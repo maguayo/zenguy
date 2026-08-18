@@ -46,7 +46,7 @@ export function renderVerifyEmail(
   appUrl: string,
   name: string,
   token: string,
-): EmailMessage {
+): Omit<EmailMessage, "to"> {
   const subject = "Verify your email — Zenguy";
   const rendered = renderBasicEmail({
     title: "Verify your email",
@@ -58,13 +58,13 @@ export function renderVerifyEmail(
     ctaLabel: "Verify email",
     ctaUrl: authUrl(appUrl, "verify-email", token),
   });
-  return { to: [], subject, ...rendered };
+  return { subject, ...rendered };
 }
 
 export function renderResetPasswordEmail(
   appUrl: string,
   token: string,
-): EmailMessage {
+): Omit<EmailMessage, "to"> {
   const subject = "Reset your password — Zenguy";
   const rendered = renderBasicEmail({
     title: "Reset your password",
@@ -75,5 +75,5 @@ export function renderResetPasswordEmail(
     ctaLabel: "Reset password",
     ctaUrl: authUrl(appUrl, "reset-password", token),
   });
-  return { to: [], subject, ...rendered };
+  return { subject, ...rendered };
 }
