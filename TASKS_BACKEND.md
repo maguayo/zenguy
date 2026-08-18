@@ -351,14 +351,14 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Write tests: template renders CTA when given; Resend adapter (mock `fetch` via injected `fetchFn` parameter defaulting to `globalThis.fetch`) sends correct payload/headers and throws sanitized error on 500.
 
 ### BE-017: JWT & cookies
-- [ ] Create `apps/api/src/infrastructure/auth/jwt.ts` using `hono/jwt` (`sign`, `verify`), HS256:
+- [x] Create `apps/api/src/infrastructure/auth/jwt.ts` using `hono/jwt` (`sign`, `verify`), HS256:
   - `issueAccessToken(cfg, user, clock): Promise<string>` with claims `{ sub: user.id, email, name, iat, exp: iat + ACCESS_TOKEN_TTL_SECONDS }`.
   - `verifyAccessToken(cfg, token): Promise<{ sub: string; email: string; name: string }>` — any failure → `AppError("UNAUTHORIZED", "Invalid or expired token")`.
-- [ ] Create `apps/api/src/http/cookies.ts`:
+- [x] Create `apps/api/src/http/cookies.ts`:
   - `REFRESH_COOKIE = "zenguy_rt"`.
   - `refreshCookieHeader(token: string, maxAgeSeconds: number, secure: boolean): string` → `zenguy_rt=<token>; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=<n>` + `; Secure` when `environment === "production"`.
   - `clearRefreshCookieHeader(secure): string` (Max-Age=0), `readRefreshCookie(c): string | null`.
-- [ ] Write tests: token round-trip; expired token rejected (FixedClock-driven `exp` in the past → verify fails); cookie strings exact.
+- [x] Write tests: token round-trip; expired token rejected (FixedClock-driven `exp` in the past → verify fails); cookie strings exact.
 
 ### BE-018: Use cases — register, verify, resend
 - [ ] Create `apps/api/src/application/auth/register.ts`: input `{ name (trim 1–80), email, password (8–100) }`. Steps: normalize email lowercase → if `findByEmail` exists throw `conflict("An account with this email already exists")` → `hashPassword` → insert user (`newId("usr")`) → create VERIFY_EMAIL token (`randomToken()`, store `sha256Hex`, expires 24 h) → send verify email → return `User`. (Email failures: log `email_send_failed`, still return success — user can resend.)
