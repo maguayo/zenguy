@@ -1,0 +1,21 @@
+ENVIRONMENT=development
+APP_URL=http://localhost:5173
+LLM_MODEL=claude-sonnet-5
+LLM_USE_VISION=true
+PADDLE_ENVIRONMENT=sandbox
+EMAIL_FROM="Zenguy <notifications@zenguy.com>"
+JWT_SECRET=replace-with-at-least-32-random-characters
+ENCRYPTION_KEY=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+ARTIFACT_URL_SECRET=replace-with-at-least-32-random-characters
+RESEND_API_KEY=
+ANTHROPIC_API_KEY=replace-with-anthropic-api-key
+TWILIO_ACCOUNT_SID=replace-with-twilio-account-sid
+TWILIO_AUTH_TOKEN=replace-with-twilio-auth-token
+TWILIO_FROM_SMS=+34600000001
+TWILIO_FROM_WHATSAPP=+34600000002
+TWILIO_FROM_CALL=+34600000003
+PADDLE_API_KEY=replace-with-paddle-api-key
+PADDLE_WEBHOOK_SECRET=replace-with-paddle-webhook-secret
+PADDLE_CLIENT_TOKEN=replace-with-paddle-client-token
+PADDLE_PRICE_ID=pri_replace_monthly
+PADDLE_OVERAGE_PRICE_ID=pri_replace_overage

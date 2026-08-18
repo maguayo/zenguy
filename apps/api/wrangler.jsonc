@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zenguy-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "limits": { "cpu_ms": 300000 },
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "browser": { "binding": "BROWSER" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "zenguy-db", "database_id": "f734402f-7c64-487f-8875-2a8d777d5665", "migrations_dir": "migrations" }
+  ],
+  "kv_namespaces": [{ "binding": "KV", "id": "747847da4d0741579c56ceb51737ab7a" }],
+  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }],
+  "queues": {
+    "producers": [
+      { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
+      { "binding": "CHECK_QUEUE", "queue": "zenguy-checks" },
+      { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
+    ],
+    "consumers": [
+      { "queue": "zenguy-runs", "max_batch_size": 1, "max_concurrency": 4, "max_retries": 3, "dead_letter_queue": "zenguy-runs-dlq" },
+      { "queue": "zenguy-checks", "max_batch_size": 5, "max_concurrency": 10, "max_retries": 3, "dead_letter_queue": "zenguy-checks-dlq" },
+      { "queue": "zenguy-notify", "max_batch_size": 5, "max_concurrency": 5, "max_retries": 3, "dead_letter_queue": "zenguy-notify-dlq" },
+      { "queue": "zenguy-runs-dlq", "max_batch_size": 10, "max_retries": 0 },
+      { "queue": "zenguy-checks-dlq", "max_batch_size": 10, "max_retries": 0 },
+      { "queue": "zenguy-notify-dlq", "max_batch_size": 10, "max_retries": 0 }
+    ]
+  },
+  "triggers": { "crons": ["*/5 * * * *", "0 3 * * *", "30 * * * *"] },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_URL": "http://localhost:5173",
+    "LLM_MODEL": "claude-sonnet-5",
+    "LLM_USE_VISION": "true",
+    "PADDLE_ENVIRONMENT": "sandbox",
+    "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+  }
+}

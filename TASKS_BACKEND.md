@@ -160,15 +160,15 @@ export default defineConfig({
 - [x] Verify `pnpm --filter @zenguy/api typecheck` passes. Commit.
 
 ### BE-003: Cloudflare resources & wrangler.jsonc
-- [ ] Create the Cloudflare resources (run these once; paste resulting IDs into `wrangler.jsonc`):
+- [x] Create the Cloudflare resources (run these once; paste resulting IDs into `wrangler.jsonc`):
   - `wrangler d1 create zenguy-db`
   - `wrangler kv namespace create zenguy-kv`
   - `wrangler r2 bucket create zenguy-artifacts`
   - `wrangler queues create zenguy-runs` / `zenguy-runs-dlq` / `zenguy-checks` / `zenguy-checks-dlq` / `zenguy-notify` / `zenguy-notify-dlq`
   - (If a command needs an authenticated account and you cannot authenticate, still write the full config with placeholder IDs `"TODO-FILL-ID"` and note it in the Deviations log; local dev with `wrangler dev` works with placeholder IDs for D1/KV/R2/queues simulation.)
-- [ ] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../web/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
-- [ ] Create `apps/api/.dev.vars.example` listing every variable from **Appendix A** with safe example values; copy to `.dev.vars` locally with real dev values (never commit `.dev.vars`).
-- [ ] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
+- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../web/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
+- [x] Create `apps/api/.dev.vars.example` listing every variable from **Appendix A** with safe example values; copy to `.dev.vars` locally with real dev values (never commit `.dev.vars`).
+- [x] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
 
 ### BE-004: Typed env & config
 - [ ] Create `apps/api/src/shared/config.ts`:
@@ -896,7 +896,7 @@ interface RunSnapshot {
 - [ ] Signed artifact URLs in `apps/api/src/http/artifact_sign.ts`: `signArtifactUrl(cfg, artifactId, now): string` → `/api/artifact-content?id=<artifactId>&exp=<now+ARTIFACT_SIG_TTL_SECONDS in unix s>&sig=<hmacSign(ARTIFACT_URL_SECRET, `${id}.${exp}`)>`; `verifyArtifactSig(cfg, id, exp, sig, now): boolean`.
 - [ ] Route `GET /api/artifact-content` (NO auth middleware — the signature IS the auth, spec §11.3 allows signed URLs): verify sig + expiry (else 404 JSON), load artifact row (must exist, `expires_at > now`), stream from R2 with `Content-Type`, `Cache-Control: private, max-age=300`, `Content-Disposition: inline`.
 - [ ] `application/browser_tests/list_runs.ts` (any member): keyset (default & max limit 100 — §12.1), optional `status` filter; each row `{ id, createdAt, source, status, durationMs, device (from snapshot), attemptCount, passedAfterRetry, billable, triggeredBy: { userId, name } | null }`.
-- [ ] `application/browser_tests/get_run.ts`: run + snapshot + attempts (`listForRun`, summary fields) + `live` block: when status QUEUED/RUNNING → `{ url: "/api/workspaces/<wsId>/runs/<runId>/events?exp=<unix+900>&sig=<hmacSign(secret, "sse." + runId + "." + exp)>" }` else `null` (SSE endpoint arrives BE-049).
+- [ ] `application/browser_tests/get_run.ts`: run + snapshot + attempts (`listForRun`, summary fields — each attempt summary also carries `latestStep` (`{ description, actionType, timestamp } | null`, the newest `run_steps` row) and `latestScreenshot` (`{ id, url: signArtifactUrl } | null`, the newest SCREENSHOT artifact) so the live panel can show progress; load them with one grouped query, null when none) + `live` block: when status QUEUED/RUNNING → `{ url: "/api/workspaces/<wsId>/runs/<runId>/events?exp=<unix+900>&sig=<hmacSign(secret, "sse." + runId + "." + exp)>" }` else `null` (SSE endpoint arrives BE-049).
 - [ ] `application/browser_tests/get_attempt.ts`: attempt (verify its run belongs to workspace) + parsed `visited_urls_json`/`console_errors_json`/`network_errors_json` + steps (each with `screenshot: { id, url: signArtifactUrl(...), expiresAt } | null`) + all attempt screenshots list.
 - [ ] Routes: `GET /api/workspaces/:workspaceId/browser-tests/:testId/runs?cursor&limit&status`; `GET /api/workspaces/:workspaceId/runs/:runId`; `GET /api/workspaces/:workspaceId/attempts/:attemptId`; `GET /api/workspaces/:workspaceId/runs/:runId/report` (rate `report_download` 60/h/workspace) — implemented now: `findReportForRun` → 404 `NOT_FOUND` ("Report not available") until generator exists; when found: stream R2 object as `text/markdown` with `Content-Disposition: attachment; filename="<from metadata_json.filename>"`, replacing `{{ARTIFACT:<id>}}` placeholders with fresh signed URLs and expired ones with `*(artifact expired)*` (generator contract, BE-060).
 - [ ] Tests: signed URL round-trip + expired sig 404 + tampered sig 404; run detail includes attempts ordered by index; artifact streaming returns bytes + headers; cross-workspace access to another workspace's run → 404.
@@ -1101,7 +1101,7 @@ CREATE INDEX idx_incident_events_incident ON incident_events(incident_id, create
 
 ### BE-061: Incidents read API
 - [ ] `application/incidents/list_incidents.ts` (any member): filters `status` (`open|resolved`), `type` (`browser|uptime`), `from`/`to` (ISO dates on `opened_at`), keyset. Join resource names (browser_tests.name / uptime_monitors.name — monitors exist after BE-062; write the join with LEFT JOIN so it works now). Row: `{ id, resourceType, resourceId, resourceName, status, openedAt, resolvedAt, durationMs (resolved−opened, or now−opened when open), lastEventAt }`.
-- [ ] `application/incidents/get_incident.ts`: incident + ordered events (`{ id, type, message, metadata, createdAt }`) + deliveries (`listForIncident` with channel names).
+- [ ] `application/incidents/get_incident.ts`: incident + `openedByRunId` / `openedByCheckId` + ordered events (`{ id, type, message, metadata, createdAt }`) + deliveries (`listForIncident` joined with channel name + type → `{ id, channelName, channelType, eventType, status, attemptCount, errorSanitized, sentAt, createdAt }`).
 - [ ] Routes: `GET /api/workspaces/:workspaceId/incidents?status&type&from&to&cursor&limit`; `GET /api/workspaces/:workspaceId/incidents/:incidentId`.
 - [ ] Tests: filter combinations; cross-workspace 404; timeline ordering.
 
@@ -1231,6 +1231,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
   3. `uptime_checks.checked_at < now - 30d` → delete (loop).
   4. `notification_deliveries.created_at < now - 30d` → delete. Incidents + incident_events are KEPT (rows are light; history stays consistent).
   5. Expired auth debris: `email_tokens.expires_at < now - 7d`; `refresh_tokens` expired or revoked > 30 d ago; `workspace_invitations.expires_at < now - 30d`.
+  5b. Workspaces soft-deleted > 30 d ago (§23.5): delete their `workspace_secrets`, `notification_channels` (+ junction rows), `browser_tests`, `uptime_monitors`, `workspace_members`, `workspace_invitations` rows (their runs/checks/artifacts age out via steps 1–4; `audit_logs`, `subscriptions`, `usage_events`, `overage_reports` are still kept).
   6. Return + log counts per table: `logEvent("cleanup", { runs, attempts, steps, artifacts, checks, deliveries, tokens })` (§23.3 cleanup metrics).
 - [ ] Also configure an R2 lifecycle rule note in README (belt & braces: delete objects > 35 days old; wrangler or dashboard command included as a comment).
 - [ ] Tests: fixture data straddling the 30-day line — only old side purged; billing tables untouched (assert rows remain); R2 delete called with exactly the old keys; loop terminates.
@@ -1300,6 +1301,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 > Append entries here as `- BE-0XX: <what differed and why>`. Keep it empty if nothing deviated.
 
 - BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
+- BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/web/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
 
 ---
 
