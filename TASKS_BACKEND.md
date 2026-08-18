@@ -253,8 +253,8 @@ export default defineConfig({
 - [x] Write tests: value + URL-encoded value redacted in one string; deep object redaction; sanitizeUrl matrix; header masking; truncation.
 
 ### BE-013: D1 helpers & integration-test infra
-- [ ] Create `apps/api/src/infrastructure/db/d1.ts`: tiny helpers over `D1Database` — `one<T>(stmt): Promise<T | null>`, `all<T>(stmt): Promise<T[]>`, `run(stmt): Promise<D1Result>`, and `batch(db, stmts)` passthrough. All D1 access in repos goes through prepared statements with bound params (never string interpolation of values).
-- [ ] Create `apps/api/vitest.integration.config.ts`:
+- [x] Create `apps/api/src/infrastructure/db/d1.ts`: tiny helpers over `D1Database` — `one<T>(stmt): Promise<T | null>`, `all<T>(stmt): Promise<T[]>`, `run(stmt): Promise<D1Result>`, and `batch(db, stmts)` passthrough. All D1 access in repos goes through prepared statements with bound params (never string interpolation of values).
+- [x] Create `apps/api/vitest.integration.config.ts`:
 ```ts
 import path from "node:path";
 import { defineWorkersConfig, readD1Migrations } from "@cloudflare/vitest-pool-workers/config";
@@ -277,15 +277,15 @@ export default defineWorkersConfig(async () => {
   };
 });
 ```
-- [ ] Create `apps/api/src/test/apply-migrations.ts`:
+- [x] Create `apps/api/src/test/apply-migrations.ts`:
 ```ts
 import { applyD1Migrations, env } from "cloudflare:test";
 await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 ```
-- [ ] Create `apps/api/src/test/env.d.ts` declaring `module "cloudflare:test"`'s `ProvidedEnv` as `Bindings & { TEST_MIGRATIONS: D1Migration[] }`.
-- [ ] Create `apps/api/src/test/helpers.ts`: `testEnv()` returning `env` from `cloudflare:test` with fake string vars filled (JWT secret `"test-secret"`, encryption key = base64 of 32 `0x01` bytes, etc.), and `freshDb()` truncating all tables between tests (`DELETE FROM <table>` for every table; keep the list updated as migrations land).
-- [ ] Add a first integration test `src/infrastructure/db/d1.itest.ts`: create a throwaway table, insert, read via `one/all`. Verify `pnpm --filter @zenguy/api test:integration` passes.
-- [ ] Convention from here on: repository tests are `*.itest.ts` (real D1 via miniflare); use-case tests are `*.test.ts` (in-memory fakes from `src/test/fakes/`).
+- [x] Create `apps/api/src/test/env.d.ts` declaring `module "cloudflare:test"`'s `ProvidedEnv` as `Bindings & { TEST_MIGRATIONS: D1Migration[] }`.
+- [x] Create `apps/api/src/test/helpers.ts`: `testEnv()` returning `env` from `cloudflare:test` with fake string vars filled (JWT secret `"test-secret"`, encryption key = base64 of 32 `0x01` bytes, etc.), and `freshDb()` truncating all tables between tests (`DELETE FROM <table>` for every table; keep the list updated as migrations land).
+- [x] Add a first integration test `src/infrastructure/db/d1.itest.ts`: create a throwaway table, insert, read via `one/all`. Verify `pnpm --filter @zenguy/api test:integration` passes.
+- [x] Convention from here on: repository tests are `*.itest.ts` (real D1 via miniflare); use-case tests are `*.test.ts` (in-memory fakes from `src/test/fakes/`).
 
 # Phase 2 — Auth
 
@@ -1303,6 +1303,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
 - BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/web/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
+- BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 
 ---
 
