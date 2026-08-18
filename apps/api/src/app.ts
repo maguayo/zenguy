@@ -1,18 +1,25 @@
 import { Hono } from "hono";
 import type { EmailSender } from "./domain/email/sender";
+import type { AuditRepo } from "./domain/audit/repo";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
   UserRepo,
 } from "./domain/users/repo";
+import type { MemberRepo, WorkspaceRepo } from "./domain/workspaces/repo";
 import type { AppEnv } from "./http/env";
 import { errorHandler } from "./http/middleware/error_handler";
 import { requestId } from "./http/middleware/request_id";
 import { securityHeaders } from "./http/middleware/security_headers";
 import { authRoutes } from "./http/routes/auth";
+import { workspaceRoutes } from "./http/routes/workspaces";
+import { WriteAudit } from "./application/audit/write_audit";
+import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
 import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
+import { D1MemberRepo } from "./infrastructure/db/member_repo";
+import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { buildEmailSender } from "./infrastructure/email";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
@@ -29,6 +36,9 @@ export interface AppOverrides {
   refreshTokens?: RefreshTokenRepo;
   emailSender?: EmailSender;
   rateLimiter?: RateLimiter;
+  workspaces?: WorkspaceRepo;
+  members?: MemberRepo;
+  audits?: AuditRepo;
 }
 
 export function buildApp(
@@ -46,6 +56,14 @@ export function buildApp(
   const emailSender = overrides.emailSender ?? buildEmailSender(config);
   const rateLimiter =
     overrides.rateLimiter ?? new KvRateLimiter(env.KV, clock);
+  const workspaces = overrides.workspaces ?? new D1WorkspaceRepo(env.DB);
+  const members = overrides.members ?? new D1MemberRepo(env.DB);
+  const audits = overrides.audits ?? new D1AuditRepo(env.DB);
+  const audit = new WriteAudit({
+    audits,
+    clock,
+    ids: overrides.ids ?? realIds,
+  });
 
   app.use("*", requestId);
   app.use("*", securityHeaders);
@@ -60,6 +78,18 @@ export function buildApp(
       refreshTokens,
       emailSender,
       rateLimiter,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    workspaceRoutes({
+      users,
+      workspaces,
+      members,
+      audit,
       clock,
       ids: overrides.ids ?? realIds,
       config,
