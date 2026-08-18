@@ -223,13 +223,13 @@ export default defineConfig({
 - [x] Write unit tests using `app.request("/api/health")`: envelope shape, error envelope (add a temporary `/api/_boom` route inside the test that throws), security headers present, unknown `/api/x` → 404 JSON.
 
 ### BE-010: KV rate limiter
-- [ ] Create `apps/api/src/shared/ratelimit.ts`.
-- [ ] `interface RateLimiter { hit(key: string, limit: number, windowSeconds: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> }`.
-- [ ] Implement `KvRateLimiter` (fixed window): KV key `rl:${key}:${floor(now/window)}`, `get` → int, if ≥ limit return not-allowed with `retryAfterSeconds` = seconds to window end; else `put(count+1, { expirationTtl: windowSeconds + 60 })`. (KV is eventually consistent — acceptable for V1 abuse protection; note this in a comment.)
-- [ ] Export `rateLimit(limiter, keyFn, limit, windowSeconds)` Hono middleware factory that throws `AppError("RATE_LIMITED", "Too many requests", undefined, retryAfter)`; `keyFn(c)` builds keys like `login:${ip}` using `c.req.header("CF-Connecting-IP") ?? "unknown"`.
-- [ ] All concrete limits live in **Appendix I** — import numbers from `constants.ts` (`RATE_LIMITS` object), never inline.
-- [ ] Create `apps/api/src/test/fakes/kv.ts`: in-memory `KVNamespace` fake (get/put/delete/list with TTL honored via injected FixedClock-compatible now()).
-- [ ] Write tests with the KV fake: allows under limit, blocks at limit, window resets, retryAfter sane.
+- [x] Create `apps/api/src/shared/ratelimit.ts`.
+- [x] `interface RateLimiter { hit(key: string, limit: number, windowSeconds: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> }`.
+- [x] Implement `KvRateLimiter` (fixed window): KV key `rl:${key}:${floor(now/window)}`, `get` → int, if ≥ limit return not-allowed with `retryAfterSeconds` = seconds to window end; else `put(count+1, { expirationTtl: windowSeconds + 60 })`. (KV is eventually consistent — acceptable for V1 abuse protection; note this in a comment.)
+- [x] Export `rateLimit(limiter, keyFn, limit, windowSeconds)` Hono middleware factory that throws `AppError("RATE_LIMITED", "Too many requests", undefined, retryAfter)`; `keyFn(c)` builds keys like `login:${ip}` using `c.req.header("CF-Connecting-IP") ?? "unknown"`.
+- [x] All concrete limits live in **Appendix I** — import numbers from `constants.ts` (`RATE_LIMITS` object), never inline.
+- [x] Create `apps/api/src/test/fakes/kv.ts`: in-memory `KVNamespace` fake (get/put/delete/list with TTL honored via injected FixedClock-compatible now()).
+- [x] Write tests with the KV fake: allows under limit, blocks at limit, window resets, retryAfter sane.
 
 ### BE-011: SSRF guard
 - [ ] Create `apps/api/src/shared/ssrf.ts`.
