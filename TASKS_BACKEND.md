@@ -331,14 +331,14 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Run `pnpm --filter @zenguy/api db:migrate:local`. Add the three tables to `freshDb()` in `test/helpers.ts`.
 
 ### BE-015: Auth domain & repositories
-- [ ] Create `apps/api/src/domain/users/types.ts`: `interface User { id; name; email; passwordHash; emailVerifiedAt: number | null; createdAt; updatedAt }` (numbers are unix ms); `interface EmailToken { id; userId; type: "VERIFY_EMAIL" | "RESET_PASSWORD"; tokenHash; expiresAt; usedAt: number | null; createdAt }`; `interface RefreshToken { id; userId; tokenHash; expiresAt; revokedAt: number | null; replacedById: string | null; createdAt }`.
-- [ ] Create `apps/api/src/domain/users/repo.ts` interfaces:
+- [x] Create `apps/api/src/domain/users/types.ts`: `interface User { id; name; email; passwordHash; emailVerifiedAt: number | null; createdAt; updatedAt }` (numbers are unix ms); `interface EmailToken { id; userId; type: "VERIFY_EMAIL" | "RESET_PASSWORD"; tokenHash; expiresAt; usedAt: number | null; createdAt }`; `interface RefreshToken { id; userId; tokenHash; expiresAt; revokedAt: number | null; replacedById: string | null; createdAt }`.
+- [x] Create `apps/api/src/domain/users/repo.ts` interfaces:
   - `UserRepo`: `findByEmail(email): Promise<User | null>`, `findById(id)`, `insert(user)`, `setEmailVerified(id, at)`, `setPassword(id, passwordHash, at)`, `updateName(id, name, at)`.
   - `EmailTokenRepo`: `insert(t)`, `findValidByHash(hash, type, now): Promise<EmailToken | null>` (unused + unexpired), `markUsed(id, at)`, `deleteAllForUser(userId, type)`.
   - `RefreshTokenRepo`: `insert(t)`, `findByHash(hash): Promise<RefreshToken | null>`, `revoke(id, at, replacedById?)`, `revokeAllForUser(userId, at)`, `deleteExpired(before): Promise<number>`.
-- [ ] Implement all three in `apps/api/src/infrastructure/db/user_repo.ts`, `email_token_repo.ts`, `refresh_token_repo.ts` (snake_case columns ↔ camelCase mapping by hand).
-- [ ] Create in-memory fakes `apps/api/src/test/fakes/repos.ts` (start with these three; extend this file in later phases — fakes implement the same interfaces over Maps).
-- [ ] Write `.itest.ts` for each D1 repo: insert/read round-trip, email case-insensitive uniqueness (duplicate insert throws), findValidByHash respects `used_at`/`expires_at`.
+- [x] Implement all three in `apps/api/src/infrastructure/db/user_repo.ts`, `email_token_repo.ts`, `refresh_token_repo.ts` (snake_case columns ↔ camelCase mapping by hand).
+- [x] Create in-memory fakes `apps/api/src/test/fakes/repos.ts` (start with these three; extend this file in later phases — fakes implement the same interfaces over Maps).
+- [x] Write `.itest.ts` for each D1 repo: insert/read round-trip, email case-insensitive uniqueness (duplicate insert throws), findValidByHash respects `used_at`/`expires_at`.
 
 ### BE-016: Email sender port + Resend adapter
 - [ ] Create `apps/api/src/domain/email/sender.ts`: `interface EmailSender { send(msg: { to: string[]; subject: string; html: string; text: string }): Promise<{ providerMessageId: string | null }> }` (throws `Error` with sanitized message on failure).
