@@ -242,15 +242,15 @@ export default defineConfig({
 - [x] Write table-driven tests: ≥15 blocked URLs (each category), ≥6 allowed (`https://example.com`, `http://example.com:8080/x?y=1`, public IP literal, punycode domain).
 
 ### BE-012: Redaction library
-- [ ] Create `apps/api/src/shared/redact.ts` — the **single central redaction library** (spec §22.6) used by steps, logs, reports, notifications, excerpts, audit metadata.
-- [ ] `class Redactor { constructor(secrets: { key: string; value: string }[]) }` with:
+- [x] Create `apps/api/src/shared/redact.ts` — the **single central redaction library** (spec §22.6) used by steps, logs, reports, notifications, excerpts, audit metadata.
+- [x] `class Redactor { constructor(secrets: { key: string; value: string }[]) }` with:
   - `redact(text: string | null | undefined): string` — replaces every occurrence of each secret value AND its `encodeURIComponent` form with `{{<KEY>}}`; empty-string secrets ignored; longest values replaced first.
   - `redactDeep<T>(obj: T): T` — walks arrays/objects/strings.
-- [ ] Standalone helpers (no secrets needed):
+- [x] Standalone helpers (no secrets needed):
   - `sanitizeUrl(raw: string): string` — keeps origin+path; for each query param whose name matches `/pass|token|secret|key|auth|code|session|signature|sig/i` replace value with `redacted`; keep other params; on parse failure return `"<invalid-url>"`.
   - `sanitizeHeaders(h: Record<string,string>): Record<string,string>` — drop `cookie`/`set-cookie`; mask `authorization`, `x-api-key`, `proxy-authorization` as `***`.
   - `truncate(s: string, max: number): string` (append `…` when cut).
-- [ ] Write tests: value + URL-encoded value redacted in one string; deep object redaction; sanitizeUrl matrix; header masking; truncation.
+- [x] Write tests: value + URL-encoded value redacted in one string; deep object redaction; sanitizeUrl matrix; header masking; truncation.
 
 ### BE-013: D1 helpers & integration-test infra
 - [ ] Create `apps/api/src/infrastructure/db/d1.ts`: tiny helpers over `D1Database` — `one<T>(stmt): Promise<T | null>`, `all<T>(stmt): Promise<T[]>`, `run(stmt): Promise<D1Result>`, and `batch(db, stmts)` passthrough. All D1 access in repos goes through prepared statements with bound params (never string interpolation of values).
