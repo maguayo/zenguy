@@ -189,13 +189,13 @@ export default defineConfig({
 - [x] Write unit tests for status mapping and helpers.
 
 ### BE-006: Shared IDs
-- [ ] Create `apps/api/src/shared/ids.ts`.
-- [ ] Define the prefix table as a const object and type `IdPrefix`:
+- [x] Create `apps/api/src/shared/ids.ts`.
+- [x] Define the prefix table as a const object and type `IdPrefix`:
   `usr` user, `tok` email token, `rt` refresh token, `ws` workspace, `mem` member, `inv` invitation, `aud` audit log, `sub` subscription, `ue` usage event, `ovr` overage report, `sec` secret, `ch` channel, `del` delivery, `bt` browser test, `run` run, `att` attempt, `step` run step, `art` artifact, `mon` monitor, `cyc` check cycle, `chk` check, `inc` incident, `evt` incident event.
-- [ ] Implement `newId(prefix: IdPrefix): string` returning `` `${prefix}_${ulid().toLowerCase()}` `` using the `ulid` package (IDs sort by creation time).
-- [ ] Implement `isId(prefix: IdPrefix, s: string): boolean` (regex `^<prefix>_[0-9a-hjkmnp-tv-z]{26}$`).
-- [ ] Export `interface IdGenerator { newId(prefix: IdPrefix): string }` and `const realIds: IdGenerator`; tests use a `FakeIds` (sequential `usr_000…1`) — create it at `apps/api/src/test/fakes/ids.ts`.
-- [ ] Write tests: uniqueness over 1000 generations, prefix correctness, `isId` accepts generated ids and rejects wrong prefixes.
+- [x] Implement `newId(prefix: IdPrefix): string` returning `` `${prefix}_${ulid().toLowerCase()}` `` using the `ulid` package (IDs sort by creation time).
+- [x] Implement `isId(prefix: IdPrefix, s: string): boolean` (regex `^<prefix>_[0-9a-hjkmnp-tv-z]{26}$`).
+- [x] Export `interface IdGenerator { newId(prefix: IdPrefix): string }` and `const realIds: IdGenerator`; tests use a `FakeIds` (sequential `usr_000…1`) — create it at `apps/api/src/test/fakes/ids.ts`.
+- [x] Write tests: uniqueness over 1000 generations, prefix correctness, `isId` accepts generated ids and rejects wrong prefixes.
 
 ### BE-007: Clock abstraction
 - [ ] Create `apps/api/src/shared/clock.ts`.
