@@ -1,0 +1,11 @@
+import { createMiddleware } from "hono/factory";
+import type { AppEnv } from "../env";
+
+export const securityHeaders = createMiddleware<AppEnv>(
+  async (context, next) => {
+    await next();
+    context.header("X-Content-Type-Options", "nosniff");
+    context.header("Referrer-Policy", "same-origin");
+    context.header("X-Frame-Options", "DENY");
+  },
+);

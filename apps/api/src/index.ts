@@ -1,5 +1,8 @@
+import { buildApp } from "./app";
+import type { Bindings } from "./shared/config";
+
 export default {
-  fetch(): Response {
-    return new Response("zenguy api", { status: 200 });
+  fetch(request, env, context) {
+    return buildApp(env).fetch(request, env, context);
   },
-} satisfies ExportedHandler;
+} satisfies ExportedHandler<Bindings>;
