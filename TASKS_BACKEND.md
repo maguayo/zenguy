@@ -139,25 +139,25 @@ packages:
 - [x] Run `pnpm install` (creates the lockfile). Commit.
 
 ### BE-002: API app scaffold (Hono skeleton)
-- [ ] Create `apps/api/package.json` with `"name": "@zenguy/api"`, `"private": true`, `"type": "module"`, scripts:
+- [x] Create `apps/api/package.json` with `"name": "@zenguy/api"`, `"private": true`, `"type": "module"`, scripts:
   - `"dev": "wrangler dev"`, `"dev:remote": "wrangler dev --remote"`, `"deploy": "wrangler deploy"`,
   - `"typecheck": "tsc --noEmit"`, `"test": "vitest run --config vitest.config.ts"`, `"test:watch": "vitest --config vitest.config.ts"`,
   - `"test:integration": "vitest run --config vitest.integration.config.ts"`,
   - `"db:migrate:local": "wrangler d1 migrations apply zenguy-db --local"`, `"db:migrate:remote": "wrangler d1 migrations apply zenguy-db --remote"`,
   - `"seed": "node scripts/seed.mjs"` (script arrives in BE-073).
-- [ ] Install runtime deps: `pnpm --filter @zenguy/api add hono zod @hono/zod-validator @cloudflare/puppeteer ulid`.
-- [ ] Install dev deps: `pnpm --filter @zenguy/api add -D wrangler typescript vitest @cloudflare/vitest-pool-workers @cloudflare/workers-types`.
-- [ ] Create `apps/api/tsconfig.json` extending `../../tsconfig.base.json`, with `"types": ["@cloudflare/workers-types/2023-07-01", "vitest/globals"]`, `"include": ["src/**/*", "vitest.*.ts", "vitest.config.ts"]`.
-- [ ] Create `apps/api/src/index.ts` exporting a default object with a `fetch` handler that returns `new Response("zenguy api", { status: 200 })` for now (queue/scheduled handlers come later).
-- [ ] Create `apps/api/vitest.config.ts` (plain unit tests, Node environment):
+- [x] Install runtime deps: `pnpm --filter @zenguy/api add hono zod @hono/zod-validator @cloudflare/puppeteer ulid`.
+- [x] Install dev deps: `pnpm --filter @zenguy/api add -D wrangler typescript vitest @cloudflare/vitest-pool-workers @cloudflare/workers-types`.
+- [x] Create `apps/api/tsconfig.json` extending `../../tsconfig.base.json`, with `"types": ["@cloudflare/workers-types/2023-07-01", "vitest/globals"]`, `"include": ["src/**/*", "vitest.*.ts", "vitest.config.ts"]`.
+- [x] Create `apps/api/src/index.ts` exporting a default object with a `fetch` handler that returns `new Response("zenguy api", { status: 200 })` for now (queue/scheduled handlers come later).
+- [x] Create `apps/api/vitest.config.ts` (plain unit tests, Node environment):
 ```ts
 import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: { include: ["src/**/*.test.ts"], globals: true },
 });
 ```
-- [ ] Create `apps/api/README.md`: prerequisites (Node 22, pnpm, wrangler login), how to run (`pnpm db:migrate:local`, `pnpm dev`), how to test, note that browser execution needs `pnpm dev:remote`.
-- [ ] Verify `pnpm --filter @zenguy/api typecheck` passes. Commit.
+- [x] Create `apps/api/README.md`: prerequisites (Node 22, pnpm, wrangler login), how to run (`pnpm db:migrate:local`, `pnpm dev`), how to test, note that browser execution needs `pnpm dev:remote`.
+- [x] Verify `pnpm --filter @zenguy/api typecheck` passes. Commit.
 
 ### BE-003: Cloudflare resources & wrangler.jsonc
 - [ ] Create the Cloudflare resources (run these once; paste resulting IDs into `wrangler.jsonc`):
@@ -1299,6 +1299,8 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 
 > Append entries here as `- BE-0XX: <what differed and why>`. Keep it empty if nothing deviated.
 
+- BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
+
 ---
 
 # Appendix A — Environment variables & bindings
@@ -1579,5 +1581,3 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
 | monitor_create | 30 | 1 h | workspace |
 | test_request | 30 | 1 h | workspace |
 | report_download | 60 | 1 h | workspace |
-
-
