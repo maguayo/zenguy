@@ -181,12 +181,12 @@ export default defineConfig({
 # Phase 1 — Shared kernel
 
 ### BE-005: Shared errors
-- [ ] Create `apps/api/src/shared/errors.ts`.
-- [ ] Define `type ErrorCode = "VALIDATION_ERROR" | "UNAUTHORIZED" | "INVALID_CREDENTIALS" | "EMAIL_NOT_VERIFIED" | "FORBIDDEN" | "BILLING_REQUIRED" | "NOT_FOUND" | "GONE" | "CONFLICT" | "ACTIVE_RUN_EXISTS" | "RATE_LIMITED" | "INTERNAL"`.
-- [ ] Define `class AppError extends Error { constructor(public code: ErrorCode, message: string, public details?: { field: string; message: string }[], public retryAfterSeconds?: number) }`.
-- [ ] Export `httpStatus(code: ErrorCode): number` mapping: VALIDATION_ERROR→400, UNAUTHORIZED/INVALID_CREDENTIALS→401, BILLING_REQUIRED→402, EMAIL_NOT_VERIFIED/FORBIDDEN→403, NOT_FOUND→404, CONFLICT/ACTIVE_RUN_EXISTS→409, GONE→410, RATE_LIMITED→429, INTERNAL→500.
-- [ ] Export helpers: `notFound(what: string)`, `forbidden(msg?)`, `conflict(msg)`, `validation(details)` returning `AppError`s; and `isAppError(e): e is AppError`.
-- [ ] Write unit tests for status mapping and helpers.
+- [x] Create `apps/api/src/shared/errors.ts`.
+- [x] Define `type ErrorCode = "VALIDATION_ERROR" | "UNAUTHORIZED" | "INVALID_CREDENTIALS" | "EMAIL_NOT_VERIFIED" | "FORBIDDEN" | "BILLING_REQUIRED" | "NOT_FOUND" | "GONE" | "CONFLICT" | "ACTIVE_RUN_EXISTS" | "RATE_LIMITED" | "INTERNAL"`.
+- [x] Define `class AppError extends Error { constructor(public code: ErrorCode, message: string, public details?: { field: string; message: string }[], public retryAfterSeconds?: number) }`.
+- [x] Export `httpStatus(code: ErrorCode): number` mapping: VALIDATION_ERROR→400, UNAUTHORIZED/INVALID_CREDENTIALS→401, BILLING_REQUIRED→402, EMAIL_NOT_VERIFIED/FORBIDDEN→403, NOT_FOUND→404, CONFLICT/ACTIVE_RUN_EXISTS→409, GONE→410, RATE_LIMITED→429, INTERNAL→500.
+- [x] Export helpers: `notFound(what: string)`, `forbidden(msg?)`, `conflict(msg)`, `validation(details)` returning `AppError`s; and `isAppError(e): e is AppError`.
+- [x] Write unit tests for status mapping and helpers.
 
 ### BE-006: Shared IDs
 - [ ] Create `apps/api/src/shared/ids.ts`.
