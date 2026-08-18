@@ -377,9 +377,9 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Write tests: wrong password; rotation revokes old and links `replacedById`; reuse of a rotated token revokes the whole family; expired refresh rejected.
 
 ### BE-020: Use cases — forgot & reset password
-- [ ] Create `apps/api/src/application/auth/forgot_password.ts`: input `{ email }` → always `{ sent: true }`; if user exists: delete old RESET_PASSWORD tokens, create one (expires 1 h), send reset email.
-- [ ] Create `apps/api/src/application/auth/reset_password.ts`: input `{ token, password (8–100) }` → valid token else `GONE` → `setPassword(hash)` → `markUsed` → `revokeAllForUser` (all sessions out).
-- [ ] Write tests: unknown email quiet; happy path revokes all refresh tokens; expired token GONE; password rules enforced by zod at route level (test in BE-021).
+- [x] Create `apps/api/src/application/auth/forgot_password.ts`: input `{ email }` → always `{ sent: true }`; if user exists: delete old RESET_PASSWORD tokens, create one (expires 1 h), send reset email.
+- [x] Create `apps/api/src/application/auth/reset_password.ts`: input `{ token, password (8–100) }` → valid token else `GONE` → `setPassword(hash)` → `markUsed` → `revokeAllForUser` (all sessions out).
+- [x] Write tests: unknown email quiet; happy path revokes all refresh tokens; expired token GONE; password rules enforced by zod at route level (test in BE-021).
 
 ### BE-021: Auth middleware & routes
 - [ ] Create `apps/api/src/http/middleware/auth.ts`:
