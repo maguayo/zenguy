@@ -456,14 +456,14 @@ CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 - [x] Apply locally; extend `freshDb()`.
 
 ### BE-023: Workspace domain & repositories
-- [ ] Create `apps/api/src/domain/workspaces/types.ts`: `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `type Role = "OWNER" | "ADMIN" | "MEMBER"`.
-- [ ] Create `apps/api/src/domain/workspaces/permissions.ts` — the machine-readable matrix (Appendix G):
+- [x] Create `apps/api/src/domain/workspaces/types.ts`: `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `type Role = "OWNER" | "ADMIN" | "MEMBER"`.
+- [x] Create `apps/api/src/domain/workspaces/permissions.ts` — the machine-readable matrix (Appendix G):
   - `type Action = "tests.view" | "tests.manage" | "tests.run" | "reports.download" | "uptime.manage" | "channels.manage" | "secrets.manage" | "members.invite" | "members.remove" | "admins.manage" | "billing.view" | "billing.manage" | "workspace.settings" | "workspace.transfer" | "workspace.delete" | "audit.view"`.
   - `can(role: Role, action: Action): boolean` implemented as a const lookup table exactly matching Appendix G.
-- [ ] Create `apps/api/src/domain/workspaces/repo.ts`: `WorkspaceRepo` (`insert`, `findById` (excludes soft-deleted by default; `includeDeleted` flag), `findBySlug`, `update(id, { name?, timezone?, ownerUserId? }, at)`, `softDelete(id, at)`, `listForUser(userId): Promise<{ workspace: Workspace; role: Role }[]>`); `MemberRepo` (`insert`, `find(workspaceId, userId)`, `list(workspaceId): Promise<(WorkspaceMember & { userName; userEmail })[]>`, `updateRole`, `remove`); `InvitationRepo` (`insert`, `findPending(workspaceId)`, `findValidByHash(hash, now)`, `findPendingByEmail(workspaceId, email)`, `markAccepted`, `revoke`, `revokeAllForWorkspace`).
-- [ ] Implement D1 repos in `apps/api/src/infrastructure/db/` (`workspace_repo.ts`, `member_repo.ts`, `invitation_repo.ts`); extend fakes.
-- [ ] Slug helper in `domain/workspaces/slug.ts`: `slugify(name)` (lowercase, ascii, `-`, trim to 40) and `uniqueSlug(repo, name)` appending `-<4 random base36>` on collision.
-- [ ] `.itest.ts`: member uniqueness, listForUser joins role, soft-deleted excluded, slug collision path.
+- [x] Create `apps/api/src/domain/workspaces/repo.ts`: `WorkspaceRepo` (`insert`, `findById` (excludes soft-deleted by default; `includeDeleted` flag), `findBySlug`, `update(id, { name?, timezone?, ownerUserId? }, at)`, `softDelete(id, at)`, `listForUser(userId): Promise<{ workspace: Workspace; role: Role }[]>`); `MemberRepo` (`insert`, `find(workspaceId, userId)`, `list(workspaceId): Promise<(WorkspaceMember & { userName; userEmail })[]>`, `updateRole`, `remove`); `InvitationRepo` (`insert`, `findPending(workspaceId)`, `findValidByHash(hash, now)`, `findPendingByEmail(workspaceId, email)`, `markAccepted`, `revoke`, `revokeAllForWorkspace`).
+- [x] Implement D1 repos in `apps/api/src/infrastructure/db/` (`workspace_repo.ts`, `member_repo.ts`, `invitation_repo.ts`); extend fakes.
+- [x] Slug helper in `domain/workspaces/slug.ts`: `slugify(name)` (lowercase, ascii, `-`, trim to 40) and `uniqueSlug(repo, name)` appending `-<4 random base36>` on collision.
+- [x] `.itest.ts`: member uniqueness, listForUser joins role, soft-deleted excluded, slug collision path.
 
 ### BE-024: Audit writer
 - [ ] Create `apps/api/src/domain/audit/types.ts` (`AuditEntry`) and `repo.ts` (`AuditRepo`: `insert`, `list(workspaceId, cursor?, limit) ` keyset).
