@@ -382,10 +382,10 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Write tests: unknown email quiet; happy path revokes all refresh tokens; expired token GONE; password rules enforced by zod at route level (test in BE-021).
 
 ### BE-021: Auth middleware & routes
-- [ ] Create `apps/api/src/http/middleware/auth.ts`:
+- [x] Create `apps/api/src/http/middleware/auth.ts`:
   - `requireAuth`: read `Authorization: Bearer <t>` → `verifyAccessToken` → load user by `sub` (must exist) → `c.set("user", user)`; missing/invalid → `UNAUTHORIZED`.
   - `requireVerifiedEmail`: after `requireAuth`; if `user.emailVerifiedAt === null` throw `AppError("EMAIL_NOT_VERIFIED", "Verify your email to continue")`. Applied to **everything except** `/api/auth/*`, `GET /api/invitations/:token`, `/api/webhooks/*`, `/api/health`, `/api/artifact-content`.
-- [ ] Create `apps/api/src/http/routes/auth.ts` and mount in `app.ts` under `/api/auth`:
+- [x] Create `apps/api/src/http/routes/auth.ts` and mount in `app.ts` under `/api/auth`:
   - `POST /register` (rate: `register` 5/h/IP) → 201 `{ data: { user } }` (presenter: `{ id, name, email, emailVerified: boolean, createdAt: ISO }` — **never** expose `password_hash`).
   - `POST /verify-email` `{ token }` → `{ data: { verified: true } }`.
   - `POST /resend-verification` `{ email }` (rate: 3/h/email) → `{ data: { sent: true } }`.
@@ -395,7 +395,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
   - `POST /forgot-password` (rate: 3/h/email) → `{ data: { sent: true } }`.
   - `POST /reset-password` `{ token, password }` → `{ data: { reset: true } }`.
   - `GET /me` (requireAuth only) → `{ data: { user } }`.
-- [ ] Write integration tests (`auth_routes.itest.ts`) driving the real app + D1: full journey register → (fetch token hash from DB, mark verified via verify use case with the plain token captured from DevEmailSender by injecting a recording fake) → login sets cookie → `/me` with bearer → refresh rotates → logout clears; plus 401 wrong password, 400 validation shape, 429 after limit exceeded (use the KV fake or real miniflare KV), EMAIL_NOT_VERIFIED gate on a protected probe route.
+- [x] Write integration tests (`auth_routes.itest.ts`) driving the real app + D1: full journey register → (fetch token hash from DB, mark verified via verify use case with the plain token captured from DevEmailSender by injecting a recording fake) → login sets cookie → `/me` with bearer → refresh rotates → logout clears; plus 401 wrong password, 400 validation shape, 429 after limit exceeded (use the KV fake or real miniflare KV), EMAIL_NOT_VERIFIED gate on a protected probe route.
 
 # Phase 3 — Workspaces, members, invitations, audit
 

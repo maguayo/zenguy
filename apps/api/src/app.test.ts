@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { buildApp } from "./app";
-import type { Bindings } from "./shared/config";
 import { AppError } from "./shared/errors";
 import { zjson, zquery } from "./http/validate";
+import { fakeBindings } from "./test/fakes/bindings";
 
 function testApp() {
-  return buildApp({} as Bindings);
+  return buildApp(fakeBindings());
 }
 
 describe("HTTP kernel", () => {
