@@ -232,14 +232,14 @@ export default defineConfig({
 - [x] Write tests with the KV fake: allows under limit, blocks at limit, window resets, retryAfter sane.
 
 ### BE-011: SSRF guard
-- [ ] Create `apps/api/src/shared/ssrf.ts`.
-- [ ] `assertSafeExternalUrl(raw: string): URL` — throws `AppError("VALIDATION_ERROR", "URL not allowed", [{field:"url", message:<reason>}])` unless ALL hold:
+- [x] Create `apps/api/src/shared/ssrf.ts`.
+- [x] `assertSafeExternalUrl(raw: string): URL` — throws `AppError("VALIDATION_ERROR", "URL not allowed", [{field:"url", message:<reason>}])` unless ALL hold:
   - parses as URL; protocol `http:` or `https:`; no embedded credentials (`url.username/password` empty); port not `0`.
   - hostname is not (case-insensitive): `localhost`, `*.localhost`, `*.local`, `*.internal`, `metadata.google.internal`, `169.254.169.254`, `[::1]`-style loopback.
   - if hostname is an IPv4 literal: reject ranges `0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 192.0.0.0/24, 198.18.0.0/15, 224.0.0.0/4, 240.0.0.0/4` (implement `ipv4ToInt` + CIDR check helpers).
   - if hostname is an IPv6 literal (brackets stripped): reject `::`, `::1`, `fc00::/7`, `fe80::/10`, `::ffff:x.x.x.x` mapped-IPv4 (recheck the v4 part).
-- [ ] Same function is called: on browser-test `start_url` validation, on **every** agent `navigate` action, on uptime monitor URL validation, and on **every redirect hop** of uptime checks. (Workers cannot pre-resolve DNS: DNS-rebinding residual risk is accepted for V1 — leave a comment saying exactly that.)
-- [ ] Write table-driven tests: ≥15 blocked URLs (each category), ≥6 allowed (`https://example.com`, `http://example.com:8080/x?y=1`, public IP literal, punycode domain).
+- [x] Same function is called: on browser-test `start_url` validation, on **every** agent `navigate` action, on uptime monitor URL validation, and on **every redirect hop** of uptime checks. (Workers cannot pre-resolve DNS: DNS-rebinding residual risk is accepted for V1 — leave a comment saying exactly that.)
+- [x] Write table-driven tests: ≥15 blocked URLs (each category), ≥6 allowed (`https://example.com`, `http://example.com:8080/x?y=1`, public IP literal, punycode domain).
 
 ### BE-012: Redaction library
 - [ ] Create `apps/api/src/shared/redact.ts` — the **single central redaction library** (spec §22.6) used by steps, logs, reports, notifications, excerpts, audit metadata.
