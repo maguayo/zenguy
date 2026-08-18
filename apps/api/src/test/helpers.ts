@@ -1,7 +1,11 @@
 import { env } from "cloudflare:test";
 import type { Bindings } from "../shared/config";
 
-const TABLES: readonly string[] = [];
+const DELETE_STATEMENTS = [
+  "DELETE FROM refresh_tokens",
+  "DELETE FROM email_tokens",
+  "DELETE FROM users",
+] as const;
 
 export function testEnv(): Bindings {
   return {
@@ -31,10 +35,7 @@ export function testEnv(): Bindings {
 }
 
 export async function freshDb(): Promise<void> {
-  if (TABLES.length === 0) {
-    return;
-  }
   await testEnv().DB.batch(
-    TABLES.map((table) => testEnv().DB.prepare(`DELETE FROM ${table}`)),
+    DELETE_STATEMENTS.map((statement) => testEnv().DB.prepare(statement)),
   );
 }

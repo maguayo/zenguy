@@ -290,7 +290,7 @@ await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 # Phase 2 — Auth
 
 ### BE-014: Auth migration
-- [ ] Create `apps/api/migrations/0001_auth.sql` exactly:
+- [x] Create `apps/api/migrations/0001_auth.sql` exactly:
 ```sql
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
@@ -328,7 +328,7 @@ CREATE UNIQUE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 ```
   (Design note, applies to ALL migrations: **no foreign key constraints** — retention purges billing-exempt tables independently; integrity is enforced in application code.)
-- [ ] Run `pnpm --filter @zenguy/api db:migrate:local`. Add the three tables to `freshDb()` in `test/helpers.ts`.
+- [x] Run `pnpm --filter @zenguy/api db:migrate:local`. Add the three tables to `freshDb()` in `test/helpers.ts`.
 
 ### BE-015: Auth domain & repositories
 - [ ] Create `apps/api/src/domain/users/types.ts`: `interface User { id; name; email; passwordHash; emailVerifiedAt: number | null; createdAt; updatedAt }` (numbers are unix ms); `interface EmailToken { id; userId; type: "VERIFY_EMAIL" | "RESET_PASSWORD"; tokenHash; expiresAt; usedAt: number | null; createdAt }`; `interface RefreshToken { id; userId; tokenHash; expiresAt; revokedAt: number | null; replacedById: string | null; createdAt }`.
