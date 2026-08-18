@@ -400,7 +400,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 # Phase 3 — Workspaces, members, invitations, audit
 
 ### BE-022: Workspace migration
-- [ ] Create `apps/api/migrations/0002_workspaces.sql`:
+- [x] Create `apps/api/migrations/0002_workspaces.sql`:
 ```sql
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY,
@@ -453,7 +453,7 @@ CREATE TABLE audit_logs (
 );
 CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 ```
-- [ ] Apply locally; extend `freshDb()`.
+- [x] Apply locally; extend `freshDb()`.
 
 ### BE-023: Workspace domain & repositories
 - [ ] Create `apps/api/src/domain/workspaces/types.ts`: `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `type Role = "OWNER" | "ADMIN" | "MEMBER"`.

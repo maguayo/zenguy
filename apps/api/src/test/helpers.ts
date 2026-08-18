@@ -2,6 +2,10 @@ import { env } from "cloudflare:test";
 import type { Bindings } from "../shared/config";
 
 const DELETE_STATEMENTS = [
+  "DELETE FROM audit_logs",
+  "DELETE FROM workspace_invitations",
+  "DELETE FROM workspace_members",
+  "DELETE FROM workspaces",
   "DELETE FROM refresh_tokens",
   "DELETE FROM email_tokens",
   "DELETE FROM users",
