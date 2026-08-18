@@ -171,12 +171,12 @@ export default defineConfig({
 - [x] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
 
 ### BE-004: Typed env & config
-- [ ] Create `apps/api/src/shared/config.ts`:
+- [x] Create `apps/api/src/shared/config.ts`:
   - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: Fetcher`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var).
   - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `resendApiKey`, `emailFrom`, `anthropicApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
   - Export `loadConfig(env: Bindings): AppConfig` validating with zod; throw `Error("Missing env: X")` listing all missing vars at once.
-- [ ] Create `apps/api/src/shared/constants.ts` with every constant from **Appendix D**, exported by the exact names given there. All later tasks import from here — never re-declare literals.
-- [ ] Write unit tests: `loadConfig` throws naming missing vars; parses a complete fake env; decodes base64 `ENCRYPTION_KEY` to 32 bytes and rejects wrong length.
+- [x] Create `apps/api/src/shared/constants.ts` with every constant from **Appendix D**, exported by the exact names given there. All later tasks import from here — never re-declare literals.
+- [x] Write unit tests: `loadConfig` throws naming missing vars; parses a complete fake env; decodes base64 `ENCRYPTION_KEY` to 32 bytes and rejects wrong length.
 
 # Phase 1 — Shared kernel
 
@@ -1302,6 +1302,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 
 - BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
 - BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/web/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
+- BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 
 ---
 
