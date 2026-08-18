@@ -203,14 +203,14 @@ export default defineConfig({
 - [x] Write tests for `FixedClock` (`now`, `advance`).
 
 ### BE-008: Crypto utilities
-- [ ] Create `apps/api/src/shared/crypto.ts` using **WebCrypto only** (no Node crypto imports). Functions:
+- [x] Create `apps/api/src/shared/crypto.ts` using **WebCrypto only** (no Node crypto imports). Functions:
   - `hashPassword(password: string): Promise<string>` → PBKDF2-HMAC-SHA256, 100_000 iterations (constant `PBKDF2_ITERATIONS`), 16-byte random salt, 32-byte key; stored format `pbkdf2$100000$<salt-b64>$<hash-b64>`.
   - `verifyPassword(password: string, stored: string): Promise<boolean>` — parse the format, re-derive with the stored iteration count, constant-time compare (`timingSafeEqualBytes(a, b)` helper: XOR-accumulate, length check first).
   - `sha256Hex(input: string): Promise<string>` — used to store hashes of refresh/verification/invitation tokens.
   - `randomToken(bytes = 32): string` — `crypto.getRandomValues` → base64url without padding (used for refresh tokens, email tokens, invitation tokens).
   - `encryptSecret(plaintext: string, key: Uint8Array): Promise<string>` → AES-256-GCM, 12-byte random IV, output `v1:<iv-b64>:<ciphertext-b64>`; `decryptSecret(encoded: string, key: Uint8Array): Promise<string>` parsing the `v1:` envelope (the version prefix is the `encryption_version`).
   - `hmacSign(secret: string, payload: string): Promise<string>` (base64url HMAC-SHA256) and `hmacVerify(secret, payload, sig): Promise<boolean>` (constant-time) — used for artifact URLs, SSE tokens, and Paddle webhook verification.
-- [ ] Write tests: password round-trip + wrong-password false + tampered-format false; encrypt/decrypt round-trip + tampered-ciphertext throws + wrong key throws; hmac sign/verify + tamper false; randomToken length/charset.
+- [x] Write tests: password round-trip + wrong-password false + tampered-format false; encrypt/decrypt round-trip + tampered-ciphertext throws + wrong key throws; hmac sign/verify + tamper false; randomToken length/charset.
 
 ### BE-009: HTTP kernel
 - [ ] Create `apps/api/src/shared/log.ts`: `logEvent(event: string, fields?: Record<string, string | number | boolean | null>)` → `console.log(JSON.stringify({ event, ...fields, t: Date.now() }))`, and `platformAlert(event: string, fields?)` → same via `console.error` with `{ level: "platform_alert" }` (this is the internal Zenguy alerting signal per spec §16.11/§27 — SYSTEM_ERRORs use it, customer channels never do).
