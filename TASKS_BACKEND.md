@@ -367,14 +367,14 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Write use-case tests with fakes: happy paths; duplicate email; expired/used token → GONE; resend for unknown email returns sent (no throw, no email sent).
 
 ### BE-019: Use cases — login, refresh, logout
-- [ ] Create `apps/api/src/application/auth/login.ts`: input `{ email, password }` → user lookup + `verifyPassword`; on either failure throw `AppError("INVALID_CREDENTIALS", "Incorrect email or password")` (same message both cases). On success: create refresh token (`randomToken()`, store hashed, expires 30 d), issue access token → return `{ user, accessToken, refreshTokenPlain, expiresIn: ACCESS_TOKEN_TTL_SECONDS }`. Login is allowed for unverified users (the API gate is middleware-level, BE-021).
-- [ ] Create `apps/api/src/application/auth/refresh.ts`: input `{ refreshTokenPlain }` → hash → `findByHash`:
+- [x] Create `apps/api/src/application/auth/login.ts`: input `{ email, password }` → user lookup + `verifyPassword`; on either failure throw `AppError("INVALID_CREDENTIALS", "Incorrect email or password")` (same message both cases). On success: create refresh token (`randomToken()`, store hashed, expires 30 d), issue access token → return `{ user, accessToken, refreshTokenPlain, expiresIn: ACCESS_TOKEN_TTL_SECONDS }`. Login is allowed for unverified users (the API gate is middleware-level, BE-021).
+- [x] Create `apps/api/src/application/auth/refresh.ts`: input `{ refreshTokenPlain }` → hash → `findByHash`:
   - not found → `UNAUTHORIZED`.
   - `revokedAt` set → **reuse detected**: `revokeAllForUser(userId)` then `UNAUTHORIZED` (log `refresh_reuse_detected`).
   - expired → `UNAUTHORIZED`.
   - valid → rotate: insert new refresh token, `revoke(old, now, newId)`, issue access token → `{ user, accessToken, refreshTokenPlain: new, expiresIn }`.
-- [ ] Create `apps/api/src/application/auth/logout.ts`: input `{ refreshTokenPlain | null }` → if present and found, revoke it. Always succeed.
-- [ ] Write tests: wrong password; rotation revokes old and links `replacedById`; reuse of a rotated token revokes the whole family; expired refresh rejected.
+- [x] Create `apps/api/src/application/auth/logout.ts`: input `{ refreshTokenPlain | null }` → if present and found, revoke it. Always succeed.
+- [x] Write tests: wrong password; rotation revokes old and links `replacedById`; reuse of a rotated token revokes the whole family; expired refresh rejected.
 
 ### BE-020: Use cases — forgot & reset password
 - [ ] Create `apps/api/src/application/auth/forgot_password.ts`: input `{ email }` → always `{ sent: true }`; if user exists: delete old RESET_PASSWORD tokens, create one (expires 1 h), send reset email.
