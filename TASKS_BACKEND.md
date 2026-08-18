@@ -198,9 +198,9 @@ export default defineConfig({
 - [x] Write tests: uniqueness over 1000 generations, prefix correctness, `isId` accepts generated ids and rejects wrong prefixes.
 
 ### BE-007: Clock abstraction
-- [ ] Create `apps/api/src/shared/clock.ts`.
-- [ ] `interface Clock { now(): number }` (unix **milliseconds**). Provide `const systemClock: Clock` and `class FixedClock implements Clock { constructor(private t: number) {} now() { return this.t; } advance(ms: number) { this.t += ms; } }`.
-- [ ] Write tests for `FixedClock` (`now`, `advance`).
+- [x] Create `apps/api/src/shared/clock.ts`.
+- [x] `interface Clock { now(): number }` (unix **milliseconds**). Provide `const systemClock: Clock` and `class FixedClock implements Clock { constructor(private t: number) {} now() { return this.t; } advance(ms: number) { this.t += ms; } }`.
+- [x] Write tests for `FixedClock` (`now`, `advance`).
 
 ### BE-008: Crypto utilities
 - [ ] Create `apps/api/src/shared/crypto.ts` using **WebCrypto only** (no Node crypto imports). Functions:
