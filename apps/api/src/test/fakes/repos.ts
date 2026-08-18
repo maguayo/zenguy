@@ -21,6 +21,9 @@ import type {
   WorkspaceInvitation,
   WorkspaceMember,
 } from "../../domain/workspaces/types";
+import type { AuditRepo } from "../../domain/audit/repo";
+import type { AuditEntry } from "../../domain/audit/types";
+import type { Cursor } from "../../shared/pagination";
 
 function clone<T extends object>(value: T): T {
   return { ...value };
@@ -451,5 +454,38 @@ export class FakeInvitationRepo implements InvitationRepo {
         this.invitations.set(id, { ...invitation, revokedAt: at });
       }
     }
+  }
+}
+
+export class FakeAuditRepo implements AuditRepo {
+  readonly entries = new Map<string, AuditEntry>();
+
+  async insert(entry: AuditEntry): Promise<void> {
+    if (this.entries.has(entry.id)) {
+      throw new Error("audit constraint violation");
+    }
+    this.entries.set(entry.id, clone(entry));
+  }
+
+  async list(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<AuditEntry[]> {
+    return [...this.entries.values()]
+      .filter(
+        (entry) =>
+          entry.workspaceId === workspaceId &&
+          (cursor === null ||
+            cursor === undefined ||
+            entry.createdAt < cursor.createdAt ||
+            (entry.createdAt === cursor.createdAt && entry.id < cursor.id)),
+      )
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .slice(0, limit)
+      .map(clone);
   }
 }

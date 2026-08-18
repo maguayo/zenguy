@@ -118,6 +118,27 @@ export function sanitizeHeaders(
   return sanitized;
 }
 
+export type AuditMetadataValue =
+  | string
+  | number
+  | boolean
+  | null
+  | string[];
+
+const SENSITIVE_METADATA_NAME =
+  /pass|token|secret|authorization|cookie|credential|private|config|header|body|content/iu;
+
+export function sanitizeAuditMetadata(
+  metadata: Record<string, AuditMetadataValue>,
+): Record<string, AuditMetadataValue> {
+  return Object.fromEntries(
+    Object.entries(metadata).map(([name, value]) => [
+      name,
+      SENSITIVE_METADATA_NAME.test(name) ? "***" : value,
+    ]),
+  );
+}
+
 export function truncate(value: string, max: number): string {
   if (max <= 0) {
     return "";

@@ -466,10 +466,10 @@ CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 - [x] `.itest.ts`: member uniqueness, listForUser joins role, soft-deleted excluded, slug collision path.
 
 ### BE-024: Audit writer
-- [ ] Create `apps/api/src/domain/audit/types.ts` (`AuditEntry`) and `repo.ts` (`AuditRepo`: `insert`, `list(workspaceId, cursor?, limit) ` keyset).
-- [ ] Create `apps/api/src/application/audit/write_audit.ts`: `WriteAudit.execute({ workspaceId, actorUserId, action, resourceType?, resourceId?, metadata?, ip? })` — metadata is passed through `sanitizeHeaders`-style cleaning: caller may only put ids, names, roles, counts; the use case JSON-stringifies and truncates to 2000 chars. Audit failures must **never** fail the parent operation: catch + `logEvent("audit_write_failed")`.
-- [ ] Audited action names (string constants in `domain/audit/actions.ts` — used across phases): `workspace.created`, `workspace.updated`, `workspace.deleted`, `workspace.ownership_transferred`, `member.invited`, `member.invitation_revoked`, `member.joined`, `member.role_changed`, `member.removed`, `secret.created`, `secret.updated`, `secret.deleted`, `channel.created`, `channel.updated`, `channel.deleted`, `channel.tested`, `test.created`, `test.updated`, `test.deleted`, `test.run_manual`, `monitor.created`, `monitor.updated`, `monitor.deleted`, `billing.subscription_updated`, `auth.password_reset`.
-- [ ] D1 `audit_repo.ts` + fake + `.itest.ts` (insert + keyset list ordering).
+- [x] Create `apps/api/src/domain/audit/types.ts` (`AuditEntry`) and `repo.ts` (`AuditRepo`: `insert`, `list(workspaceId, cursor?, limit) ` keyset).
+- [x] Create `apps/api/src/application/audit/write_audit.ts`: `WriteAudit.execute({ workspaceId, actorUserId, action, resourceType?, resourceId?, metadata?, ip? })` — metadata is passed through `sanitizeHeaders`-style cleaning: caller may only put ids, names, roles, counts; the use case JSON-stringifies and truncates to 2000 chars. Audit failures must **never** fail the parent operation: catch + `logEvent("audit_write_failed")`.
+- [x] Audited action names (string constants in `domain/audit/actions.ts` — used across phases): `workspace.created`, `workspace.updated`, `workspace.deleted`, `workspace.ownership_transferred`, `member.invited`, `member.invitation_revoked`, `member.joined`, `member.role_changed`, `member.removed`, `secret.created`, `secret.updated`, `secret.deleted`, `channel.created`, `channel.updated`, `channel.deleted`, `channel.tested`, `test.created`, `test.updated`, `test.deleted`, `test.run_manual`, `monitor.created`, `monitor.updated`, `monitor.deleted`, `billing.subscription_updated`, `auth.password_reset`.
+- [x] D1 `audit_repo.ts` + fake + `.itest.ts` (insert + keyset list ordering).
 
 ### BE-025: Workspace middleware & role guard
 - [ ] Create `apps/api/src/http/middleware/workspace.ts`:

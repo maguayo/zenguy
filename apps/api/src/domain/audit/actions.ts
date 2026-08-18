@@ -1,0 +1,30 @@
+export const AUDIT_ACTIONS = {
+  workspaceCreated: "workspace.created",
+  workspaceUpdated: "workspace.updated",
+  workspaceDeleted: "workspace.deleted",
+  workspaceOwnershipTransferred: "workspace.ownership_transferred",
+  memberInvited: "member.invited",
+  memberInvitationRevoked: "member.invitation_revoked",
+  memberJoined: "member.joined",
+  memberRoleChanged: "member.role_changed",
+  memberRemoved: "member.removed",
+  secretCreated: "secret.created",
+  secretUpdated: "secret.updated",
+  secretDeleted: "secret.deleted",
+  channelCreated: "channel.created",
+  channelUpdated: "channel.updated",
+  channelDeleted: "channel.deleted",
+  channelTested: "channel.tested",
+  testCreated: "test.created",
+  testUpdated: "test.updated",
+  testDeleted: "test.deleted",
+  testRunManual: "test.run_manual",
+  monitorCreated: "monitor.created",
+  monitorUpdated: "monitor.updated",
+  monitorDeleted: "monitor.deleted",
+  billingSubscriptionUpdated: "billing.subscription_updated",
+  authPasswordReset: "auth.password_reset",
+} as const;
+
+export type AuditAction =
+  (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
