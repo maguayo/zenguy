@@ -472,10 +472,10 @@ CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 - [x] D1 `audit_repo.ts` + fake + `.itest.ts` (insert + keyset list ordering).
 
 ### BE-025: Workspace middleware & role guard
-- [ ] Create `apps/api/src/http/middleware/workspace.ts`:
+- [x] Create `apps/api/src/http/middleware/workspace.ts`:
   - `withWorkspace`: for routes matching `/api/workspaces/:workspaceId/*` — load workspace (`NOT_FOUND` if missing or soft-deleted) and the caller's membership (`NOT_FOUND` too — do not reveal existence to non-members), then `c.set("workspace", ws)`, `c.set("role", role)`.
   - `requireAction(action: Action)`: middleware factory → `can(role, action)` else `forbidden()`.
-- [ ] Write integration tests with two users/workspaces: non-member gets 404 (not 403), member vs admin vs owner on a probe route per guard.
+- [x] Write integration tests with two users/workspaces: non-member gets 404 (not 403), member vs admin vs owner on a probe route per guard.
 
 ### BE-026: Workspace use cases & routes
 - [ ] `application/workspaces/create_workspace.ts`: input `{ name (1–80), timezone (validate: `new Intl.DateTimeFormat("en", { timeZone })` inside try/catch → invalid → validation error), actor }` → create workspace (`newId("ws")`, `uniqueSlug`, `owner_user_id = actor.id`) + OWNER member row + audit `workspace.created`. Returns workspace + role + `subscriptionStatus: "NONE"`.
