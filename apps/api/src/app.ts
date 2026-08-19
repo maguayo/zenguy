@@ -23,6 +23,7 @@ import type {
 } from "./domain/incidents/repo";
 import type { MonitorConfig } from "./domain/uptime/rules";
 import type { CheckRepo, MonitorRepo } from "./domain/uptime/repo";
+import type { OverviewRepo } from "./domain/overview/repo";
 import type { CheckOutcome } from "./application/uptime/execute_check";
 import { executeCheck } from "./application/uptime/execute_check";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
@@ -77,6 +78,7 @@ import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1CheckRepo } from "./infrastructure/db/check_repo";
+import { D1OverviewRepo } from "./infrastructure/db/overview_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
@@ -93,6 +95,7 @@ import { browserTestRoutes } from "./http/routes/browser_tests";
 import { artifactRoutes } from "./http/routes/artifacts";
 import { runEventRoutes } from "./http/routes/run_events";
 import { uptimeRoutes } from "./http/routes/uptime";
+import { overviewRoutes } from "./http/routes/overview";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -131,6 +134,7 @@ export interface AppOverrides {
   incidentEvents?: IncidentEventRepo;
   monitors?: MonitorRepo;
   checks?: CheckRepo;
+  overview?: OverviewRepo;
   uptimeCheckExecutor?: (
     config: MonitorConfig,
     workspaceId: string,
@@ -185,6 +189,7 @@ export function buildApp(
     overrides.incidentEvents ?? new D1IncidentEventRepo(env.DB);
   const monitors = overrides.monitors ?? new D1MonitorRepo(env.DB);
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
+  const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
   const uptimeCheckExecutor =
     overrides.uptimeCheckExecutor ??
     ((monitorConfig: MonitorConfig, workspaceId: string) =>
@@ -344,6 +349,19 @@ export function buildApp(
       incidents,
       incidentEvents,
       deliveries,
+      clock,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    overviewRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      usageEvents,
+      overview,
       clock,
       config,
     }),

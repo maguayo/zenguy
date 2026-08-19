@@ -1246,7 +1246,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 # Phase 12 — Aggregate reads
 
 ### BE-070: Overview endpoint
-- [ ] `application/overview/get_overview.ts` (any member) assembling exactly (§9):
+- [x] `application/overview/get_overview.ts` (any member) assembling exactly (§9):
   - `usage`: `get_cycle_usage` output + `periodEnd` as reset date.
   - `browserTests`: `{ total, runningRuns, openIncidents, failed24h }` (counts; failed24h = non-VALIDATION runs finished FAILED/TIMEOUT in last 24 h).
   - `uptime`: `{ up, down, unknown, openIncidents, avgResponseTimeMs24h }`.
@@ -1256,7 +1256,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
     - uptime incidents opened → `MONITOR_DOWN`, link `{ incidentId }`.
     - deliveries FAILED (last 24 h) → `CHANNEL_DELIVERY_FAILED`, title `"Delivery to <channel name> failed"`, link `{ channelId }`.
   - Item shape: `{ id, type, occurredAt, title, resourceType, resourceId, resourceName, link }`.
-- [ ] Route `GET /api/workspaces/:workspaceId/overview`. Tests: counts + merge ordering + types with a seeded fixture set.
+- [x] Route `GET /api/workspaces/:workspaceId/overview`. Tests: counts + merge ordering + types with a seeded fixture set.
 
 ### BE-071: Audit log endpoint
 - [ ] `application/audit/list_audit_logs.ts` (`audit.view` — OWNER & ADMIN), keyset, rows `{ id, action, actor: { userId, name } | null, resourceType, resourceId, metadata (parsed JSON), ip, createdAt }`.
