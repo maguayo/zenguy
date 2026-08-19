@@ -342,13 +342,13 @@ export default defineConfig({
 - [x] Empty: `No notification channels yet` / `Create a channel once, then reuse it across tests and monitors.` + CTA.
 
 ### FE-035: Channel form (per-type)
-- [ ] `pages/notifications/ChannelFormModal.tsx` — Modal launched from Add/Edit (no separate route). Step 1 (create only): type picker — 6 tile buttons (icon + label). Step 2: fields:
+- [x] `pages/notifications/ChannelFormModal.tsx` — Modal launched from Add/Edit (no separate route). Step 1 (create only): type picker — 6 tile buttons (icon + label). Step 2: fields:
   - Common: Name (1–80).
   - EMAIL: `components/EmailListInput.tsx` — chips input (type address + Enter/comma adds, validates email, removable chips, max 10).
   - SMS / WHATSAPP / CALL: Phone number Input, placeholder `+34612345678`, hint `E.164 format, with country code.` WhatsApp extra hint: `The number must have WhatsApp and accept messages from your Twilio sender.`
   - SLACK: Webhook URL Input (validate prefix `https://hooks.slack.com/`), hint `Create an incoming webhook in your Slack workspace and paste the URL. Treat it like a password.`; DISCORD: same with `https://discord.com/api/webhooks/` and Discord copy.
   - Edit mode for SLACK/DISCORD: show masked URL as placeholder text `Currently: https://hooks.slack.com/…abcd` with empty input `Paste a new URL to replace it` — send `config` only when the user typed one (webhook values are never readable back).
-- [ ] Save → create/update mutation → toast + invalidate. Zod validation per type mirrors backend (bad → inline field errors).
+- [x] Save → create/update mutation → toast + invalidate. Zod validation per type mirrors backend (bad → inline field errors).
 
 ### FE-036: Delivery history
 - [ ] `pages/notifications/DeliveriesDrawer.tsx`: right-side slide-over panel (reuse Modal mechanics, `max-w-md h-full ml-auto` panel) opened from a channel's `View deliveries`: header `Deliveries — <channel name>`; list rows: event Badge (`Failure` danger / `Recovery` ok / `Test` neutral), status (`Sent`/`Failed` + attempts count `2 attempts`), error text when failed (mono, truncated with Tooltip), incident link icon when `incidentId`, `formatDateTime(createdAt)`. `LoadMore` (25/page). Empty: `No deliveries yet.`

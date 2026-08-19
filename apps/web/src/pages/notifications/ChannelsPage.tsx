@@ -40,6 +40,7 @@ import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatRelative } from "../../lib/format";
+import { ChannelFormModal } from "./ChannelFormModal";
 
 const channelIcons: Record<ChannelType, LucideIcon> = {
   CALL: Phone,
@@ -102,6 +103,15 @@ export function openChannelPanel(
   const next = new URLSearchParams(current);
   next.delete(panel === "channel" ? "deliveries" : "channel");
   next.set(panel, value);
+  return next;
+}
+
+export function closeChannelPanel(
+  current: URLSearchParams,
+  panel: "channel" | "deliveries",
+): URLSearchParams {
+  const next = new URLSearchParams(current);
+  next.delete(panel);
   return next;
 }
 
@@ -319,6 +329,16 @@ export default function ChannelsPage() {
   });
   const addChannel = () =>
     setSearchParams(openChannelPanel(searchParams, "channel", "new"));
+  const channelParam = searchParams.get("channel");
+  const editingChannel =
+    channelParam && channelParam !== "new"
+      ? channels.data?.find((channel) => channel.id === channelParam)
+      : undefined;
+  const formOpen =
+    can("channels.manage") &&
+    (channelParam === "new" || Boolean(editingChannel));
+  const closeForm = () =>
+    setSearchParams(closeChannelPanel(searchParams, "channel"), { replace: true });
 
   return (
     <div className="space-y-6">
@@ -358,6 +378,12 @@ export default function ChannelsPage() {
           ))}
         </div>
       )}
+
+      <ChannelFormModal
+        channel={editingChannel}
+        onClose={closeForm}
+        open={formOpen}
+      />
     </div>
   );
 }

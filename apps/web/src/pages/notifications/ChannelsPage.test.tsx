@@ -5,6 +5,7 @@ import type { Channel, Delivery } from "../../api/types";
 import {
   ChannelSummary,
   channelTarget,
+  closeChannelPanel,
   lastDeliveryText,
   openChannelPanel,
   testDeliveryResult,
@@ -108,5 +109,6 @@ describe("notification channels list", () => {
     const history = openChannelPanel(editor, "deliveries", "channel_1");
     expect(history.get("deliveries")).toBe("channel_1");
     expect(history.has("channel")).toBe(false);
+    expect(closeChannelPanel(history, "deliveries").toString()).toBe("filter=active");
   });
 });
