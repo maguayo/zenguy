@@ -1,23 +1,36 @@
 import type { User } from "../../domain/users/types";
+import { WriteAudit } from "../../application/audit/write_audit";
 import { FixedClock } from "../../shared/clock";
 import { RecordingEmailSender } from "./email";
 import { FakeIds } from "./ids";
 import {
   FakeEmailTokenRepo,
+  FakeAuditRepo,
+  FakeMemberRepo,
   FakeRefreshTokenRepo,
   FakeUserRepo,
+  FakeWorkspaceRepo,
+  FakeWorkspaceState,
 } from "./repos";
 
 export const TEST_NOW = Date.now();
 
 export function authTestDependencies() {
+  const clock = new FixedClock(TEST_NOW);
+  const ids = new FakeIds();
+  const audits = new FakeAuditRepo();
+  const workspaceState = new FakeWorkspaceState();
   return {
     users: new FakeUserRepo(),
     emailTokens: new FakeEmailTokenRepo(),
     refreshTokens: new FakeRefreshTokenRepo(),
+    workspaces: new FakeWorkspaceRepo(workspaceState),
+    members: new FakeMemberRepo(workspaceState),
+    audits,
+    audit: new WriteAudit({ audits, clock, ids }),
     emailSender: new RecordingEmailSender(),
-    clock: new FixedClock(TEST_NOW),
-    ids: new FakeIds(),
+    clock,
+    ids,
     config: {
       appUrl: "https://app.zenguy.test",
       jwtSecret: "jwt-test-secret".padEnd(32, "-"),

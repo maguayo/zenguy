@@ -14,6 +14,8 @@ import type {
   RefreshTokenRepo,
   UserRepo,
 } from "../../domain/users/repo";
+import type { WorkspaceRepo } from "../../domain/workspaces/repo";
+import type { WriteAudit } from "../../application/audit/write_audit";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import {
@@ -37,6 +39,8 @@ export interface AuthRoutesDependencies {
   users: UserRepo;
   emailTokens: EmailTokenRepo;
   refreshTokens: RefreshTokenRepo;
+  workspaces: WorkspaceRepo;
+  audit: Pick<WriteAudit, "execute">;
   emailSender: EmailSender;
   rateLimiter: RateLimiter;
   clock: Clock;
@@ -212,7 +216,10 @@ export function authRoutes(
     "/reset-password",
     zjson(resetPasswordSchema),
     async (context) => {
-      const result = await resetPassword.execute(context.req.valid("json"));
+      const result = await resetPassword.execute({
+        ...context.req.valid("json"),
+        ip: clientIp(context),
+      });
       return context.json({ data: result });
     },
   );

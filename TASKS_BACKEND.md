@@ -1259,10 +1259,10 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Route `GET /api/workspaces/:workspaceId/overview`. Tests: counts + merge ordering + types with a seeded fixture set.
 
 ### BE-071: Audit log endpoint
-- [ ] `application/audit/list_audit_logs.ts` (`audit.view` — OWNER & ADMIN), keyset, rows `{ id, action, actor: { userId, name } | null, resourceType, resourceId, metadata (parsed JSON), ip, createdAt }`.
-- [ ] Route `GET /api/workspaces/:workspaceId/audit-logs?cursor&limit`.
-- [ ] Wiring audit — verify every action from BE-024's list is actually written by its use case (grep for each constant; add any missing call). §22.10 requires at minimum: test create/delete, secret changes, role changes, invitations, billing, channels, workspace deletion, manual runs.
-- [ ] Tests: MEMBER 403; entries appear after invoking audited use cases; pagination.
+- [x] `application/audit/list_audit_logs.ts` (`audit.view` — OWNER & ADMIN), keyset, rows `{ id, action, actor: { userId, name } | null, resourceType, resourceId, metadata (parsed JSON), ip, createdAt }`.
+- [x] Route `GET /api/workspaces/:workspaceId/audit-logs?cursor&limit`.
+- [x] Wiring audit — verify every action from BE-024's list is actually written by its use case (grep for each constant; add any missing call). §22.10 requires at minimum: test create/delete, secret changes, role changes, invitations, billing, channels, workspace deletion, manual runs.
+- [x] Tests: MEMBER 403; entries appear after invoking audited use cases; pagination.
 
 # Phase 13 — Hardening & release
 

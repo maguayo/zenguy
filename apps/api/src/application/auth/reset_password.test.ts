@@ -1,4 +1,5 @@
 import type { EmailToken, RefreshToken } from "../../domain/users/types";
+import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import { sha256Hex, verifyPassword } from "../../shared/crypto";
 import { authTestDependencies, testUser } from "../../test/fakes/auth";
 import { ResetPassword } from "./reset_password";
@@ -27,6 +28,24 @@ describe("ResetPassword", () => {
       createdAt: dependencies.clock.now(),
     };
     await dependencies.users.insert(user);
+    await dependencies.workspaces.insert({
+      id: "ws_password_reset",
+      name: "Password Reset Workspace",
+      slug: "password-reset-workspace",
+      timezone: "UTC",
+      ownerUserId: user.id,
+      createdAt: dependencies.clock.now(),
+      updatedAt: dependencies.clock.now(),
+      deletedAt: null,
+    });
+    await dependencies.members.insert({
+      id: "mem_password_reset",
+      workspaceId: "ws_password_reset",
+      userId: user.id,
+      role: "OWNER",
+      invitedBy: null,
+      joinedAt: dependencies.clock.now(),
+    });
     await dependencies.emailTokens.insert(resetToken);
     await dependencies.refreshTokens.insert(refreshToken);
 
@@ -34,6 +53,7 @@ describe("ResetPassword", () => {
       new ResetPassword(dependencies).execute({
         token: plain,
         password: "new-password",
+        ip: "203.0.113.8",
       }),
     ).resolves.toEqual({ reset: true });
 
@@ -48,6 +68,16 @@ describe("ResetPassword", () => {
     expect(
       dependencies.refreshTokens.tokens.get(refreshToken.id)?.revokedAt,
     ).toBe(dependencies.clock.now());
+    expect([...dependencies.audits.entries.values()]).toEqual([
+      expect.objectContaining({
+        workspaceId: "ws_password_reset",
+        actorUserId: user.id,
+        action: AUDIT_ACTIONS.authPasswordReset,
+        resourceType: "user",
+        resourceId: user.id,
+        ip: "203.0.113.8",
+      }),
+    ]);
   });
 
   it.each([

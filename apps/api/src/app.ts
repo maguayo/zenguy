@@ -96,6 +96,7 @@ import { artifactRoutes } from "./http/routes/artifacts";
 import { runEventRoutes } from "./http/routes/run_events";
 import { uptimeRoutes } from "./http/routes/uptime";
 import { overviewRoutes } from "./http/routes/overview";
+import { auditRoutes } from "./http/routes/audit";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -250,6 +251,8 @@ export function buildApp(
       users,
       emailTokens,
       refreshTokens,
+      workspaces,
+      audit,
       emailSender,
       rateLimiter,
       clock,
@@ -352,6 +355,10 @@ export function buildApp(
       clock,
       config,
     }),
+  );
+  app.route(
+    "/api/workspaces",
+    auditRoutes({ users, workspaces, members, audits, config }),
   );
   app.route(
     "/api/workspaces",
