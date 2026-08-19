@@ -46,9 +46,9 @@ const CreateWorkspace = lazy(() => import("./pages/onboarding/CreateWorkspace"))
 const BillingSetup = lazy(() => import("./pages/onboarding/BillingSetup"));
 const OverviewPage = lazy(() => import("./pages/overview/OverviewPage"));
 const TestsListPage = lazy(() => import("./pages/tests/TestsListPage"));
-const NewTestPage = stub("New browser test");
+const NewTestPage = lazy(() => import("./pages/tests/TestFormPage"));
 const TestDetailPage = stub("Browser test");
-const EditTestPage = stub("Edit browser test");
+const EditTestPage = lazy(() => import("./pages/tests/TestFormPage"));
 const RunDetailPage = stub("Run");
 const UptimeListPage = stub("Uptime");
 const NewMonitorPage = stub("New monitor");

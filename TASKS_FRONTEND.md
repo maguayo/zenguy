@@ -253,8 +253,8 @@ export default defineConfig({
 - [x] Empty: `No browser tests yet` / `Describe a flow in plain language and Zenguy will verify it in a real browser on a schedule.` + `Create your first test`. Loading/error states.
 
 ### FE-024: Test form (create/edit) with `Test it`
-- [ ] `pages/tests/TestFormPage.tsx` serving `/tests/new` and `/tests/:testId/edit` (load + prefill on edit). RHF + zod schema mirroring the API: name 1–120, startUrl (`z.string().url()` + must start `http`), instructions min 1, device enum, intervalHours int 1–24, maxRetries int 0–3, notifyOnRecovery boolean, channelIds string[].
-- [ ] Sections as titled Cards in §18.6 order:
+- [x] `pages/tests/TestFormPage.tsx` serving `/tests/new` and `/tests/:testId/edit` (load + prefill on edit). RHF + zod schema mirroring the API: name 1–120, startUrl (`z.string().url()` + must start `http`), instructions min 1, device enum, intervalHours int 1–24, maxRetries int 0–3, notifyOnRecovery boolean, channelIds string[].
+- [x] Sections as titled Cards in §18.6 order:
   1. **Basics** — Name; Starting URL.
   2. **Instructions** — Textarea (8 rows), hint `Write what to do and what must be true, in plain language. Reference secrets like {{SHOP_PASSWORD}}.`; below it the staging-credentials warning banner (Appendix D, warn tones, `TriangleAlert` icon) and the token note (Appendix D, `text-xs text-zinc-500`).
   3. **Device** — two radio cards side by side: `Desktop — 1440 × 900` (Monitor icon) / `Mobile — 390 × 844` (Smartphone icon).
@@ -263,8 +263,8 @@ export default defineConfig({
   6. **Notifications** — checkbox list of workspace channels (name + type Badge); link `Manage channels` → notifications page; empty → `No channels yet — create one under Notifications.`
   7. **Recovery** — Toggle `Notify when this test recovers` (default ON).
   8. **Test it** — see below. 9. Sticky footer bar: `Cancel` + primary `Save test` / `Save changes`.
-- [ ] **Test it** panel: run-cost copy line (Appendix D) + secondary button `Test it` (disabled while a validation run is in progress or form invalid): on click → `validateDraft(current form values)` → store `runId` → render `<RunStatusPanel wsId runId />` (FE-026 component) inline in the card. Saving is **never** blocked by a failed or missing test run (§10.5); leaving the page mid-run is allowed (the run continues server-side — mention in a hint).
-- [ ] Submit → create: toast `Test created — first run scheduled` → detail page. Edit: toast `Changes saved` (+ if interval changed, backend already recomputed next run). 402 `BILLING_REQUIRED` → toast `Billing required — set up your subscription first.`
+- [x] **Test it** panel: run-cost copy line (Appendix D) + secondary button `Test it` (disabled while a validation run is in progress or form invalid): on click → `validateDraft(current form values)` → store `runId` → render `<RunStatusPanel wsId runId />` (FE-026 component) inline in the card. Saving is **never** blocked by a failed or missing test run (§10.5); leaving the page mid-run is allowed (the run continues server-side — mention in a hint).
+- [x] Submit → create: toast `Test created — first run scheduled` → detail page. Edit: toast `Changes saved` (+ if interval changed, backend already recomputed next run). 402 `BILLING_REQUIRED` → toast `Billing required — set up your subscription first.`
 
 ### FE-025: Test detail
 - [ ] `pages/tests/TestDetailPage.tsx` (§18.7), query test + runs (first page). Header: name + `StatusBadge` of last run; actions `Run now` (useRunNow), `Edit`, Dropdown `Delete` (ConfirmDialog danger `Delete "<name>"? Its history stays available for 30 days.`) — all permission-gated.
