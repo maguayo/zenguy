@@ -25,7 +25,7 @@ import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { ApiError } from "../../lib/api";
-import { apiErrorMessage } from "../../lib/errors";
+import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 import { runCostCopy } from "./hooks";
 
 export const stagingCredentialsCopy =
@@ -169,7 +169,14 @@ export default function TestFormPage() {
       </div>
     );
   }
-  if (editing && test.isError) return <ErrorState onRetry={() => void test.refetch()} />;
+  if (editing && test.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(test.error)}
+        onRetry={() => void test.refetch()}
+      />
+    );
+  }
 
   const selectedDevice = form.watch("device");
 

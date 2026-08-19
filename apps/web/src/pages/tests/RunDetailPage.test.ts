@@ -59,7 +59,7 @@ describe("run detail", () => {
       isMissingRun(new ApiError("Unavailable", { code: "INTERNAL", status: 500 })),
     ).toBe(false);
     expect(expiredRunMessage).toBe(
-      "This run is no longer available (runs are kept for 30 days).",
+      "This item is no longer available (data is kept for 30 days).",
     );
   });
 

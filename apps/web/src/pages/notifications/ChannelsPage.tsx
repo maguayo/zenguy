@@ -119,9 +119,11 @@ export function closeChannelPanel(
 export function ChannelSummary({
   channel,
   lastDelivery,
+  loadingLastDelivery = false,
 }: {
   channel: Channel;
   lastDelivery?: Delivery;
+  loadingLastDelivery?: boolean;
 }) {
   const Icon = channelIcons[channel.type];
   const deliveryLabel = lastDeliveryText(channel.lastDeliveryStatus, lastDelivery);
@@ -146,12 +148,16 @@ export function ChannelSummary({
       <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2">
         {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}
         {channel.verifiedAt ? <Badge tone="ok">Verified</Badge> : null}
-        <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
-          {channel.lastDeliveryStatus ? (
-            <span aria-hidden="true" className={`size-1.5 rounded-full ${deliveryTone}`} />
-          ) : null}
-          {deliveryLabel}
-        </span>
+        {loadingLastDelivery ? (
+          <Skeleton aria-label="Loading latest delivery" className="h-3 w-24" />
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+            {channel.lastDeliveryStatus ? (
+              <span aria-hidden="true" className={`size-1.5 rounded-full ${deliveryTone}`} />
+            ) : null}
+            {deliveryLabel}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -293,9 +299,22 @@ function ChannelCard({ channel }: { channel: Channel }) {
   });
 
   return (
-    <Card className="flex min-h-44 items-start gap-3">
-      <ChannelSummary channel={channel} lastDelivery={deliveries.data?.items[0]} />
-      <ChannelActions channel={channel} />
+    <Card className="min-h-44">
+      <div className="flex items-start gap-3">
+        <ChannelSummary
+          channel={channel}
+          lastDelivery={deliveries.data?.items[0]}
+          loadingLastDelivery={Boolean(channel.lastDeliveryStatus) && deliveries.isPending}
+        />
+        <ChannelActions channel={channel} />
+      </div>
+      {deliveries.isError ? (
+        <ErrorState
+          className="mt-3"
+          message="The latest delivery couldn't be loaded."
+          onRetry={() => void deliveries.refetch()}
+        />
+      ) : null}
     </Card>
   );
 }

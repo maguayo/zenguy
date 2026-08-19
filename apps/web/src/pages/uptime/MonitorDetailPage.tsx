@@ -34,11 +34,12 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { Spinner } from "../../components/ui/Spinner";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
-import { apiErrorMessage } from "../../lib/errors";
+import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 import {
   formatDateTime,
   formatDuration,
@@ -228,7 +229,14 @@ export default function MonitorDetailPage() {
   if (monitor.isPending || channels.isPending) {
     return <div className="grid min-h-64 place-items-center"><Spinner label="Loading uptime monitor" size={6} /></div>;
   }
-  if (monitor.isError) return <ErrorState onRetry={() => void monitor.refetch()} />;
+  if (monitor.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(monitor.error)}
+        onRetry={() => void monitor.refetch()}
+      />
+    );
+  }
   if (channels.isError) return <ErrorState onRetry={() => void channels.refetch()} />;
 
   const data = monitor.data;
@@ -279,10 +287,24 @@ export default function MonitorDetailPage() {
         <ErrorState onRetry={() => void stats.refetch()} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Uptime 24 h" tone={uptimeTone(stats.data?.uptime24h ?? null)}>{stats.isPending ? "—" : formatPct(stats.data.uptime24h)}</StatCard>
-          <StatCard title="Uptime 7 days" tone={uptimeTone(stats.data?.uptime7d ?? null)}>{stats.isPending ? "—" : formatPct(stats.data.uptime7d)}</StatCard>
-          <StatCard title="Uptime 30 days" tone={uptimeTone(stats.data?.uptime30d ?? null)}>{stats.isPending ? "—" : formatPct(stats.data.uptime30d)}</StatCard>
-          <StatCard title="Avg response (24 h)">{stats.isPending || stats.data.avgResponseTimeMs24h === null ? "—" : `${Math.round(stats.data.avgResponseTimeMs24h)} ms`}</StatCard>
+          <StatCard title="Uptime 24 h" tone={uptimeTone(stats.data?.uptime24h ?? null)}>
+            {stats.isPending ? <Skeleton className="h-8 w-20" /> : formatPct(stats.data.uptime24h)}
+          </StatCard>
+          <StatCard title="Uptime 7 days" tone={uptimeTone(stats.data?.uptime7d ?? null)}>
+            {stats.isPending ? <Skeleton className="h-8 w-20" /> : formatPct(stats.data.uptime7d)}
+          </StatCard>
+          <StatCard title="Uptime 30 days" tone={uptimeTone(stats.data?.uptime30d ?? null)}>
+            {stats.isPending ? <Skeleton className="h-8 w-20" /> : formatPct(stats.data.uptime30d)}
+          </StatCard>
+          <StatCard title="Avg response (24 h)">
+            {stats.isPending ? (
+              <Skeleton className="h-8 w-24" />
+            ) : stats.data.avgResponseTimeMs24h === null ? (
+              "—"
+            ) : (
+              `${Math.round(stats.data.avgResponseTimeMs24h)} ms`
+            )}
+          </StatCard>
         </div>
       )}
 
@@ -324,7 +346,7 @@ export default function MonitorDetailPage() {
         ) : incidents.isError ? (
           <ErrorState onRetry={() => void incidents.refetch()} />
         ) : monitorIncidents.length === 0 ? (
-          <p className="text-sm text-zinc-500">No incidents.</p>
+          <EmptyState className="min-h-32" title="No incidents." />
         ) : (
           <ul className="divide-y divide-zinc-200">
             {monitorIncidents.map((incident: Incident) => (

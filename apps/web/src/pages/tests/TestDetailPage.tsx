@@ -26,7 +26,7 @@ import { Tabs } from "../../components/ui/Tabs";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import type { ApiPage } from "../../lib/api";
-import { apiErrorMessage } from "../../lib/errors";
+import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 import {
   formatDateTime,
   formatDuration,
@@ -165,7 +165,14 @@ export default function TestDetailPage() {
       </div>
     );
   }
-  if (test.isError) return <ErrorState onRetry={() => void test.refetch()} />;
+  if (test.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(test.error)}
+        onRetry={() => void test.refetch()}
+      />
+    );
+  }
   if (channels.isError) return <ErrorState onRetry={() => void channels.refetch()} />;
 
   const testData = test.data;

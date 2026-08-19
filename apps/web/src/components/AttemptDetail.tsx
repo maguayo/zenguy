@@ -5,6 +5,7 @@ import clsx from "clsx";
 
 import { getAttempt } from "../api/tests";
 import type { ArtifactRef, Attempt, Step } from "../api/types";
+import { itemQueryErrorMessage } from "../lib/errors";
 import { formatTime } from "../lib/format";
 import { ScreenshotViewer, type ScreenshotItem } from "./ScreenshotViewer";
 import { StatusBadge } from "./StatusBadge";
@@ -196,7 +197,14 @@ export function AttemptDetail({
       </div>
     );
   }
-  if (attempt.isError) return <ErrorState onRetry={() => void attempt.refetch()} />;
+  if (attempt.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(attempt.error)}
+        onRetry={() => void attempt.refetch()}
+      />
+    );
+  }
 
   const data = attempt.data;
   const screenshots = screenshotItems(data);

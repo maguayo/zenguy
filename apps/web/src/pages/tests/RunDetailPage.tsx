@@ -13,6 +13,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { DescriptionList } from "../../components/ui/DescriptionList";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Spinner } from "../../components/ui/Spinner";
@@ -20,18 +21,21 @@ import { Tooltip } from "../../components/ui/Tooltip";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { ApiError } from "../../lib/api";
-import { apiErrorMessage } from "../../lib/errors";
+import {
+  apiErrorMessage,
+  isUnavailableItem,
+  unavailableItemMessage,
+} from "../../lib/errors";
 import { formatDateTime, formatDuration } from "../../lib/format";
 
 export const reportNote =
   "The report describes what was observed. It contains no credentials and doesn't assert an unverified root cause.";
 export const draftValidationNote =
   "This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.";
-export const expiredRunMessage =
-  "This run is no longer available (runs are kept for 30 days).";
+export const expiredRunMessage = unavailableItemMessage;
 
 export function isMissingRun(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404;
+  return isUnavailableItem(error);
 }
 
 export function defaultExpandedAttemptId(attempts: AttemptSummary[]): string | null {
@@ -259,20 +263,28 @@ export default function RunDetailPage() {
         <h2 className="text-sm font-semibold text-zinc-900" id="attempts-title">
           Attempts
         </h2>
-        {data.attempts.map((attempt) => (
-          <AttemptCard
-            key={attempt.id}
-            attempt={attempt}
-            expanded={expandedAttemptId === attempt.id}
-            timezone={timezone}
-            wsId={current.id}
-            onToggle={() =>
-              setExpandedAttemptId((currentId) =>
-                currentId === attempt.id ? null : attempt.id,
-              )
-            }
+        {data.attempts.length === 0 ? (
+          <EmptyState
+            className="min-h-32"
+            description="The first attempt will appear when the browser starts."
+            title="No attempts yet"
           />
-        ))}
+        ) : (
+          data.attempts.map((attempt) => (
+            <AttemptCard
+              key={attempt.id}
+              attempt={attempt}
+              expanded={expandedAttemptId === attempt.id}
+              timezone={timezone}
+              wsId={current.id}
+              onToggle={() =>
+                setExpandedAttemptId((currentId) =>
+                  currentId === attempt.id ? null : attempt.id,
+                )
+              }
+            />
+          ))
+        )}
       </section>
     </div>
   );

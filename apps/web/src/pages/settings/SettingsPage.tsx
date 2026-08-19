@@ -314,7 +314,7 @@ function DangerZone() {
   const [transferCandidate, setTransferCandidate] = useState<Member>();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const members = useQuery({
-    enabled: can("workspace.transfer"),
+    enabled: can("workspace.transfer") && transferOpen,
     queryFn: () => listMembers(current.id),
     queryKey: ["ws", current.id, "members"],
   });

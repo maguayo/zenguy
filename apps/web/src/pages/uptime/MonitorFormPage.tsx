@@ -30,7 +30,7 @@ import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { ApiError } from "../../lib/api";
-import { apiErrorMessage } from "../../lib/errors";
+import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 
 const methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
 const bodyConditions = ["CONTAINS", "NOT_CONTAINS", "EQUALS", "JSON_PATH_EQUALS"] as const;
@@ -279,7 +279,14 @@ export default function MonitorFormPage() {
       </div>
     );
   }
-  if (editing && monitor.isError) return <ErrorState onRetry={() => void monitor.refetch()} />;
+  if (editing && monitor.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(monitor.error)}
+        onRetry={() => void monitor.refetch()}
+      />
+    );
+  }
 
   const method = form.watch("method");
   const condition = form.watch("bodyCondition");

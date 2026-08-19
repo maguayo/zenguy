@@ -8,12 +8,14 @@ import { IncidentTimeline } from "../../components/IncidentTimeline";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Spinner } from "../../components/ui/Spinner";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { itemQueryErrorMessage } from "../../lib/errors";
 import { formatDateTime, formatDuration } from "../../lib/format";
 
 export const emptyDeliveriesCopy =
@@ -75,7 +77,14 @@ export default function IncidentDetailPage() {
   if (incident.isPending) {
     return <div className="grid min-h-64 place-items-center"><Spinner label="Loading incident" size={6} /></div>;
   }
-  if (incident.isError) return <ErrorState onRetry={() => void incident.refetch()} />;
+  if (incident.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(incident.error)}
+        onRetry={() => void incident.refetch()}
+      />
+    );
+  }
 
   const data = incident.data;
   const resourceLabel = data.resourceType === "BROWSER_TEST" ? "browser test" : "monitor";
@@ -133,7 +142,7 @@ export default function IncidentDetailPage() {
         </div>
         <Table
           columns={incidentDeliveryColumns(timezone)}
-          empty={<p className="p-4 text-sm text-zinc-500">{emptyDeliveriesCopy}</p>}
+          empty={<EmptyState className="m-4" title={emptyDeliveriesCopy} />}
           rowKey={(delivery) => delivery.id}
           rows={data.deliveries}
         />

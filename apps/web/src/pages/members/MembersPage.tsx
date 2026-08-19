@@ -27,6 +27,7 @@ import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
@@ -411,7 +412,17 @@ export default function MembersPage() {
         </Card>
       )}
 
-      {can("members.invite") && invitations.isError ? (
+      {can("members.invite") && invitations.isPending ? (
+        <Card aria-label="Loading pending invitations" padding="none" role="status">
+          <div className="border-b border-zinc-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-zinc-900">Pending invitations</h2>
+          </div>
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        </Card>
+      ) : can("members.invite") && invitations.isError ? (
         <ErrorState onRetry={() => void invitations.refetch()} />
       ) : invitations.data && invitations.data.length > 0 ? (
         <PendingInvitations invitations={invitations.data} />

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getAttempt, getRun } from "../api/tests";
 import type { AttemptStatus, Run, RunStatus } from "../api/types";
+import { itemQueryErrorMessage } from "../lib/errors";
 import { formatDuration } from "../lib/format";
 import { subscribeRun } from "../lib/sse";
 import { StatusBadge } from "./StatusBadge";
@@ -96,7 +97,14 @@ export function RunStatusPanel({
       </div>
     );
   }
-  if (run.isError) return <ErrorState onRetry={() => void run.refetch()} />;
+  if (run.isError) {
+    return (
+      <ErrorState
+        message={itemQueryErrorMessage(run.error)}
+        onRetry={() => void run.refetch()}
+      />
+    );
+  }
 
   const latestStep = latestAttempt?.latestStep;
   const latestScreenshot = latestAttempt?.latestScreenshot;
@@ -170,8 +178,16 @@ export function RunStatusPanel({
             {latestAttempt?.failureReason ??
               (run.data.status === "TIMEOUT" ? "The attempt timed out." : "The test failed.")}
           </p>
-          {attemptDetail.isError ? (
-            <ErrorState className="mt-3" onRetry={() => void attemptDetail.refetch()} />
+          {needsAttemptDetail && attemptDetail.isPending ? (
+            <div aria-label="Loading failure details" className="mt-3 space-y-2" role="status">
+              <Skeleton className="h-14" />
+            </div>
+          ) : needsAttemptDetail && attemptDetail.isError ? (
+            <ErrorState
+              className="mt-3"
+              message={itemQueryErrorMessage(attemptDetail.error)}
+              onRetry={() => void attemptDetail.refetch()}
+            />
           ) : attemptDetail.data?.expectedResult || attemptDetail.data?.actualResult ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="rounded-md border border-danger-600/20 bg-white/70 p-3">

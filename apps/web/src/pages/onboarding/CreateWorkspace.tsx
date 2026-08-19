@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createWorkspace, listWorkspaces } from "../../api/workspaces";
 import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
+import { ErrorState } from "../../components/ui/ErrorState";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -109,6 +110,13 @@ export default function CreateWorkspace() {
       }
       title="Create your workspace"
     >
+      {workspaceQuery.isError ? (
+        <ErrorState
+          className="mb-4"
+          message="Your existing workspaces couldn't be loaded."
+          onRetry={() => void workspaceQuery.refetch()}
+        />
+      ) : null}
       <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
         <Field
           error={fieldError(form.formState, "name")}
