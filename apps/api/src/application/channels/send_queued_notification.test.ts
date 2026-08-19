@@ -43,13 +43,14 @@ class RecordingIncidentEvents implements IncidentEventWriter {
 class SelectiveSender implements ChannelSender {
   readonly calls: ChannelType[] = [];
   readonly failures = new Set<ChannelType>();
+  failureMessage = "provider unavailable";
 
   async send(
     channel: { type: ChannelType; config: unknown },
   ): Promise<{ providerMessageId: string | null }> {
     this.calls.push(channel.type);
     if (this.failures.has(channel.type)) {
-      throw new Error("provider unavailable");
+      throw new Error(this.failureMessage);
     }
     return { providerMessageId: `provider-${channel.type}` };
   }
@@ -195,6 +196,41 @@ describe("SendQueuedNotification", () => {
     expect(log.mock.calls.join(" ")).toContain(
       '"event":"notification_delivery_failed"',
     );
+    log.mockRestore();
+  });
+
+  it("redacts decrypted channel config values from delivery errors and logs", async () => {
+    const fixture = consumerFixture();
+    const rawConfigValue = "ops@example.com";
+    await fixture.channels.insert(await channel("ch_config_error", "EMAIL"));
+    await fixture.deliveries.insert(
+      delivery("del_config_error", "ch_config_error"),
+    );
+    fixture.sender.failures.add("EMAIL");
+    fixture.sender.failureMessage = `Provider rejected ${rawConfigValue}`;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = notify("del_config_error", "ch_config_error");
+
+    await fixture.consumer.execute(
+      body,
+      new RecordingMessage("msg_config_1", body, 1),
+    );
+    await fixture.consumer.execute(
+      body,
+      new RecordingMessage("msg_config_2", body, 2),
+    );
+    await fixture.consumer.execute(
+      body,
+      new RecordingMessage("msg_config_3", body, 3),
+    );
+
+    const stored = await fixture.deliveries.findById(
+      "ws_1",
+      "del_config_error",
+    );
+    expect(stored?.errorSanitized).toContain("{{CHANNEL_CONFIG_");
+    expect(stored?.errorSanitized).not.toContain(rawConfigValue);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(rawConfigValue);
     log.mockRestore();
   });
 

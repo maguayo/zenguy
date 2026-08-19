@@ -13,6 +13,7 @@ import { ListRuns } from "../../application/browser_tests/list_runs";
 import { RunNow } from "../../application/browser_tests/run_now";
 import { UpdateBrowserTest } from "../../application/browser_tests/update_browser_test";
 import { ValidateDraft } from "../../application/browser_tests/validate_draft";
+import type { RunSecretResolver } from "../../application/browser_tests/redact_run_output";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
   ArtifactRepo,
@@ -63,6 +64,7 @@ export interface BrowserTestRoutesDependencies {
   runQueue: Pick<Queue<AttemptMessage>, "send">;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
+  resolveSecrets: RunSecretResolver;
   clock: Clock;
   ids: IdGenerator;
   config: Pick<
@@ -148,6 +150,7 @@ export function browserTestRoutes(
     dependencies.users,
     dependencies.config,
     dependencies.clock,
+    dependencies.resolveSecrets,
   );
   const getAttempt = new GetAttempt(
     dependencies.attempts,
@@ -156,6 +159,7 @@ export function browserTestRoutes(
     dependencies.artifacts,
     dependencies.config,
     dependencies.clock,
+    dependencies.resolveSecrets,
   );
   const downloadReport = new DownloadReport(
     dependencies.runs,

@@ -13,6 +13,10 @@ import type {
   RunDetailOutput,
   UserRefOutput,
 } from "./run_models";
+import {
+  runOutputRedactor,
+  type RunSecretResolver,
+} from "./redact_run_output";
 
 const RUN_SSE_TTL_SECONDS = 900;
 
@@ -23,6 +27,7 @@ export class GetRun {
     private readonly users: UserRepo,
     private readonly config: Pick<AppConfig, "artifactUrlSecret">,
     private readonly clock: Clock,
+    private readonly resolveSecrets?: RunSecretResolver,
   ) {}
 
   async execute(input: {
@@ -68,7 +73,7 @@ export class GetRun {
       triggeringUser === null
         ? null
         : { userId: triggeringUser.id, name: triggeringUser.name };
-    return {
+    const output: RunDetailOutput = {
       id: run.id,
       testId: run.browserTestId,
       source: run.source,
@@ -90,6 +95,12 @@ export class GetRun {
           ? { url: await this.liveUrl(input.workspaceId, run.id, now) }
           : null,
     };
+    const redactor = await runOutputRedactor(
+      input.workspaceId,
+      run.snapshot,
+      this.resolveSecrets,
+    );
+    return redactor.redactDeep(output);
   }
 
   private async liveUrl(

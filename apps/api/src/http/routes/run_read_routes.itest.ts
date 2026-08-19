@@ -25,7 +25,10 @@ import {
 } from "../../infrastructure/storage/artifacts";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { ARTIFACT_SIG_TTL_SECONDS } from "../../shared/constants";
+import {
+  ARTIFACT_SIG_TTL_SECONDS,
+  RATE_LIMITS,
+} from "../../shared/constants";
 import { hmacSign } from "../../shared/crypto";
 import { signArtifactUrl } from "../artifact_sign";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
@@ -588,6 +591,25 @@ describe("run read and artifact routes", () => {
     expect(missing.status).toBe(404);
     await expect(missing.json()).resolves.toEqual({
       error: { code: "NOT_FOUND", message: "Report not available" },
+    });
+  });
+
+  it("rate limits report downloads by workspace", async () => {
+    const path =
+      `/api/workspaces/${WORKSPACE.id}/runs/${FAILED_RUN.id}/report`;
+    for (let count = 0; count < RATE_LIMITS.report_download.limit; count += 1) {
+      const response = await app.request(path, {
+        headers: { Authorization: authorization },
+      });
+      expect(response.status).toBe(200);
+    }
+    const limited = await app.request(path, {
+      headers: { Authorization: authorization },
+    });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+    await expect(limited.json()).resolves.toEqual({
+      error: { code: "RATE_LIMITED", message: "Too many requests" },
     });
   });
 });

@@ -11,7 +11,7 @@ import type {
 import type { Clock } from "../../shared/clock";
 import { decryptSecret } from "../../shared/crypto";
 import { logEvent } from "../../shared/log";
-import { truncate } from "../../shared/redact";
+import { Redactor, truncate } from "../../shared/redact";
 import type { IncidentEventWriter } from "./incident_event_writer";
 
 export type NotificationQueueControl = Pick<
@@ -25,6 +25,24 @@ function errorMessage(error: unknown): string {
 
 function retryDelay(attemptCount: number): number {
   return Math.min(300, 30 * 2 ** Math.max(0, attemptCount - 1));
+}
+
+function configValues(value: unknown): string[] {
+  if (typeof value === "string") return value.length === 0 ? [] : [value];
+  if (Array.isArray(value)) return value.flatMap(configValues);
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).flatMap(configValues);
+  }
+  return [];
+}
+
+function channelConfigRedactor(plaintext: string, config: unknown): Redactor {
+  return new Redactor(
+    [plaintext, ...configValues(config)].map((value, index) => ({
+      key: `CHANNEL_CONFIG_${index + 1}`,
+      value,
+    })),
+  );
 }
 
 export class SendQueuedNotification {
@@ -65,13 +83,16 @@ export class SendQueuedNotification {
 
     const attemptCount = delivery.attemptCount + 1;
     let sent: { providerMessageId: string | null };
+    let redactor = new Redactor([]);
     try {
       const plaintext = await decryptSecret(
         channel.encryptedConfig,
         this.encryptionKey,
       );
+      const parsedConfig = JSON.parse(plaintext) as unknown;
+      redactor = channelConfigRedactor(plaintext, parsedConfig);
       sent = await this.sender.send(
-        { type: channel.type, config: JSON.parse(plaintext) },
+        { type: channel.type, config: parsedConfig },
         input.message,
       );
     } catch (error) {
@@ -83,7 +104,10 @@ export class SendQueuedNotification {
         queueMessage.retry({ delaySeconds: retryDelay(attemptCount) });
         return;
       }
-      const errorSanitized = truncate(errorMessage(error), 300);
+      const errorSanitized = truncate(
+        redactor.redact(errorMessage(error)),
+        300,
+      );
       await this.deliveries.update(delivery.id, {
         status: "FAILED",
         errorSanitized,

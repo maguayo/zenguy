@@ -21,6 +21,7 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
+import { RATE_LIMITS } from "../../shared/constants";
 import { encryptSecret } from "../../shared/crypto";
 import { FakeIds } from "../../test/fakes/ids";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
@@ -234,6 +235,28 @@ describe("uptime monitor routes", () => {
       },
     );
     expect(frequency.status).toBe(400);
+    const metadataAddress = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors`,
+      {
+        method: "POST",
+        headers: headers("owner"),
+        body: JSON.stringify({
+          ...CONFIG,
+          url: "http://169.254.169.254/",
+          method: "GET",
+          body: undefined,
+        }),
+      },
+    );
+    expect(metadataAddress.status).toBe(400);
+    await expect(metadataAddress.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: expect.arrayContaining([
+          expect.objectContaining({ field: "url" }),
+        ]),
+      },
+    });
     const member = await create("member");
     expect(member.status).toBe(403);
     expect((await monitors.list(WORKSPACE.id)).length).toBe(0);
@@ -386,6 +409,56 @@ describe("uptime monitor routes", () => {
       )
       .first<{ monitors: number; checks: number }>();
     expect(counts).toEqual({ monitors: 0, checks: 0 });
+  });
+
+  it("rate limits monitor creation and test requests independently", async () => {
+    for (let count = 0; count < RATE_LIMITS.monitor_create.limit; count += 1) {
+      const response = await app.request(
+        `/api/workspaces/${WORKSPACE.id}/uptime-monitors`,
+        {
+          method: "POST",
+          headers: headers("owner"),
+          body: JSON.stringify({ ...CONFIG, name: `Monitor ${count}` }),
+        },
+      );
+      expect(response.status).toBe(201);
+    }
+    const limitedCreate = await create();
+    expect(limitedCreate.status).toBe(429);
+    expect(limitedCreate.headers.get("Retry-After")).toMatch(/^\d+$/u);
+
+    const request = {
+      url: "https://example.com/health",
+      method: "GET",
+      expectedStatus: 204,
+      frequencySeconds: 300,
+      timeoutSeconds: 10,
+      maxRetries: 0,
+      notifyOnRecovery: true,
+      channelIds: [],
+    };
+    for (let count = 0; count < RATE_LIMITS.test_request.limit; count += 1) {
+      const response = await app.request(
+        `/api/workspaces/${WORKSPACE.id}/uptime-monitors/test-request`,
+        {
+          method: "POST",
+          headers: headers("admin"),
+          body: JSON.stringify(request),
+        },
+      );
+      expect(response.status).toBe(200);
+    }
+    const limitedTest = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors/test-request`,
+      {
+        method: "POST",
+        headers: headers("admin"),
+        body: JSON.stringify(request),
+      },
+    );
+    expect(limitedTest.status).toBe(429);
+    expect(limitedTest.headers.get("Retry-After")).toMatch(/^\d+$/u);
+    expect(executorCalls).toHaveLength(RATE_LIMITS.test_request.limit);
   });
 
   it("lists member-visible check history with a keyset cursor and returns stats", async () => {

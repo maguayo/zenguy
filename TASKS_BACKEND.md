@@ -1267,14 +1267,14 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 # Phase 13 — Hardening & release
 
 ### BE-072: Security & RBAC sweep
-- [ ] Write `apps/api/src/http/routes/rbac_matrix.itest.ts`: data-driven over the full route table (Appendix C): seed owner/admin/member/outsider (+ one unauthenticated) and assert every route returns the expected status for each caller (200/201/204 vs 401/403/404/402). This is the spec's "RBAC enforced in backend" proof (§7.5, §31.1).
-- [ ] Secret-leak sweep (fix anything found):
+- [x] Write `apps/api/src/http/routes/rbac_matrix.itest.ts`: data-driven over the full route table (Appendix C): seed owner/admin/member/outsider (+ one unauthenticated) and assert every route returns the expected status for each caller (200/201/204 vs 401/403/404/402). This is the spec's "RBAC enforced in backend" proof (§7.5, §31.1).
+- [x] Secret-leak sweep (fix anything found):
   - grep for `decryptSecret(` — allowed call sites only: secret resolution (BE-038), channel send path (BE-040/43), monitor execution + OWNER/ADMIN monitor read (BE-062/63), seed. Anything else is a bug.
   - Integration test: create secret + channel + monitor with sensitive values, then fetch EVERY read endpoint of the workspace and assert the raw values never appear in any response body.
   - Verify report generation, notification payloads, delivery errors, audit metadata, and SSE frames pass through redaction (targeted tests each).
-- [ ] Confirm rate limits active on every row of Appendix I (probe each with the KV fake: exceed limit → 429 + Retry-After).
-- [ ] Confirm: refresh cookie flags exact (BE-017); webhook signature required (tamper test exists); artifact/SSE HMAC expiry enforced; SSRF called at all four entry points (BE-011 list) — add a regression test that a monitor with `url: "http://169.254.169.254/"` is rejected at create AND at execution, and an agent `navigate` to `http://localhost:8080` records a blocked ERROR step.
-- [ ] Cross-tenant test: workspace B's member fetching workspace A's run/attempt/artifact-sig/monitor/incident/secret ids → 404 everywhere (§31.1 "no data leaks between workspaces").
+- [x] Confirm rate limits active on every row of Appendix I (probe each with the KV fake: exceed limit → 429 + Retry-After).
+- [x] Confirm: refresh cookie flags exact (BE-017); webhook signature required (tamper test exists); artifact/SSE HMAC expiry enforced; SSRF called at all four entry points (BE-011 list) — add a regression test that a monitor with `url: "http://169.254.169.254/"` is rejected at create AND at execution, and an agent `navigate` to `http://localhost:8080` records a blocked ERROR step.
+- [x] Cross-tenant test: workspace B's member fetching workspace A's run/attempt/artifact-sig/monitor/incident/secret ids → 404 everywhere (§31.1 "no data leaks between workspaces").
 
 ### BE-073: Seed data
 - [ ] Create `apps/api/scripts/seed.mjs` (Node ≥ 22, uses `node:crypto` `webcrypto` — same PBKDF2 + AES-GCM formats as BE-008):

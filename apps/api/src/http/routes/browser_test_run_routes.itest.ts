@@ -297,11 +297,10 @@ describe("browser test run creation routes", () => {
       expect(response.status).toBe(202);
     }
     const blocked = await app.request(
-      `/api/workspaces/${WORKSPACE.id}/browser-tests/validate`,
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST.id}/run-now`,
       {
         method: "POST",
         headers: headers(ownerToken),
-        body: JSON.stringify(DRAFT),
       },
     );
     expect(blocked.status).toBe(429);

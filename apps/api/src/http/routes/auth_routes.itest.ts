@@ -105,7 +105,11 @@ describe("auth routes", () => {
     const login = (await loginResponse.json()) as SessionResponse;
     expect(login.data.user.emailVerified).toBe(true);
     expect(login.data.expiresIn).toBe(1_800);
-    const firstCookie = cookiePair(loginResponse.headers.get("Set-Cookie"));
+    const loginCookieHeader = loginResponse.headers.get("Set-Cookie");
+    expect(loginCookieHeader).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
+    );
+    const firstCookie = cookiePair(loginCookieHeader);
     expect(firstCookie).toMatch(/^zenguy_rt=\S+$/u);
 
     const meResponse = await app.request("/api/auth/me", {
@@ -123,9 +127,11 @@ describe("auth routes", () => {
     expect(refreshResponse.status).toBe(200);
     const refreshed = (await refreshResponse.json()) as SessionResponse;
     expect(refreshed.data.accessToken).toEqual(expect.any(String));
-    const rotatedCookie = cookiePair(
-      refreshResponse.headers.get("Set-Cookie"),
+    const refreshCookie = refreshResponse.headers.get("Set-Cookie");
+    expect(refreshCookie).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
     );
+    const rotatedCookie = cookiePair(refreshCookie);
     expect(rotatedCookie).not.toBe(firstCookie);
 
     const logoutResponse = await app.request("/api/auth/logout", {
@@ -134,7 +140,9 @@ describe("auth routes", () => {
     });
     expect(logoutResponse.status).toBe(204);
     expect(await logoutResponse.text()).toBe("");
-    expect(logoutResponse.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(logoutResponse.headers.get("Set-Cookie")).toBe(
+      "zenguy_rt=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0",
+    );
   });
 
   it("returns the same 401 for a wrong password and missing bearer token", async () => {
@@ -213,6 +221,55 @@ describe("auth routes", () => {
     await expect(limited.json()).resolves.toEqual({
       error: { code: "RATE_LIMITED", message: "Too many requests" },
     });
+  });
+
+  it("rate limits register, forgot-password, and resend-verification", async () => {
+    const registerIp = "198.51.100.31";
+    for (let attempt = 0; attempt < RATE_LIMITS.register.limit; attempt += 1) {
+      const response = await registerUser(app, registerIp, {
+        name: `Registrant ${attempt}`,
+        email: `registrant-${attempt}@example.com`,
+        password: "initial-password",
+      });
+      expect(response.status).toBe(201);
+    }
+    const limitedRegister = await registerUser(app, registerIp, {
+      name: "Limited Registrant",
+      email: "limited-registrant@example.com",
+      password: "initial-password",
+    });
+    expect(limitedRegister.status).toBe(429);
+    expect(limitedRegister.headers.get("Retry-After")).toMatch(/^\d+$/u);
+
+    for (const flow of [
+      {
+        path: "/api/auth/forgot-password",
+        email: "forgot-limit@example.com",
+        rate: RATE_LIMITS.forgot,
+      },
+      {
+        path: "/api/auth/resend-verification",
+        email: "resend-limit@example.com",
+        rate: RATE_LIMITS.resend,
+      },
+    ] as const) {
+      for (let attempt = 0; attempt < flow.rate.limit; attempt += 1) {
+        const response = await app.request(
+          flow.path,
+          jsonRequest({ email: flow.email }),
+        );
+        expect(response.status).toBe(200);
+      }
+      const limited = await app.request(
+        flow.path,
+        jsonRequest({ email: flow.email.toUpperCase() }),
+      );
+      expect(limited.status).toBe(429);
+      expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+      await expect(limited.json()).resolves.toEqual({
+        error: { code: "RATE_LIMITED", message: "Too many requests" },
+      });
+    }
   });
 
   it("blocks an unverified user at the reusable verified-email gate", async () => {

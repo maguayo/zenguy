@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { GetRun } from "../../application/browser_tests/get_run";
+import type { RunSecretResolver } from "../../application/browser_tests/redact_run_output";
 import type {
   AttemptRepo,
   RunRepo,
@@ -19,6 +20,7 @@ export interface RunEventRoutesDependencies {
   users: UserRepo;
   config: Pick<AppConfig, "artifactUrlSecret">;
   clock: Clock;
+  resolveSecrets: RunSecretResolver;
 }
 
 export function runEventRoutes(
@@ -31,6 +33,7 @@ export function runEventRoutes(
     dependencies.users,
     dependencies.config,
     dependencies.clock,
+    dependencies.resolveSecrets,
   );
 
   app.get("/:workspaceId/runs/:runId/events", async (context) => {

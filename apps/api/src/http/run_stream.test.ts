@@ -1,5 +1,8 @@
 import { GetRun } from "../application/browser_tests/get_run";
-import type { TestRun } from "../domain/browser_tests/types";
+import type {
+  TestAttempt,
+  TestRun,
+} from "../domain/browser_tests/types";
 import { FixedClock } from "../shared/clock";
 import {
   FakeAttemptRepo,
@@ -118,5 +121,74 @@ describe("streamRunUpdates", () => {
     }
     expect(frames).toHaveLength(1);
     expect(frames[0]).toMatchObject({ event: "update" });
+  });
+
+  it("redacts referenced secret values from every SSE update frame", async () => {
+    const rawSecret = "sse-raw-secret-value";
+    const securedRun: TestRun = {
+      ...structuredClone(RUN),
+      snapshot: {
+        ...structuredClone(RUN.snapshot),
+        instructions: "Authenticate with {{API_TOKEN}}",
+      },
+    };
+    const attempt: TestAttempt = {
+      id: "att_sse_redaction",
+      testRunId: securedRun.id,
+      attemptIndex: 0,
+      status: "RUNNING",
+      retryDelaySeconds: 0,
+      queuedAt: NOW,
+      startedAt: NOW,
+      finishedAt: null,
+      durationMs: null,
+      summary: `Using ${rawSecret}`,
+      expectedResult: null,
+      actualResult: null,
+      failureReason: `Rejected ${rawSecret}`,
+      visitedUrlsJson: "[]",
+      consoleErrorsJson: "[]",
+      networkErrorsJson: "[]",
+      tokenUsage: null,
+      modelName: "gpt-5-mini",
+      runnerVersion: "test",
+      systemErrorCode: null,
+      createdAt: NOW,
+    };
+    const runs = new FakeRunRepo();
+    const attempts = new FakeAttemptRepo();
+    const clock = new FixedClock(NOW);
+    await runs.insert(securedRun);
+    await attempts.insert(attempt);
+    const getRun = new GetRun(
+      runs,
+      attempts,
+      new FakeUserRepo(),
+      CONFIG,
+      clock,
+      {
+        execute: async () =>
+          new Map([
+            [
+              "API_TOKEN",
+              { value: rawSecret, allowedDomains: ["example.com"] },
+            ],
+          ]),
+      },
+    );
+    const stream = streamRunUpdates(
+      { workspaceId: securedRun.workspaceId, runId: securedRun.id },
+      { getRun, clock },
+    );
+
+    const first = await stream.next();
+    await stream.return(undefined);
+
+    expect(first.value).toMatchObject({ event: "update" });
+    const serialized = "data" in (first.value ?? {})
+      ? (first.value as { data: string }).data
+      : "";
+    expect(serialized).toContain("{{API_TOKEN}}");
+    expect(serialized).not.toContain(rawSecret);
   });
 });

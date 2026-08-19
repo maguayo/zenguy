@@ -586,7 +586,7 @@ describe("runAgentAttempt", () => {
     const test = harness({
       decisions: [
         {
-          action: action({ action: "navigate", url: "http://127.0.0.1/admin" }),
+          action: action({ action: "navigate", url: "http://localhost:8080/admin" }),
           tokensUsed: 1,
         },
         {

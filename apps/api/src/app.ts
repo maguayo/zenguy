@@ -173,6 +173,7 @@ export function buildApp(
   const overageReports =
     overrides.overageReports ?? new D1OverageReportRepo(env.DB);
   const secrets = overrides.secrets ?? new D1SecretRepo(env.DB);
+  const resolveSecrets = new ResolveSecrets(secrets, config.encryptionKey);
   const channels = overrides.channels ?? new D1ChannelRepo(env.DB);
   const deliveries = overrides.deliveries ?? new D1DeliveryRepo(env.DB);
   const channelSender =
@@ -198,7 +199,7 @@ export function buildApp(
         {
           fetchFn: (input, init) => globalThis.fetch(input, init),
           clock,
-          resolveSecrets: new ResolveSecrets(secrets, config.encryptionKey),
+          resolveSecrets,
         },
         monitorConfig,
         workspaceId,
@@ -243,7 +244,14 @@ export function buildApp(
   );
   app.route(
     "/api/workspaces",
-    runEventRoutes({ runs, attempts, users, clock, config }),
+    runEventRoutes({
+      runs,
+      attempts,
+      users,
+      resolveSecrets,
+      clock,
+      config,
+    }),
   );
   app.route(
     "/api/auth",
@@ -413,6 +421,7 @@ export function buildApp(
         (env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">),
       rateLimiter,
       audit,
+      resolveSecrets,
       clock,
       ids: overrides.ids ?? realIds,
       config,

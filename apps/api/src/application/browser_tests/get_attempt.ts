@@ -15,6 +15,10 @@ import type {
   ConsoleErrorOutput,
   NetworkErrorOutput,
 } from "./run_models";
+import {
+  runOutputRedactor,
+  type RunSecretResolver,
+} from "./redact_run_output";
 
 function parseArray<T>(raw: string | null): T[] {
   if (raw === null) return [];
@@ -34,6 +38,7 @@ export class GetAttempt {
     private readonly artifacts: ArtifactRepo,
     private readonly config: Pick<AppConfig, "artifactUrlSecret">,
     private readonly clock: Clock,
+    private readonly resolveSecrets?: RunSecretResolver,
   ) {}
 
   async execute(input: {
@@ -63,7 +68,7 @@ export class GetAttempt {
     );
     const latestStep = steps.at(-1) ?? null;
     const latestScreenshot = screenshots.at(-1) ?? null;
-    return {
+    const output: AttemptDetailOutput = {
       id: attempt.id,
       attemptIndex: attempt.attemptIndex,
       status: attempt.status,
@@ -115,6 +120,12 @@ export class GetAttempt {
         return reference === undefined ? [] : [reference];
       }),
     };
+    const redactor = await runOutputRedactor(
+      input.workspaceId,
+      run.snapshot,
+      this.resolveSecrets,
+    );
+    return redactor.redactDeep(output);
   }
 
   private async artifactRef(
