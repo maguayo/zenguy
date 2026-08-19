@@ -323,10 +323,10 @@ export default defineConfig({
 # Phase 8 — Incidents
 
 ### FE-032: Incidents list
-- [ ] `src/api/incidents.ts` (`listIncidents(wsId, filters, cursor)`, `getIncident`).
-- [ ] `pages/incidents/IncidentsPage.tsx` (§18.12): `PageHeader` `Incidents`. Filter bar: Tabs `Open` / `Resolved` / `All` (default Open), type Select `All types / Browser tests / Uptime monitors`, date range (two native `<input type="date">` From/To, optional). Filters → query params in the URL (shareable) → API params.
-- [ ] Table: **Resource** (name + type Badge `Browser test` info / `Uptime monitor` accent), **Status** (`Open` danger pulsing dot / `Resolved` ok), **Opened** (`formatDateTime`), **Duration** (`formatDuration(durationMs)`, ticking for open ones — re-render via 30-s interval), **Last event** (relative). Row → detail. 30-s refetch on the Open tab.
-- [ ] Empty (Open tab): ok-toned EmptyState `No open incidents` / `Everything is passing. Incidents appear here when a test or monitor fails after all retries.`
+- [x] `src/api/incidents.ts` (`listIncidents(wsId, filters, cursor)`, `getIncident`).
+- [x] `pages/incidents/IncidentsPage.tsx` (§18.12): `PageHeader` `Incidents`. Filter bar: Tabs `Open` / `Resolved` / `All` (default Open), type Select `All types / Browser tests / Uptime monitors`, date range (two native `<input type="date">` From/To, optional). Filters → query params in the URL (shareable) → API params.
+- [x] Table: **Resource** (name + type Badge `Browser test` info / `Uptime monitor` accent), **Status** (`Open` danger pulsing dot / `Resolved` ok), **Opened** (`formatDateTime`), **Duration** (`formatDuration(durationMs)`, ticking for open ones — re-render via 30-s interval), **Last event** (relative). Row → detail. 30-s refetch on the Open tab.
+- [x] Empty (Open tab): ok-toned EmptyState `No open incidents` / `Everything is passing. Incidents appear here when a test or monitor fails after all retries.`
 
 ### FE-033: Incident detail
 - [ ] `pages/incidents/IncidentDetailPage.tsx`: header `Incident — <resourceName>` + status Badge; meta line `Opened <dateTime> · <duration>` (+ `Resolved <dateTime>` when closed); button `View <browser test|monitor> →` + (when `openedByRunId`) `View failing run →`.

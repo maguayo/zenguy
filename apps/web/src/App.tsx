@@ -54,7 +54,7 @@ const UptimeListPage = lazy(() => import("./pages/uptime/UptimeListPage"));
 const NewMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
 const MonitorDetailPage = lazy(() => import("./pages/uptime/MonitorDetailPage"));
 const EditMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
-const IncidentsPage = stub("Incidents");
+const IncidentsPage = lazy(() => import("./pages/incidents/IncidentsPage"));
 const IncidentDetailPage = stub("Incident");
 const ChannelsPage = stub("Notifications");
 const SecretsPage = stub("Secrets");
