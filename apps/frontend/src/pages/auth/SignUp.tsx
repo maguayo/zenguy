@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Checkbox } from "../../components/ui/Checkbox";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
@@ -59,6 +60,7 @@ export default function SignUp() {
 
   return (
     <AuthShell
+      description="Start watching your site in minutes."
       footer={
         <>
           Already have an account?{" "}
@@ -69,12 +71,13 @@ export default function SignUp() {
       }
       title="Create your account"
     >
-      <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
+      <form className="space-y-5" noValidate onSubmit={(event) => void submit(event)}>
         <Field error={fieldError(form.formState, "name")} htmlFor="signup-name" label="Name" required>
           <Input
             autoComplete="name"
             id="signup-name"
             invalid={Boolean(form.formState.errors.name)}
+            placeholder="Ada Lovelace"
             {...form.register("name")}
           />
         </Field>
@@ -83,21 +86,22 @@ export default function SignUp() {
             autoComplete="email"
             id="signup-email"
             invalid={Boolean(form.formState.errors.email)}
+            placeholder="you@company.com"
             type="email"
             {...form.register("email")}
           />
         </Field>
         <Field
           error={fieldError(form.formState, "password")}
+          hint="At least 8 characters."
           htmlFor="signup-password"
           label="Password"
           required
         >
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="signup-password"
             invalid={Boolean(form.formState.errors.password)}
-            type="password"
             {...form.register("password")}
           />
         </Field>
@@ -107,11 +111,10 @@ export default function SignUp() {
           label="Confirm password"
           required
         >
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="signup-confirm-password"
             invalid={Boolean(form.formState.errors.confirmPassword)}
-            type="password"
             {...form.register("confirmPassword")}
           />
         </Field>
@@ -141,7 +144,10 @@ export default function SignUp() {
           ) : null}
         </div>
         {form.formState.errors.root?.message ? (
-          <p className="text-sm text-danger-600" role="alert">
+          <p
+            className="rounded-md border border-danger-600/20 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+            role="alert"
+          >
             {form.formState.errors.root.message}{" "}
             <Link className="font-medium underline" to="/signin">
               Sign in

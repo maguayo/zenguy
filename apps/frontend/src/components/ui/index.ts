@@ -14,6 +14,7 @@ export * from "./Input";
 export * from "./LoadMore";
 export * from "./Modal";
 export * from "./PageHeader";
+export * from "./PasswordInput";
 export * from "./Select";
 export * from "./Skeleton";
 export * from "./Spinner";

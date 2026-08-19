@@ -7,6 +7,7 @@ import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
@@ -49,6 +50,7 @@ export default function SignIn() {
 
   return (
     <AuthShell
+      description="Sign in to your workspace."
       footer={
         <>
           Don't have an account?{" "}
@@ -57,9 +59,9 @@ export default function SignIn() {
           </Link>
         </>
       }
-      title="Sign in"
+      title="Welcome back"
     >
-      <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
+      <form className="space-y-5" noValidate onSubmit={(event) => void submit(event)}>
         <Field
           error={fieldError(form.formState, "email")}
           htmlFor="signin-email"
@@ -70,6 +72,7 @@ export default function SignIn() {
             autoComplete="email"
             id="signin-email"
             invalid={Boolean(form.formState.errors.email)}
+            placeholder="you@company.com"
             type="email"
             {...form.register("email")}
           />
@@ -80,16 +83,18 @@ export default function SignIn() {
           label="Password"
           required
         >
-          <Input
+          <PasswordInput
             autoComplete="current-password"
             id="signin-password"
             invalid={Boolean(form.formState.errors.password)}
-            type="password"
             {...form.register("password")}
           />
         </Field>
         {form.formState.errors.root?.message ? (
-          <p className="text-sm text-danger-600" role="alert">
+          <p
+            className="rounded-md border border-danger-600/20 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+            role="alert"
+          >
             {form.formState.errors.root.message}
           </p>
         ) : null}
