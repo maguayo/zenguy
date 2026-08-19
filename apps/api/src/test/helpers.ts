@@ -2,6 +2,12 @@ import { env } from "cloudflare:test";
 import type { Bindings } from "../shared/config";
 
 const DELETE_STATEMENTS = [
+  // Test isolation only. Production purge jobs must NEVER touch billing or
+  // audit retention tables: subscriptions, usage_events, overage_reports,
+  // and audit_logs.
+  "DELETE FROM overage_reports",
+  "DELETE FROM usage_events",
+  "DELETE FROM subscriptions",
   "DELETE FROM audit_logs",
   "DELETE FROM workspace_invitations",
   "DELETE FROM workspace_members",

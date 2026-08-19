@@ -510,7 +510,7 @@ CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 > Reminder: billing rules outrank everything else in this spec. The billable unit is the **run**. Usage events are idempotent, created when the initial attempt actually starts, reversible on SYSTEM_ERROR-without-execution, and **never purged**.
 
 ### BE-030: Billing migration
-- [ ] Create `apps/api/migrations/0003_billing.sql`:
+- [x] Create `apps/api/migrations/0003_billing.sql`:
 ```sql
 CREATE TABLE subscriptions (
   id TEXT PRIMARY KEY,
@@ -558,7 +558,7 @@ CREATE TABLE overage_reports (
 );
 CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, period_start);
 ```
-- [ ] Apply locally; extend `freshDb()` (but note in a comment: production purge jobs must NEVER touch these three tables).
+- [x] Apply locally; extend `freshDb()` (but note in a comment: production purge jobs must NEVER touch these three tables).
 
 ### BE-031: Paddle client
 - [ ] Create `apps/api/src/domain/billing/types.ts`: `Subscription`, `UsageEvent`, `OverageReport`, `type SubscriptionStatus = "NONE" | "ACTIVE" | "PAST_DUE" | "CANCELED"`.
