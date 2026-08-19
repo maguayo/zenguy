@@ -10,10 +10,18 @@ static-assets Worker (`zenguy-website`).
 pnpm --filter @zenguy/website dev      # http://localhost:4400
 pnpm --filter @zenguy/website build    # outputs dist/
 pnpm --filter @zenguy/website preview  # serve the built site on :4400
-pnpm --filter @zenguy/website deploy   # astro build && wrangler deploy
 ```
 
-Attach `zenguy.com` (+ `www`) to the `zenguy-website` worker at launch.
+## Deploys
+
+Git-connected **Cloudflare Pages** project `zenguy` — every push to `main` builds and deploys.
+Required project settings (dashboard → zenguy → Settings → Build):
+
+- **Root directory:** `apps/website`
+- **Build command:** `pnpm build`
+- **Build output directory:** comes from `wrangler.jsonc` (`pages_build_output_dir: ./dist`)
+
+Attach `zenguy.com` (+ `www`) to the Pages project as custom domains at launch.
 
 ## Porting notes
 

@@ -8,7 +8,7 @@
     "preview": "astro preview --port 4400",
     "typecheck": "astro build",
     "test": "echo \"no tests\"",
-    "deploy": "astro build && wrangler deploy"
+    "deploy": "echo 'Deploys automatically via Cloudflare Pages on git push (project: zenguy)'"
   },
   "dependencies": { "astro": "^7.2.2" },
   "devDependencies": {
