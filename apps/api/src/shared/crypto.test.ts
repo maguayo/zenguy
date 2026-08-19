@@ -3,7 +3,9 @@ import {
   encryptSecret,
   hashPassword,
   hmacSign,
+  hmacSha256Hex,
   hmacVerify,
+  hmacVerifyHex,
   randomToken,
   sha256Hex,
   timingSafeEqualBytes,
@@ -76,6 +78,23 @@ describe("signing and random values", () => {
       false,
     );
     await expect(hmacVerify("other", "payload", signature)).resolves.toBe(
+      false,
+    );
+  });
+
+  it("signs and verifies provider-compatible hex HMACs", async () => {
+    const signature = await hmacSha256Hex("secret", "payload");
+
+    expect(signature).toBe(
+      "b82fcb791acec57859b989b430a826488ce2e479fdf92326bd0a2e8375a42ba4",
+    );
+    await expect(
+      hmacVerifyHex("secret", "payload", signature),
+    ).resolves.toBe(true);
+    await expect(
+      hmacVerifyHex("secret", "changed", signature),
+    ).resolves.toBe(false);
+    await expect(hmacVerifyHex("secret", "payload", "not-hex")).resolves.toBe(
       false,
     );
   });

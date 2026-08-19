@@ -574,15 +574,15 @@ CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, perio
 - [x] Write tests with a recording fake `fetchFn`: correct URL/headers/bodies per method; totals mapping `"3900"` → 3900; error path sanitized.
 
 ### BE-032: Paddle webhook
-- [ ] Create `apps/api/src/application/billing/handle_paddle_webhook.ts`. Input: `{ rawBody: string, signatureHeader: string | null, ip? }`.
+- [x] Create `apps/api/src/application/billing/handle_paddle_webhook.ts`. Input: `{ rawBody: string, signatureHeader: string | null, ip? }`.
   - Verify signature: header format `ts=<unix>;h1=<hex>`; compute HMAC-SHA256 of `` `${ts}:${rawBody}` `` with `PADDLE_WEBHOOK_SECRET`, constant-time compare against `h1`; reject if missing/mismatch (`UNAUTHORIZED`) or `ts` older than 15 minutes.
   - Parse JSON → `{ event_id, event_type, data }`. Idempotency: KV key `pdl_evt:<event_id>` — if present, return `{ handled: "duplicate" }`; else process then `put` with 7-day TTL. (§24.13.)
   - Handle `subscription.created`, `subscription.updated`, `subscription.canceled`, `subscription.past_due` (or status carried inside `subscription.updated`): find workspace via `data.custom_data.workspace_id` (creation) or existing row by `data.id`; upsert subscription: map Paddle status → ours (`active`/`trialing` → ACTIVE, `past_due` → PAST_DUE, `canceled`/`paused` → CANCELED), `period_start/period_end` ← `data.current_billing_period.starts_at/ends_at` (ISO → ms), `cancel_at_period_end` ← `data.scheduled_change?.action === "cancel"`, `update_payment_url/cancel_url` ← `data.management_urls.{update_payment_method,cancel}`, `provider_customer_id` ← `data.customer_id`. Audit `billing.subscription_updated` (metadata: status).
   - **Period rollover hook:** when the stored row has a non-null `period_start` differing from the incoming one, call `ReportOverageForPeriod` (BE-035) for the OLD stored period **before** overwriting (best-effort; failures logged — the hourly cron is the safety net).
   - Unknown event types → `{ handled: "ignored" }`, still 200.
-- [ ] Route `apps/api/src/http/routes/webhooks.ts`: `POST /api/webhooks/paddle` — no auth middleware; read raw text body first (signature needs exact bytes), always respond `{ "data": { "received": true } }` on success; 401 on bad signature.
-- [ ] Create `apps/api/src/test/fixtures/paddle.ts` with two condensed realistic payloads (`subscription.created` with `custom_data.workspace_id`, `subscription.updated` with new period + management_urls).
-- [ ] Tests: valid signature accepted, tampered body rejected, duplicate event_id processed once, status/period/urls mapping, rollover triggers overage call (assert with fake), CANCELED mapping.
+- [x] Route `apps/api/src/http/routes/webhooks.ts`: `POST /api/webhooks/paddle` — no auth middleware; read raw text body first (signature needs exact bytes), always respond `{ "data": { "received": true } }` on success; 401 on bad signature.
+- [x] Create `apps/api/src/test/fixtures/paddle.ts` with two condensed realistic payloads (`subscription.created` with `custom_data.workspace_id`, `subscription.updated` with new period + management_urls).
+- [x] Tests: valid signature accepted, tampered body rejected, duplicate event_id processed once, status/period/urls mapping, rollover triggers overage call (assert with fake), CANCELED mapping.
 
 ### BE-033: Usage service
 - [ ] `application/billing/record_run_usage.ts`: `execute({ workspaceId, runId, occurredAt })` → `insertIfAbsent({ id: newId("ue"), idempotency_key: "run:" + runId, ... })`; returns the usage event id (existing or new). Called exactly once per run, at the moment the first attempt actually starts executing (wired in BE-052).

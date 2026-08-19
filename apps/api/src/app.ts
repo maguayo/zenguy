@@ -3,6 +3,7 @@ import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
 import type { SubscriptionRepo } from "./domain/billing/repo";
+import type { PeriodOverageReporter } from "./application/billing/handle_paddle_webhook";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -39,6 +40,8 @@ import {
   type PaddleClient,
 } from "./infrastructure/paddle/client";
 import { buildEmailSender } from "./infrastructure/email";
+import { NoopOverageReporter } from "./infrastructure/billing/noop_overage_reporter";
+import { webhookRoutes } from "./http/routes/webhooks";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
@@ -60,6 +63,7 @@ export interface AppOverrides {
   invitations?: InvitationRepo;
   subscriptions?: SubscriptionRepo;
   paddleClient?: PaddleClient;
+  overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
 }
 
@@ -87,6 +91,8 @@ export function buildApp(
     overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
+  const overageReporter =
+    overrides.overageReporter ?? new NoopOverageReporter();
   const billingCanceller =
     overrides.billingCanceller ??
     new PaddleBillingCanceller(subscriptions, paddleClient, clock);
@@ -150,6 +156,18 @@ export function buildApp(
       clock,
       ids: overrides.ids ?? realIds,
       config,
+    }),
+  );
+  app.route(
+    "/api/webhooks",
+    webhookRoutes({
+      webhookSecret: config.paddle.webhookSecret,
+      kv: env.KV,
+      subscriptions,
+      overageReporter,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
     }),
   );
 

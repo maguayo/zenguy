@@ -36,6 +36,24 @@ function exactBuffer(bytes: Uint8Array): ArrayBuffer {
   return Uint8Array.from(bytes).buffer;
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function hexToBytes(encoded: string): Uint8Array {
+  if (!/^[0-9a-f]+$/iu.test(encoded) || encoded.length % 2 !== 0) {
+    throw new Error("Invalid hex value");
+  }
+  const bytes = new Uint8Array(encoded.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    const pair = encoded.slice(index * 2, index * 2 + 2);
+    bytes[index] = Number.parseInt(pair, 16);
+  }
+  return bytes;
+}
+
 async function derivePasswordHash(
   password: string,
   salt: Uint8Array,
@@ -110,9 +128,7 @@ export async function verifyPassword(
 
 export async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(input));
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return bytesToHex(new Uint8Array(digest));
 }
 
 export function randomToken(bytes = 32): string {
@@ -208,6 +224,39 @@ export async function hmacVerify(
   try {
     const expected = base64UrlToBytes(await hmacSign(secret, payload));
     const actual = base64UrlToBytes(signature);
+    return timingSafeEqualBytes(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
+export async function hmacSha256Hex(
+  secret: string,
+  payload: string,
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(payload),
+  );
+  return bytesToHex(new Uint8Array(signature));
+}
+
+export async function hmacVerifyHex(
+  secret: string,
+  payload: string,
+  signature: string,
+): Promise<boolean> {
+  try {
+    const expected = hexToBytes(await hmacSha256Hex(secret, payload));
+    const actual = hexToBytes(signature);
     return timingSafeEqualBytes(expected, actual);
   } catch {
     return false;
