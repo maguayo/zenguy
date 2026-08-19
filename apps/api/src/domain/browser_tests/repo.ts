@@ -49,6 +49,7 @@ export interface RunFinalize {
 
 export interface RunRepo {
   insert(run: TestRun): Promise<void>;
+  insertWithAttempt(run: TestRun, attempt: TestAttempt): Promise<void>;
   findById(workspaceId: string, runId: string): Promise<TestRun | null>;
   listForTest(
     testId: string,

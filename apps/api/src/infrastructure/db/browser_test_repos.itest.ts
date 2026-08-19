@@ -288,6 +288,41 @@ describe("D1 browser test repositories", () => {
       status: "PASSED",
     });
     expect(summaries.has("bt_2")).toBe(false);
+
+    const atomicAttempts = new D1AttemptRepo(testEnv().DB);
+    const collision = attempt("att_collision");
+    await atomicAttempts.insert(collision);
+    const rolledBack = testRun({
+      id: "run_rolled_back",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 800,
+    });
+    await expect(
+      runs.insertWithAttempt(rolledBack, {
+        ...collision,
+        testRunId: rolledBack.id,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      runs.findById("ws_1", rolledBack.id),
+    ).resolves.toBeNull();
+    const atomic = testRun({
+      id: "run_atomic",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 900,
+    });
+    const atomicAttempt = {
+      ...attempt("att_atomic"),
+      testRunId: atomic.id,
+      status: "QUEUED" as const,
+    };
+    await runs.insertWithAttempt(atomic, atomicAttempt);
+    await expect(runs.findById("ws_1", atomic.id)).resolves.toEqual(atomic);
+    await expect(atomicAttempts.listForRun(atomic.id)).resolves.toEqual([
+      atomicAttempt,
+    ]);
   });
 
   it("resets attempts and round-trips ordered steps and artifacts", async () => {

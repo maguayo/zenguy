@@ -11,6 +11,7 @@ import type {
   BrowserTestRepo,
   RunRepo,
 } from "./domain/browser_tests/repo";
+import type { AttemptMessage } from "./domain/queues";
 import type { IncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
 import { NoopIncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
 import type { SecretRepo } from "./domain/secrets/repo";
@@ -99,6 +100,7 @@ export interface AppOverrides {
   browserTests?: BrowserTestRepo;
   runs?: RunRepo;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
+  runQueue?: Pick<Queue<AttemptMessage>, "send">;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -273,6 +275,10 @@ export function buildApp(
       tests: browserTests,
       runs,
       incidents: incidentCloserOnTestDelete,
+      runQueue:
+        overrides.runQueue ??
+        (env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">),
+      rateLimiter,
       audit,
       clock,
       ids: overrides.ids ?? realIds,

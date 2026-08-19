@@ -7,10 +7,11 @@ import type {
   RunSource,
   RunStatus,
   RunSummaryRow,
+  TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
 import type { Cursor } from "../../shared/pagination";
-import { all, one, run } from "./d1";
+import { all, batch, one, run } from "./d1";
 
 interface RunRow {
   id: string;
@@ -94,6 +95,77 @@ export class D1RunRepo implements RunRepo {
           value.createdAt,
         ),
     );
+  }
+
+  async insertWithAttempt(
+    value: TestRun,
+    attempt: TestAttempt,
+  ): Promise<void> {
+    await batch(this.database, [
+      this.database
+        .prepare(
+          `INSERT INTO test_runs
+            (id, workspace_id, browser_test_id, source, status, snapshot_json,
+             scheduled_for, queued_at, started_at, finished_at, duration_ms,
+             attempt_count, infra_attempts, passed_after_retry, billable,
+             usage_event_id, triggered_by_user_id, incident_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          value.id,
+          value.workspaceId,
+          value.browserTestId,
+          value.source,
+          value.status,
+          JSON.stringify(value.snapshot),
+          value.scheduledFor,
+          value.queuedAt,
+          value.startedAt,
+          value.finishedAt,
+          value.durationMs,
+          value.attemptCount,
+          value.infraAttempts,
+          value.passedAfterRetry ? 1 : 0,
+          value.billable ? 1 : 0,
+          value.usageEventId,
+          value.triggeredByUserId,
+          value.incidentId,
+          value.createdAt,
+        ),
+      this.database
+        .prepare(
+          `INSERT INTO test_attempts
+            (id, test_run_id, attempt_index, status, retry_delay_seconds,
+             queued_at, started_at, finished_at, duration_ms, summary,
+             expected_result, actual_result, failure_reason, visited_urls_json,
+             console_errors_json, network_errors_json, token_usage, model_name,
+             runner_version, system_error_code, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          attempt.id,
+          attempt.testRunId,
+          attempt.attemptIndex,
+          attempt.status,
+          attempt.retryDelaySeconds,
+          attempt.queuedAt,
+          attempt.startedAt,
+          attempt.finishedAt,
+          attempt.durationMs,
+          attempt.summary,
+          attempt.expectedResult,
+          attempt.actualResult,
+          attempt.failureReason,
+          attempt.visitedUrlsJson,
+          attempt.consoleErrorsJson,
+          attempt.networkErrorsJson,
+          attempt.tokenUsage,
+          attempt.modelName,
+          attempt.runnerVersion,
+          attempt.systemErrorCode,
+          attempt.createdAt,
+        ),
+    ]);
   }
 
   async findById(

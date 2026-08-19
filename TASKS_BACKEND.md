@@ -878,7 +878,7 @@ interface RunSnapshot {
 - [x] Tests: create validates channels belong to workspace; interval change recomputes next_run_at (FixedClock); soft-deleted excluded from list/get; MEMBER 403 on mutations, 200 on reads.
 
 ### BE-047: Run creation (Test it / Run now)
-- [ ] `application/browser_tests/create_run.ts` — the **single** run-creating service used by validate, run-now and the scheduler:
+- [x] `application/browser_tests/create_run.ts` — the **single** run-creating service used by validate, run-now and the scheduler:
   `execute({ workspaceId, source, config | testId, triggeredByUserId?, scheduledFor? })`:
   1. Resolve snapshot: `testId` → load test (must exist, not deleted) + its channelIds → `buildSnapshot`; `config` (draft) → validate schema → snapshot with given channelIds (draft runs keep `browser_test_id = NULL` — even when validating an edit of an existing test; §10.6 draft semantics: no incidents, no alerts).
   2. Subscription must be ACTIVE/PAST_DUE (`BILLING_REQUIRED`), workspace not deleted.
@@ -886,10 +886,10 @@ interface RunSnapshot {
   4. D1 `batch`: insert run (`newId("run")`, status QUEUED, snapshot JSON, `queued_at = now`, `billable = 1`) + insert attempt 0 (`newId("att")`, status QUEUED, `retry_delay_seconds = 0`).
   5. `RUN_QUEUE.send({ kind: "attempt", runId, attemptId, attemptIndex: 0 })` (schema added to `domain/queues.ts`: `AttemptMessage`).
   6. Return the run.
-- [ ] `application/browser_tests/run_now.ts` (`tests.run` + subscription, rate `run_create` 10/min/workspace): `create_run` with `source: "MANUAL"`, `triggeredByUserId`; audit `test.run_manual`.
-- [ ] `application/browser_tests/validate_draft.ts` (`tests.run` + subscription, same rate limit): body = full `browserTestConfigSchema` → `create_run` with `source: "VALIDATION"`.
-- [ ] Routes: `POST /api/workspaces/:workspaceId/browser-tests/:testId/run-now` → 202 `{ data: { runId } }`; `POST /api/workspaces/:workspaceId/browser-tests/validate` → 202 `{ data: { runId } }`.
-- [ ] Tests: run+attempt+queue message created atomically (fake queue); 409 on second run-now; VALIDATION runs have null testId; 402 when no subscription; MEMBER 403 (`tests.run` is Owner/Admin only).
+- [x] `application/browser_tests/run_now.ts` (`tests.run` + subscription, rate `run_create` 10/min/workspace): `create_run` with `source: "MANUAL"`, `triggeredByUserId`; audit `test.run_manual`.
+- [x] `application/browser_tests/validate_draft.ts` (`tests.run` + subscription, same rate limit): body = full `browserTestConfigSchema` → `create_run` with `source: "VALIDATION"`.
+- [x] Routes: `POST /api/workspaces/:workspaceId/browser-tests/:testId/run-now` → 202 `{ data: { runId } }`; `POST /api/workspaces/:workspaceId/browser-tests/validate` → 202 `{ data: { runId } }`.
+- [x] Tests: run+attempt+queue message created atomically (fake queue); 409 on second run-now; VALIDATION runs have null testId; 402 when no subscription; MEMBER 403 (`tests.run` is Owner/Admin only).
 
 ### BE-048: Runs & attempts read API, artifact URLs
 - [ ] Create `apps/api/src/infrastructure/storage/artifacts.ts`: `ArtifactStorage` — `put(key, bytes, contentType): Promise<{ sizeBytes }>` (R2 `ARTIFACTS.put`), `get(key): Promise<R2ObjectBody | null>`, `delete(keys: string[])` (batch ≤ 1000). Key format: `ws/${workspaceId}/run/${runId}/att/${attemptId}/${artifactId}.jpg` (screenshots) / `.md` (reports).

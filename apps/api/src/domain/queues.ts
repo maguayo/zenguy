@@ -23,3 +23,14 @@ export const notifyMessageSchema = z
   .strict();
 
 export type NotifyMessage = z.infer<typeof notifyMessageSchema>;
+
+export const attemptMessageSchema = z
+  .object({
+    kind: z.literal("attempt"),
+    runId: z.string().min(1),
+    attemptId: z.string().min(1),
+    attemptIndex: z.number().int().min(0).max(3),
+  })
+  .strict();
+
+export type AttemptMessage = z.infer<typeof attemptMessageSchema>;

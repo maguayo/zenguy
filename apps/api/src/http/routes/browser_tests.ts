@@ -1,11 +1,14 @@
 import { Hono } from "hono";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import { CreateBrowserTest } from "../../application/browser_tests/create_browser_test";
+import { CreateRun } from "../../application/browser_tests/create_run";
 import { DeleteBrowserTest } from "../../application/browser_tests/delete_browser_test";
 import { GetBrowserTest } from "../../application/browser_tests/get_browser_test";
 import type { IncidentCloserOnDelete } from "../../application/browser_tests/incident_closer";
 import { ListBrowserTests } from "../../application/browser_tests/list_browser_tests";
+import { RunNow } from "../../application/browser_tests/run_now";
 import { UpdateBrowserTest } from "../../application/browser_tests/update_browser_test";
+import { ValidateDraft } from "../../application/browser_tests/validate_draft";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
   BrowserTestRepo,
@@ -13,6 +16,7 @@ import type {
 } from "../../domain/browser_tests/repo";
 import { browserTestConfigSchema } from "../../domain/browser_tests/rules";
 import type { ChannelRepo } from "../../domain/channels/repo";
+import type { AttemptMessage } from "../../domain/queues";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   MemberRepo,
@@ -21,6 +25,7 @@ import type {
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import type { IdGenerator } from "../../shared/ids";
+import type { RateLimiter } from "../../shared/ratelimit";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireActiveSubscription } from "../middleware/require_subscription";
@@ -37,10 +42,12 @@ export interface BrowserTestRoutesDependencies {
   tests: BrowserTestRepo;
   runs: RunRepo;
   incidents: IncidentCloserOnDelete;
+  runQueue: Pick<Queue<AttemptMessage>, "send">;
+  rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret">;
+  config: Pick<AppConfig, "jwtSecret" | "llmModel">;
 }
 
 const updateSchema = browserTestConfigSchema.partial().refine(
@@ -95,6 +102,27 @@ export function browserTestRoutes(
     dependencies.runs,
     dependencies.users,
   );
+  const createRun = new CreateRun(
+    dependencies.tests,
+    dependencies.runs,
+    dependencies.workspaces,
+    dependencies.subscriptions,
+    dependencies.runQueue,
+    dependencies.config,
+    dependencies.clock,
+    dependencies.ids,
+  );
+  const runNow = new RunNow(
+    createRun,
+    dependencies.subscriptions,
+    dependencies.rateLimiter,
+    dependencies.audit,
+  );
+  const validateDraft = new ValidateDraft(
+    createRun,
+    dependencies.subscriptions,
+    dependencies.rateLimiter,
+  );
 
   app.get(
     "/:workspaceId/browser-tests",
@@ -126,6 +154,44 @@ export function browserTestRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentBrowserTest(result) }, 201);
+    },
+  );
+
+  app.post(
+    "/:workspaceId/browser-tests/validate",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    requireAction("tests.run"),
+    active,
+    zjson(browserTestConfigSchema),
+    async (context) => {
+      const run = await validateDraft.execute({
+        workspaceId: context.get("workspace").id,
+        config: context.req.valid("json"),
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+      });
+      return context.json({ data: { runId: run.id } }, 202);
+    },
+  );
+
+  app.post(
+    "/:workspaceId/browser-tests/:testId/run-now",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    requireAction("tests.run"),
+    active,
+    async (context) => {
+      const run = await runNow.execute({
+        workspaceId: context.get("workspace").id,
+        testId: context.req.param("testId"),
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        ip: requestIp(context),
+      });
+      return context.json({ data: { runId: run.id } }, 202);
     },
   );
 

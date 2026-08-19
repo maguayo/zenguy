@@ -1,4 +1,4 @@
-import { notifyMessageSchema } from "./queues";
+import { attemptMessageSchema, notifyMessageSchema } from "./queues";
 
 const VALID = {
   kind: "notify",
@@ -27,6 +27,32 @@ describe("notifyMessageSchema", () => {
         ...VALID,
         extra: "not allowed",
         message: { ...VALID.message, link: "not-a-url" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("attemptMessageSchema", () => {
+  it("accepts only a bounded attempt queue message", () => {
+    expect(
+      attemptMessageSchema.parse({
+        kind: "attempt",
+        runId: "run_1",
+        attemptId: "att_1",
+        attemptIndex: 0,
+      }),
+    ).toEqual({
+      kind: "attempt",
+      runId: "run_1",
+      attemptId: "att_1",
+      attemptIndex: 0,
+    });
+    expect(
+      attemptMessageSchema.safeParse({
+        kind: "attempt",
+        runId: "run_1",
+        attemptId: "att_1",
+        attemptIndex: 4,
       }).success,
     ).toBe(false);
   });

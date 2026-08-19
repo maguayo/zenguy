@@ -109,6 +109,7 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
 
 export class FakeRunRepo implements RunRepo {
   readonly runs = new Map<string, TestRun>();
+  readonly initialAttempts = new Map<string, TestAttempt>();
 
   async insert(run: TestRun): Promise<void> {
     if (this.runs.has(run.id)) throw new Error("run constraint violation");
@@ -135,6 +136,29 @@ export class FakeRunRepo implements RunRepo {
       throw new Error("run occurrence constraint violation");
     }
     this.runs.set(run.id, copy(run));
+  }
+
+  async insertWithAttempt(
+    run: TestRun,
+    attempt: TestAttempt,
+  ): Promise<void> {
+    await this.insert(run);
+    try {
+      if (
+        this.initialAttempts.has(attempt.id) ||
+        [...this.initialAttempts.values()].some(
+          (candidate) =>
+            candidate.testRunId === attempt.testRunId &&
+            candidate.attemptIndex === attempt.attemptIndex,
+        )
+      ) {
+        throw new Error("attempt constraint violation");
+      }
+      this.initialAttempts.set(attempt.id, copy(attempt));
+    } catch (error) {
+      this.runs.delete(run.id);
+      throw error;
+    }
   }
 
   async findById(
