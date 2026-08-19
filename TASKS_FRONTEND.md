@@ -356,12 +356,12 @@ export default defineConfig({
 # Phase 10 — Secrets
 
 ### FE-037: Secrets page
-- [ ] `src/api/secrets.ts` (`listSecrets`, `createSecret`, `replaceSecret`, `deleteSecret`).
-- [ ] `pages/secrets/SecretsPage.tsx` (§18.14): `PageHeader` `Secrets` + `Add secret` (gated `secrets.manage`). Top warning banner (always visible, warn tones, TriangleAlert): staging-credentials copy (Appendix D).
-- [ ] Table: **Key** (mono, `KeyRound` icon), **Allowed domains** (small neutral Badges, `*.example.com` rendered as-is), **Description** (`—`), **Updated** (relative), **Created by**; row menu (gated): `Replace value…`, `Edit domains…`, `Delete` (ConfirmDialog danger `Delete {{KEY}}? Tests that reference it will start failing.`). **Values are never shown anywhere — there is no view action.**
-- [ ] Add modal: **Key** Input (auto-uppercase on change, zod `/^[A-Z][A-Z0-9_]{1,63}$/`, hint `Uppercase letters, digits and _ — e.g. SHOP_PASSWORD. Use it in instructions as {{SHOP_PASSWORD}}.`); **Value** `<input type="password" autoComplete="off">` (1–4096) + hint `You won't be able to view this value again — only replace it.`; **Allowed domains** — `components/DomainListInput.tsx` chips input (validates `hostname` or `*.hostname`, lowercases, min 1, hint `example.com matches only that host. *.example.com also matches its subdomains. Secrets are only ever typed on these domains.`); **Description** optional.
-- [ ] Replace-value modal: text `The current value can't be viewed. Entering a new value replaces it immediately.` + password input → PUT. Edit-domains modal: DomainListInput + description. `CONFLICT` on create → inline `A secret with this key already exists.`
-- [ ] Member view: table renders, banner renders, no action buttons. Empty: `No secrets yet` / `Store credentials once, encrypted, and reference them in tests as {{KEY}}.` + CTA (gated).
+- [x] `src/api/secrets.ts` (`listSecrets`, `createSecret`, `replaceSecret`, `deleteSecret`).
+- [x] `pages/secrets/SecretsPage.tsx` (§18.14): `PageHeader` `Secrets` + `Add secret` (gated `secrets.manage`). Top warning banner (always visible, warn tones, TriangleAlert): staging-credentials copy (Appendix D).
+- [x] Table: **Key** (mono, `KeyRound` icon), **Allowed domains** (small neutral Badges, `*.example.com` rendered as-is), **Description** (`—`), **Updated** (relative), **Created by**; row menu (gated): `Replace value…`, `Edit domains…`, `Delete` (ConfirmDialog danger `Delete {{KEY}}? Tests that reference it will start failing.`). **Values are never shown anywhere — there is no view action.**
+- [x] Add modal: **Key** Input (auto-uppercase on change, zod `/^[A-Z][A-Z0-9_]{1,63}$/`, hint `Uppercase letters, digits and _ — e.g. SHOP_PASSWORD. Use it in instructions as {{SHOP_PASSWORD}}.`); **Value** `<input type="password" autoComplete="off">` (1–4096) + hint `You won't be able to view this value again — only replace it.`; **Allowed domains** — `components/DomainListInput.tsx` chips input (validates `hostname` or `*.hostname`, lowercases, min 1, hint `example.com matches only that host. *.example.com also matches its subdomains. Secrets are only ever typed on these domains.`); **Description** optional.
+- [x] Replace-value modal: text `The current value can't be viewed. Entering a new value replaces it immediately.` + password input → PUT. Edit-domains modal: DomainListInput + description. `CONFLICT` on create → inline `A secret with this key already exists.`
+- [x] Member view: table renders, banner renders, no action buttons. Empty: `No secrets yet` / `Store credentials once, encrypted, and reference them in tests as {{KEY}}.` + CTA (gated).
 
 # Phase 11 — Members
 
