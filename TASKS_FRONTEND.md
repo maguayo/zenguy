@@ -177,13 +177,13 @@ export default defineConfig({
 - [x] Route guards in `App.tsx` helpers: `RequireAuth` (signedOut → `<Navigate to="/signin" state={{ next }} />`; signedIn but `!user.emailVerified` → `/verify-pending` except on that page), `PublicOnly` (signedIn → `/`).
 
 ### FE-013: Router skeleton
-- [ ] `App.tsx` with `BrowserRouter` + full route tree (all elements `React.lazy` page stubs rendering `PageHeader` for now):
+- [x] `App.tsx` with `BrowserRouter` + full route tree (all elements `React.lazy` page stubs rendering `PageHeader` for now):
   - Public: `/signin`, `/signup`, `/check-email`, `/verify-email`, `/forgot-password`, `/reset-password`, `/invitations/:token`.
   - Authed, no workspace chrome: `/verify-pending`, `/onboarding/workspace`, `/w/:wsId/setup/billing`.
   - Authed + AppLayout under `/w/:wsId/`: `overview`, `tests`, `tests/new`, `tests/:testId`, `tests/:testId/edit`, `runs/:runId`, `uptime`, `uptime/new`, `uptime/:monitorId`, `uptime/:monitorId/edit`, `incidents`, `incidents/:incidentId`, `notifications`, `secrets`, `members`, `billing`, `settings`.
   - `/` → resolver: signedIn → navigate to `/w/<last used wsId from localStorage, else first workspace>/overview`, or `/onboarding/workspace` when no workspaces; signedOut → `/signin`.
   - `*` → `NotFound.tsx` (404 card + link Home).
-- [ ] Top-level `ErrorBoundary` (class component) rendering `ErrorState` with reload button. `QueryClient` defaults: `staleTime: 10_000`, `retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2`, `refetchOnWindowFocus: true`.
+- [x] Top-level `ErrorBoundary` (class component) rendering `ErrorState` with reload button. `QueryClient` defaults: `staleTime: 10_000`, `retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2`, `refetchOnWindowFocus: true`.
 
 # Phase 3 — Auth screens
 

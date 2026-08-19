@@ -7,12 +7,14 @@ import { Button } from "./Button";
 export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
   message?: string;
   onRetry: () => void;
+  retryLabel?: string;
 }
 
 export function ErrorState({
   className,
   message = "Something went wrong. Please try again.",
   onRetry,
+  retryLabel = "Retry",
   ...props
 }: ErrorStateProps) {
   return (
@@ -28,7 +30,7 @@ export function ErrorState({
       <div className="flex-1">
         <p className="text-sm font-medium">{message}</p>
         <Button className="mt-3" onClick={onRetry} size="sm" variant="secondary">
-          Retry
+          {retryLabel}
         </Button>
       </div>
     </div>

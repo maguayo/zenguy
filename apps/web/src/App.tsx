@@ -1,4 +1,10 @@
-import type { ReactNode } from "react";
+import {
+  Component,
+  Suspense,
+  lazy,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -7,9 +13,67 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 
+import type { Workspace } from "./api/types";
+import { ErrorState } from "./components/ui/ErrorState";
+import { Spinner } from "./components/ui/Spinner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { ApiError, apiGet } from "./lib/api";
+
+const stub = (title: string) =>
+  lazy(async () => {
+    const { StubPage } = await import("./pages/StubPage");
+    return { default: () => <StubPage title={title} /> };
+  });
+
+const SignIn = stub("Sign in");
+const SignUp = stub("Sign up");
+const CheckEmail = stub("Check your inbox");
+const VerifyEmail = stub("Verify email");
+const ForgotPassword = stub("Forgot password");
+const ResetPassword = stub("Reset password");
+const AcceptInvitation = stub("Invitation");
+const VerifyPending = stub("Verify your email");
+const CreateWorkspace = stub("Create your workspace");
+const BillingSetup = stub("Set up billing");
+const OverviewPage = stub("Overview");
+const TestsListPage = stub("Browser Tests");
+const NewTestPage = stub("New browser test");
+const TestDetailPage = stub("Browser test");
+const EditTestPage = stub("Edit browser test");
+const RunDetailPage = stub("Run");
+const UptimeListPage = stub("Uptime");
+const NewMonitorPage = stub("New monitor");
+const MonitorDetailPage = stub("Uptime monitor");
+const EditMonitorPage = stub("Edit monitor");
+const IncidentsPage = stub("Incidents");
+const IncidentDetailPage = stub("Incident");
+const ChannelsPage = stub("Notifications");
+const SecretsPage = stub("Secrets");
+const MembersPage = stub("Members");
+const BillingPage = stub("Usage & Billing");
+const SettingsPage = stub("Workspace Settings");
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+export function shouldRetryQuery(count: number, error: unknown): boolean {
+  return !(error instanceof ApiError && error.status < 500) && count < 2;
+}
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+      retry: shouldRetryQuery,
+      staleTime: 10_000,
+    },
+  },
+});
 
 export function RequireAuth({ children }: { children?: ReactNode }) {
   const { status, user } = useAuth();
@@ -29,37 +93,135 @@ export function PublicOnly({ children }: { children?: ReactNode }) {
   return <>{children ?? <Outlet />}</>;
 }
 
-function Placeholder({ label }: { label: string }) {
+function RouteLoading() {
   return (
-    <main className="grid min-h-screen place-items-center">
-      <h1 className="text-2xl font-semibold">{label}</h1>
-    </main>
+    <div className="grid min-h-64 place-items-center">
+      <Spinner label="Loading page" size={5} />
+    </div>
   );
+}
+
+function WorkspaceShellStub() {
+  return <Outlet />;
+}
+
+function RootResolver() {
+  const { status } = useAuth();
+  const workspaces = useQuery({
+    enabled: status === "signedIn",
+    queryFn: () => apiGet<Workspace[]>("/api/workspaces"),
+    queryKey: ["workspaces"],
+  });
+
+  if (status === "signedOut") return <Navigate replace to="/signin" />;
+  if (workspaces.isPending) return <RouteLoading />;
+  if (workspaces.isError) {
+    return (
+      <main className="mx-auto max-w-xl px-4 py-12">
+        <ErrorState onRetry={() => void workspaces.refetch()} />
+      </main>
+    );
+  }
+  if (workspaces.data.length === 0) {
+    return <Navigate replace to="/onboarding/workspace" />;
+  }
+
+  const lastId = localStorage.getItem("zenguy:lastWorkspace");
+  const workspace = workspaces.data.find((item) => item.id === lastId) ?? workspaces.data[0];
+  if (!workspace) return <Navigate replace to="/onboarding/workspace" />;
+  return <Navigate replace to={`/w/${workspace.id}/overview`} />;
 }
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route element={<PublicOnly />}>
-        <Route element={<Placeholder label="Sign in" />} path="/signin" />
-      </Route>
-      <Route element={<RequireAuth />}>
-        <Route element={<Placeholder label="Verify your email" />} path="/verify-pending" />
-        <Route element={<Placeholder label="Zenguy" />} path="/" />
-      </Route>
-      <Route element={<Placeholder label="Not found" />} path="*" />
-    </Routes>
+    <Suspense fallback={<RouteLoading />}>
+      <Routes>
+        <Route element={<PublicOnly />}>
+          <Route element={<SignIn />} path="/signin" />
+          <Route element={<SignUp />} path="/signup" />
+          <Route element={<CheckEmail />} path="/check-email" />
+          <Route element={<ForgotPassword />} path="/forgot-password" />
+          <Route element={<ResetPassword />} path="/reset-password" />
+        </Route>
+        <Route element={<VerifyEmail />} path="/verify-email" />
+        <Route element={<AcceptInvitation />} path="/invitations/:token" />
+
+        <Route element={<RequireAuth />}>
+          <Route element={<VerifyPending />} path="/verify-pending" />
+          <Route element={<CreateWorkspace />} path="/onboarding/workspace" />
+          <Route element={<BillingSetup />} path="/w/:wsId/setup/billing" />
+          <Route element={<WorkspaceShellStub />} path="/w/:wsId">
+            <Route element={<Navigate replace to="overview" />} index />
+            <Route element={<OverviewPage />} path="overview" />
+            <Route element={<TestsListPage />} path="tests" />
+            <Route element={<NewTestPage />} path="tests/new" />
+            <Route element={<TestDetailPage />} path="tests/:testId" />
+            <Route element={<EditTestPage />} path="tests/:testId/edit" />
+            <Route element={<RunDetailPage />} path="runs/:runId" />
+            <Route element={<UptimeListPage />} path="uptime" />
+            <Route element={<NewMonitorPage />} path="uptime/new" />
+            <Route element={<MonitorDetailPage />} path="uptime/:monitorId" />
+            <Route element={<EditMonitorPage />} path="uptime/:monitorId/edit" />
+            <Route element={<IncidentsPage />} path="incidents" />
+            <Route element={<IncidentDetailPage />} path="incidents/:incidentId" />
+            <Route element={<ChannelsPage />} path="notifications" />
+            <Route element={<SecretsPage />} path="secrets" />
+            <Route element={<MembersPage />} path="members" />
+            <Route element={<BillingPage />} path="billing" />
+            <Route element={<SettingsPage />} path="settings" />
+          </Route>
+        </Route>
+
+        <Route element={<RootResolver />} path="/" />
+        <Route element={<NotFound />} path="*" />
+      </Routes>
+    </Suspense>
   );
+}
+
+interface ErrorBoundaryState {
+  failed: boolean;
+}
+
+export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { failed: true };
+  }
+
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // The UI remains safe and recoverable; production observability captures window errors.
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <main className="mx-auto max-w-xl px-4 py-12">
+          <ErrorState
+            message="The application couldn't load this page."
+            onRetry={() => window.location.reload()}
+            retryLabel="Reload"
+          />
+        </main>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export function App() {
   return (
-    <BrowserRouter>
-      <ToastProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </ToastProvider>
+        </QueryClientProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
