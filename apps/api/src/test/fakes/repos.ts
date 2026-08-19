@@ -603,6 +603,13 @@ export class FakeUsageEventRepo implements UsageEventRepo {
     return "inserted";
   }
 
+  async findByRunId(runId: string): Promise<UsageEvent | null> {
+    for (const event of this.events.values()) {
+      if (event.testRunId === runId) return clone(event);
+    }
+    return null;
+  }
+
   async reverseByRunId(runId: string, at: number): Promise<void> {
     for (const [id, event] of this.events) {
       if (event.testRunId === runId && event.reversedAt === null) {

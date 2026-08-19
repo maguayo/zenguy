@@ -15,6 +15,7 @@ export interface SubscriptionRepo {
 
 export interface UsageEventRepo {
   insertIfAbsent(event: UsageEvent): Promise<InsertResult>;
+  findByRunId(runId: string): Promise<UsageEvent | null>;
   reverseByRunId(runId: string, at: number): Promise<void>;
   countBillable(
     workspaceId: string,

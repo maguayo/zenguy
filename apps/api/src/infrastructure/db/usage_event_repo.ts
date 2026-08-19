@@ -6,6 +6,37 @@ interface TotalRow {
   total: number;
 }
 
+interface UsageEventRow {
+  id: string;
+  workspace_id: string;
+  test_run_id: string;
+  type: string;
+  quantity: number;
+  billable: number;
+  idempotency_key: string;
+  occurred_at: number;
+  reversed_at: number | null;
+  created_at: number;
+}
+
+function toUsageEvent(row: UsageEventRow): UsageEvent {
+  if (row.type !== "BROWSER_RUN") {
+    throw new Error("Unsupported usage event type");
+  }
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    testRunId: row.test_run_id,
+    type: "BROWSER_RUN",
+    quantity: row.quantity,
+    billable: row.billable === 1,
+    idempotencyKey: row.idempotency_key,
+    occurredAt: row.occurred_at,
+    reversedAt: row.reversed_at,
+    createdAt: row.created_at,
+  };
+}
+
 export class D1UsageEventRepo implements UsageEventRepo {
   constructor(private readonly database: D1Database) {}
 
@@ -39,6 +70,15 @@ export class D1UsageEventRepo implements UsageEventRepo {
       if (isUniqueConstraintError(error)) return "duplicate";
       throw error;
     }
+  }
+
+  async findByRunId(runId: string): Promise<UsageEvent | null> {
+    const row = await one<UsageEventRow>(
+      this.database
+        .prepare("SELECT * FROM usage_events WHERE test_run_id = ?")
+        .bind(runId),
+    );
+    return row === null ? null : toUsageEvent(row);
   }
 
   async reverseByRunId(runId: string, at: number): Promise<void> {

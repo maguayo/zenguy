@@ -101,6 +101,7 @@ describe("D1 billing repositories", () => {
     });
 
     await expect(repo.insertIfAbsent(counted)).resolves.toBe("inserted");
+    await expect(repo.findByRunId("run_counted")).resolves.toEqual(counted);
     await expect(
       repo.insertIfAbsent({ ...counted, id: "ue_duplicate" }),
     ).resolves.toBe("duplicate");
