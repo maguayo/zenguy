@@ -16,7 +16,11 @@ import type {
 } from "./domain/browser_tests/repo";
 import type { AttemptMessage } from "./domain/queues";
 import type { IncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
-import { NoopIncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
+import { CloseIncidentOnTestDelete } from "./application/incidents/close_incident_on_test_delete";
+import type {
+  IncidentEventRepo,
+  IncidentRepo,
+} from "./domain/incidents/repo";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
@@ -64,6 +68,8 @@ import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
+import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
+import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
@@ -112,6 +118,8 @@ export interface AppOverrides {
   steps?: StepRepo;
   artifacts?: ArtifactRepo;
   artifactStorage?: Pick<ArtifactStorage, "put" | "get" | "delete">;
+  incidents?: IncidentRepo;
+  incidentEvents?: IncidentEventRepo;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   runQueue?: Pick<Queue<AttemptMessage>, "send">;
   paddleClient?: PaddleClient;
@@ -157,8 +165,16 @@ export function buildApp(
   const artifacts = overrides.artifacts ?? new D1ArtifactRepo(env.DB);
   const artifactStorage =
     overrides.artifactStorage ?? new ArtifactStorage(env.ARTIFACTS);
+  const incidents = overrides.incidents ?? new D1IncidentRepo(env.DB);
+  const incidentEvents =
+    overrides.incidentEvents ?? new D1IncidentEventRepo(env.DB);
   const incidentCloserOnTestDelete =
-    overrides.incidentCloserOnTestDelete ?? new NoopIncidentCloserOnDelete();
+    overrides.incidentCloserOnTestDelete ??
+    new CloseIncidentOnTestDelete(
+      incidents,
+      incidentEvents,
+      overrides.ids ?? realIds,
+    );
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const overageReporter =

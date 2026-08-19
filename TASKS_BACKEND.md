@@ -1081,7 +1081,7 @@ CREATE INDEX idx_incident_events_incident ON incident_events(incident_id, create
 - [x] D1 impls + fakes + `.itest.ts`: double open → one row; filters; partial unique allows re-open after resolve.
 
 ### BE-059: Browser incident engine (RunFinalizedHandler)
-- [ ] Create `application/incidents/handle_run_finalized.ts` implementing `RunFinalizedHandler` (deps: incident repos, dispatch_notifications, channel repo, workspace repo, report generator port (BE-060), templates, clock, ids):
+- [x] Create `application/incidents/handle_run_finalized.ts` implementing `RunFinalizedHandler` (deps: incident repos, dispatch_notifications, channel repo, workspace repo, report generator port (BE-060), templates, clock, ids):
   - `shouldOpenIncident(...)` true (FAILED/TIMEOUT + non-VALIDATION + real test):
     - Existing open incident → `insert` event `FAILURE_RECORDED` (message `Run <id> finished <status>`, source_id run id) + `touch` + set run.incident_id — **no new alert** (dedup §15.3).
     - Else `insertOpen` (opened_by_run_id) + event `OPENED` + set run.incident_id + **dispatch FAILURE notifications** to the snapshot's `channelIds` (message via `buildNotificationMessage` with redacted `failureSummary` = final attempt's failure_reason) (§16.11: alert once, after retries exhausted).
@@ -1089,7 +1089,7 @@ CREATE INDEX idx_incident_events_incident ON incident_events(incident_id, create
   - `SYSTEM_ERROR` → never open/notify customer; `platformAlert("run_system_error", { runId, code })` (§16.11).
   - `shouldGenerateReport` → call `ReportGenerator.generateForRun(run)` (port; BE-060) — failures logged, never break finalization.
   - Also implement the deferred wirings: `IncidentEventWriter` for BE-043 (writes NOTIFICATION_SENT/NOTIFICATION_FAILED events with channel name + delivery status) and `IncidentCloserOnDelete` for BE-046 (resolve + `TEST_DELETED` event, no notifications). Replace the no-op container registrations.
-- [ ] Tests (fakes): matrix — first failure opens+notifies once; second failing run appends only; recovery resolves+notifies when flag on / silent when off; VALIDATION never opens; SYSTEM_ERROR never notifies customers; passed-after-retry without incident → nothing; delete-test path resolves with TEST_DELETED.
+- [x] Tests (fakes): matrix — first failure opens+notifies once; second failing run appends only; recovery resolves+notifies when flag on / silent when off; VALIDATION never opens; SYSTEM_ERROR never notifies customers; passed-after-retry without incident → nothing; delete-test path resolves with TEST_DELETED.
 
 ### BE-060: Markdown failure report
 - [ ] Create `application/reports/generate_report.ts` implementing `ReportGenerator` (§13). Input: finalized run (FAILED/TIMEOUT only — assert) + attempts + steps + artifacts + workspace. Build the markdown **exactly** in this order (all 22 items §13.3; every user-originated string through the run's `Redactor` — rebuild it from the snapshot's referenced secrets):

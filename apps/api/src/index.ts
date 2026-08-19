@@ -1,17 +1,17 @@
 import { buildApp } from "./app";
 import { RecordRunUsage } from "./application/billing/record_run_usage";
 import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
-import {
-  NoopIncidentEventWriter,
-} from "./application/channels/incident_event_writer";
+import { DispatchNotifications } from "./application/channels/dispatch_notifications";
 import {
   SendQueuedNotification,
   type NotificationQueueControl,
 } from "./application/channels/send_queued_notification";
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
-import { LoggingRunFinalizedHandler } from "./application/execution/logging_run_finalized";
+import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
+import { WriteIncidentNotificationEvent } from "./application/incidents/write_notification_event";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
+import { NoopReportGenerator } from "./domain/browser_tests/ports";
 import {
   attemptMessageSchema,
   notifyMessageSchema,
@@ -23,6 +23,8 @@ import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
+import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
+import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
@@ -189,11 +191,18 @@ export async function processQueueBatch(
 function notifyConsumer(env: Bindings): SendQueuedNotification {
   const config = loadConfig(env);
   const emailSender = buildEmailSender(config);
+  const incidents = new D1IncidentRepo(env.DB);
+  const incidentEvents = new D1IncidentEventRepo(env.DB);
   return new SendQueuedNotification(
     new D1DeliveryRepo(env.DB),
     new D1ChannelRepo(env.DB),
     buildChannelSender(config, emailSender),
-    new NoopIncidentEventWriter(),
+    new WriteIncidentNotificationEvent(
+      incidents,
+      incidentEvents,
+      systemClock,
+      realIds,
+    ),
     config.encryptionKey,
     systemClock,
   );
@@ -208,7 +217,18 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
   const browserTests = new D1BrowserTestRepo(env.DB);
   const workspaces = new D1WorkspaceRepo(env.DB);
   const usageEvents = new D1UsageEventRepo(env.DB);
+  const channels = new D1ChannelRepo(env.DB);
+  const deliveries = new D1DeliveryRepo(env.DB);
+  const incidents = new D1IncidentRepo(env.DB);
+  const incidentEvents = new D1IncidentEventRepo(env.DB);
   const storage = new ArtifactStorage(env.ARTIFACTS);
+  const dispatchNotifications = new DispatchNotifications(
+    channels,
+    deliveries,
+    env.NOTIFY_QUEUE as Pick<Queue, "send">,
+    systemClock,
+    realIds,
+  );
   const lifecycle = new AttemptLifecycle({
     runs,
     attempts,
@@ -222,7 +242,19 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
     queue: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
     clock: systemClock,
     ids: realIds,
-    runFinalizedHandler: new LoggingRunFinalizedHandler(),
+    runFinalizedHandler: new HandleRunFinalized({
+      incidents,
+      events: incidentEvents,
+      runs,
+      attempts,
+      dispatchNotifications,
+      channels,
+      workspaces,
+      reports: new NoopReportGenerator(),
+      appUrl: config.appUrl,
+      clock: systemClock,
+      ids: realIds,
+    }),
   });
   return new ExecuteAttempt({
     lifecycle,
