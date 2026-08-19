@@ -958,15 +958,15 @@ interface RunSnapshot {
 - [x] Define `class ActionError extends Error` here. Unit-test the pure parts (entry shaping, caps, dedupe) by faking the page event emitters; real-browser behavior is covered by the BE-057 manual smoke.
 
 ### BE-054: DOM serializer
-- [ ] Create `apps/api/src/infrastructure/browser/serializer.ts`.
-- [ ] Export `SERIALIZE_SCRIPT: string` — a self-contained JS function source executed via `page.evaluate` that:
+- [x] Create `apps/api/src/infrastructure/browser/serializer.ts`.
+- [x] Export `SERIALIZE_SCRIPT: string` — a self-contained JS function source executed via `page.evaluate` that:
   1. Removes previous `data-zg-idx` attributes.
   2. Collects candidates: `a, button, input, select, textarea, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="checkbox"], [role="combobox"], [onclick], [contenteditable="true"]`.
   3. Filters visible+enabled: `getClientRects().length > 0`, computed style not `display:none/visibility:hidden`, not `disabled`, width/height > 0.
   4. Sorts: elements intersecting the viewport first (document order within groups); caps at `MAX_ELEMENTS = 150`.
   5. Sets `data-zg-idx="<i>"` and builds `{ i, tag, type: input type attr | null, text: (innerText || value || placeholder || "").trim().slice(0, 60), aria: aria-label | null, href: a[href] host+path only | null, inViewport: boolean }`.
   6. Returns `{ url: location.href, title: document.title, scrollY, scrollHeight, innerHeight, elements, textDigest: document.body.innerText.replace(/\s+/g, " ").slice(0, 1500) }`.
-- [ ] `formatPageState(state: PageState): string` — compact text for the LLM:
+- [x] `formatPageState(state: PageState): string` — compact text for the LLM:
   ```
   URL: <sanitizeUrl(url)>
   Title: <title>
@@ -977,8 +977,8 @@ interface RunSnapshot {
   ...
   Page text: <textDigest>
   ```
-- [ ] `BrowserSession.serialize()` (BE-053) runs `SERIALIZE_SCRIPT` and returns the parsed `PageState`.
-- [ ] Tests: `formatPageState` snapshot from a fixture `PageState`; script string contains no backtick-breaking syntax (evaluate it with `new Function` on a jsdom-free fake `document`? — instead: assert it compiles via `new Function("return (" + SERIALIZE_SCRIPT + ")")`).
+- [x] `BrowserSession.serialize()` (BE-053) runs `SERIALIZE_SCRIPT` and returns the parsed `PageState`.
+- [x] Tests: `formatPageState` snapshot from a fixture `PageState`; script string contains no backtick-breaking syntax (evaluate it with `new Function` on a jsdom-free fake `document`? — instead: assert it compiles via `new Function("return (" + SERIALIZE_SCRIPT + ")")`).
 
 ### BE-055: LLM client (Anthropic)
 - [ ] Create `apps/api/src/infrastructure/llm/anthropic.ts`.

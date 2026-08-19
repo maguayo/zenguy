@@ -16,6 +16,7 @@ import {
   SCREENSHOT_JPEG_QUALITY,
 } from "../../shared/constants";
 import { sanitizeUrl, truncate } from "../../shared/redact";
+import { serializePage } from "./serializer";
 import type { PageState } from "./types";
 
 const MAX_VISITED_URLS = 100;
@@ -292,10 +293,6 @@ class PuppeteerBrowserSession implements BrowserSession {
   }
 }
 
-async function serializerPending(): Promise<PageState> {
-  throw new Error("Page serializer is not available until BE-054");
-}
-
 export async function launchSession(
   browserBinding: BrowserRun,
   device: Device,
@@ -323,7 +320,7 @@ export async function launchSession(
       browser,
       page,
       evidence,
-      options.serializePage ?? serializerPending,
+      options.serializePage ?? serializePage,
     );
   } catch (error) {
     try {
