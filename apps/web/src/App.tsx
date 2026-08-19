@@ -45,7 +45,7 @@ const VerifyPending = lazy(() => import("./pages/auth/VerifyPending"));
 const CreateWorkspace = lazy(() => import("./pages/onboarding/CreateWorkspace"));
 const BillingSetup = lazy(() => import("./pages/onboarding/BillingSetup"));
 const OverviewPage = lazy(() => import("./pages/overview/OverviewPage"));
-const TestsListPage = stub("Browser Tests");
+const TestsListPage = lazy(() => import("./pages/tests/TestsListPage"));
 const NewTestPage = stub("New browser test");
 const TestDetailPage = stub("Browser test");
 const EditTestPage = stub("Edit browser test");
