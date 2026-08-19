@@ -161,14 +161,14 @@ export default defineConfig({
 # Phase 2 — API client & auth core
 
 ### FE-011: API client with auto-refresh
-- [ ] `lib/auth-token.ts`: module holding `{ accessToken: string | null, expiresAt: number | null }` in memory with `setToken(token, expiresInSeconds)`, `getToken()`, `clearToken()`, and `onExpiringSoon(cb)` — a single `setTimeout` scheduled at `expiresIn - 60` seconds that fires `cb` (proactive refresh); rescheduled on every `setToken`.
-- [ ] `lib/api.ts`:
+- [x] `lib/auth-token.ts`: module holding `{ accessToken: string | null, expiresAt: number | null }` in memory with `setToken(token, expiresInSeconds)`, `getToken()`, `clearToken()`, and `onExpiringSoon(cb)` — a single `setTimeout` scheduled at `expiresIn - 60` seconds that fires `cb` (proactive refresh); rescheduled on every `setToken`.
+- [x] `lib/api.ts`:
   - `export class ApiError extends Error { code: string; status: number; details?: { field: string; message: string }[] }`.
   - Core `request(method, path, body?, opts?)`: fetch `path` (always relative `/api/...`), headers `Content-Type: application/json` + `Authorization: Bearer <token>` when present, `credentials: "same-origin"`; parse envelope: ok → `json.data` (204 → undefined); error → throw `ApiError` from `json.error`.
   - **Auto-refresh:** on 401 for any path except `/api/auth/*`: await `ensureFreshToken()` then retry the request **once**; still 401 → `clearToken()` + emit `authEvents.signedOut` + throw. `ensureFreshToken()` single-flight: one shared in-flight `POST /api/auth/refresh` promise (`{ user, accessToken, expiresIn }` → `setToken`); concurrent callers await the same promise. Also called by the proactive timer.
   - `authEvents`: tiny emitter `{ onSignedOut(cb) }` consumed by AuthContext.
   - Exports: `apiGet<T>(path)`, `apiPost<T>(path, body?)`, `apiPatch`, `apiPut`, `apiDelete(path, body?)` (workspace deletion sends `{ confirmName }` in the DELETE body), `apiGetBlob(path)` (for the report download — returns `{ blob, filename }` parsing `Content-Disposition`).
-- [ ] Vitest with mocked `fetch`: envelope unwrap; ApiError fields; 401 → refresh → retry once (assert order and single retry); concurrent 401s trigger ONE refresh call; refresh failure signs out; `/api/auth/login` 401 does NOT trigger refresh.
+- [x] Vitest with mocked `fetch`: envelope unwrap; ApiError fields; 401 → refresh → retry once (assert order and single retry); concurrent 401s trigger ONE refresh call; refresh failure signs out; `/api/auth/login` 401 does NOT trigger refresh.
 
 ### FE-012: API types & auth context
 - [ ] `src/api/types.ts`: transcribe **Appendix A** into TypeScript interfaces/unions verbatim (this file is the single source of truth for the whole app — every fetcher and component imports from it; never inline-type an API payload).

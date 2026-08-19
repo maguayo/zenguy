@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { clearToken, getToken, setToken } from "./auth-token";
+import {
+  ApiError,
+  apiGet,
+  apiGetBlob,
+  apiGetPage,
+  apiPost,
+  authEvents,
+} from "./api";
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}
+
+describe("API client", () => {
+  beforeEach(() => {
+    clearToken();
+  });
+
+  afterEach(() => {
+    clearToken();
+    vi.unstubAllGlobals();
+  });
+
+  it("unwraps success envelopes and sends same-origin credentials", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { ok: true } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiGet<{ ok: boolean }>("/api/health")).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/health",
+      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+    );
+  });
+
+  it("preserves paginated cursors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({ data: [{ id: "one" }], nextCursor: "cursor-2" }),
+      ),
+    );
+
+    await expect(apiGetPage<{ id: string }>("/api/items")).resolves.toEqual({
+      items: [{ id: "one" }],
+      nextCursor: "cursor-2",
+    });
+  });
+
+  it("throws ApiError with envelope fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              details: [{ field: "email", message: "Invalid email" }],
+              message: "Invalid input",
+            },
+          },
+          400,
+        ),
+      ),
+    );
+
+    const error = await apiPost("/api/items", {}).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: [{ field: "email", message: "Invalid email" }],
+      message: "Invalid input",
+      status: 400,
+    });
+  });
+
+  it("refreshes a 401 and retries the original request exactly once", async () => {
+    setToken("expired", 1_800);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { code: "UNAUTHORIZED" } }, 401))
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { accessToken: "fresh", expiresIn: 1_800, user: {} } }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ data: { value: 42 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiGet<{ value: number }>("/api/protected")).resolves.toEqual({ value: 42 });
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/api/protected",
+      "/api/auth/refresh",
+      "/api/protected",
+    ]);
+    const retriedHeaders = fetchMock.mock.calls[2]?.[1]?.headers as Headers;
+    expect(retriedHeaders.get("Authorization")).toBe("Bearer fresh");
+  });
+
+  it("uses one refresh request for concurrent 401 responses", async () => {
+    let protectedCalls = 0;
+    let refreshCalls = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const path = String(input);
+      if (path === "/api/auth/refresh") {
+        refreshCalls += 1;
+        return jsonResponse({ data: { accessToken: "fresh", expiresIn: 1_800, user: {} } });
+      }
+      protectedCalls += 1;
+      if (protectedCalls <= 2) {
+        return jsonResponse({ error: { code: "UNAUTHORIZED" } }, 401);
+      }
+      return jsonResponse({ data: { path } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [first, second] = await Promise.all([
+      apiGet<{ path: string }>("/api/first"),
+      apiGet<{ path: string }>("/api/second"),
+    ]);
+
+    expect(first.path).toBe("/api/first");
+    expect(second.path).toBe("/api/second");
+    expect(refreshCalls).toBe(1);
+  });
+
+  it("clears auth and emits signed-out when refresh fails", async () => {
+    setToken("expired", 1_800);
+    const onSignedOut = vi.fn();
+    const unsubscribe = authEvents.onSignedOut(onSignedOut);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ error: { code: "UNAUTHORIZED" } }, 401))
+        .mockResolvedValueOnce(jsonResponse({ error: { code: "UNAUTHORIZED" } }, 401)),
+    );
+
+    await expect(apiGet("/api/protected")).rejects.toBeInstanceOf(ApiError);
+    expect(getToken()).toEqual({ accessToken: null, expiresAt: null });
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("does not refresh a login 401", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: { code: "INVALID_CREDENTIALS" } }, 401));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiPost("/api/auth/login", {})).rejects.toMatchObject({
+      code: "INVALID_CREDENTIALS",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("downloads blobs and parses UTF-8 filenames", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("report", {
+          headers: {
+            "Content-Disposition": "attachment; filename*=UTF-8''failure%20report.md",
+            "Content-Type": "text/markdown",
+          },
+        }),
+      ),
+    );
+
+    const result = await apiGetBlob("/api/report");
+    expect(result.filename).toBe("failure report.md");
+    await expect(result.blob.text()).resolves.toBe("report");
+  });
+});
