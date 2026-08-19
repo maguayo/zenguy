@@ -7,6 +7,12 @@ import type {
   ChannelRepo,
   DeliveryRepo,
 } from "./domain/channels/repo";
+import type {
+  BrowserTestRepo,
+  RunRepo,
+} from "./domain/browser_tests/repo";
+import type { IncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
+import { NoopIncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
@@ -49,6 +55,8 @@ import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
+import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
+import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
   HttpPaddleClient,
@@ -59,6 +67,7 @@ import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
 import { secretRoutes } from "./http/routes/secrets";
 import { channelRoutes } from "./http/routes/channels";
+import { browserTestRoutes } from "./http/routes/browser_tests";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -87,6 +96,9 @@ export interface AppOverrides {
   channels?: ChannelRepo;
   deliveries?: DeliveryRepo;
   channelSender?: ChannelSender;
+  browserTests?: BrowserTestRepo;
+  runs?: RunRepo;
+  incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -122,6 +134,11 @@ export function buildApp(
   const deliveries = overrides.deliveries ?? new D1DeliveryRepo(env.DB);
   const channelSender =
     overrides.channelSender ?? buildChannelSender(config, emailSender);
+  const browserTests =
+    overrides.browserTests ?? new D1BrowserTestRepo(env.DB);
+  const runs = overrides.runs ?? new D1RunRepo(env.DB);
+  const incidentCloserOnTestDelete =
+    overrides.incidentCloserOnTestDelete ?? new NoopIncidentCloserOnDelete();
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const overageReporter =
@@ -239,6 +256,23 @@ export function buildApp(
       deliveries,
       sender: channelSender,
       rateLimiter,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    browserTestRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      channels,
+      tests: browserTests,
+      runs,
+      incidents: incidentCloserOnTestDelete,
       audit,
       clock,
       ids: overrides.ids ?? realIds,
