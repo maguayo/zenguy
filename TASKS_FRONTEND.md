@@ -135,9 +135,9 @@ export default defineConfig({
 - [x] `form.ts` helper: `fieldError(formState, name): string | undefined` to wire RHF errors into `Field`.
 
 ### FE-007: Layout primitives
-- [ ] `Card.tsx` (`title?`, `actions?` right slot, `padding` default p-4), `PageHeader.tsx` (`title`, `description?`, `actions?` — used at the top of every page), `DescriptionList.tsx` (`items: { label, value: ReactNode }[]`, 2-col responsive grid), `Divider.tsx`.
-- [ ] `EmptyState.tsx`: `({ icon?, title, description?, action? })` — centered, dashed border card. Used by every list page (copy Appendix D).
-- [ ] `Skeleton.tsx` (pulsing zinc-200 blocks) + `TableSkeleton` (5 rows), `ErrorState.tsx` (`({ message?, onRetry })` — danger-tinted card with Retry button; default message `Something went wrong. Please try again.`).
+- [x] `Card.tsx` (`title?`, `actions?` right slot, `padding` default p-4), `PageHeader.tsx` (`title`, `description?`, `actions?` — used at the top of every page), `DescriptionList.tsx` (`items: { label, value: ReactNode }[]`, 2-col responsive grid), `Divider.tsx`.
+- [x] `EmptyState.tsx`: `({ icon?, title, description?, action? })` — centered, dashed border card. Used by every list page (copy Appendix D).
+- [x] `Skeleton.tsx` (pulsing zinc-200 blocks) + `TableSkeleton` (5 rows), `ErrorState.tsx` (`({ message?, onRetry })` — danger-tinted card with Retry button; default message `Something went wrong. Please try again.`).
 
 ### FE-008: Overlays
 - [ ] `Modal.tsx`: portal to body; backdrop `bg-zinc-950/40`; panel centered `max-w-lg w-full bg-white rounded-lg shadow-lg`; closes on Escape and backdrop click; focus trapped inside while open (loop Tab within focusable elements); `title`, `children`, `footer?`. Body scroll locked while open.
