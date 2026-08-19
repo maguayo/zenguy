@@ -644,10 +644,10 @@ CREATE UNIQUE INDEX idx_secrets_ws_key ON workspace_secrets(workspace_id, key);
 - [x] Tests: create/replace/delete happy paths; response JSON of every endpoint stringified and asserted to NOT contain the plaintext value; MEMBER can GET list but gets 403 on mutations; bad key format 400.
 
 ### BE-038: Runtime secret resolution
-- [ ] Create `application/secrets/resolve_secrets.ts`: `execute({ workspaceId, referencedKeys: string[] })` → `getManyByKeys` → decrypt each → return `ResolvedSecrets = Map<string, { value: string; allowedDomains: string[] }>`. Unknown keys are simply absent (callers treat a missing key as a functional failure with reason `Unknown secret {{KEY}}` — asserted in Phase 8/10).
-- [ ] Add `substitutePlaceholders(text: string, secrets: ResolvedSecrets, currentHost: string): { ok: true; text: string } | { ok: false; reason: string }` in `domain/secrets/rules.ts`: replaces each `{{KEY}}`; if key missing → `{ ok: false, reason: "Unknown secret {{KEY}}" }`; if `!isDomainAllowed(currentHost, allowedDomains)` → `{ ok: false, reason: "Secret {{KEY}} is not allowed on domain <host>" }` (reason strings must never contain values).
-- [ ] Add `buildRedactor(secrets: ResolvedSecrets): Redactor` bridging to BE-012.
-- [ ] Tests: substitution happy path; unknown key; disallowed domain; multi-placeholder strings; redactor built from resolved map removes values.
+- [x] Create `application/secrets/resolve_secrets.ts`: `execute({ workspaceId, referencedKeys: string[] })` → `getManyByKeys` → decrypt each → return `ResolvedSecrets = Map<string, { value: string; allowedDomains: string[] }>`. Unknown keys are simply absent (callers treat a missing key as a functional failure with reason `Unknown secret {{KEY}}` — asserted in Phase 8/10).
+- [x] Add `substitutePlaceholders(text: string, secrets: ResolvedSecrets, currentHost: string): { ok: true; text: string } | { ok: false; reason: string }` in `domain/secrets/rules.ts`: replaces each `{{KEY}}`; if key missing → `{ ok: false, reason: "Unknown secret {{KEY}}" }`; if `!isDomainAllowed(currentHost, allowedDomains)` → `{ ok: false, reason: "Secret {{KEY}} is not allowed on domain <host>" }` (reason strings must never contain values).
+- [x] Add `buildRedactor(secrets: ResolvedSecrets): Redactor` bridging to BE-012.
+- [x] Tests: substitution happy path; unknown key; disallowed domain; multi-placeholder strings; redactor built from resolved map removes values.
 
 # Phase 6 — Notification channels
 

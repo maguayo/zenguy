@@ -15,3 +15,10 @@ export interface SecretMetaUpdate {
   allowedDomains?: string[];
   description?: string | null;
 }
+
+export interface ResolvedSecret {
+  value: string;
+  allowedDomains: string[];
+}
+
+export type ResolvedSecrets = Map<string, ResolvedSecret>;

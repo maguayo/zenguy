@@ -1,4 +1,5 @@
 import { validation } from "../../shared/errors";
+import type { ResolvedSecrets } from "./types";
 
 export const SECRET_KEY_REGEX = /^[A-Z][A-Z0-9_]{1,63}$/;
 
@@ -48,4 +49,34 @@ export function extractPlaceholders(text: string): string[] {
     if (key !== undefined) keys.add(key);
   }
   return [...keys];
+}
+
+export type SubstitutionResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: string };
+
+export function substitutePlaceholders(
+  text: string,
+  secrets: ResolvedSecrets,
+  currentHost: string,
+): SubstitutionResult {
+  for (const key of extractPlaceholders(text)) {
+    const secret = secrets.get(key);
+    if (secret === undefined) {
+      return { ok: false, reason: `Unknown secret {{${key}}}` };
+    }
+    if (!isDomainAllowed(currentHost, secret.allowedDomains)) {
+      return {
+        ok: false,
+        reason: `Secret {{${key}}} is not allowed on domain ${currentHost}`,
+      };
+    }
+  }
+  return {
+    ok: true,
+    text: text.replace(
+      /\{\{([A-Z][A-Z0-9_]{1,63})\}\}/gu,
+      (_placeholder, key: string) => secrets.get(key)?.value ?? "",
+    ),
+  };
 }
