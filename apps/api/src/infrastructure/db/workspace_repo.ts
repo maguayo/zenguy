@@ -3,7 +3,7 @@ import type {
   WorkspaceUpdate,
 } from "../../domain/workspaces/repo";
 import type { Role, Workspace } from "../../domain/workspaces/types";
-import { all, one, run } from "./d1";
+import { all, batch, one, run } from "./d1";
 
 interface WorkspaceRow {
   id: string;
@@ -118,6 +118,31 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
         )
         .bind(at, at, id),
     );
+  }
+
+  async transferOwnership(
+    id: string,
+    oldOwnerUserId: string,
+    newOwnerUserId: string,
+    at: number,
+  ): Promise<void> {
+    await batch(this.database, [
+      this.database
+        .prepare(
+          "UPDATE workspaces SET owner_user_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+        )
+        .bind(newOwnerUserId, at, id),
+      this.database
+        .prepare(
+          "UPDATE workspace_members SET role = 'OWNER' WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(id, newOwnerUserId),
+      this.database
+        .prepare(
+          "UPDATE workspace_members SET role = 'ADMIN' WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(id, oldOwnerUserId),
+    ]);
   }
 
   async listForUser(

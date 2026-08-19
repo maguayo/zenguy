@@ -254,6 +254,34 @@ export class FakeWorkspaceRepo implements WorkspaceRepo {
     }
   }
 
+  async transferOwnership(
+    id: string,
+    oldOwnerUserId: string,
+    newOwnerUserId: string,
+    at: number,
+  ): Promise<void> {
+    const workspace = this.workspaces.get(id);
+    if (workspace === undefined || workspace.deletedAt !== null) return;
+    const newOwner = [...this.state.members.entries()].find(
+      ([, member]) =>
+        member.workspaceId === id && member.userId === newOwnerUserId,
+    );
+    const oldOwner = [...this.state.members.entries()].find(
+      ([, member]) =>
+        member.workspaceId === id && member.userId === oldOwnerUserId,
+    );
+    if (newOwner === undefined || oldOwner === undefined) {
+      throw new Error("ownership transfer constraint violation");
+    }
+    this.workspaces.set(id, {
+      ...workspace,
+      ownerUserId: newOwnerUserId,
+      updatedAt: at,
+    });
+    this.state.members.set(newOwner[0], { ...newOwner[1], role: "OWNER" });
+    this.state.members.set(oldOwner[0], { ...oldOwner[1], role: "ADMIN" });
+  }
+
   async listForUser(
     userId: string,
   ): Promise<{ workspace: Workspace; role: Role }[]> {

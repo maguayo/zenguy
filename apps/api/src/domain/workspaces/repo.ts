@@ -16,6 +16,12 @@ export interface WorkspaceRepo {
   findById(id: string, includeDeleted?: boolean): Promise<Workspace | null>;
   findBySlug(slug: string): Promise<Workspace | null>;
   update(id: string, changes: WorkspaceUpdate, at: number): Promise<void>;
+  transferOwnership(
+    id: string,
+    oldOwnerUserId: string,
+    newOwnerUserId: string,
+    at: number,
+  ): Promise<void>;
   softDelete(id: string, at: number): Promise<void>;
   listForUser(
     userId: string,

@@ -4,9 +4,16 @@ import { CreateWorkspace } from "../../application/workspaces/create_workspace";
 import { GetWorkspace } from "../../application/workspaces/get_workspace";
 import { ListMyWorkspaces } from "../../application/workspaces/list_my_workspaces";
 import { UpdateWorkspace } from "../../application/workspaces/update_workspace";
+import { TransferOwnership } from "../../application/workspaces/transfer_ownership";
+import { DeleteWorkspace } from "../../application/workspaces/delete_workspace";
 import type { WriteAudit } from "../../application/audit/write_audit";
+import type { BillingCanceller } from "../../domain/billing/canceller";
 import type { UserRepo } from "../../domain/users/repo";
-import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
+import type {
+  InvitationRepo,
+  MemberRepo,
+  WorkspaceRepo,
+} from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import type { IdGenerator } from "../../shared/ids";
@@ -20,6 +27,8 @@ export interface WorkspaceRoutesDependencies {
   users: UserRepo;
   workspaces: WorkspaceRepo;
   members: MemberRepo;
+  invitations: InvitationRepo;
+  billingCanceller: BillingCanceller;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
@@ -38,6 +47,8 @@ const updateSchema = z
   .refine((input) => input.name !== undefined || input.timezone !== undefined, {
     message: "At least one field is required",
   });
+const transferSchema = z.object({ newOwnerUserId: z.string().min(1) });
+const deleteSchema = z.object({ confirmName: z.string() });
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -56,6 +67,19 @@ export function workspaceRoutes(
   const listMyWorkspaces = new ListMyWorkspaces(dependencies.workspaces);
   const getWorkspace = new GetWorkspace();
   const updateWorkspace = new UpdateWorkspace(dependencies);
+  const transferOwnership = new TransferOwnership(
+    dependencies.workspaces,
+    dependencies.members,
+    dependencies.audit,
+    dependencies.clock,
+  );
+  const deleteWorkspace = new DeleteWorkspace(
+    dependencies.workspaces,
+    dependencies.invitations,
+    dependencies.billingCanceller,
+    dependencies.audit,
+    dependencies.clock,
+  );
 
   app.post("/", auth, verified, zjson(createSchema), async (context) => {
     const result = await createWorkspace.execute({
@@ -97,6 +121,44 @@ export function workspaceRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentWorkspace(result) });
+    },
+  );
+
+  app.post(
+    "/:workspaceId/transfer-ownership",
+    auth,
+    verified,
+    workspace,
+    requireAction("workspace.transfer"),
+    zjson(transferSchema),
+    async (context) => {
+      const result = await transferOwnership.execute({
+        workspace: context.get("workspace"),
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        newOwnerUserId: context.req.valid("json").newOwnerUserId,
+        ip: requestIp(context),
+      });
+      return context.json({ data: result });
+    },
+  );
+
+  app.delete(
+    "/:workspaceId",
+    auth,
+    verified,
+    workspace,
+    requireAction("workspace.delete"),
+    zjson(deleteSchema),
+    async (context) => {
+      await deleteWorkspace.execute({
+        workspace: context.get("workspace"),
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        confirmName: context.req.valid("json").confirmName,
+        ip: requestIp(context),
+      });
+      return context.body(null, 204);
     },
   );
 
