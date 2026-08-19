@@ -351,7 +351,7 @@ export default defineConfig({
 - [x] Save → create/update mutation → toast + invalidate. Zod validation per type mirrors backend (bad → inline field errors).
 
 ### FE-036: Delivery history
-- [ ] `pages/notifications/DeliveriesDrawer.tsx`: right-side slide-over panel (reuse Modal mechanics, `max-w-md h-full ml-auto` panel) opened from a channel's `View deliveries`: header `Deliveries — <channel name>`; list rows: event Badge (`Failure` danger / `Recovery` ok / `Test` neutral), status (`Sent`/`Failed` + attempts count `2 attempts`), error text when failed (mono, truncated with Tooltip), incident link icon when `incidentId`, `formatDateTime(createdAt)`. `LoadMore` (25/page). Empty: `No deliveries yet.`
+- [x] `pages/notifications/DeliveriesDrawer.tsx`: right-side slide-over panel (reuse Modal mechanics, `max-w-md h-full ml-auto` panel) opened from a channel's `View deliveries`: header `Deliveries — <channel name>`; list rows: event Badge (`Failure` danger / `Recovery` ok / `Test` neutral), status (`Sent`/`Failed` + attempts count `2 attempts`), error text when failed (mono, truncated with Tooltip), incident link icon when `incidentId`, `formatDateTime(createdAt)`. `LoadMore` (25/page). Empty: `No deliveries yet.`
 
 # Phase 10 — Secrets
 

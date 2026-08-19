@@ -41,6 +41,7 @@ import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatRelative } from "../../lib/format";
 import { ChannelFormModal } from "./ChannelFormModal";
+import { DeliveriesDrawer } from "./DeliveriesDrawer";
 
 const channelIcons: Record<ChannelType, LucideIcon> = {
   CALL: Phone,
@@ -339,6 +340,12 @@ export default function ChannelsPage() {
     (channelParam === "new" || Boolean(editingChannel));
   const closeForm = () =>
     setSearchParams(closeChannelPanel(searchParams, "channel"), { replace: true });
+  const deliveriesParam = searchParams.get("deliveries");
+  const deliveriesChannel = deliveriesParam
+    ? channels.data?.find((channel) => channel.id === deliveriesParam)
+    : undefined;
+  const closeDeliveries = () =>
+    setSearchParams(closeChannelPanel(searchParams, "deliveries"), { replace: true });
 
   return (
     <div className="space-y-6">
@@ -383,6 +390,11 @@ export default function ChannelsPage() {
         channel={editingChannel}
         onClose={closeForm}
         open={formOpen}
+      />
+      <DeliveriesDrawer
+        channel={deliveriesChannel}
+        onClose={closeDeliveries}
+        open={Boolean(deliveriesChannel)}
       />
     </div>
   );
