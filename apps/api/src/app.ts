@@ -21,6 +21,7 @@ import {
   publicInvitationRoutes,
   workspaceInvitationRoutes,
 } from "./http/routes/invitations";
+import { memberRoutes } from "./http/routes/members";
 import { WriteAudit } from "./application/audit/write_audit";
 import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
@@ -110,6 +111,10 @@ export function buildApp(
   app.route(
     "/api/workspaces",
     workspaceInvitationRoutes(invitationDependencies),
+  );
+  app.route(
+    "/api/workspaces",
+    memberRoutes({ users, workspaces, members, audit, config }),
   );
   app.route(
     "/api/invitations",

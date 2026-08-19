@@ -493,11 +493,11 @@ CREATE INDEX idx_audit_ws_time ON audit_logs(workspace_id, created_at DESC);
 - [x] Tests: admin can invite MEMBER, cannot invite ADMIN; owner can invite ADMIN; wrong-email accept 403; expired 410; accept idempotent; re-invite replaces pending.
 
 ### BE-028: Members
-- [ ] `application/members/list_members.ts` (any member): rows `{ userId, name, email, role, joinedAt }`.
-- [ ] `application/members/change_member_role.ts`: OWNER only (`admins.manage`). Target must be a member; cannot change the OWNER's role; new role ∈ `ADMIN | MEMBER`; audit `member.role_changed` (metadata: target user id, from, to).
-- [ ] `application/members/remove_member.ts`: requires `members.remove`. Rules: target must be a member; nobody removes the OWNER; an ADMIN may remove only `MEMBER`s (removing an ADMIN requires OWNER); actors cannot remove themselves (owner must transfer first; others just leave — leaving is out of V1 scope, return `forbidden("You cannot remove yourself")`). Audit `member.removed`.
-- [ ] Routes: `GET /api/workspaces/:workspaceId/members`, `PATCH .../members/:userId` `{ role }`, `DELETE .../members/:userId` (204).
-- [ ] Tests: full permission matrix for these three endpoints (owner/admin/member × each op), remove-owner blocked, admin-removes-admin blocked.
+- [x] `application/members/list_members.ts` (any member): rows `{ userId, name, email, role, joinedAt }`.
+- [x] `application/members/change_member_role.ts`: OWNER only (`admins.manage`). Target must be a member; cannot change the OWNER's role; new role ∈ `ADMIN | MEMBER`; audit `member.role_changed` (metadata: target user id, from, to).
+- [x] `application/members/remove_member.ts`: requires `members.remove`. Rules: target must be a member; nobody removes the OWNER; an ADMIN may remove only `MEMBER`s (removing an ADMIN requires OWNER); actors cannot remove themselves (owner must transfer first; others just leave — leaving is out of V1 scope, return `forbidden("You cannot remove yourself")`). Audit `member.removed`.
+- [x] Routes: `GET /api/workspaces/:workspaceId/members`, `PATCH .../members/:userId` `{ role }`, `DELETE .../members/:userId` (204).
+- [x] Tests: full permission matrix for these three endpoints (owner/admin/member × each op), remove-owner blocked, admin-removes-admin blocked.
 
 ### BE-029: Transfer ownership & delete workspace
 - [ ] `application/workspaces/transfer_ownership.ts`: OWNER only. Input `{ newOwnerUserId }` — must be an existing member. Effect (single D1 `batch`): workspace `owner_user_id` ← new; new owner's member row role ← `OWNER`; old owner's member row role ← `ADMIN`. Audit `workspace.ownership_transferred`.
