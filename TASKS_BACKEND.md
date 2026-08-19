@@ -704,14 +704,14 @@ CREATE INDEX idx_deliveries_incident ON notification_deliveries(incident_id);
 - [x] Tests (fake fetch): each provider called with exact URL/auth/payload; XML escaping in TwiML; errors sanitized (assert thrown message contains no phone number/webhook path).
 
 ### BE-041: Notification templates
-- [ ] Create `apps/api/src/domain/channels/templates.ts`: `buildNotificationMessage(input): NotificationMessage` where `input = { eventType: "FAILURE" | "RECOVERY" | "TEST"; resourceType: "BROWSER_TEST" | "UPTIME_MONITOR"; resourceName: string; workspaceName: string; appUrl: string; workspaceId: string; incidentId?: string; runId?: string; occurredAtIso: string; durationMs?: number; failureSummary?: string }`. Exact copy — Appendix E. Highlights:
+- [x] Create `apps/api/src/domain/channels/templates.ts`: `buildNotificationMessage(input): NotificationMessage` where `input = { eventType: "FAILURE" | "RECOVERY" | "TEST"; resourceType: "BROWSER_TEST" | "UPTIME_MONITOR"; resourceName: string; workspaceName: string; appUrl: string; workspaceId: string; incidentId?: string; runId?: string; occurredAtIso: string; durationMs?: number; failureSummary?: string }`. Exact copy — Appendix E. Highlights:
   - FAILURE browser test: title `❌ ${resourceName} failed`; lines: `Browser test "${resourceName}" failed after all configured retries.`, `Workspace: ${workspaceName}`, `When: ${occurredAtIso}`, (`Summary: ${truncate(failureSummary, 200)}` when present); link `${appUrl}/w/${workspaceId}/incidents/${incidentId}` (or run link when no incident); speakText `Zenguy alert. The ${resourceName} browser test has failed after all configured retries.`; shortText `Zenguy: FAILED ${resourceName} (browser test). ${link}`; color red.
   - FAILURE uptime: title `🔴 ${resourceName} is down`; speakText `Zenguy alert. The ${resourceName} uptime monitor is down after all configured retries.`; rest analogous.
   - RECOVERY: title `✅ ${resourceName} recovered`; lines include `Downtime: ${formatDuration(durationMs)}`; speakText `Zenguy alert. The ${resourceName} has recovered.`; color green.
   - TEST: title `Zenguy test notification`; line `This is a test notification for channel verification. No action needed.`; color gray.
   - `formatDuration(ms)` helper → `"2h 14m"` / `"3m 12s"` / `"45s"`.
   - **The failureSummary passed in must already be redacted by the caller; template additionally never includes URLs other than the app link** (§16.7: calls must not read URLs/secrets — speakText contains no link).
-- [ ] Tests: snapshot each event×resource combination; duration formatting; truncation.
+- [x] Tests: snapshot each event×resource combination; duration formatting; truncation.
 
 ### BE-042: Channel CRUD, test send, deliveries
 - [ ] `application/channels/create_channel.ts` (`channels.manage` + subscription): validate `{ name 1–80, type, config }` via `channelConfigSchema` → encrypt config JSON (`encryptSecret`) → insert (enabled=1, verified_at=null) → audit `channel.created` (metadata: name, type — never config).

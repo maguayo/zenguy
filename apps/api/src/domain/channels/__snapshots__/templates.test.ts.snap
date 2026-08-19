@@ -1,0 +1,97 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildNotificationMessage > matches the FAILURE BROWSER_TEST copy 1`] = `
+{
+  "color": "red",
+  "eventType": "FAILURE",
+  "lines": [
+    "Browser test "Checkout Production" failed after all configured retries.",
+    "Workspace: Acme",
+    "When: 2026-08-19T01:02:03.000Z",
+    "Summary: Expected checkout confirmation",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy: FAILED Checkout Production (browser test). https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "speakText": "Zenguy alert. The Checkout Production browser test has failed after all configured retries.",
+  "title": "❌ Checkout Production failed",
+}
+`;
+
+exports[`buildNotificationMessage > matches the FAILURE UPTIME_MONITOR copy 1`] = `
+{
+  "color": "red",
+  "eventType": "FAILURE",
+  "lines": [
+    "Uptime monitor "Checkout Production" is down after all configured retries.",
+    "Workspace: Acme",
+    "When: 2026-08-19T01:02:03.000Z",
+    "Summary: Expected checkout confirmation",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy: DOWN Checkout Production (uptime monitor). https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "speakText": "Zenguy alert. The Checkout Production uptime monitor is down after all configured retries.",
+  "title": "🔴 Checkout Production is down",
+}
+`;
+
+exports[`buildNotificationMessage > matches the RECOVERY BROWSER_TEST copy 1`] = `
+{
+  "color": "green",
+  "eventType": "RECOVERY",
+  "lines": [
+    ""Checkout Production" has recovered.",
+    "Downtime: 2h 14m",
+    "Workspace: Acme",
+    "When: 2026-08-19T01:02:03.000Z",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy: RECOVERED Checkout Production (browser test). https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "speakText": "Zenguy alert. The Checkout Production has recovered.",
+  "title": "✅ Checkout Production recovered",
+}
+`;
+
+exports[`buildNotificationMessage > matches the RECOVERY UPTIME_MONITOR copy 1`] = `
+{
+  "color": "green",
+  "eventType": "RECOVERY",
+  "lines": [
+    ""Checkout Production" has recovered.",
+    "Downtime: 2h 14m",
+    "Workspace: Acme",
+    "When: 2026-08-19T01:02:03.000Z",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy: RECOVERED Checkout Production (uptime monitor). https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "speakText": "Zenguy alert. The Checkout Production has recovered.",
+  "title": "✅ Checkout Production recovered",
+}
+`;
+
+exports[`buildNotificationMessage > matches the TEST BROWSER_TEST copy 1`] = `
+{
+  "color": "gray",
+  "eventType": "TEST",
+  "lines": [
+    "This is a test notification for channel verification. No action needed.",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy test notification.",
+  "speakText": "This is a test notification from Zenguy.",
+  "title": "Zenguy test notification",
+}
+`;
+
+exports[`buildNotificationMessage > matches the TEST UPTIME_MONITOR copy 1`] = `
+{
+  "color": "gray",
+  "eventType": "TEST",
+  "lines": [
+    "This is a test notification for channel verification. No action needed.",
+  ],
+  "link": "https://app.zenguy.test/w/ws_123/incidents/inc_123",
+  "shortText": "Zenguy test notification.",
+  "speakText": "This is a test notification from Zenguy.",
+  "title": "Zenguy test notification",
+}
+`;
