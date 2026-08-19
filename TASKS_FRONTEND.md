@@ -130,9 +130,9 @@ export default defineConfig({
 - [x] `Spinner.tsx`: lucide `Loader2` with `animate-spin`, sizes 4/5/6.
 
 ### FE-006: Form controls
-- [ ] `Input.tsx`, `Textarea.tsx` (auto min-h-28 for instructions), `Select.tsx` (native `<select>` styled), `Checkbox.tsx`, `Toggle.tsx` (accessible switch: `role="switch"`, `aria-checked`, accent when on): all `forwardRef` (react-hook-form compatible), error state prop `invalid?: boolean` → `border-danger-600`.
-- [ ] `Field.tsx`: wrapper `({ label, htmlFor, error?, hint?, required?, children })` rendering label (`text-sm font-medium`, red asterisk when required), children, hint (`text-xs text-zinc-500`), error (`text-xs text-danger-600`, `role="alert"`).
-- [ ] `form.ts` helper: `fieldError(formState, name): string | undefined` to wire RHF errors into `Field`.
+- [x] `Input.tsx`, `Textarea.tsx` (auto min-h-28 for instructions), `Select.tsx` (native `<select>` styled), `Checkbox.tsx`, `Toggle.tsx` (accessible switch: `role="switch"`, `aria-checked`, accent when on): all `forwardRef` (react-hook-form compatible), error state prop `invalid?: boolean` → `border-danger-600`.
+- [x] `Field.tsx`: wrapper `({ label, htmlFor, error?, hint?, required?, children })` rendering label (`text-sm font-medium`, red asterisk when required), children, hint (`text-xs text-zinc-500`), error (`text-xs text-danger-600`, `role="alert"`).
+- [x] `form.ts` helper: `fieldError(formState, name): string | undefined` to wire RHF errors into `Field`.
 
 ### FE-007: Layout primitives
 - [ ] `Card.tsx` (`title?`, `actions?` right slot, `padding` default p-4), `PageHeader.tsx` (`title`, `description?`, `actions?` — used at the top of every page), `DescriptionList.tsx` (`items: { label, value: ReactNode }[]`, 2-col responsive grid), `Divider.tsx`.
