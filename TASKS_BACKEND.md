@@ -912,10 +912,10 @@ interface RunSnapshot {
 > This phase implements the spec's "browser-use worker" as a TypeScript agent: Browser Rendering (`@cloudflare/puppeteer`) + an LLM loop calling the Anthropic API with one forced tool (`browser_action`). Semantics (§10, §24, §26) are law. Every attempt: fresh browser, hard 5-minute cap, structured output, full evidence, everything redacted.
 
 ### BE-050: Queue plumbing
-- [ ] In `apps/api/src/domain/queues.ts` add `AttemptMessage = { kind: "attempt"; runId: string; attemptId: string; attemptIndex: number }` (zod schema; `CheckMessage` comes in Phase 10).
-- [ ] Implement `queue(batch: MessageBatch, env, ctx)` in `src/index.ts`: switch on `batch.queue` (`zenguy-runs` → attempt consumer (BE-057), `zenguy-checks` → check consumer (BE-064), `zenguy-notify` → BE-043, `*-dlq` → for each message `platformAlert("dlq_message", { queue, body: JSON.stringify(msg.body).slice(0, 200) })` + ack). Per-message isolation: try/catch each; validation failure → ack + alert; handler throw → `message.retry()` (up to queue `max_retries: 3`, then DLQ).
-- [ ] Consumer settings live in wrangler.jsonc (Appendix H): `zenguy-runs` `max_batch_size: 1`, `max_concurrency: 4` (Browser Rendering concurrent-session limits), `max_retries: 3`; `zenguy-checks` batch 5 / concurrency 10; `zenguy-notify` batch 5 / concurrency 5.
-- [ ] Tests: message parse + routing with fake handlers; poison message acked and alerted.
+- [x] In `apps/api/src/domain/queues.ts` add `AttemptMessage = { kind: "attempt"; runId: string; attemptId: string; attemptIndex: number }` (zod schema; `CheckMessage` comes in Phase 10).
+- [x] Implement `queue(batch: MessageBatch, env, ctx)` in `src/index.ts`: switch on `batch.queue` (`zenguy-runs` → attempt consumer (BE-057), `zenguy-checks` → check consumer (BE-064), `zenguy-notify` → BE-043, `*-dlq` → for each message `platformAlert("dlq_message", { queue, body: JSON.stringify(msg.body).slice(0, 200) })` + ack). Per-message isolation: try/catch each; validation failure → ack + alert; handler throw → `message.retry()` (up to queue `max_retries: 3`, then DLQ).
+- [x] Consumer settings live in wrangler.jsonc (Appendix H): `zenguy-runs` `max_batch_size: 1`, `max_concurrency: 4` (Browser Rendering concurrent-session limits), `max_retries: 3`; `zenguy-checks` batch 5 / concurrency 10; `zenguy-notify` batch 5 / concurrency 5.
+- [x] Tests: message parse + routing with fake handlers; poison message acked and alerted.
 
 ### BE-051: Run lifecycle rules (pure functions — the semantics core)
 - [ ] Create `apps/api/src/domain/browser_tests/run_rules.ts`. Pure, no I/O. Constants from `constants.ts` (`RETRY_DELAY_SECONDS = { 1: 0, 2: 60, 3: 120 }`, `MAX_INFRA_RETRIES = 2`).
