@@ -5,7 +5,7 @@ import { Spinner } from "./Spinner";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   variant?: "primary" | "secondary" | "danger" | "ghost";
 }
 
@@ -19,6 +19,7 @@ const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
 const sizes: Record<NonNullable<ButtonProps["size"]>, string> = {
   sm: "h-8 px-3 text-xs",
   md: "h-9 px-4 text-sm",
+  lg: "h-11 px-5 text-sm",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(

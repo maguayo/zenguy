@@ -74,6 +74,7 @@ export default function SignUp() {
       <form className="space-y-5" noValidate onSubmit={(event) => void submit(event)}>
         <Field error={fieldError(form.formState, "name")} htmlFor="signup-name" label="Name" required>
           <Input
+            controlSize="lg"
             autoComplete="name"
             id="signup-name"
             invalid={Boolean(form.formState.errors.name)}
@@ -83,6 +84,7 @@ export default function SignUp() {
         </Field>
         <Field error={fieldError(form.formState, "email")} htmlFor="signup-email" label="Email" required>
           <Input
+            controlSize="lg"
             autoComplete="email"
             id="signup-email"
             invalid={Boolean(form.formState.errors.email)}
@@ -99,6 +101,7 @@ export default function SignUp() {
           required
         >
           <PasswordInput
+            controlSize="lg"
             autoComplete="new-password"
             id="signup-password"
             invalid={Boolean(form.formState.errors.password)}
@@ -112,6 +115,7 @@ export default function SignUp() {
           required
         >
           <PasswordInput
+            controlSize="lg"
             autoComplete="new-password"
             id="signup-confirm-password"
             invalid={Boolean(form.formState.errors.confirmPassword)}
@@ -154,7 +158,7 @@ export default function SignUp() {
             </Link>
           </p>
         ) : null}
-        <Button className="w-full" loading={form.formState.isSubmitting} type="submit" variant="primary">
+        <Button className="w-full" loading={form.formState.isSubmitting} size="lg" type="submit" variant="primary">
           Create account
         </Button>
       </form>

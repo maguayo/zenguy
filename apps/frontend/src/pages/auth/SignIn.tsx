@@ -69,6 +69,7 @@ export default function SignIn() {
           required
         >
           <Input
+            controlSize="lg"
             autoComplete="email"
             id="signin-email"
             invalid={Boolean(form.formState.errors.email)}
@@ -84,6 +85,7 @@ export default function SignIn() {
           required
         >
           <PasswordInput
+            controlSize="lg"
             autoComplete="current-password"
             id="signin-password"
             invalid={Boolean(form.formState.errors.password)}
@@ -103,7 +105,7 @@ export default function SignIn() {
             Forgot password?
           </Link>
         </div>
-        <Button className="w-full" loading={form.formState.isSubmitting} type="submit" variant="primary">
+        <Button className="w-full" loading={form.formState.isSubmitting} size="lg" type="submit" variant="primary">
           Sign in
         </Button>
       </form>
