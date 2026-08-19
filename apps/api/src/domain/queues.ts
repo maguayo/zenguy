@@ -34,3 +34,15 @@ export const attemptMessageSchema = z
   .strict();
 
 export type AttemptMessage = z.infer<typeof attemptMessageSchema>;
+
+export const checkMessageSchema = z
+  .object({
+    kind: z.literal("check"),
+    monitorId: z.string().min(1),
+    workspaceId: z.string().min(1),
+    cycleId: z.string().min(1),
+    attemptIndex: z.number().int().min(0).max(3),
+  })
+  .strict();
+
+export type CheckMessage = z.infer<typeof checkMessageSchema>;

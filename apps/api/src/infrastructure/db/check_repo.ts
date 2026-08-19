@@ -46,6 +46,21 @@ function toCheck(row: CheckRow): UptimeCheck {
 export class D1CheckRepo implements CheckRepo {
   constructor(private readonly database: D1Database) {}
 
+  async findByCycleAttempt(
+    cycleId: string,
+    attemptIndex: number,
+  ): Promise<UptimeCheck | null> {
+    const row = await one<CheckRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM uptime_checks
+           WHERE cycle_id = ? AND attempt_index = ?`,
+        )
+        .bind(cycleId, attemptIndex),
+    );
+    return row === null ? null : toCheck(row);
+  }
+
   async insertIfAbsent(check: UptimeCheck): Promise<CheckInsertResult> {
     try {
       await run(

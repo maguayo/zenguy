@@ -185,6 +185,18 @@ export class FakeMonitorRepo implements MonitorRepo {
 export class FakeCheckRepo implements CheckRepo {
   readonly checks = new Map<string, UptimeCheck>();
 
+  async findByCycleAttempt(
+    cycleId: string,
+    attemptIndex: number,
+  ): Promise<UptimeCheck | null> {
+    const check = [...this.checks.values()].find(
+      (candidate) =>
+        candidate.cycleId === cycleId &&
+        candidate.attemptIndex === attemptIndex,
+    );
+    return check === undefined ? null : copy(check);
+  }
+
   async insertIfAbsent(check: UptimeCheck): Promise<CheckInsertResult> {
     const duplicate = [...this.checks.values()].some(
       (candidate) =>

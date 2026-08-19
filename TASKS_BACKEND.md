@@ -1185,15 +1185,15 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Tests (fake fetch): every failure reason has a test; redirect hop revalidation + header-drop on cross-host + GET-downgrade; body cap; all-conditions-must-pass; secret in header substituted for allowed domain and refused otherwise; excerpt redacted.
 
 ### BE-064: Check cycle orchestration (queue consumer)
-- [ ] Add `CheckMessage = { kind: "check"; monitorId: string; workspaceId: string; cycleId: string; attemptIndex: number }` to `domain/queues.ts`.
-- [ ] Create `application/uptime/handle_check_message.ts`:
+- [x] Add `CheckMessage = { kind: "check"; monitorId: string; workspaceId: string; cycleId: string; attemptIndex: number }` to `domain/queues.ts`.
+- [x] Create `application/uptime/handle_check_message.ts`:
   1. Load monitor: missing/deleted/workspace-deleted → ack quietly. `insertIfAbsent` guard: existing `(cycleId, attemptIndex)` row → ack (redelivery).
   2. Decrypt config → `executeCheck` → insert check row (`newId("chk")`).
   3. PASSED → `closeCycle(status UP, lastCheck fields)`; if open incident → resolve (resolved_by_check_id) + event RESOLVED + if `notify_on_recovery` dispatch RECOVERY to monitor channels (§15.4).
   4. FAILED → if `attemptIndex < max_retries` → `CHECK_QUEUE.send({ ...msg, attemptIndex: +1 }, { delaySeconds: RETRY_DELAY_SECONDS[attemptIndex + 1] })` (same 0/60/120 ladder, §14.10); else → `closeCycle(status DOWN)` + open incident if none (idempotent `insertOpen`, opened_by_check_id) + event OPENED + dispatch FAILURE (message: uptime flavor; failureSummary = `<failureReason>: <detail of first failed condition>`); if incident already open → FAILURE_RECORDED event only (§15.3).
   5. Monitor state transitions per §14.8: UNKNOWN until first cycle concludes; a passing check during retries never opens an incident (§14.10).
-- [ ] Wire `zenguy-checks` consumer branch in `index.ts`.
-- [ ] Tests (fakes): example §26.6 exactly (fail then immediate retry passes → UP, no incident; all fail → DOWN + incident + alerts once); recovery closes + notifies; second DOWN cycle while incident open → event only; redelivery idempotent; deleted monitor mid-cycle → ack.
+- [x] Wire `zenguy-checks` consumer branch in `index.ts`.
+- [x] Tests (fakes): example §26.6 exactly (fail then immediate retry passes → UP, no incident; all fail → DOWN + incident + alerts once); recovery closes + notifies; second DOWN cycle while incident open → event only; redelivery idempotent; deleted monitor mid-cycle → ack.
 
 ### BE-065: Monitor CRUD, test request, routes
 - [ ] `application/uptime/create_monitor.ts` (`uptime.manage` + subscription, rate `monitor_create` 30/h/ws): validate schema + channels belong to workspace → encrypt headers/body → `next_check_at = now + frequency_seconds * 1000` → insert + `setChannels` + audit `monitor.created`.

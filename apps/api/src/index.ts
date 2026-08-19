@@ -12,19 +12,25 @@ import { HandleRunFinalized } from "./application/incidents/handle_run_finalized
 import { WriteIncidentNotificationEvent } from "./application/incidents/write_notification_event";
 import { GenerateReport } from "./application/reports/generate_report";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
+import { executeCheck } from "./application/uptime/execute_check";
+import { HandleCheckMessage } from "./application/uptime/handle_check_message";
 import {
   attemptMessageSchema,
+  checkMessageSchema,
   notifyMessageSchema,
   type AttemptMessage,
+  type CheckMessage,
 } from "./domain/queues";
 import { launchSession } from "./infrastructure/browser/session";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
+import { D1CheckRepo } from "./infrastructure/db/check_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
+import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
@@ -45,7 +51,7 @@ export interface AttemptQueueConsumer {
 }
 
 export interface CheckQueueConsumer {
-  execute(message: unknown, context: ExecutionContext): Promise<void>;
+  execute(message: CheckMessage, context: ExecutionContext): Promise<void>;
 }
 
 export interface QueueConsumers {
@@ -133,11 +139,14 @@ export async function processCheckBatch(
   consumer: CheckQueueConsumer,
   context: ExecutionContext,
 ): Promise<void> {
-  // CheckMessage and its schema arrive with the uptime domain in BE-062.
-  // Until then this is deliberately a typed-unknown routing seam.
   for (const queueMessage of batch.messages) {
+    const parsed = checkMessageSchema.safeParse(queueMessage.body);
+    if (!parsed.success) {
+      badQueueMessage(batch, queueMessage);
+      continue;
+    }
     try {
-      await consumer.execute(queueMessage.body, context);
+      await consumer.execute(parsed.data, context);
       queueMessage.ack();
     } catch {
       failedQueueMessage(batch, queueMessage);
@@ -285,12 +294,51 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
   });
 }
 
-const pendingCheckConsumer: CheckQueueConsumer = {
-  async execute() {
-    // Replaced by the concrete uptime check consumer in BE-064.
-    throw new Error("check consumer not available");
-  },
-};
+export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
+  const config = loadConfig(env);
+  const monitors = new D1MonitorRepo(env.DB);
+  const checks = new D1CheckRepo(env.DB);
+  const incidents = new D1IncidentRepo(env.DB);
+  const events = new D1IncidentEventRepo(env.DB);
+  const channels = new D1ChannelRepo(env.DB);
+  const deliveries = new D1DeliveryRepo(env.DB);
+  const workspaces = new D1WorkspaceRepo(env.DB);
+  const resolveSecrets = new ResolveSecrets(
+    new D1SecretRepo(env.DB),
+    config.encryptionKey,
+  );
+  const dispatchNotifications = new DispatchNotifications(
+    channels,
+    deliveries,
+    env.NOTIFY_QUEUE as Pick<Queue, "send">,
+    systemClock,
+    realIds,
+  );
+  return new HandleCheckMessage({
+    monitors,
+    checks,
+    incidents,
+    events,
+    channels,
+    workspaces,
+    dispatchNotifications,
+    checkQueue: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+    executeCheck: (monitorConfig, workspaceId) =>
+      executeCheck(
+        {
+          fetchFn: (input, init) => globalThis.fetch(input, init),
+          clock: systemClock,
+          resolveSecrets,
+        },
+        monitorConfig,
+        workspaceId,
+      ),
+    encryptionKey: config.encryptionKey,
+    appUrl: config.appUrl,
+    clock: systemClock,
+    ids: realIds,
+  });
+}
 
 export async function queue(
   batch: MessageBatch<unknown>,
@@ -306,7 +354,7 @@ export async function queue(
       await processAttemptBatch(batch, buildAttemptConsumer(env), context);
       return;
     case "zenguy-checks":
-      await processCheckBatch(batch, pendingCheckConsumer, context);
+      await processCheckBatch(batch, buildCheckConsumer(env), context);
       return;
     case "zenguy-notify":
       await processNotifyBatch(batch, notifyConsumer(env));

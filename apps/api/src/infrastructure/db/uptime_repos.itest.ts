@@ -208,6 +208,9 @@ describe("D1 uptime repositories", () => {
     await expect(
       repo.insertIfAbsent({ ...early, id: "chk_same_attempt" }),
     ).resolves.toBe("duplicate");
+    await expect(
+      repo.findByCycleAttempt(early.cycleId, early.attemptIndex),
+    ).resolves.toEqual(early);
     await expect(repo.listForMonitor(monitorId, null, 2)).resolves.toEqual([
       tiedZ,
       tiedA,

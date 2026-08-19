@@ -54,6 +54,10 @@ export interface MonitorRepo {
 }
 
 export interface CheckRepo {
+  findByCycleAttempt(
+    cycleId: string,
+    attemptIndex: number,
+  ): Promise<UptimeCheck | null>;
   insertIfAbsent(check: UptimeCheck): Promise<CheckInsertResult>;
   listForMonitor(
     monitorId: string,

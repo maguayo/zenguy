@@ -1,8 +1,10 @@
-import type { NotifyMessage } from "./domain/queues";
+import type { CheckMessage, NotifyMessage } from "./domain/queues";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
+import { HandleCheckMessage } from "./application/uptime/handle_check_message";
 import { fakeBindings } from "./test/fakes/bindings";
 import {
   buildAttemptConsumer,
+  buildCheckConsumer,
   processQueueBatch,
   type QueueConsumers,
 } from "./index";
@@ -73,6 +75,7 @@ function consumers(overrides: Partial<QueueConsumers> = {}): QueueConsumers {
 describe("queue routing", () => {
   it("builds the concrete browser attempt consumer for the runs queue", () => {
     expect(buildAttemptConsumer(fakeBindings())).toBeInstanceOf(ExecuteAttempt);
+    expect(buildCheckConsumer(fakeBindings())).toBeInstanceOf(HandleCheckMessage);
   });
 
   it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {
@@ -112,7 +115,18 @@ describe("queue routing", () => {
   });
 
   it("routes check and notification batches to their respective handlers", async () => {
-    const checkMessage = new RecordingMessage("msg_check", { cycleId: "cyc_1" });
+    const checkBody: CheckMessage = {
+      kind: "check",
+      monitorId: "mon_1",
+      workspaceId: "ws_1",
+      cycleId: "cyc_1",
+      attemptIndex: 0,
+    };
+    const poisonCheck = new RecordingMessage("msg_check_bad", {
+      kind: "check",
+      cycleId: "cyc_bad",
+    });
+    const checkMessage = new RecordingMessage("msg_check", checkBody);
     const notifyMessage = new RecordingMessage("msg_notify", NOTIFY);
     const checkExecute = vi.fn(async () => undefined);
     const notifyExecute = vi.fn(async (_message, control: Pick<Message, "ack">) => {
@@ -123,8 +137,9 @@ describe("queue routing", () => {
       notifications: { execute: notifyExecute },
     });
 
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await processQueueBatch(
-      batch("zenguy-checks", [checkMessage]),
+      batch("zenguy-checks", [poisonCheck, checkMessage]),
       configured,
       CONTEXT,
     );
@@ -134,10 +149,13 @@ describe("queue routing", () => {
       CONTEXT,
     );
 
-    expect(checkExecute).toHaveBeenCalledWith(checkMessage.body, CONTEXT);
+    expect(checkExecute).toHaveBeenCalledWith(checkBody, CONTEXT);
+    expect(poisonCheck.ackCount).toBe(1);
     expect(checkMessage.ackCount).toBe(1);
     expect(notifyExecute).toHaveBeenCalledWith(NOTIFY, notifyMessage);
     expect(notifyMessage.ackCount).toBe(1);
+    expect(alert.mock.calls.join(" ")).toContain('"event":"bad_queue_message"');
+    alert.mockRestore();
   });
 
   it("alerts and acknowledges every dead-letter message with a bounded body", async () => {
