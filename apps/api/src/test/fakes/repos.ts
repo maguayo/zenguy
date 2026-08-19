@@ -24,6 +24,16 @@ import type {
 import type { AuditRepo } from "../../domain/audit/repo";
 import type { AuditEntry } from "../../domain/audit/types";
 import type { Cursor } from "../../shared/pagination";
+import type {
+  ChannelRepo,
+  ChannelUpdate,
+  DeliveryRepo,
+  DeliveryUpdate,
+} from "../../domain/channels/repo";
+import type {
+  NotificationChannel,
+  NotificationDelivery,
+} from "../../domain/channels/types";
 import type { SecretRepo } from "../../domain/secrets/repo";
 import type {
   SecretMetaUpdate,
@@ -798,5 +808,126 @@ export class FakeSecretRepo implements SecretRepo {
         ...clone(secret),
         allowedDomains: [...secret.allowedDomains],
       }));
+  }
+}
+
+export class FakeChannelRepo implements ChannelRepo {
+  readonly channels = new Map<string, NotificationChannel>();
+
+  async insert(channel: NotificationChannel): Promise<void> {
+    if (this.channels.has(channel.id)) {
+      throw new Error("channel constraint violation");
+    }
+    this.channels.set(channel.id, clone(channel));
+  }
+
+  async findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<NotificationChannel | null> {
+    const channel = this.channels.get(id);
+    return channel === undefined || channel.workspaceId !== workspaceId
+      ? null
+      : clone(channel);
+  }
+
+  async list(workspaceId: string): Promise<NotificationChannel[]> {
+    return [...this.channels.values()]
+      .filter((channel) => channel.workspaceId === workspaceId)
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .map(clone);
+  }
+
+  async listByIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<NotificationChannel[]> {
+    const wanted = new Set(ids);
+    return (await this.list(workspaceId)).filter((channel) =>
+      wanted.has(channel.id),
+    );
+  }
+
+  async update(
+    id: string,
+    changes: ChannelUpdate,
+    at: number,
+  ): Promise<void> {
+    const channel = this.channels.get(id);
+    if (channel !== undefined) {
+      this.channels.set(id, { ...channel, ...changes, updatedAt: at });
+    }
+  }
+
+  async setLastDeliveryStatus(id: string, status: string): Promise<void> {
+    const channel = this.channels.get(id);
+    if (channel !== undefined) {
+      this.channels.set(id, { ...channel, lastDeliveryStatus: status });
+    }
+  }
+
+  async setVerified(id: string, at: number): Promise<void> {
+    const channel = this.channels.get(id);
+    if (channel !== undefined && channel.verifiedAt === null) {
+      this.channels.set(id, { ...channel, verifiedAt: at });
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    this.channels.delete(id);
+  }
+}
+
+export class FakeDeliveryRepo implements DeliveryRepo {
+  readonly deliveries = new Map<string, NotificationDelivery>();
+
+  async insert(delivery: NotificationDelivery): Promise<void> {
+    if (this.deliveries.has(delivery.id)) {
+      throw new Error("delivery constraint violation");
+    }
+    this.deliveries.set(delivery.id, clone(delivery));
+  }
+
+  async update(id: string, changes: DeliveryUpdate): Promise<void> {
+    const delivery = this.deliveries.get(id);
+    if (delivery !== undefined) {
+      this.deliveries.set(id, { ...delivery, ...changes });
+    }
+  }
+
+  async listForChannel(
+    channelId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<NotificationDelivery[]> {
+    return [...this.deliveries.values()]
+      .filter(
+        (delivery) =>
+          delivery.notificationChannelId === channelId &&
+          (cursor === null ||
+            cursor === undefined ||
+            delivery.createdAt < cursor.createdAt ||
+            (delivery.createdAt === cursor.createdAt &&
+              delivery.id < cursor.id)),
+      )
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async listForIncident(incidentId: string): Promise<NotificationDelivery[]> {
+    return [...this.deliveries.values()]
+      .filter((delivery) => delivery.incidentId === incidentId)
+      .sort(
+        (left, right) =>
+          left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+      )
+      .map(clone);
   }
 }

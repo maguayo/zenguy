@@ -652,7 +652,7 @@ CREATE UNIQUE INDEX idx_secrets_ws_key ON workspace_secrets(workspace_id, key);
 # Phase 6 — Notification channels
 
 ### BE-039: Channels migration & config schemas
-- [ ] Create `apps/api/migrations/0005_channels.sql`:
+- [x] Create `apps/api/migrations/0005_channels.sql`:
 ```sql
 CREATE TABLE notification_channels (
   id TEXT PRIMARY KEY,
@@ -685,10 +685,10 @@ CREATE TABLE notification_deliveries (
 CREATE INDEX idx_deliveries_channel_time ON notification_deliveries(notification_channel_id, created_at DESC);
 CREATE INDEX idx_deliveries_incident ON notification_deliveries(incident_id);
 ```
-- [ ] Create `apps/api/src/domain/channels/types.ts`: `type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD"`; zod config schemas per type: `EMAIL { emails: string[].min(1).max(10) (each z.string().email()) }`, `SMS | WHATSAPP | CALL { phoneNumber: /^\+[1-9]\d{6,14}$/ }` (E.164), `SLACK { webhookUrl: url starting "https://hooks.slack.com/" }`, `DISCORD { webhookUrl: url starting "https://discord.com/api/webhooks/" or "https://discordapp.com/api/webhooks/" }`; `channelConfigSchema(type)` selector.
-- [ ] `configPreview(type, config)` for API responses: EMAIL → `{ emails }`; phone types → `{ phoneNumber }`; SLACK/DISCORD → `{ webhookUrlMasked: "https://hooks.slack.com/…" + last 4 chars }` (webhook URLs are secrets — never returned whole, §22.8).
-- [ ] `domain/channels/repo.ts`: `ChannelRepo` (`insert`, `findById(wsId, id)`, `list(wsId)`, `listByIds(wsId, ids)`, `update(id, { name?, enabled?, encryptedConfig? }, at)`, `setLastDeliveryStatus(id, status)`, `setVerified(id, at)`, `delete(id)` — hard delete + callers must also delete junction rows); `DeliveryRepo` (`insert`, `update(id, { status, providerMessageId?, errorSanitized?, attemptCount, sentAt? })`, `listForChannel(channelId, cursor?, limit)`, `listForIncident(incidentId)`).
-- [ ] D1 impls + fakes + `.itest.ts` (config encrypted at rest: read raw column, assert it does not contain the webhook URL plaintext).
+- [x] Create `apps/api/src/domain/channels/types.ts`: `type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD"`; zod config schemas per type: `EMAIL { emails: string[].min(1).max(10) (each z.string().email()) }`, `SMS | WHATSAPP | CALL { phoneNumber: /^\+[1-9]\d{6,14}$/ }` (E.164), `SLACK { webhookUrl: url starting "https://hooks.slack.com/" }`, `DISCORD { webhookUrl: url starting "https://discord.com/api/webhooks/" or "https://discordapp.com/api/webhooks/" }`; `channelConfigSchema(type)` selector.
+- [x] `configPreview(type, config)` for API responses: EMAIL → `{ emails }`; phone types → `{ phoneNumber }`; SLACK/DISCORD → `{ webhookUrlMasked: "https://hooks.slack.com/…" + last 4 chars }` (webhook URLs are secrets — never returned whole, §22.8).
+- [x] `domain/channels/repo.ts`: `ChannelRepo` (`insert`, `findById(wsId, id)`, `list(wsId)`, `listByIds(wsId, ids)`, `update(id, { name?, enabled?, encryptedConfig? }, at)`, `setLastDeliveryStatus(id, status)`, `setVerified(id, at)`, `delete(id)` — hard delete + callers must also delete junction rows); `DeliveryRepo` (`insert`, `update(id, { status, providerMessageId?, errorSanitized?, attemptCount, sentAt? })`, `listForChannel(channelId, cursor?, limit)`, `listForIncident(incidentId)`).
+- [x] D1 impls + fakes + `.itest.ts` (config encrypted at rest: read raw column, assert it does not contain the webhook URL plaintext).
 
 ### BE-040: Provider senders
 - [ ] Create `apps/api/src/domain/channels/notifier.ts`: `interface ChannelSender { send(channel: { type; config: unknown }, message: NotificationMessage): Promise<{ providerMessageId: string | null }> }` where `NotificationMessage = { eventType: "FAILURE" | "RECOVERY" | "TEST"; title: string; lines: string[]; link: string; speakText: string; shortText: string; color: "red" | "green" | "gray" }` (built by BE-041 templates).
