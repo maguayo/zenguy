@@ -98,6 +98,10 @@ import { runEventRoutes } from "./http/routes/run_events";
 import { uptimeRoutes } from "./http/routes/uptime";
 import { overviewRoutes } from "./http/routes/overview";
 import { auditRoutes } from "./http/routes/audit";
+import { apiKeyRoutes } from "./http/routes/api_keys";
+import { publicApiRoutes } from "./http/routes/public_api";
+import type { ApiKeyRepo } from "./domain/api_keys/repo";
+import { D1ApiKeyRepo } from "./infrastructure/db/api_key_repo";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -146,6 +150,7 @@ export interface AppOverrides {
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
+  apiKeys?: ApiKeyRepo;
 }
 
 export function buildApp(
@@ -194,6 +199,7 @@ export function buildApp(
   const monitors = overrides.monitors ?? new D1MonitorRepo(env.DB);
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
+  const apiKeys = overrides.apiKeys ?? new D1ApiKeyRepo(env.DB);
   const uptimeCheckExecutor =
     overrides.uptimeCheckExecutor ??
     ((monitorConfig: MonitorConfig, workspaceId: string) =>
@@ -239,16 +245,26 @@ export function buildApp(
   app.use("*", securityHeaders);
   // The SPA calls the API cross-origin (api.zenguy.com from app.zenguy.com);
   // only the configured application origin may send credentialed requests.
-  app.use(
-    "*",
-    cors({
-      origin: (origin) => (origin === config.appUrl ? origin : null),
-      credentials: true,
-      allowHeaders: ["Authorization", "Content-Type"],
-      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      exposeHeaders: ["Content-Disposition"],
-      maxAge: 86_400,
-    }),
+  // /api/v1 is the key-authenticated public read API: no cookies are ever
+  // involved there, so any origin may call it (the API key is the credential).
+  const spaCors = cors({
+    origin: (origin) => (origin === config.appUrl ? origin : null),
+    credentials: true,
+    allowHeaders: ["Authorization", "Content-Type"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    exposeHeaders: ["Content-Disposition"],
+    maxAge: 86_400,
+  });
+  const publicApiCors = cors({
+    origin: "*",
+    allowHeaders: ["Authorization", "Content-Type", "X-Api-Key"],
+    allowMethods: ["GET", "OPTIONS"],
+    maxAge: 86_400,
+  });
+  app.use("*", (context, next) =>
+    context.req.path.startsWith("/api/v1/")
+      ? publicApiCors(context, next)
+      : spaCors(context, next),
   );
   app.onError(errorHandler);
 
@@ -382,6 +398,37 @@ export function buildApp(
   app.route(
     "/api/workspaces",
     auditRoutes({ users, workspaces, members, audits, config }),
+  );
+  app.route(
+    "/api/workspaces",
+    apiKeyRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      apiKeys,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/v1",
+    publicApiRoutes({
+      apiKeys,
+      workspaces,
+      users,
+      monitors,
+      incidents,
+      tests: browserTests,
+      runs,
+      attempts,
+      rateLimiter,
+      resolveSecrets,
+      clock,
+      config,
+    }),
   );
   app.route(
     "/api/workspaces",

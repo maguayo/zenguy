@@ -1308,6 +1308,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-057: Per the user's explicit provider override, the execution engine uses OpenAI Responses with the low-cost `gpt-5-mini` model instead of Anthropic; the agent action and error contracts are unchanged.
 - BE-016: Per the user's explicit provider override, transactional email uses the native Cloudflare Email Service Worker binding instead of Resend. The sender is restricted to `notifications@zenguy.com` and Cloudflare authentication is isolated in the personal `zenguy-personal` Wrangler profile.
 - BE-057: The live `example.com` page now labels its informational link `Learn more` rather than `More information`; the manual smoke therefore verifies the same heading-and-informational-link behavior using the current label instead of forcing an incorrect PASS for stale external content.
+- Post-plan (user-requested 2026-08-19): Workspace API keys and a key-authenticated public read API were added beyond the original V1 scope. Migration `0012_api_keys.sql` creates `workspace_api_keys` (SHA-256 key hash, display prefix, `last_used_at`, `revoked_at`). Management endpoints `GET/POST /api/workspaces/:id/api-keys` and `DELETE /api/workspaces/:id/api-keys/:apiKeyId` follow the standard middleware chain with the new `api_keys.manage` action (OWNER/ADMIN; members may list) and audit actions `api_key.created`/`api_key.revoked`; creation is subscription-gated and capped at 20 active keys per workspace, revocation is deliberately not gated. Keys use the `zgk_` prefix (`ak_` entity ids), are shown once at creation, and authenticate the read-only `/api/v1` surface (`workspace`, `uptime-monitors` with MEMBER-view presentation, `browser-tests`, `browser-tests/:testId/runs`, `runs/:runId`) via `Authorization: Bearer` or `X-Api-Key`, rate-limited per key (`public_api`, Appendix I) and served with open CORS because the key itself is the credential. See `apps/api/README.md` § "Workspace API keys and the public read API".
 
 ---
 
@@ -1437,6 +1438,11 @@ export const UPTIME_EXCERPT_MAX = 2048;
 
 export const RETENTION_DAYS = 30;
 export const ARTIFACT_SIG_TTL_SECONDS = 600;
+
+export const API_KEY_PREFIX = "zgk_";                    // post-plan: workspace API keys
+export const API_KEY_TOKEN_BYTES = 32;
+export const API_KEY_DISPLAY_PREFIX_LENGTH = 12;
+export const MAX_ACTIVE_API_KEYS_PER_WORKSPACE = 20;
 
 export const DEVICE_PROFILES = {
   DESKTOP: { width: 1440, height: 900, isMobile: false, hasTouch: false, deviceScaleFactor: 1,
@@ -1598,3 +1604,4 @@ hostnames.
 | monitor_create | 30 | 1 h | workspace |
 | test_request | 30 | 1 h | workspace |
 | report_download | 60 | 1 h | workspace |
+| public_api | 120 | 1 min | API key |

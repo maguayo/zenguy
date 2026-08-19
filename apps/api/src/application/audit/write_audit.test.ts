@@ -120,6 +120,8 @@ describe("WriteAudit", () => {
         "monitor.deleted",
         "billing.subscription_updated",
         "auth.password_reset",
+        "api_key.created",
+        "api_key.revoked",
       ].sort(),
     );
   });

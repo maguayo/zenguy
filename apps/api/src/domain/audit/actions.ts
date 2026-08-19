@@ -24,6 +24,8 @@ export const AUDIT_ACTIONS = {
   monitorDeleted: "monitor.deleted",
   billingSubscriptionUpdated: "billing.subscription_updated",
   authPasswordReset: "auth.password_reset",
+  apiKeyCreated: "api_key.created",
+  apiKeyRevoked: "api_key.revoked",
 } as const;
 
 export type AuditAction =

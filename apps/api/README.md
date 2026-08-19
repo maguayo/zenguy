@@ -79,6 +79,38 @@ Remote seeding is deliberately guarded and requires both flags:
 
 Only use the remote form against an expendable development database.
 
+## Workspace API keys and the public read API
+
+Workspaces can create API keys so external apps and dashboards consume
+workspace data programmatically. Keys are managed from the session-based API
+(OWNER or ADMIN; any member can list) and grant read-only access:
+
+    POST   /api/workspaces/{workspaceId}/api-keys      { "name": "Status dashboard" }
+    GET    /api/workspaces/{workspaceId}/api-keys
+    DELETE /api/workspaces/{workspaceId}/api-keys/{apiKeyId}
+
+The create response includes the full key (format `zgk_…`) exactly once; only
+its SHA-256 hash is stored, and the list endpoint exposes just the display
+prefix, creator, and last-used timestamp. A workspace can hold at most 20
+active keys. Creation requires an active subscription; revocation never does,
+so a leaked key can always be disabled. Both actions are audit-logged.
+
+A key authenticates the public read-only surface under `/api/v1`, sent as
+`Authorization: Bearer zgk_…` or `X-Api-Key: zgk_…`:
+
+    GET /api/v1/workspace                        # identify the key's workspace
+    GET /api/v1/uptime-monitors                  # monitors with current status
+    GET /api/v1/browser-tests                    # tests with their last run
+    GET /api/v1/browser-tests/{testId}/runs      # keyset-paginated runs (cursor, limit, status)
+    GET /api/v1/runs/{runId}                     # run detail with attempts
+
+Responses reuse the SPA presenters; monitors use the least-privileged MEMBER
+view, so admin-only request configuration never leaks through a key. The
+public surface is scoped to the key's workspace, rate limited per key
+(120 requests/minute), and open to any CORS origin — the key itself is the
+credential and no cookies are involved. Revoked keys and keys of deleted
+workspaces are rejected with a uniform 401.
+
 ## Provider setup
 
 ### Paddle Billing

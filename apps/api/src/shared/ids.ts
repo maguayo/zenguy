@@ -24,6 +24,7 @@ export const ID_PREFIXES = {
   check: "chk",
   incident: "inc",
   incidentEvent: "evt",
+  apiKey: "ak",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

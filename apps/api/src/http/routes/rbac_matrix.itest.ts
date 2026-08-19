@@ -7,6 +7,7 @@ import type {
   TestRun,
 } from "../../domain/browser_tests/types";
 import type { NotificationChannel } from "../../domain/channels/types";
+import type { WorkspaceApiKey } from "../../domain/api_keys/types";
 import type { Incident, IncidentEvent } from "../../domain/incidents/types";
 import type { WorkspaceSecret } from "../../domain/secrets/types";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
@@ -17,6 +18,7 @@ import type {
   WorkspaceInvitation,
 } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
+import { D1ApiKeyRepo } from "../../infrastructure/db/api_key_repo";
 import { D1ArtifactRepo } from "../../infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "../../infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "../../infrastructure/db/browser_test_repo";
@@ -153,6 +155,7 @@ const ROLE: Record<"owner" | "admin" | "member", Role> = {
 };
 const CHANNEL_ID = "ch_rbac_matrix";
 const SECRET_ID = "sec_rbac_matrix";
+const API_KEY_ID = "ak_rbac_matrix";
 const TEST_ID = "bt_rbac_matrix";
 const RUN_ID = "run_rbac_matrix";
 const ATTEMPT_ID = "att_rbac_matrix";
@@ -361,6 +364,18 @@ async function seedFixture(
     updatedAt: NOW,
   };
   await new D1SecretRepo(bindings.DB).insert(secret);
+  const apiKey: WorkspaceApiKey = {
+    id: API_KEY_ID,
+    workspaceId: WORKSPACE.id,
+    name: "Matrix key",
+    keyPrefix: "zgk_rbacmatr",
+    keyHash: await sha256Hex("zgk_rbac-matrix-key"),
+    createdBy: USERS.owner.id,
+    createdAt: NOW,
+    lastUsedAt: null,
+    revokedAt: null,
+  };
+  await new D1ApiKeyRepo(bindings.DB).insert(apiKey);
 
   const browserTest: BrowserTest = {
     id: TEST_ID,
@@ -815,6 +830,27 @@ const ROUTES: RouteCase[] = [
     `/api/workspaces/${WORKSPACE.id}/secrets/${SECRET_ID}`,
     { method: "DELETE" },
     true,
+  ),
+  route(
+    "GET .../api-keys",
+    "M",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/api-keys`,
+  ),
+  route(
+    "POST .../api-keys",
+    "OWNER_ADMIN",
+    201,
+    `/api/workspaces/${WORKSPACE.id}/api-keys`,
+    json("POST", { name: "Created by matrix" }),
+    true,
+  ),
+  route(
+    "DELETE .../api-keys/:apiKeyId",
+    "OWNER_ADMIN",
+    204,
+    `/api/workspaces/${WORKSPACE.id}/api-keys/${API_KEY_ID}`,
+    { method: "DELETE" },
   ),
   route("GET .../channels", "M", 200, `/api/workspaces/${WORKSPACE.id}/channels`),
   route(

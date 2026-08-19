@@ -51,6 +51,8 @@ import type {
   Subscription,
   UsageEvent,
 } from "../../domain/billing/types";
+import type { ApiKeyRepo } from "../../domain/api_keys/repo";
+import type { WorkspaceApiKey } from "../../domain/api_keys/types";
 
 function clone<T extends object>(value: T): T {
   return { ...value };
@@ -967,5 +969,69 @@ export class FakeDeliveryRepo implements DeliveryRepo {
         channelType: channel?.type ?? null,
       };
     });
+  }
+}
+
+export class FakeApiKeyRepo implements ApiKeyRepo {
+  readonly apiKeys = new Map<string, WorkspaceApiKey>();
+
+  async insert(apiKey: WorkspaceApiKey): Promise<void> {
+    if (
+      this.apiKeys.has(apiKey.id) ||
+      [...this.apiKeys.values()].some(
+        (candidate) => candidate.keyHash === apiKey.keyHash,
+      )
+    ) {
+      throw new Error("api key constraint violation");
+    }
+    this.apiKeys.set(apiKey.id, clone(apiKey));
+  }
+
+  async findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<WorkspaceApiKey | null> {
+    const apiKey = this.apiKeys.get(id);
+    return apiKey === undefined || apiKey.workspaceId !== workspaceId
+      ? null
+      : clone(apiKey);
+  }
+
+  async findByHash(keyHash: string): Promise<WorkspaceApiKey | null> {
+    for (const apiKey of this.apiKeys.values()) {
+      if (apiKey.keyHash === keyHash) return clone(apiKey);
+    }
+    return null;
+  }
+
+  async list(workspaceId: string): Promise<WorkspaceApiKey[]> {
+    return [...this.apiKeys.values()]
+      .filter((apiKey) => apiKey.workspaceId === workspaceId)
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .map(clone);
+  }
+
+  async countActive(workspaceId: string): Promise<number> {
+    return [...this.apiKeys.values()].filter(
+      (apiKey) =>
+        apiKey.workspaceId === workspaceId && apiKey.revokedAt === null,
+    ).length;
+  }
+
+  async revoke(id: string, at: number): Promise<void> {
+    const apiKey = this.apiKeys.get(id);
+    if (apiKey !== undefined && apiKey.revokedAt === null) {
+      this.apiKeys.set(id, { ...apiKey, revokedAt: at });
+    }
+  }
+
+  async touchLastUsed(id: string, at: number): Promise<void> {
+    const apiKey = this.apiKeys.get(id);
+    if (apiKey !== undefined) {
+      this.apiKeys.set(id, { ...apiKey, lastUsedAt: at });
+    }
   }
 }

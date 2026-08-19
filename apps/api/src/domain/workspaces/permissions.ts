@@ -8,6 +8,7 @@ export type Action =
   | "uptime.manage"
   | "channels.manage"
   | "secrets.manage"
+  | "api_keys.manage"
   | "members.invite"
   | "members.remove"
   | "admins.manage"
@@ -27,6 +28,7 @@ export const PERMISSIONS = {
     "uptime.manage": true,
     "channels.manage": true,
     "secrets.manage": true,
+    "api_keys.manage": true,
     "members.invite": true,
     "members.remove": true,
     "admins.manage": true,
@@ -45,6 +47,7 @@ export const PERMISSIONS = {
     "uptime.manage": true,
     "channels.manage": true,
     "secrets.manage": true,
+    "api_keys.manage": true,
     "members.invite": true,
     "members.remove": true,
     "admins.manage": false,
@@ -63,6 +66,7 @@ export const PERMISSIONS = {
     "uptime.manage": false,
     "channels.manage": false,
     "secrets.manage": false,
+    "api_keys.manage": false,
     "members.invite": false,
     "members.remove": false,
     "admins.manage": false,

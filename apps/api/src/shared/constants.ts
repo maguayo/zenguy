@@ -38,6 +38,11 @@ export const UPTIME_EXCERPT_MAX = 2048;
 export const RETENTION_DAYS = 30;
 export const ARTIFACT_SIG_TTL_SECONDS = 600;
 
+export const API_KEY_PREFIX = "zgk_";
+export const API_KEY_TOKEN_BYTES = 32;
+export const API_KEY_DISPLAY_PREFIX_LENGTH = 12;
+export const MAX_ACTIVE_API_KEYS_PER_WORKSPACE = 20;
+
 export const DEVICE_PROFILES = {
   DESKTOP: {
     width: 1440,
@@ -70,4 +75,5 @@ export const RATE_LIMITS = {
   monitor_create: { limit: 30, windowSeconds: 3600 },
   test_request: { limit: 30, windowSeconds: 3600 },
   report_download: { limit: 60, windowSeconds: 3600 },
+  public_api: { limit: 120, windowSeconds: 60 },
 } as const;
