@@ -56,6 +56,15 @@ export class D1InvitationRepo implements InvitationRepo {
     );
   }
 
+  async findByHash(hash: string): Promise<WorkspaceInvitation | null> {
+    const row = await one<InvitationRow>(
+      this.database
+        .prepare("SELECT * FROM workspace_invitations WHERE token_hash = ?")
+        .bind(hash),
+    );
+    return row === null ? null : toInvitation(row);
+  }
+
   async findPending(workspaceId: string): Promise<WorkspaceInvitation[]> {
     const rows = await all<InvitationRow>(
       this.database

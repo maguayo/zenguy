@@ -6,13 +6,21 @@ import type {
   RefreshTokenRepo,
   UserRepo,
 } from "./domain/users/repo";
-import type { MemberRepo, WorkspaceRepo } from "./domain/workspaces/repo";
+import type {
+  InvitationRepo,
+  MemberRepo,
+  WorkspaceRepo,
+} from "./domain/workspaces/repo";
 import type { AppEnv } from "./http/env";
 import { errorHandler } from "./http/middleware/error_handler";
 import { requestId } from "./http/middleware/request_id";
 import { securityHeaders } from "./http/middleware/security_headers";
 import { authRoutes } from "./http/routes/auth";
 import { workspaceRoutes } from "./http/routes/workspaces";
+import {
+  publicInvitationRoutes,
+  workspaceInvitationRoutes,
+} from "./http/routes/invitations";
 import { WriteAudit } from "./application/audit/write_audit";
 import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
@@ -20,6 +28,7 @@ import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
+import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { buildEmailSender } from "./infrastructure/email";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
@@ -39,6 +48,7 @@ export interface AppOverrides {
   workspaces?: WorkspaceRepo;
   members?: MemberRepo;
   audits?: AuditRepo;
+  invitations?: InvitationRepo;
 }
 
 export function buildApp(
@@ -59,6 +69,8 @@ export function buildApp(
   const workspaces = overrides.workspaces ?? new D1WorkspaceRepo(env.DB);
   const members = overrides.members ?? new D1MemberRepo(env.DB);
   const audits = overrides.audits ?? new D1AuditRepo(env.DB);
+  const invitations =
+    overrides.invitations ?? new D1InvitationRepo(env.DB);
   const audit = new WriteAudit({
     audits,
     clock,
@@ -82,6 +94,26 @@ export function buildApp(
       ids: overrides.ids ?? realIds,
       config,
     }),
+  );
+  const invitationDependencies = {
+    users,
+    workspaces,
+    members,
+    invitations,
+    emailSender,
+    audit,
+    rateLimiter,
+    clock,
+    ids: overrides.ids ?? realIds,
+    config,
+  };
+  app.route(
+    "/api/workspaces",
+    workspaceInvitationRoutes(invitationDependencies),
+  );
+  app.route(
+    "/api/invitations",
+    publicInvitationRoutes(invitationDependencies),
   );
   app.route(
     "/api/workspaces",

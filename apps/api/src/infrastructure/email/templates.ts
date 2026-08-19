@@ -77,3 +77,23 @@ export function renderResetPasswordEmail(
   });
   return { subject, ...rendered };
 }
+
+export function renderInvitationEmail(
+  appUrl: string,
+  token: string,
+  workspaceName: string,
+  inviterName: string,
+  role: "ADMIN" | "MEMBER",
+): Omit<EmailMessage, "to"> {
+  const subject = `You've been invited to ${workspaceName} on Zenguy`;
+  const rendered = renderBasicEmail({
+    title: "You've been invited to Zenguy",
+    bodyLines: [
+      `${inviterName} invited you to join the workspace "${workspaceName}" as ${role}.`,
+      "This invitation expires in 7 days.",
+    ],
+    ctaLabel: "Accept invitation",
+    ctaUrl: `${appUrl.replace(/\/$/, "")}/invitations/${encodeURIComponent(token)}`,
+  });
+  return { subject, ...rendered };
+}

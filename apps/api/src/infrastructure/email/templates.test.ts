@@ -1,5 +1,6 @@
 import {
   renderBasicEmail,
+  renderInvitationEmail,
   renderResetPasswordEmail,
   renderVerifyEmail,
 } from "./templates";
@@ -63,5 +64,24 @@ describe("email templates", () => {
     expect(reset.text).toContain(
       "This link expires in 1 hour. If you didn't request this, ignore this email.",
     );
+  });
+
+  it("renders the exact workspace invitation copy", () => {
+    const invitation = renderInvitationEmail(
+      "https://app.zenguy.example/",
+      "invite-token",
+      "Acme",
+      "Alice",
+      "ADMIN",
+    );
+
+    expect(invitation.subject).toBe("You've been invited to Acme on Zenguy");
+    expect(invitation.text).toContain(
+      'Alice invited you to join the workspace "Acme" as ADMIN.',
+    );
+    expect(invitation.text).toContain(
+      "https://app.zenguy.example/invitations/invite-token",
+    );
+    expect(invitation.text).toContain("This invitation expires in 7 days.");
   });
 });

@@ -368,6 +368,13 @@ export class FakeInvitationRepo implements InvitationRepo {
     this.invitations.set(invitation.id, clone(invitation));
   }
 
+  async findByHash(hash: string): Promise<WorkspaceInvitation | null> {
+    for (const invitation of this.invitations.values()) {
+      if (invitation.tokenHash === hash) return clone(invitation);
+    }
+    return null;
+  }
+
   async findPending(workspaceId: string): Promise<WorkspaceInvitation[]> {
     return [...this.invitations.values()]
       .filter(

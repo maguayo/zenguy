@@ -3,7 +3,7 @@ import { buildApp } from "../../app";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { loadConfig } from "../../shared/config";
 import { RATE_LIMITS } from "../../shared/constants";
-import { freshDb, testEnv } from "../../test/helpers";
+import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import { RecordingEmailSender } from "../../test/fakes/email";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
@@ -64,6 +64,7 @@ describe("auth routes", () => {
 
   beforeEach(async () => {
     await freshDb();
+    await freshKv();
     emails = new RecordingEmailSender();
     app = buildApp(testEnv(), { emailSender: emails });
   });

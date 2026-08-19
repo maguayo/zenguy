@@ -37,6 +37,7 @@ export interface MemberRepo {
 
 export interface InvitationRepo {
   insert(invitation: WorkspaceInvitation): Promise<void>;
+  findByHash(hash: string): Promise<WorkspaceInvitation | null>;
   findPending(workspaceId: string): Promise<WorkspaceInvitation[]>;
   findValidByHash(
     hash: string,

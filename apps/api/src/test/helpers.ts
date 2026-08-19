@@ -43,3 +43,12 @@ export async function freshDb(): Promise<void> {
     DELETE_STATEMENTS.map((statement) => testEnv().DB.prepare(statement)),
   );
 }
+
+export async function freshKv(): Promise<void> {
+  let cursor: string | undefined;
+  do {
+    const page = await testEnv().KV.list({ cursor });
+    await Promise.all(page.keys.map(({ name }) => testEnv().KV.delete(name)));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor !== undefined);
+}
