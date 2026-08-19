@@ -732,7 +732,7 @@ CREATE INDEX idx_deliveries_incident ON notification_deliveries(incident_id);
 # Phase 7 — Browser tests CRUD & runs API
 
 ### BE-044: Browser tests migration
-- [ ] Create `apps/api/migrations/0006_browser_tests.sql`:
+- [x] Create `apps/api/migrations/0006_browser_tests.sql`:
 ```sql
 CREATE TABLE browser_tests (
   id TEXT PRIMARY KEY,
@@ -844,7 +844,7 @@ CREATE UNIQUE INDEX idx_artifacts_key ON run_artifacts(storage_key);
 CREATE INDEX idx_artifacts_run ON run_artifacts(run_id);
 CREATE INDEX idx_artifacts_expiry ON run_artifacts(expires_at);
 ```
-- [ ] Apply locally; extend `freshDb()`.
+- [x] Apply locally; extend `freshDb()`.
 
 ### BE-045: Browser-test domain & repositories
 - [ ] Create `apps/api/src/domain/browser_tests/types.ts`: `BrowserTest`, `TestRun`, `TestAttempt`, `RunStep`, `RunArtifact`, `type Device = "DESKTOP" | "MOBILE"`, `type RunSource = "VALIDATION" | "MANUAL" | "SCHEDULED"`, `type RunStatus`, `type AttemptStatus`, and `RunSnapshot`:

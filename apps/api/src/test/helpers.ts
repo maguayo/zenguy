@@ -5,6 +5,12 @@ const DELETE_STATEMENTS = [
   // Test isolation only. Production purge jobs must NEVER touch billing or
   // audit retention tables: subscriptions, usage_events, overage_reports,
   // and audit_logs.
+  "DELETE FROM run_steps",
+  "DELETE FROM run_artifacts",
+  "DELETE FROM test_attempts",
+  "DELETE FROM test_runs",
+  "DELETE FROM browser_test_channels",
+  "DELETE FROM browser_tests",
   "DELETE FROM notification_deliveries",
   "DELETE FROM notification_channels",
   "DELETE FROM workspace_secrets",
