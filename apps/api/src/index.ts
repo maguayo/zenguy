@@ -10,8 +10,8 @@ import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
 import { WriteIncidentNotificationEvent } from "./application/incidents/write_notification_event";
+import { GenerateReport } from "./application/reports/generate_report";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
-import { NoopReportGenerator } from "./domain/browser_tests/ports";
 import {
   attemptMessageSchema,
   notifyMessageSchema,
@@ -222,6 +222,10 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
   const incidents = new D1IncidentRepo(env.DB);
   const incidentEvents = new D1IncidentEventRepo(env.DB);
   const storage = new ArtifactStorage(env.ARTIFACTS);
+  const secretResolver = new ResolveSecrets(
+    new D1SecretRepo(env.DB),
+    config.encryptionKey,
+  );
   const dispatchNotifications = new DispatchNotifications(
     channels,
     deliveries,
@@ -250,7 +254,16 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
       dispatchNotifications,
       channels,
       workspaces,
-      reports: new NoopReportGenerator(),
+      reports: new GenerateReport({
+        attempts,
+        steps,
+        artifacts,
+        workspaces,
+        resolveSecrets: secretResolver,
+        storage,
+        clock: systemClock,
+        ids: realIds,
+      }),
       appUrl: config.appUrl,
       clock: systemClock,
       ids: realIds,
@@ -263,10 +276,7 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
     steps,
     artifacts,
     storage,
-    resolveSecrets: new ResolveSecrets(
-      new D1SecretRepo(env.DB),
-      config.encryptionKey,
-    ),
+    resolveSecrets: secretResolver,
     launchSession: (device) => launchSession(env.BROWSER, device),
     llm: new OpenAiLlmClient(config),
     llmUseVision: config.llmUseVision,

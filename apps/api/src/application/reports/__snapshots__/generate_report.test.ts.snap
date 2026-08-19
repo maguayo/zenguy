@@ -1,0 +1,88 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GenerateReport > renders and stores the complete factual report with every secret redacted 1`] = `
+"# Test failure report: Chéckout Flow
+
+**Run ID:** run_report_failure
+**Date:** 2026-08-19T12:29:59.000Z (UTC)
+**Workspace timezone:** Europe/Madrid
+**Source:** SCHEDULED
+**Starting URL:** https://shop.example.com/start?token=redacted&view=full
+**Device:** MOBILE (390×844)
+
+## Instructions
+
+\`\`\`
+Use {{API_TOKEN}} to begin.
+Then verify the \`checkout\` result.
+\`\`\`
+
+## Result
+
+Final status: TIMEOUT
+Total duration: 1m 59s
+Attempts: 2
+Passed after retry: no
+
+## Failure summary
+
+Observed checkout failure with {{API_TOKEN}}
+
+Failure reason: Timed out after using {{API_TOKEN}}
+
+## Expected
+
+The checkout confirmation is visible
+
+## Observed
+
+The page showed {{API_TOKEN}} rejected
+
+## Steps
+
+### Attempt 0 (FAILED, 30s, waited 0s)
+
+1. [12:28:02] click — Clicked checkout using {{API_TOKEN}} (https://shop.example.com/cart?note={{API_TOKEN}})
+
+### Attempt 1 (TIMEOUT, 30s, waited 60s)
+
+2. [12:29:02] wait — Waited after {{API_TOKEN}} (https://shop.example.com/cart)
+
+## Visited URLs
+
+- https://shop.example.com/checkout?note={{API_TOKEN}}
+
+## Console errors
+
+| level | message |
+|---|---|
+| error | Request rejected for {{API_TOKEN}} |
+| error | Request rejected for {{API_TOKEN}} |
+
+## Network errors
+
+| method | host | path | status | error |
+|---|---|---|---|---|
+| POST | shop.example.com | /api/{{API_TOKEN}} | 503 | upstream rejected {{API_TOKEN}} |
+| POST | shop.example.com | /api/{{API_TOKEN}} | 503 | upstream rejected {{API_TOKEN}} |
+
+## Screenshots
+
+- Attempt 0, step 1: {{ARTIFACT:art_screen_zero}}
+- Attempt 1, step 2: {{ARTIFACT:art_screen_one}}
+
+## Retries
+
+- Attempt 1: TIMEOUT — Timed out after using {{API_TOKEN}}
+
+## Technical metadata
+
+- Model: gpt-5-mini
+- Runner version: zenguy-runner/1.0.0
+- Token usage: 250
+- Run ID: run_report_failure
+- Attempt IDs: att_report_zero, att_report_one
+
+> This report describes what was observed during the test. It contains no credentials and does not assert an unverified root cause. Secret values are redacted as {{KEY}} placeholders.
+"
+`;
