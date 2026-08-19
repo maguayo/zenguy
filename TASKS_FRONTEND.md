@@ -67,12 +67,12 @@ Query-key convention (used everywhere): `["me"]`, `["workspaces"]`, `["ws", wsId
 # Phase 0 — Scaffold & landing
 
 ### FE-001: Web app scaffold
-- [ ] If the repo-root workspace files don't exist yet, create them **exactly** as follows (identical to TASKS_BACKEND BE-001 — if they exist, verify and skip): root `package.json` `{ "name": "zenguy", "private": true, "engines": { "node": ">=22" }, "scripts": { "dev:api": "pnpm --filter @zenguy/api dev", "dev:web": "pnpm --filter @zenguy/web dev", "build": "pnpm -r build", "test": "pnpm -r test", "typecheck": "pnpm -r typecheck" } }`; `pnpm-workspace.yaml` (`packages: ["apps/*"]`); `tsconfig.base.json` (strict, ES2023, Bundler resolution, noUncheckedIndexedAccess, verbatimModuleSyntax); `.gitignore` (`node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env*`, `coverage/`, `*.log`, `.DS_Store`); `.editorconfig`.
-- [ ] Create `apps/web/package.json`: name `@zenguy/web`, `"type": "module"`, scripts `dev` (`vite`), `build` (`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `test` (`vitest run`).
-- [ ] Install: `pnpm --filter @zenguy/web add react react-dom react-router-dom @tanstack/react-query react-hook-form @hookform/resolvers zod recharts lucide-react clsx` and dev deps `pnpm --filter @zenguy/web add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom tailwindcss @tailwindcss/vite vitest`.
-- [ ] `apps/web/tsconfig.json` extends `../../tsconfig.base.json`, adds `"jsx": "react-jsx"`, `"lib": ["ES2023", "DOM", "DOM.Iterable"]`, `"types": ["vite/client"]`, include `src`, `vite.config.ts`.
-- [ ] `apps/web/index.html`: `<html lang="en">`, `<title>Zenguy</title>`, viewport meta, Google Fonts preconnect + Inter stylesheet (`https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap`), `<div id="root">`, module script `/src/main.tsx`.
-- [ ] `apps/web/vite.config.ts`:
+- [x] If the repo-root workspace files don't exist yet, create them **exactly** as follows (identical to TASKS_BACKEND BE-001 — if they exist, verify and skip): root `package.json` `{ "name": "zenguy", "private": true, "engines": { "node": ">=22" }, "scripts": { "dev:api": "pnpm --filter @zenguy/api dev", "dev:web": "pnpm --filter @zenguy/web dev", "build": "pnpm -r build", "test": "pnpm -r test", "typecheck": "pnpm -r typecheck" } }`; `pnpm-workspace.yaml` (`packages: ["apps/*"]`); `tsconfig.base.json` (strict, ES2023, Bundler resolution, noUncheckedIndexedAccess, verbatimModuleSyntax); `.gitignore` (`node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env*`, `coverage/`, `*.log`, `.DS_Store`); `.editorconfig`.
+- [x] Create `apps/web/package.json`: name `@zenguy/web`, `"type": "module"`, scripts `dev` (`vite`), `build` (`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `test` (`vitest run`).
+- [x] Install: `pnpm --filter @zenguy/web add react react-dom react-router-dom @tanstack/react-query react-hook-form @hookform/resolvers zod recharts lucide-react clsx` and dev deps `pnpm --filter @zenguy/web add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom tailwindcss @tailwindcss/vite vitest`.
+- [x] `apps/web/tsconfig.json` extends `../../tsconfig.base.json`, adds `"jsx": "react-jsx"`, `"lib": ["ES2023", "DOM", "DOM.Iterable"]`, `"types": ["vite/client"]`, include `src`, `vite.config.ts`.
+- [x] `apps/web/index.html`: `<html lang="en">`, `<title>Zenguy</title>`, viewport meta, Google Fonts preconnect + Inter stylesheet (`https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap`), `<div id="root">`, module script `/src/main.tsx`.
+- [x] `apps/web/vite.config.ts`:
 ```ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -83,8 +83,8 @@ export default defineConfig({
   server: { proxy: { "/api": { target: "http://localhost:8787", changeOrigin: false } } },
 });
 ```
-- [ ] `src/main.tsx` rendering `<App />` inside `<React.StrictMode>`; minimal `App.tsx` showing "Zenguy" centered; `src/styles/index.css` with `@import "tailwindcss";` imported from `main.tsx`.
-- [ ] Verify `pnpm --filter @zenguy/web dev` renders and `build` outputs `dist/`. Commit.
+- [x] `src/main.tsx` rendering `<App />` inside `<React.StrictMode>`; minimal `App.tsx` showing "Zenguy" centered; `src/styles/index.css` with `@import "tailwindcss";` imported from `main.tsx`.
+- [x] Verify `pnpm --filter @zenguy/web dev` renders and `build` outputs `dist/`. Commit.
 
 ### FE-002: Design tokens & base styles
 - [ ] Replace `src/styles/index.css` with Tailwind v4 theme tokens (`@theme`) — this is the whole visual identity; use these everywhere, never ad-hoc hex values:
@@ -167,7 +167,7 @@ export default defineConfig({
   - Core `request(method, path, body?, opts?)`: fetch `path` (always relative `/api/...`), headers `Content-Type: application/json` + `Authorization: Bearer <token>` when present, `credentials: "same-origin"`; parse envelope: ok → `json.data` (204 → undefined); error → throw `ApiError` from `json.error`.
   - **Auto-refresh:** on 401 for any path except `/api/auth/*`: await `ensureFreshToken()` then retry the request **once**; still 401 → `clearToken()` + emit `authEvents.signedOut` + throw. `ensureFreshToken()` single-flight: one shared in-flight `POST /api/auth/refresh` promise (`{ user, accessToken, expiresIn }` → `setToken`); concurrent callers await the same promise. Also called by the proactive timer.
   - `authEvents`: tiny emitter `{ onSignedOut(cb) }` consumed by AuthContext.
-  - Exports: `apiGet<T>(path)`, `apiPost<T>(path, body?)`, `apiPatch`, `apiPut`, `apiDelete`, `apiGetBlob(path)` (for the report download — returns `{ blob, filename }` parsing `Content-Disposition`).
+  - Exports: `apiGet<T>(path)`, `apiPost<T>(path, body?)`, `apiPatch`, `apiPut`, `apiDelete(path, body?)` (workspace deletion sends `{ confirmName }` in the DELETE body), `apiGetBlob(path)` (for the report download — returns `{ blob, filename }` parsing `Content-Disposition`).
 - [ ] Vitest with mocked `fetch`: envelope unwrap; ApiError fields; 401 → refresh → retry once (assert order and single retry); concurrent 401s trigger ONE refresh call; refresh failure signs out; `/api/auth/login` 401 does NOT trigger refresh.
 
 ### FE-012: API types & auth context
@@ -233,4 +233,413 @@ export default defineConfig({
   - If already ACTIVE/PAST_DUE on load → redirect to overview. If status CANCELED → same screen with heading `Reactivate your workspace` (identical flow).
   - Non-owner reaching this screen: replace button with `Only the workspace owner can set up billing.` + owner's name/email.
 
-<!-- SPLIT:FE2 -->
+# Phase 5 — Overview
+
+### FE-022: Overview page
+- [ ] `src/api/overview.ts` (`getOverview(wsId)`) + `pages/overview/OverviewPage.tsx`, query `["ws", wsId, "overview"]` with `refetchInterval: 30_000`.
+- [ ] Layout: `PageHeader` `Overview`. Then a 3-card grid (stack on mobile):
+  1. **Usage this cycle** — `UsageMeter` component (build in `components/UsageMeter.tsx`, reused by Billing page): `X of 300 runs used`, progress bar (accent; turns warn ≥ 80%, danger when overage), rows: `Included runs 300`, `Used <billableRuns>`, `Remaining <remainingRuns>`, and when overage > 0: `Extra runs <overageRuns>` + `Extra cost <formatEuros(overageAmountCents)>`; footer `Projected total <formatEuros(projectedTotalCents)> · resets <formatDateTime(periodEnd)>`.
+  2. **Browser tests** — big number `total` tests; rows with dot indicators: `Running now <runningRuns>`, `Open incidents <openIncidents>` (danger when > 0, links to incidents filtered), `Failures (24 h) <failed24h>`; footer link `View tests →`.
+  3. **Uptime** — `UP <up>` (ok), `DOWN <down>` (danger), `UNKNOWN <unknown>` (neutral) as three inline stats; `Open incidents` row; `Avg response (24 h) <ms> ms`; footer link `View monitors →`.
+- [ ] **Recent activity** Card below: list of `activity` items — icon+tone by type (Appendix B activity table), title, `formatRelative(occurredAt)`; each row links via its `link` object (`runId` → `/w/:wsId/runs/:id`, `incidentId` → incident, `monitorId` → monitor, `channelId` → notifications). Empty → EmptyState `No activity yet` / `Create your first browser test to see activity here.` + button (hidden for Member).
+- [ ] Loading: 3 skeleton cards + list skeleton. Error: ErrorState with retry.
+
+# Phase 6 — Browser Tests
+
+### FE-023: Tests list
+- [ ] `src/api/tests.ts`: `listTests`, `getTest`, `createTest`, `updateTest`, `deleteTest`, `validateDraft`, `runNow`, `listRuns`, `getRun`, `getAttempt`, `downloadReport` (uses `apiGetBlob`).
+- [ ] `pages/tests/TestsListPage.tsx` (§18.5): `PageHeader` `Browser Tests` + primary `New test` (hidden unless `can("tests.manage")`). Table columns: **Name** (medium weight, device sub-line `Desktop · Every 6 hours`), **Last status** (`StatusBadge` from `lastRun` + `formatRelative(lastRun.finishedAt)`; `—` when never run), **Next run** (`formatRelative(nextRunAt)`), **Incident** (danger Badge `Open` linking to it, else `—`), **Actions** (Dropdown: `Open`, `Run now` (disabled while `lastRun` status QUEUED/RUNNING, hidden unless `can("tests.run")`), `Edit`, `Delete` (danger; both hidden unless `can("tests.manage")`)). Row click → detail.
+- [ ] `Run now` flow (shared helper `useRunNow(test)` in `pages/tests/hooks.ts`): ConfirmDialog title `Run "<name>" now?`, body = run-cost copy (Appendix D) → POST run-now → toast `Run started` → navigate `/w/:wsId/runs/<runId>`; `ACTIVE_RUN_EXISTS` → toast `A run is already in progress for this test.`
+- [ ] Empty: `No browser tests yet` / `Describe a flow in plain language and Zenguy will verify it in a real browser on a schedule.` + `Create your first test`. Loading/error states.
+
+### FE-024: Test form (create/edit) with `Test it`
+- [ ] `pages/tests/TestFormPage.tsx` serving `/tests/new` and `/tests/:testId/edit` (load + prefill on edit). RHF + zod schema mirroring the API: name 1–120, startUrl (`z.string().url()` + must start `http`), instructions min 1, device enum, intervalHours int 1–24, maxRetries int 0–3, notifyOnRecovery boolean, channelIds string[].
+- [ ] Sections as titled Cards in §18.6 order:
+  1. **Basics** — Name; Starting URL.
+  2. **Instructions** — Textarea (8 rows), hint `Write what to do and what must be true, in plain language. Reference secrets like {{SHOP_PASSWORD}}.`; below it the staging-credentials warning banner (Appendix D, warn tones, `TriangleAlert` icon) and the token note (Appendix D, `text-xs text-zinc-500`).
+  3. **Device** — two radio cards side by side: `Desktop — 1440 × 900` (Monitor icon) / `Mobile — 390 × 844` (Smartphone icon).
+  4. **Schedule** — Select `Every 1 hour … Every 24 hours` (all 24 integers); timeout help copy (Appendix D) as hint.
+  5. **Retries** — Select 0–3 with per-option description `3 retries — immediately, after 1 min, after 2 min`; hint `Retries run in a fresh browser and don't consume runs.`
+  6. **Notifications** — checkbox list of workspace channels (name + type Badge); link `Manage channels` → notifications page; empty → `No channels yet — create one under Notifications.`
+  7. **Recovery** — Toggle `Notify when this test recovers` (default ON).
+  8. **Test it** — see below. 9. Sticky footer bar: `Cancel` + primary `Save test` / `Save changes`.
+- [ ] **Test it** panel: run-cost copy line (Appendix D) + secondary button `Test it` (disabled while a validation run is in progress or form invalid): on click → `validateDraft(current form values)` → store `runId` → render `<RunStatusPanel wsId runId />` (FE-026 component) inline in the card. Saving is **never** blocked by a failed or missing test run (§10.5); leaving the page mid-run is allowed (the run continues server-side — mention in a hint).
+- [ ] Submit → create: toast `Test created — first run scheduled` → detail page. Edit: toast `Changes saved` (+ if interval changed, backend already recomputed next run). 402 `BILLING_REQUIRED` → toast `Billing required — set up your subscription first.`
+
+### FE-025: Test detail
+- [ ] `pages/tests/TestDetailPage.tsx` (§18.7), query test + runs (first page). Header: name + `StatusBadge` of last run; actions `Run now` (useRunNow), `Edit`, Dropdown `Delete` (ConfirmDialog danger `Delete "<name>"? Its history stays available for 30 days.`) — all permission-gated.
+- [ ] Open-incident banner when `openIncidentId` (danger Card: `This test has an open incident.` + `View incident →`).
+- [ ] Summary Cards row: **Last result** (StatusBadge + relative time + duration), **Next run** (`formatRelative(nextRunAt)`), **Schedule** (`formatInterval` + device), **Retries** (`<maxRetries> retries`).
+- [ ] **Configuration** Card: DescriptionList — Starting URL (truncated, CopyButton), Instructions (pre-wrap, collapsed to 6 lines with `Show more`), Device + viewport, Notification channels (names as Badges, `None`), Notify on recovery `Yes/No`.
+- [ ] **Runs** Card (§12.1): status filter Tabs (`All`, `Passed`, `Failed`, `Timeout`, `System error`) driving the `status` query param; Table columns: Date (`formatDateTime`), Source (Badge: VALIDATION `Validation` neutral / MANUAL `Manual` info / SCHEDULED `Scheduled` neutral), Status (`StatusBadge` + passedAfterRetry), Duration, Attempts (`2 of 4`), Triggered by (user name or `—`), Billable (`1 run` / `—`). Row → run detail. `LoadMore` with cursor (100/page). Empty: `No runs yet` / `Run it now or wait for the schedule.`
+
+### FE-026: Run detail & live progress
+- [ ] `components/RunStatusPanel.tsx` — the live view used by run detail AND the form's Test it:
+  - Props `{ wsId, runId, compact?: boolean }`. Query `["ws", wsId, "runs", runId]`. While status QUEUED/RUNNING: subscribe via `lib/sse.ts` → `subscribeRun(liveUrl, onUpdate)` wrapping `EventSource` (`update` → parsed Run replaces the query cache via `queryClient.setQueryData`; `done`/`error` → close; on `error` fall back to `refetchInterval: 2000` polling). Always stop on terminal status.
+  - Renders: status line (`StatusBadge` + pulsing dot while running + elapsed timer ticking each second from `startedAt`), horizontal attempt stepper (`Attempt 1 ✓/✗/⏱/⚙ …` with `waited 60 s` sub-labels from `retryDelaySeconds`), latest step description (from the newest attempt's latest step, when present in the SSE payload), latest screenshot thumbnail when available. Terminal: result block — PASSED → ok Card `Passed` (+ `Passed after retry` badge when set); FAILED/TIMEOUT → danger Card with `failureReason` + expected/actual two-column blocks; SYSTEM_ERROR → neutral Card `System error on our side — this run is not billed and no incident was opened.` `compact` hides the stepper details (form usage).
+- [ ] `pages/tests/RunDetailPage.tsx` (§12.3): breadcrumb `Browser Tests / <test name or "Draft validation"> / Run`. Top: `RunStatusPanel`. Meta DescriptionList: Run ID (CopyButton), Source, Device + viewport, Started / Finished, Total duration, Attempts count, Billable (`1 run` / `Not billed`), Triggered by, Incident (link when set), Model + runner version (from snapshot). **Instructions used** Card (snapshot verbatim, pre-wrap) + Starting URL.
+- [ ] Report button in header: `Download report` (FileDown icon) — rendered only when status FAILED/TIMEOUT; calls `downloadReport(runId)` → create object URL → temp `<a download="<filename>">` click → revoke; 404 → toast `Report not available.`
+- [ ] **Attempts** section: one collapsible Card per attempt (first failed one expanded by default, else the last): header `Attempt <index+1>` + StatusBadge + duration + `waited <n> s` when > 0; body = `AttemptDetail` (FE-027).
+- [ ] Tests: none (manual QA) — but keep the SSE module pure enough to unit-test `subscribeRun` reconnect/fallback with a fake EventSource; write that test.
+
+### FE-027: Attempt detail viewer
+- [ ] `components/AttemptDetail.tsx`: props `{ wsId, attemptId, timezone }`; query `["ws", wsId, "attempts", attemptId]` (lazy — only when expanded).
+- [ ] Layout (§12.4):
+  - Result strip: summary text; when failed: `failureReason` highlighted; expected vs actual side-by-side bordered blocks (`Expected` / `Observed`); token usage + model as small meta line; `systemErrorCode` shown for SYSTEM_ERROR.
+  - **Steps timeline**: vertical list — sequence number bubble, `actionType` mono Badge, description, `formatTime(timestamp)`, sanitized URL (truncated, Tooltip full), result dot (ok/danger); step screenshot as 96-px thumbnail (lazy `loading="lazy"`, `alt="Step <n> screenshot"`) → opens `ScreenshotViewer` at that index.
+  - `components/ScreenshotViewer.tsx`: full-screen Modal lightbox over all attempt screenshots: large image, `<n> of <m>`, prev/next buttons + ArrowLeft/ArrowRight keys, caption (step description), close on Escape. Expired artifact URLs (img error) → placeholder `Screenshot expired`.
+  - **Console errors** Card (collapsed count header, e.g. `Console errors (3)`): mono list `level · message · url`. **Network errors** Card: table Method / Host / Path / Status / Error. **Visited URLs** Card: ordered mono list. Each `_None captured_` empty text when empty.
+- [ ] All text content renders as text (never `dangerouslySetInnerHTML`).
+
+### FE-028: Drafts note & runs from incidents
+- [ ] Ensure `/w/:wsId/runs/:runId` works for validation runs (null `testId`): breadcrumb shows `Draft validation`, no test links, banner `This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.`
+- [ ] From incident pages (FE-033) run links land here — verify the route accepts any runId in the workspace and shows NOT_FOUND state (`ErrorState` `This run is no longer available (runs are kept for 30 days).`) on 404.
+
+# Phase 7 — Uptime
+
+### FE-029: Uptime list
+- [ ] `src/api/uptime.ts`: `listMonitors`, `getMonitor`, `createMonitor`, `updateMonitor`, `deleteMonitor`, `testRequest`, `listChecks`, `getStats`.
+- [ ] `pages/uptime/UptimeListPage.tsx` (§18.9): `PageHeader` `Uptime` + `New monitor` (gated `uptime.manage`). Table: **Status** (StatusBadge UP/DOWN/UNKNOWN; small pulsing `Checking` info Badge appended when `checking`), **Name** (+ host sub-line: `new URL(url).host`), **Frequency** (`formatFrequency`), **Last check** (relative), **Response** (`<ms> ms` / `—`), **Incident** (`Open` link / `—`), **Actions** (Open / Edit / Delete gated). 30-s `refetchInterval`.
+- [ ] Empty: `No uptime monitors yet` / `Ping an endpoint on a schedule and get alerted when it goes down. Uptime checks never consume runs.` + CTA.
+
+### FE-030: Monitor form with request builder
+- [ ] `pages/uptime/MonitorFormPage.tsx` (`/uptime/new`, `/uptime/:monitorId/edit`). Zod mirror of the API config (name, url, method enum, headers[], body, expectedStatus 100–599, bodyCondition enum + conditional fields, frequencySeconds enum, timeoutSeconds 1–30, maxRetries 0–3, notifyOnRecovery, channelIds). Cross-field zod rules: body forbidden for GET/HEAD; `bodyExpectedValue` required when condition set; `bodyConditionPath` required when `JSON_PATH_EQUALS`.
+- [ ] Cards (§18.10):
+  1. **Request** — Method Select (GET/POST/PUT/PATCH/DELETE/HEAD) inline with URL input (flex row); **Headers**: `components/KeyValueEditor.tsx` (rows of key/value Inputs + remove IconButton + `Add header`; build it generic: `{ value: {key,value}[], onChange, keyPlaceholder, valuePlaceholder }`); hint `Values support secrets: Authorization: Bearer {{API_TOKEN}}`; **Body**: Textarea shown unless GET/HEAD, mono font, hint `Raw text or JSON. Set a Content-Type header if needed.`
+  2. **Expectations** — Expected status (number Input, default 200); Body condition Select: `None` / `Body contains` / `Body does not contain` / `Body equals` / `JSON path equals`; conditional Value Input; conditional JSON path Input (placeholder `$.status.healthy`, mono).
+  3. **Schedule** — Frequency Select (exactly: Every 5/10/15/30 min, 1/3/6/12/24 h); Timeout number 1–30 `seconds`; Retries Select 0–3 (same descriptions as tests); hint `Uptime checks and retries never consume browser test runs.`
+  4. **Notifications** + **Recovery** — same components as the test form (extract `ChannelPicker` + recovery Toggle into shared components in this task and refactor FE-024 to use them).
+  5. **Test request** — secondary button `Send test request` (note: `Runs the request once from Zenguy. Nothing is saved and no runs are consumed.`): POST test-request with current form values → result panel: PASSED → ok Card `✓ <httpStatus> in <responseTimeMs> ms`; FAILED → danger Card with `failureReason`; below, per-condition checklist rows (`✓/✗ <type> — <detail>`); response excerpt in a collapsed mono block when present.
+  6. Sticky footer `Cancel` / `Save monitor`.
+- [ ] Edit mode for MEMBER-masked payloads never happens (route gated), but headers may come back decrypted for OWNER/ADMIN — prefill normally. Toasts as usual.
+
+### FE-031: Monitor detail
+- [ ] `pages/uptime/MonitorDetailPage.tsx` (§18.11): header name + StatusBadge (+ `Checking` chip) + host; actions Edit / Delete (gated, confirm). Open-incident banner as in tests.
+- [ ] Stats row (query stats, `refetchInterval: 60_000`): Cards `Uptime 24 h` / `7 days` / `30 days` (`formatPct`, ok tone ≥ 99.9, warn ≥ 99, danger below; `—` for null) + `Avg response (24 h)` in ms.
+- [ ] **Response time (24 h)** Card: `recharts` `ResponsiveContainer` + `AreaChart` of `series` — X = time (`formatTime` ticks, ~6), Y = ms (auto), area accent-600 at 15% fill 2-px line; failed points overlaid as danger dots (`Scatter` on same chart of `status === "FAILED"` entries at y = their responseTime or 0); Tooltip: time, `<ms> ms`, status word. Empty series → EmptyState `Not enough data yet.` Chart height 220, no grid clutter (dashed zinc-100 horizontal lines only).
+- [ ] **Recent checks** Card: Table Time / Result (`Passed`/`Failed` Badge) / HTTP status / Response time / Reason (mono, `—`); `LoadMore` pagination (50/page).
+- [ ] **Incidents** Card: this monitor's incidents (reuse incidents fetcher with `type=uptime` filtered client-side by resourceId, or fetch and filter — either is fine; link into incident detail). **Configuration** Card: DescriptionList of method+URL, expectations summary (`Status 200 · Body contains "healthy"`), frequency, timeout, retries, channels, recovery.
+
+# Phase 8 — Incidents
+
+### FE-032: Incidents list
+- [ ] `src/api/incidents.ts` (`listIncidents(wsId, filters, cursor)`, `getIncident`).
+- [ ] `pages/incidents/IncidentsPage.tsx` (§18.12): `PageHeader` `Incidents`. Filter bar: Tabs `Open` / `Resolved` / `All` (default Open), type Select `All types / Browser tests / Uptime monitors`, date range (two native `<input type="date">` From/To, optional). Filters → query params in the URL (shareable) → API params.
+- [ ] Table: **Resource** (name + type Badge `Browser test` info / `Uptime monitor` accent), **Status** (`Open` danger pulsing dot / `Resolved` ok), **Opened** (`formatDateTime`), **Duration** (`formatDuration(durationMs)`, ticking for open ones — re-render via 30-s interval), **Last event** (relative). Row → detail. 30-s refetch on the Open tab.
+- [ ] Empty (Open tab): ok-toned EmptyState `No open incidents` / `Everything is passing. Incidents appear here when a test or monitor fails after all retries.`
+
+### FE-033: Incident detail
+- [ ] `pages/incidents/IncidentDetailPage.tsx`: header `Incident — <resourceName>` + status Badge; meta line `Opened <dateTime> · <duration>` (+ `Resolved <dateTime>` when closed); button `View <browser test|monitor> →` + (when `openedByRunId`) `View failing run →`.
+- [ ] `components/IncidentTimeline.tsx`: vertical timeline of `events` ascending — icon per type (OPENED `Siren` danger, FAILURE_RECORDED `XCircle` danger, NOTIFICATION_SENT `Send` info, NOTIFICATION_FAILED `AlertTriangle` warn, RESOLVED `CheckCircle2` ok, TEST_DELETED/MONITOR_DELETED `Trash2` neutral), message, `formatDateTime`, metadata chips when present (channel name, delivery status, run/check links from metadata ids).
+- [ ] **Notifications sent** Card: deliveries table — Channel, Event (`Failure`/`Recovery`), Status (`Sent` ok / `Failed` danger + Tooltip with `errorSanitized`), Attempts, Time. Empty → `No notifications were configured when this incident opened.`
+
+# Phase 9 — Notification channels
+
+### FE-034: Channels list
+- [ ] `src/api/channels.ts` (`listChannels`, `createChannel`, `updateChannel`, `deleteChannel`, `testChannel`, `listDeliveries`).
+- [ ] `pages/notifications/ChannelsPage.tsx` (§18.13): `PageHeader` `Notifications` + `Add channel` (gated `channels.manage`). Grid of channel Cards (2-col desktop): type icon (EMAIL `Mail`, SMS `MessageSquare`, WHATSAPP `MessageCircle`, CALL `Phone`, SLACK `Hash`, DISCORD `Gamepad2`), name, target line from `configPreview` (emails joined / phone / masked webhook), status chips: `Disabled` neutral when `!enabled`; `Verified` ok when `verifiedAt`; last delivery dot (`SENT` ok / `FAILED` danger + relative time). Card menu (gated): `Send test`, `View deliveries`, `Edit`, `Disable`/`Enable`, `Delete`.
+- [ ] `Send test` → ConfirmDialog `Send a test notification?` body `This sends a real notification to this channel.` → POST test → result toast `Test sent` / `Test failed: <errorSanitized>` + refresh list. `Delete` → ConfirmDialog danger `Delete "<name>"? It will be removed from every test and monitor that uses it.`
+- [ ] Empty: `No notification channels yet` / `Create a channel once, then reuse it across tests and monitors.` + CTA.
+
+### FE-035: Channel form (per-type)
+- [ ] `pages/notifications/ChannelFormModal.tsx` — Modal launched from Add/Edit (no separate route). Step 1 (create only): type picker — 6 tile buttons (icon + label). Step 2: fields:
+  - Common: Name (1–80).
+  - EMAIL: `components/EmailListInput.tsx` — chips input (type address + Enter/comma adds, validates email, removable chips, max 10).
+  - SMS / WHATSAPP / CALL: Phone number Input, placeholder `+34612345678`, hint `E.164 format, with country code.` WhatsApp extra hint: `The number must have WhatsApp and accept messages from your Twilio sender.`
+  - SLACK: Webhook URL Input (validate prefix `https://hooks.slack.com/`), hint `Create an incoming webhook in your Slack workspace and paste the URL. Treat it like a password.`; DISCORD: same with `https://discord.com/api/webhooks/` and Discord copy.
+  - Edit mode for SLACK/DISCORD: show masked URL as placeholder text `Currently: https://hooks.slack.com/…abcd` with empty input `Paste a new URL to replace it` — send `config` only when the user typed one (webhook values are never readable back).
+- [ ] Save → create/update mutation → toast + invalidate. Zod validation per type mirrors backend (bad → inline field errors).
+
+### FE-036: Delivery history
+- [ ] `pages/notifications/DeliveriesDrawer.tsx`: right-side slide-over panel (reuse Modal mechanics, `max-w-md h-full ml-auto` panel) opened from a channel's `View deliveries`: header `Deliveries — <channel name>`; list rows: event Badge (`Failure` danger / `Recovery` ok / `Test` neutral), status (`Sent`/`Failed` + attempts count `2 attempts`), error text when failed (mono, truncated with Tooltip), incident link icon when `incidentId`, `formatDateTime(createdAt)`. `LoadMore` (25/page). Empty: `No deliveries yet.`
+
+# Phase 10 — Secrets
+
+### FE-037: Secrets page
+- [ ] `src/api/secrets.ts` (`listSecrets`, `createSecret`, `replaceSecret`, `deleteSecret`).
+- [ ] `pages/secrets/SecretsPage.tsx` (§18.14): `PageHeader` `Secrets` + `Add secret` (gated `secrets.manage`). Top warning banner (always visible, warn tones, TriangleAlert): staging-credentials copy (Appendix D).
+- [ ] Table: **Key** (mono, `KeyRound` icon), **Allowed domains** (small neutral Badges, `*.example.com` rendered as-is), **Description** (`—`), **Updated** (relative), **Created by**; row menu (gated): `Replace value…`, `Edit domains…`, `Delete` (ConfirmDialog danger `Delete {{KEY}}? Tests that reference it will start failing.`). **Values are never shown anywhere — there is no view action.**
+- [ ] Add modal: **Key** Input (auto-uppercase on change, zod `/^[A-Z][A-Z0-9_]{1,63}$/`, hint `Uppercase letters, digits and _ — e.g. SHOP_PASSWORD. Use it in instructions as {{SHOP_PASSWORD}}.`); **Value** `<input type="password" autoComplete="off">` (1–4096) + hint `You won't be able to view this value again — only replace it.`; **Allowed domains** — `components/DomainListInput.tsx` chips input (validates `hostname` or `*.hostname`, lowercases, min 1, hint `example.com matches only that host. *.example.com also matches its subdomains. Secrets are only ever typed on these domains.`); **Description** optional.
+- [ ] Replace-value modal: text `The current value can't be viewed. Entering a new value replaces it immediately.` + password input → PUT. Edit-domains modal: DomainListInput + description. `CONFLICT` on create → inline `A secret with this key already exists.`
+- [ ] Member view: table renders, banner renders, no action buttons. Empty: `No secrets yet` / `Store credentials once, encrypted, and reference them in tests as {{KEY}}.` + CTA (gated).
+
+# Phase 11 — Members
+
+### FE-038: Members page
+- [ ] `src/api/members.ts` (`listMembers`, `changeRole`, `removeMember`, `listInvitations`, `invite`, `revokeInvitation`).
+- [ ] `pages/members/MembersPage.tsx` (§18.15): `PageHeader` `Members` (description `Members are unlimited and free.`) + `Invite member` (gated `members.invite`).
+- [ ] Members table: **Member** (name + email sub-line), **Role** Badge (OWNER accent, ADMIN info, MEMBER neutral), **Joined** (date), row menu: `Change role` submenu Admin/Member — only when `can("admins.manage")` (owner) and target isn't OWNER; `Remove` — shown when `can("members.remove")` AND (actor is owner ? target isn't OWNER and isn't self : target role is MEMBER); ConfirmDialog `Remove <name> from this workspace?`
+- [ ] Invite modal: Email + Role Select — options: `Member` always; `Admin` only when `can("admins.manage")` (owner). Submit → toast `Invitation sent to <email>` → refresh pending list. `CONFLICT` → inline `Already a member.`
+- [ ] **Pending invitations** Card (only when non-empty): rows email, role Badge, `Invited by <name>`, `Expires <relative>`, `Revoke` button (gated, confirm-less, toast).
+
+# Phase 12 — Usage & Billing
+
+### FE-039: Billing page
+- [ ] `src/api/billing.ts` (`getBillingConfig`, `getBilling`, `getInvoiceUrl`).
+- [ ] `pages/billing/BillingPage.tsx` (§18.16). Route-level guard: `can("billing.view")` false → `AccessDenied` card (`Only owners and admins can view billing.`) — the nav item is already hidden for Members (FE-019).
+- [ ] **Plan** Card: `Zenguy — 39 €/month` + status Badge (`Active` ok / `Past due` warn / `Canceled` danger / `Not set up` neutral); bullets `300 runs included · 0,20 € per extra run · Unlimited members`; when CANCELED/NONE → primary `Set up subscription` → `/w/:wsId/setup/billing`; when `cancelAtPeriodEnd` → warn banner `Your subscription ends on <formatDateTime(periodEnd)>.`
+- [ ] **Usage** Card: reuse `UsageMeter` (FE-022) + line `Current period: <periodStart> – <periodEnd>` (workspace tz).
+- [ ] **Invoices** Card: table Date (`billedAt`), Invoice # (`invoiceNumber` / `—`), Total (`formatEuros(totalCents)`), Status (Badge), action `View PDF` → `getInvoiceUrl(txId)` → `window.open(url, "_blank")` (loading spinner on the row button). Empty `No invoices yet.`
+- [ ] **Payment** Card — owner only (`can("billing.manage")`; admins instead see the info line `Only the owner can manage the subscription.`): `Update payment method` secondary button → opens `updatePaymentMethodUrl` in a new tab (disabled + Tooltip `Available after the first payment` when null); `Cancel subscription…` ghost-danger button → ConfirmDialog danger (`Cancel the subscription? Scheduled runs and checks stop when the current period ends. Your data stays readable for 30 days.`) → opens `cancelUrl` in a new tab (Paddle-hosted flow) → info toast `Finish cancelling in the Paddle page we just opened.`
+
+# Phase 13 — Workspace settings
+
+### FE-040: Settings & audit log
+- [ ] `src/api/workspaces.ts` additions: `updateWorkspace`, `deleteWorkspace(wsId, confirmName)`, `transferOwnership`, `listAuditLogs`.
+- [ ] `pages/settings/SettingsPage.tsx` (§18.17):
+  - **General** Card (gated `workspace.settings`; read-only DescriptionList for Members — though Members normally won't navigate here, the route stays accessible): Name Input + Timezone Select (same filterable select as onboarding) + `Save changes` → PATCH → toast; workspace name in the sidebar updates via invalidation.
+  - **Audit log** Card (rendered only when `can("audit.view")`): table Time (`formatDateTime`), Actor (name / `System`), Action (mono, e.g. `secret.created`), Resource (`<type> · <id>` truncated + CopyButton), Details (`<details>` disclosure with pretty-printed metadata JSON). `LoadMore` 25/page. Empty `No audit entries yet.`
+  - **Danger zone** Card (danger-tinted border; owner only — hidden otherwise):
+    - `Transfer ownership…` → Modal: Select of other members (name + email; empty state `Invite someone first — owners can only transfer to an existing member.`) → ConfirmDialog `Transfer ownership to <name>? You will become an Admin.` → POST → toast + invalidate workspaces (+role changes ripple through `can()`).
+    - `Delete workspace…` → ConfirmDialog danger, `requireText` = workspace name, body: `This cancels the subscription immediately, stops all scheduled runs and checks, revokes invitations, and permanently removes data after the retention window. Type the workspace name to confirm.` → DELETE (send `{ confirmName }`) → clear `zenguy:lastWorkspace` → navigate `/` (lands on another workspace or onboarding).
+
+# Phase 14 — Polish & release QA
+
+### FE-041: Loading / error / empty audit
+- [ ] Sweep every page against this table and fix gaps — each row must have: skeleton or spinner on load, `ErrorState` with retry on failure, `EmptyState` with the copy from its task: Overview, Tests list, Test form (edit load), Test detail (+ runs table), Run detail (+ each attempt lazy load), Uptime list, Monitor form (edit load), Monitor detail (stats, chart, checks), Incidents list/detail, Channels (+ deliveries), Secrets, Members (+ invitations), Billing, Settings (+ audit). 404s from deep links (expired 30-day data) → `ErrorState` with `This item is no longer available (data is kept for 30 days).`
+- [ ] Global: mutations always disable their submit button while pending (`loading` prop); destructive dialogs always show consequences; every `useQuery` error path renders (no silent blanks). Navigating to a workspace you lost access to → the FE-018 `Workspace not found` state.
+
+### FE-042: Permissions sweep
+- [ ] Walk **Appendix C** against the UI as each role (seed users via `apps/api` seed + invite flows): Member sees NO create/edit/run/delete/test-send/invite buttons anywhere, no Usage & Billing nav, no Danger zone, no audit card, masked monitor headers, secret keys visible but action-less; Admin sees everything except: invite/promote Admin, billing management buttons, transfer, delete workspace; Owner sees all. Fix any control that isn't gated by `can()`.
+- [ ] Defense-in-depth: a 403 `FORBIDDEN` from the API anywhere → toast `You don't have permission to do that.` (add to the shared mutation error helper); a 402 `BILLING_REQUIRED` → toast + navigate to `setup/billing`.
+
+### FE-043: Responsive & accessibility pass
+- [ ] ≤ 767 px: drawer nav works on every page; all Tables scroll horizontally without breaking the page; form Cards stack single-column; modals become near-full-screen (`max-h-[90dvh] overflow-y-auto`, side drawer full width); PageHeader actions wrap; ScreenshotViewer fits viewport.
+- [ ] Keyboard: full journey with keyboard only — nav, switcher, dropdowns (arrows + Enter + Escape), tabs (arrows), modals (trap + Escape), lightbox (arrows), forms. Focus visible everywhere (FE-002 ring).
+- [ ] a11y details: every input labeled (`Field` enforces), icons in icon-only buttons have `aria-label`, StatusBadge always pairs color with text (never a bare dot), toasts `aria-live`, images have alt text, pulsing/`animate-*` wrapped in `motion-safe:` variants, text contrast ≥ 4.5:1 (zinc-500 is the lightest allowed on white).
+
+### FE-044: Final QA & acceptance walkthrough
+- [ ] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):
+  1. Sign up → verify (dev email in wrangler logs) → sign in. 2. Create workspace → Paddle sandbox checkout → ACTIVE. 3. Create secret `DEMO_TOKEN`. 4. Create email channel + send test. 5. Create browser test with `Test it` → watch live panel → PASSED. 6. `Run now` from list. 7. Edit instructions to force failure → run → FAILED → incident appears + email + report downloads. 8. Fix instructions → run → PASSED → incident resolved + recovery email. 9. Create uptime monitor (test request → save) → UP within its frequency; break the URL (edit to a 404 path with expected 200) → DOWN + incident; fix → recovery. 10. Invite a second account as Member → verify read-only UI; promote to Admin as owner → verify. 11. Billing page shows usage incremented ONLY by browser runs (uptime free, retries free — check the numbers). 12. Overview reflects all of it. 13. Workspace settings: rename, audit log lists the session's actions. 14. Mobile pass (drawer, tables) + keyboard pass.
+- [ ] Map results to `PROJECT.md` §31 acceptance criteria (UI-visible ones) — every unmet criterion becomes a fix before closing this task.
+- [ ] `pnpm --filter @zenguy/web typecheck && pnpm --filter @zenguy/web test && pnpm --filter @zenguy/web build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
+
+---
+
+## Deviations log
+
+> Append entries as `- FE-0XX: <what differed and why>`. Keep empty if nothing deviated.
+
+---
+
+# Appendix A — API contract (authoritative)
+
+All endpoints are same-origin under `/api`. JSON envelopes: success `{ "data": T }`; lists `{ "data": T[], "nextCursor": string | null }` (pass `?cursor=` back verbatim); empty success HTTP 204. Errors: `{ "error": { "code": string, "message": string, "details"?: { "field": string, "message": string }[] } }` — codes: `VALIDATION_ERROR` 400, `UNAUTHORIZED`/`INVALID_CREDENTIALS` 401, `BILLING_REQUIRED` 402, `EMAIL_NOT_VERIFIED`/`FORBIDDEN` 403, `NOT_FOUND` 404, `CONFLICT`/`ACTIVE_RUN_EXISTS` 409, `GONE` 410, `RATE_LIMITED` 429 (+`Retry-After` header), `INTERNAL` 500. All timestamps are ISO 8601 UTC strings. Money is integer cents (EUR). Auth: `Authorization: Bearer <accessToken>` on everything except the public auth/invitation-info/webhook/signed-URL endpoints; the refresh cookie is HttpOnly and handled automatically by the browser.
+
+```ts
+// ── Core ──────────────────────────────────────────────────────────────────────
+type User = { id: string; name: string; email: string; emailVerified: boolean; createdAt: string };
+type Role = "OWNER" | "ADMIN" | "MEMBER";
+type SubscriptionStatus = "NONE" | "ACTIVE" | "PAST_DUE" | "CANCELED";
+type UserRef = { userId: string; name: string } | null;
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// POST /api/auth/register        { name, email, password }            → 201 { user: User }   (no tokens; verify email first)
+// POST /api/auth/verify-email    { token }                            → { verified: true }
+// POST /api/auth/resend-verification { email }                        → { sent: true }       (always 200)
+// POST /api/auth/login           { email, password }                  → { user, accessToken, expiresIn: 1800 } + sets refresh cookie
+// POST /api/auth/refresh         (cookie only)                        → { user, accessToken, expiresIn } + rotates cookie; 401 when signed out
+// POST /api/auth/logout                                               → 204 + clears cookie
+// POST /api/auth/forgot-password { email }                            → { sent: true }       (always 200)
+// POST /api/auth/reset-password  { token, password }                  → { reset: true }
+// GET  /api/auth/me                                                   → { user: User }       (works while unverified)
+
+// ── Workspaces / members / invitations ───────────────────────────────────────
+type Workspace = { id: string; name: string; slug: string; timezone: string; role: Role; subscriptionStatus: SubscriptionStatus; createdAt: string };
+// POST /api/workspaces           { name, timezone }                   → 201 Workspace
+// GET  /api/workspaces                                                → Workspace[]
+// GET  /api/workspaces/:wsId                                          → Workspace
+// PATCH /api/workspaces/:wsId    { name?, timezone? }                 → Workspace
+// DELETE /api/workspaces/:wsId   { confirmName }                      → 204
+// POST /api/workspaces/:wsId/transfer-ownership { newOwnerUserId }    → { ok: true }
+
+type Member = { userId: string; name: string; email: string; role: Role; joinedAt: string };
+// GET    /api/workspaces/:wsId/members                                → Member[]
+// PATCH  /api/workspaces/:wsId/members/:userId { role: "ADMIN" | "MEMBER" } → Member
+// DELETE /api/workspaces/:wsId/members/:userId                        → 204
+
+type Invitation = { id: string; email: string; role: "ADMIN" | "MEMBER"; invitedBy: UserRef; expiresAt: string; createdAt: string };
+// POST   /api/workspaces/:wsId/invitations { email, role }            → 201 Invitation
+// GET    /api/workspaces/:wsId/invitations                            → Invitation[]        (pending only)
+// DELETE /api/workspaces/:wsId/invitations/:invitationId              → 204
+// GET    /api/invitations/:token   (public)                           → { workspaceName, inviterName, email, role, expiresAt } | 410
+// POST   /api/invitations/:token/accept                               → { workspaceId }
+
+// ── Billing ───────────────────────────────────────────────────────────────────
+// GET /api/billing/config                                             → { environment: "sandbox" | "production", clientToken: string, priceId: string }
+type Usage = { periodStart: string; periodEnd: string; billableRuns: number; includedRuns: 300; remainingRuns: number; overageRuns: number; overageAmountCents: number; projectedTotalCents: number };
+type Billing = {
+  plan: { pricePerMonthCents: 3900; currency: "EUR"; includedRuns: 300; overagePerRunCents: 20 };
+  subscription: { status: SubscriptionStatus; periodStart: string | null; periodEnd: string | null; cancelAtPeriodEnd: boolean;
+                  updatePaymentMethodUrl: string | null; cancelUrl: string | null };  // urls only for OWNER
+  usage: Usage;
+  invoices: { id: string; billedAt: string | null; status: string; totalCents: number; currency: string; invoiceNumber: string | null }[];
+};
+// GET /api/workspaces/:wsId/billing                                   → Billing   (OWNER/ADMIN; Member 403)
+// GET /api/workspaces/:wsId/billing/invoices/:transactionId/url       → { url: string }
+
+// ── Secrets ───────────────────────────────────────────────────────────────────
+type Secret = { id: string; key: string; allowedDomains: string[]; description: string | null; createdBy: UserRef; createdAt: string; updatedAt: string };
+// GET    /api/workspaces/:wsId/secrets                                → Secret[]  (values NEVER returned, ever)
+// POST   /api/workspaces/:wsId/secrets { key, value, allowedDomains, description? } → 201 Secret
+// PUT    /api/workspaces/:wsId/secrets/:secretId { value?, allowedDomains?, description? } → Secret
+// DELETE /api/workspaces/:wsId/secrets/:secretId                      → 204
+
+// ── Notification channels ────────────────────────────────────────────────────
+type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD";
+type ChannelConfigInput =
+  | { emails: string[] }                    // EMAIL (1–10)
+  | { phoneNumber: string }                 // SMS / WHATSAPP / CALL, E.164
+  | { webhookUrl: string };                 // SLACK / DISCORD
+type ChannelPreview = { emails?: string[]; phoneNumber?: string; webhookUrlMasked?: string };
+type Channel = { id: string; name: string; type: ChannelType; enabled: boolean; configPreview: ChannelPreview; verifiedAt: string | null; lastDeliveryStatus: "SENT" | "FAILED" | null; createdAt: string };
+// GET    /api/workspaces/:wsId/channels                               → Channel[]
+// POST   /api/workspaces/:wsId/channels { name, type, config: ChannelConfigInput } → 201 Channel
+// PATCH  /api/workspaces/:wsId/channels/:channelId { name?, enabled?, config? } → Channel
+// DELETE /api/workspaces/:wsId/channels/:channelId                    → 204
+// POST   /api/workspaces/:wsId/channels/:channelId/test               → { delivery: Delivery }
+type Delivery = { id: string; eventType: "FAILURE" | "RECOVERY" | "TEST"; status: "PENDING" | "SENT" | "FAILED"; providerMessageId: string | null; attemptCount: number; errorSanitized: string | null; sentAt: string | null; createdAt: string; incidentId: string | null };
+// GET    /api/workspaces/:wsId/channels/:channelId/deliveries?cursor&limit → Delivery[] (paginated)
+
+// ── Browser tests ────────────────────────────────────────────────────────────
+type Device = "DESKTOP" | "MOBILE";
+type RunSource = "VALIDATION" | "MANUAL" | "SCHEDULED";
+type RunStatus = "QUEUED" | "RUNNING" | "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR";
+type AttemptStatus = RunStatus | "STARTING";
+type RunSummary = { id: string; status: RunStatus; source: RunSource; startedAt: string | null; finishedAt: string | null; durationMs: number | null; passedAfterRetry: boolean; createdAt: string } | null;
+type BrowserTest = { id: string; name: string; startUrl: string; instructions: string; device: Device; intervalHours: number; maxRetries: number; notifyOnRecovery: boolean; channelIds: string[]; nextRunAt: string; createdBy: UserRef; createdAt: string; updatedAt: string; lastRun: RunSummary; openIncidentId: string | null };
+type BrowserTestInput = { name: string; startUrl: string; instructions: string; device: Device; intervalHours: number; maxRetries: number; notifyOnRecovery: boolean; channelIds: string[] };
+// GET    /api/workspaces/:wsId/browser-tests                          → BrowserTest[]
+// POST   /api/workspaces/:wsId/browser-tests  BrowserTestInput        → 201 BrowserTest
+// GET    /api/workspaces/:wsId/browser-tests/:testId                  → BrowserTest
+// PATCH  /api/workspaces/:wsId/browser-tests/:testId  Partial<BrowserTestInput> → BrowserTest
+// DELETE /api/workspaces/:wsId/browser-tests/:testId                  → 204
+// POST   /api/workspaces/:wsId/browser-tests/validate  BrowserTestInput → 202 { runId }   (draft "Test it"; consumes 1 run)
+// POST   /api/workspaces/:wsId/browser-tests/:testId/run-now          → 202 { runId } | 409 ACTIVE_RUN_EXISTS
+
+type RunListItem = { id: string; createdAt: string; source: RunSource; status: RunStatus; durationMs: number | null; device: Device; attemptCount: number; passedAfterRetry: boolean; billable: boolean; triggeredBy: UserRef };
+// GET /api/workspaces/:wsId/browser-tests/:testId/runs?cursor&limit(≤100)&status → RunListItem[] (paginated, newest first)
+
+type RunSnapshot = { name: string; startUrl: string; instructions: string; device: Device; intervalHours: number; maxRetries: number; notifyOnRecovery: boolean; channelIds: string[]; viewport: { width: number; height: number }; modelName: string; runnerVersion: string };
+type AttemptSummary = { id: string; attemptIndex: number; status: AttemptStatus; retryDelaySeconds: number; queuedAt: string; startedAt: string | null; finishedAt: string | null; durationMs: number | null; summary: string | null; failureReason: string | null;
+  latestStep: { description: string; actionType: string; timestamp: string } | null;      // populated while running / on SSE; may be null
+  latestScreenshot: { id: string; url: string } | null };
+type Run = { id: string; testId: string | null; source: RunSource; status: RunStatus; snapshot: RunSnapshot; scheduledFor: string | null; queuedAt: string; startedAt: string | null; finishedAt: string | null; durationMs: number | null; attemptCount: number; passedAfterRetry: boolean; billable: boolean; incidentId: string | null; triggeredBy: UserRef; attempts: AttemptSummary[];
+  live: { url: string } | null };   // SSE URL (self-authenticating), non-null while QUEUED/RUNNING
+// GET /api/workspaces/:wsId/runs/:runId                               → Run
+// GET /api/workspaces/:wsId/runs/:runId/events?exp&sig  (SSE; use live.url verbatim) — events: "update" (data = Run JSON), "done"
+// GET /api/workspaces/:wsId/runs/:runId/report                        → text/markdown attachment; 404 unless final status FAILED/TIMEOUT
+
+type ArtifactRef = { id: string; url: string; expiresAt: string };    // url is signed, valid ~10 min; re-fetch the attempt for fresh ones
+type Step = { sequence: number; timestamp: string; actionType: string; description: string; urlSanitized: string | null; result: "OK" | "ERROR"; screenshot: ArtifactRef | null };
+type Attempt = AttemptSummary & { expectedResult: string | null; actualResult: string | null; tokenUsage: number | null; modelName: string | null; runnerVersion: string | null; systemErrorCode: string | null; visitedUrls: string[];
+  consoleErrors: { level: string; message: string; url: string | null; timestamp: string }[];
+  networkErrors: { method: string; host: string; path: string; statusCode: number | null; errorType: string | null; durationMs: number | null }[];
+  steps: Step[]; screenshots: ArtifactRef[] };
+// GET /api/workspaces/:wsId/attempts/:attemptId                       → Attempt
+
+// ── Uptime ────────────────────────────────────────────────────────────────────
+type MonitorMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD";
+type BodyCondition = "CONTAINS" | "NOT_CONTAINS" | "EQUALS" | "JSON_PATH_EQUALS";
+type MonitorInput = { name: string; url: string; method: MonitorMethod; headers?: { key: string; value: string }[]; body?: string; expectedStatus: number; bodyCondition?: BodyCondition | null; bodyExpectedValue?: string | null; bodyConditionPath?: string | null; frequencySeconds: 300 | 600 | 900 | 1800 | 3600 | 10800 | 21600 | 43200 | 86400; timeoutSeconds: number; maxRetries: number; notifyOnRecovery: boolean; channelIds: string[] };
+type Monitor = MonitorInput & { id: string; headersMasked: boolean;   // true → headers/body are null for your role (Member)
+  status: "UNKNOWN" | "UP" | "DOWN"; checking: boolean; nextCheckAt: string; lastCheckAt: string | null; lastResponseTimeMs: number | null; openIncidentId: string | null; createdBy: UserRef; createdAt: string; updatedAt: string };
+// GET    /api/workspaces/:wsId/uptime-monitors                        → Monitor[]
+// POST   /api/workspaces/:wsId/uptime-monitors  MonitorInput          → 201 Monitor
+// GET    /api/workspaces/:wsId/uptime-monitors/:monitorId             → Monitor
+// PATCH  /api/workspaces/:wsId/uptime-monitors/:monitorId Partial<MonitorInput> → Monitor
+// DELETE /api/workspaces/:wsId/uptime-monitors/:monitorId             → 204
+// POST   /api/workspaces/:wsId/uptime-monitors/test-request  MonitorInput (name optional) → TestRequestResult  (nothing stored, no runs)
+type TestRequestResult = { passed: boolean; httpStatus: number | null; responseTimeMs: number; failureReason: string | null; conditions: { type: string; passed: boolean; detail: string }[]; responseExcerpt: string | null };
+
+type Check = { id: string; cycleId: string; attemptIndex: number; status: "PASSED" | "FAILED"; httpStatus: number | null; responseTimeMs: number | null; failureReason: string | null; checkedAt: string };
+// GET /api/workspaces/:wsId/uptime-monitors/:monitorId/checks?cursor&limit → Check[] (paginated)
+// GET /api/workspaces/:wsId/uptime-monitors/:monitorId/stats          → { uptime24h: number | null; uptime7d: number | null; uptime30d: number | null; avgResponseTimeMs24h: number | null; series: { t: string; responseTimeMs: number | null; status: "PASSED" | "FAILED" }[] }
+
+// ── Incidents ────────────────────────────────────────────────────────────────
+type Incident = { id: string; resourceType: "BROWSER_TEST" | "UPTIME_MONITOR"; resourceId: string; resourceName: string; status: "OPEN" | "RESOLVED"; openedAt: string; resolvedAt: string | null; durationMs: number; lastEventAt: string };
+// GET /api/workspaces/:wsId/incidents?status=open|resolved&type=browser|uptime&from&to&cursor&limit → Incident[] (paginated)
+type IncidentEvent = { id: string; type: "OPENED" | "FAILURE_RECORDED" | "NOTIFICATION_SENT" | "NOTIFICATION_FAILED" | "RESOLVED" | "TEST_DELETED" | "MONITOR_DELETED"; message: string; metadata: Record<string, unknown> | null; createdAt: string };
+type IncidentDelivery = { id: string; channelName: string; channelType: ChannelType; eventType: "FAILURE" | "RECOVERY"; status: "PENDING" | "SENT" | "FAILED"; attemptCount: number; errorSanitized: string | null; sentAt: string | null; createdAt: string };
+// GET /api/workspaces/:wsId/incidents/:incidentId                     → Incident & { events: IncidentEvent[]; deliveries: IncidentDelivery[]; openedByRunId: string | null; openedByCheckId: string | null }
+
+// ── Overview / audit / misc ──────────────────────────────────────────────────
+type ActivityItem = { id: string; type: "TEST_PASSED" | "TEST_FAILED" | "TEST_TIMEOUT" | "TEST_SYSTEM_ERROR" | "TEST_RECOVERED" | "MONITOR_DOWN" | "MONITOR_RECOVERED" | "CHANNEL_DELIVERY_FAILED"; occurredAt: string; title: string; resourceType: string; resourceId: string; resourceName: string; link: { runId?: string; incidentId?: string; monitorId?: string; channelId?: string } };
+// GET /api/workspaces/:wsId/overview → { usage: Usage; browserTests: { total: number; runningRuns: number; openIncidents: number; failed24h: number }; uptime: { up: number; down: number; unknown: number; openIncidents: number; avgResponseTimeMs24h: number | null }; activity: ActivityItem[] }
+
+type AuditEntry = { id: string; action: string; actor: UserRef; resourceType: string | null; resourceId: string | null; metadata: Record<string, unknown> | null; ip: string | null; createdAt: string };
+// GET /api/workspaces/:wsId/audit-logs?cursor&limit                   → AuditEntry[] (paginated; OWNER/ADMIN)
+// GET /api/health                                                     → { ok: true }
+```
+
+# Appendix B — Status → UI mapping
+
+| Status | Badge tone | Label | Notes |
+|---|---|---|---|
+| `QUEUED` | neutral | Queued | |
+| `STARTING` / `RUNNING` / `CHECKING` (monitor `checking`) | info | Starting / Running / Checking | pulsing dot (`motion-safe:animate-pulse`) |
+| `PASSED` / `UP` / `RESOLVED` / `SENT` | ok | Passed / Up / Resolved / Sent | |
+| `FAILED` / `DOWN` / `OPEN` (incident) | danger | Failed / Down / Open | |
+| `TIMEOUT` | warn | Timeout | never call it "Failed" |
+| `SYSTEM_ERROR` | neutral (wrench `Wrench` icon) | System error | must NOT look like a site failure; tooltip: `An error on Zenguy's side — not billed, no incident.` |
+| `UNKNOWN` | neutral | Unknown | |
+| `PENDING` (delivery) | neutral | Pending | |
+| passed_after_retry | warn outline, next to Passed | Passed after retry | tooltip = retry copy (Appendix D) |
+
+Run sources: `VALIDATION` → `Validation` (neutral), `MANUAL` → `Manual` (info), `SCHEDULED` → `Scheduled` (neutral). Activity icons: TEST_PASSED `CheckCircle2` ok · TEST_FAILED `XCircle` danger · TEST_TIMEOUT `Clock` warn · TEST_SYSTEM_ERROR `Wrench` neutral · TEST_RECOVERED / MONITOR_RECOVERED `HeartPulse` ok · MONITOR_DOWN `Siren` danger · CHANNEL_DELIVERY_FAILED `BellOff` warn.
+
+# Appendix C — Permission matrix (mirror of the backend; drives `can()`)
+
+| Action key | OWNER | ADMIN | MEMBER | UI effect when false |
+|---|---|---|---|---|
+| tests.view / reports.download | ✓ | ✓ | ✓ | — |
+| tests.manage | ✓ | ✓ | – | hide New/Edit/Delete test |
+| tests.run | ✓ | ✓ | – | hide Test it / Run now |
+| uptime.manage | ✓ | ✓ | – | hide monitor mutations; headers shown masked |
+| channels.manage | ✓ | ✓ | – | hide Add/Edit/Delete/Send test |
+| secrets.manage | ✓ | ✓ | – | secrets table read-only (keys only) |
+| members.invite | ✓ | ✓ (MEMBER role only) | – | hide Invite; Admin's role select shows only Member |
+| admins.manage | ✓ | – | – | hide Change role; hide Admin option in invite |
+| members.remove | ✓ | ✓ (Members only) | – | hide Remove per-row by rule |
+| billing.view | ✓ | ✓ | – | hide Usage & Billing nav item |
+| billing.manage | ✓ | – | – | hide payment/cancel buttons (Admin sees read-only note) |
+| workspace.settings | ✓ | ✓ | – | settings form read-only |
+| workspace.transfer / workspace.delete | ✓ | – | – | hide Danger zone |
+| audit.view | ✓ | ✓ | – | hide Audit log card |
+
+# Appendix D — Required copy (verbatim)
+
+- **Run cost (before `Test it` and `Run now`):** `This will use 1 run. Retries don't use additional runs.`
+- **Staging credentials warning (secrets page + test form):** `Use staging or test credentials only. Never use personal accounts, real cards, or credentials with destructive permissions.`
+- **Timeout help (test form, schedule section):** `Each attempt can run for up to 5 minutes. If it takes longer, it ends with a Timeout status and may be retried according to your settings.`
+- **Token note (test form, instructions section):** `Tests are designed for a nominal maximum of 200,000 tokens. If a test is very large, split it into smaller tests.`
+- **Passed-after-retry tooltip:** `The first attempt failed, but a fresh clean browser completed the test successfully.`
+- **Report note (run detail, next to the download button):** `The report describes what was observed. It contains no credentials and doesn't assert an unverified root cause.`
+- **Channel test dialog:** `This sends a real notification to this channel.`
+- **Past-due banner:** `Your last payment failed. Update your payment method to keep runs going.`
+- **Draft validation banner (run detail of a draft run):** `This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.`
+- **System error tooltip:** `An error on Zenguy's side — not billed, no incident.`
+- **Expired data:** `This item is no longer available (data is kept for 30 days).`
+
+# Appendix E — Route map
+
+| Path | Page | Guard |
+|---|---|---|
+| `/signin`, `/signup`, `/check-email`, `/verify-email`, `/forgot-password`, `/reset-password` | auth pages | PublicOnly (except verify-email: public) |
+| `/invitations/:token` | AcceptInvitation | public (adapts to auth state) |
+| `/verify-pending` | VerifyPending | signed-in, unverified |
+| `/onboarding/workspace` | CreateWorkspace | RequireAuth |
+| `/w/:wsId/setup/billing` | BillingSetup | RequireAuth + member |
+| `/w/:wsId/overview` | Overview | member (+ subscription redirect FE-018) |
+| `/w/:wsId/tests`, `/tests/new`, `/tests/:testId`, `/tests/:testId/edit` | tests pages | member; mutations gated by `can` |
+| `/w/:wsId/runs/:runId` | RunDetail | member |
+| `/w/:wsId/uptime`, `/uptime/new`, `/uptime/:monitorId`, `/uptime/:monitorId/edit` | uptime pages | member |
+| `/w/:wsId/incidents`, `/incidents/:incidentId` | incidents | member |
+| `/w/:wsId/notifications` | channels | member |
+| `/w/:wsId/secrets` | secrets | member |
+| `/w/:wsId/members` | members | member |
+| `/w/:wsId/billing` | billing | `billing.view` (else AccessDenied) |
+| `/w/:wsId/settings` | settings | member (cards gated inside) |
+| `/` | resolver → last/first workspace or onboarding | — |
+| `*` | NotFound | — |
+
