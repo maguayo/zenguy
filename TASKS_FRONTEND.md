@@ -140,10 +140,10 @@ export default defineConfig({
 - [x] `Skeleton.tsx` (pulsing zinc-200 blocks) + `TableSkeleton` (5 rows), `ErrorState.tsx` (`({ message?, onRetry })` — danger-tinted card with Retry button; default message `Something went wrong. Please try again.`).
 
 ### FE-008: Overlays
-- [ ] `Modal.tsx`: portal to body; backdrop `bg-zinc-950/40`; panel centered `max-w-lg w-full bg-white rounded-lg shadow-lg`; closes on Escape and backdrop click; focus trapped inside while open (loop Tab within focusable elements); `title`, `children`, `footer?`. Body scroll locked while open.
-- [ ] `ConfirmDialog.tsx` built on Modal: `({ title, body, confirmLabel = "Confirm", tone: "default" | "danger", requireText?: string, onConfirm })` — when `requireText` set, an input must equal it before the confirm button enables (used for workspace delete). Confirm button shows loading during async `onConfirm`.
-- [ ] `Dropdown.tsx`: trigger + menu (portal, positioned under trigger, `role="menu"`, arrow-key navigation, Escape/blur closes); `items: { label, icon?, tone?: "danger", onSelect, disabled? }[]`. Used for row action menus (`MoreHorizontal` icon trigger).
-- [ ] `Tooltip.tsx`: simple hover/focus title-style tooltip (positioned span, no library).
+- [x] `Modal.tsx`: portal to body; backdrop `bg-zinc-950/40`; panel centered `max-w-lg w-full bg-white rounded-lg shadow-lg`; closes on Escape and backdrop click; focus trapped inside while open (loop Tab within focusable elements); `title`, `children`, `footer?`. Body scroll locked while open.
+- [x] `ConfirmDialog.tsx` built on Modal: `({ title, body, confirmLabel = "Confirm", tone: "default" | "danger", requireText?: string, onConfirm })` — when `requireText` set, an input must equal it before the confirm button enables (used for workspace delete). Confirm button shows loading during async `onConfirm`.
+- [x] `Dropdown.tsx`: trigger + menu (portal, positioned under trigger, `role="menu"`, arrow-key navigation, Escape/blur closes); `items: { label, icon?, tone?: "danger", onSelect, disabled? }[]`. Used for row action menus (`MoreHorizontal` icon trigger).
+- [x] `Tooltip.tsx`: simple hover/focus title-style tooltip (positioned span, no library).
 
 ### FE-009: Data display & formatters
 - [ ] `Table.tsx` — generic: `columns: { key, header, className?, render: (row) => ReactNode }[]`, `rows: T[]`, `rowKey(row)`, `onRowClick?`, `loading` (renders TableSkeleton), `empty` (ReactNode). Semantics: real `<table>` with `<th scope="col">`; wrapper `overflow-x-auto`; row hover `bg-zinc-50` + `cursor-pointer` when clickable.
