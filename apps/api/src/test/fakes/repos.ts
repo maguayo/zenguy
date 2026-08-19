@@ -24,6 +24,11 @@ import type {
 import type { AuditRepo } from "../../domain/audit/repo";
 import type { AuditEntry } from "../../domain/audit/types";
 import type { Cursor } from "../../shared/pagination";
+import type { SecretRepo } from "../../domain/secrets/repo";
+import type {
+  SecretMetaUpdate,
+  WorkspaceSecret,
+} from "../../domain/secrets/types";
 import type {
   OverageReportRepo,
   SubscriptionRepo,
@@ -685,5 +690,113 @@ export class FakeOverageReportRepo implements OverageReportRepo {
 
   async deleteById(id: string): Promise<void> {
     this.reports.delete(id);
+  }
+}
+
+export class FakeSecretRepo implements SecretRepo {
+  readonly secrets = new Map<string, WorkspaceSecret>();
+
+  async insert(secret: WorkspaceSecret): Promise<void> {
+    if (
+      this.secrets.has(secret.id) ||
+      [...this.secrets.values()].some(
+        (candidate) =>
+          candidate.workspaceId === secret.workspaceId &&
+          candidate.key === secret.key,
+      )
+    ) {
+      throw new Error("secret constraint violation");
+    }
+    this.secrets.set(secret.id, {
+      ...clone(secret),
+      allowedDomains: [...secret.allowedDomains],
+    });
+  }
+
+  async findByKey(
+    workspaceId: string,
+    key: string,
+  ): Promise<WorkspaceSecret | null> {
+    for (const secret of this.secrets.values()) {
+      if (secret.workspaceId === workspaceId && secret.key === key) {
+        return { ...clone(secret), allowedDomains: [...secret.allowedDomains] };
+      }
+    }
+    return null;
+  }
+
+  async findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<WorkspaceSecret | null> {
+    const secret = this.secrets.get(id);
+    return secret === undefined || secret.workspaceId !== workspaceId
+      ? null
+      : { ...clone(secret), allowedDomains: [...secret.allowedDomains] };
+  }
+
+  async list(workspaceId: string): Promise<WorkspaceSecret[]> {
+    return [...this.secrets.values()]
+      .filter((secret) => secret.workspaceId === workspaceId)
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .map((secret) => ({
+        ...clone(secret),
+        allowedDomains: [...secret.allowedDomains],
+      }));
+  }
+
+  async updateValue(
+    id: string,
+    encryptedValue: string,
+    at: number,
+  ): Promise<void> {
+    const secret = this.secrets.get(id);
+    if (secret !== undefined) {
+      this.secrets.set(id, { ...secret, encryptedValue, updatedAt: at });
+    }
+  }
+
+  async updateMeta(
+    id: string,
+    changes: SecretMetaUpdate,
+    at: number,
+  ): Promise<void> {
+    const secret = this.secrets.get(id);
+    if (secret !== undefined) {
+      this.secrets.set(id, {
+        ...secret,
+        ...(changes.allowedDomains === undefined
+          ? {}
+          : { allowedDomains: [...changes.allowedDomains] }),
+        ...(changes.description === undefined
+          ? {}
+          : { description: changes.description }),
+        updatedAt: at,
+      });
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    this.secrets.delete(id);
+  }
+
+  async getManyByKeys(
+    workspaceId: string,
+    keys: string[],
+  ): Promise<WorkspaceSecret[]> {
+    const wanted = new Set(keys);
+    return [...this.secrets.values()]
+      .filter(
+        (secret) =>
+          secret.workspaceId === workspaceId && wanted.has(secret.key),
+      )
+      .sort((left, right) => left.key.localeCompare(right.key))
+      .map((secret) => ({
+        ...clone(secret),
+        allowedDomains: [...secret.allowedDomains],
+      }));
   }
 }

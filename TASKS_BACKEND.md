@@ -611,7 +611,7 @@ CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, perio
 # Phase 5 — Secrets
 
 ### BE-036: Secrets migration & domain
-- [ ] Create `apps/api/migrations/0004_secrets.sql`:
+- [x] Create `apps/api/migrations/0004_secrets.sql`:
 ```sql
 CREATE TABLE workspace_secrets (
   id TEXT PRIMARY KEY,
@@ -627,14 +627,14 @@ CREATE TABLE workspace_secrets (
 );
 CREATE UNIQUE INDEX idx_secrets_ws_key ON workspace_secrets(workspace_id, key);
 ```
-- [ ] Create `apps/api/src/domain/secrets/types.ts` + `rules.ts`:
+- [x] Create `apps/api/src/domain/secrets/types.ts` + `rules.ts`:
   - `SECRET_KEY_REGEX = /^[A-Z][A-Z0-9_]{1,63}$/`.
   - `validateAllowedDomains(domains: string[])`: 1–20 entries; each entry either `hostname` or `*.hostname`; hostname lowercase, matches `/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/`; no protocol, no path, no port.
   - `isDomainAllowed(host: string, allowed: string[]): boolean` — exact entry `example.com` matches only `example.com`; wildcard `*.example.com` matches `example.com` **and** any subdomain (`a.example.com`, `a.b.example.com`). Case-insensitive.
   - `extractPlaceholders(text: string): string[]` — unique keys from `/\{\{([A-Z][A-Z0-9_]{1,63})\}\}/g`.
-- [ ] `domain/secrets/repo.ts`: `SecretRepo` (`insert`, `findByKey(wsId, key)`, `findById`, `list(wsId)`, `updateValue(id, encryptedValue, at)`, `updateMeta(id, { allowedDomains?, description? }, at)`, `delete(id)`, `getManyByKeys(wsId, keys)`).
-- [ ] D1 impl `infrastructure/db/secret_repo.ts` (allowed_domains stored as JSON array text) + fake + `.itest.ts` (uniqueness per workspace, cross-workspace same key OK).
-- [ ] Unit tests for rules: regex matrix, domain validation, `isDomainAllowed` matrix (exact, wildcard, deep subdomain, case, non-match `notexample.com`), placeholder extraction.
+- [x] `domain/secrets/repo.ts`: `SecretRepo` (`insert`, `findByKey(wsId, key)`, `findById`, `list(wsId)`, `updateValue(id, encryptedValue, at)`, `updateMeta(id, { allowedDomains?, description? }, at)`, `delete(id)`, `getManyByKeys(wsId, keys)`).
+- [x] D1 impl `infrastructure/db/secret_repo.ts` (allowed_domains stored as JSON array text) + fake + `.itest.ts` (uniqueness per workspace, cross-workspace same key OK).
+- [x] Unit tests for rules: regex matrix, domain validation, `isDomainAllowed` matrix (exact, wildcard, deep subdomain, case, non-match `notexample.com`), placeholder extraction.
 
 ### BE-037: Secrets use cases & routes
 - [ ] `application/secrets/create_secret.ts` (`secrets.manage` + active subscription): input `{ key, value (1–4096 chars), allowedDomains, description? }` → validate rules → duplicate key → `conflict("A secret with this key already exists")` → `encryptSecret(value, cfg.encryptionKey)` → insert → audit `secret.created` (metadata: key + domains — **never the value**). Response: metadata only.
