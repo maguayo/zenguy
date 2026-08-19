@@ -42,7 +42,7 @@ const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 const AcceptInvitation = lazy(() => import("./pages/auth/AcceptInvitation"));
 const VerifyPending = lazy(() => import("./pages/auth/VerifyPending"));
-const CreateWorkspace = stub("Create your workspace");
+const CreateWorkspace = lazy(() => import("./pages/onboarding/CreateWorkspace"));
 const BillingSetup = stub("Set up billing");
 const OverviewPage = stub("Overview");
 const TestsListPage = stub("Browser Tests");
