@@ -87,7 +87,7 @@ export default defineConfig({
 - [x] Verify `pnpm --filter @zenguy/web dev` renders and `build` outputs `dist/`. Commit.
 
 ### FE-002: Design tokens & base styles
-- [ ] Replace `src/styles/index.css` with Tailwind v4 theme tokens (`@theme`) — this is the whole visual identity; use these everywhere, never ad-hoc hex values:
+- [x] Replace `src/styles/index.css` with Tailwind v4 theme tokens (`@theme`) — this is the whole visual identity; use these everywhere, never ad-hoc hex values:
 ```css
 @import "tailwindcss";
 
@@ -101,13 +101,13 @@ export default defineConfig({
   --color-info-50: #eff6ff;    --color-info-600: #2563eb;
 }
 ```
-- [ ] Base layer: `body` → `bg-zinc-50 text-zinc-900 font-sans text-sm antialiased`. Global focus style: `*:focus-visible` → 2px `accent-600` ring, offset 2.
-- [ ] Visual rules (write them as a comment block at the top of the file so they're always in view):
+- [x] Base layer: `body` → `bg-zinc-50 text-zinc-900 font-sans text-sm antialiased`. Global focus style: `*:focus-visible` → 2px `accent-600` ring, offset 2.
+- [x] Visual rules (write them as a comment block at the top of the file so they're always in view):
   - Cards: `bg-white border border-zinc-200 rounded-lg` — **borders, not shadows** (shadows only on overlays: `shadow-lg`).
   - Page container: `max-w-6xl mx-auto px-4 md:px-6 py-6`; page title `text-xl font-semibold`; section titles `text-sm font-semibold text-zinc-900`; secondary text `text-zinc-500`.
   - Spacing rhythm: 4/8/12/16/24; dense tables (`py-2.5`); controls height 36px (`h-9`).
   - One accent color (indigo). Status colors ONLY for status. No gradients, no dark mode in V1.
-- [ ] Commit.
+- [x] Commit.
 
 ### FE-003: Deployment wiring note
 - [ ] Add `apps/web/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/web/dist`; **always run `pnpm --filter @zenguy/web build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
@@ -642,4 +642,3 @@ Run sources: `VALIDATION` → `Validation` (neutral), `MANUAL` → `Manual` (inf
 | `/w/:wsId/settings` | settings | member (cards gated inside) |
 | `/` | resolver → last/first workspace or onboarding | — |
 | `*` | NotFound | — |
-
