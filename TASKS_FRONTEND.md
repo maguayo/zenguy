@@ -114,11 +114,11 @@ export default defineConfig({
 - [x] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/web build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
 
 ### FE-004: Astro landing (Coming soon)
-- [ ] Create `apps/landing/package.json` (`@zenguy/landing`, scripts `dev`: `astro dev`, `build`: `astro build`, `deploy`: `astro build && wrangler deploy`) and install `pnpm --filter @zenguy/landing add astro` + `-D wrangler`.
-- [ ] `apps/landing/astro.config.mjs`: `import { defineConfig } from "astro/config"; export default defineConfig({ output: "static" });`
-- [ ] `apps/landing/src/pages/index.astro` — single centered page, no client JS: dark zinc-950 background; wordmark `zenguy` (Inter 700, white, tracking-tight, accent-indigo dot: `zenguy.`); tagline `Describe what your website should do. Zenguy checks it in a real browser — on a schedule, with alerts.`; sub-line `Coming soon.`; button `Open the app →` linking `https://app.zenguy.com` (white text on `#4f46e5`, rounded-lg, px-5 py-2.5); footer `© 2026 Zenguy`. Inline `<style>` (Inter via same Google Fonts link), responsive, centered flex column, max-w-xl.
-- [ ] `apps/landing/wrangler.jsonc`: `{ "name": "zenguy-landing", "compatibility_date": "2026-08-01", "assets": { "directory": "./dist" } }` (custom domain `zenguy.com` attached at deploy time — note in a comment).
-- [ ] Verify `pnpm --filter @zenguy/landing build` outputs `dist/index.html`. Commit. (This is the ONLY marketing surface in V1 — nothing else gets built, §29.)
+- [x] Create `apps/landing/package.json` (`@zenguy/landing`, scripts `dev`: `astro dev`, `build`: `astro build`, `deploy`: `astro build && wrangler deploy`) and install `pnpm --filter @zenguy/landing add astro` + `-D wrangler`.
+- [x] `apps/landing/astro.config.mjs`: `import { defineConfig } from "astro/config"; export default defineConfig({ output: "static" });`
+- [x] `apps/landing/src/pages/index.astro` — single centered page, no client JS: dark zinc-950 background; wordmark `zenguy` (Inter 700, white, tracking-tight, accent-indigo dot: `zenguy.`); tagline `Describe what your website should do. Zenguy checks it in a real browser — on a schedule, with alerts.`; sub-line `Coming soon.`; button `Open the app →` linking `https://app.zenguy.com` (white text on `#4f46e5`, rounded-lg, px-5 py-2.5); footer `© 2026 Zenguy`. Inline `<style>` (Inter via same Google Fonts link), responsive, centered flex column, max-w-xl.
+- [x] `apps/landing/wrangler.jsonc`: `{ "name": "zenguy-landing", "compatibility_date": "2026-08-01", "assets": { "directory": "./dist" } }` (custom domain `zenguy.com` attached at deploy time — note in a comment).
+- [x] Verify `pnpm --filter @zenguy/landing build` outputs `dist/index.html`. Commit. (This is the ONLY marketing surface in V1 — nothing else gets built, §29.)
 
 # Phase 1 — UI kit (`src/components/ui/`)
 

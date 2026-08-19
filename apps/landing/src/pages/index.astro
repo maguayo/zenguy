@@ -1,0 +1,117 @@
+---
+const year = 2026;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Describe what your website should do. Zenguy checks it in a real browser."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>Zenguy — Coming soon</title>
+  </head>
+  <body>
+    <main>
+      <p class="wordmark" aria-label="Zenguy">zenguy<span>.</span></p>
+      <h1>
+        Describe what your website should do. Zenguy checks it in a real browser
+        — on a schedule, with alerts.
+      </h1>
+      <p class="coming-soon">Coming soon.</p>
+      <a href="https://app.zenguy.com">Open the app →</a>
+    </main>
+    <footer>© {year} Zenguy</footer>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(html) {
+    color-scheme: dark;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  :global(body) {
+    align-items: center;
+    background: #09090b;
+    color: #fafafa;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin: 0;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+
+  main {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 36rem;
+  }
+
+  .wordmark {
+    font-size: clamp(2rem, 8vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    margin: 0 0 2.5rem;
+  }
+
+  .wordmark span {
+    color: #4f46e5;
+  }
+
+  h1 {
+    font-size: clamp(1.5rem, 5vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .coming-soon {
+    color: #a1a1aa;
+    font-size: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  a {
+    background: #4f46e5;
+    border-radius: 0.5rem;
+    color: #fff;
+    display: inline-flex;
+    font-weight: 600;
+    padding: 0.625rem 1.25rem;
+    text-decoration: none;
+  }
+
+  a:hover {
+    background: #4338ca;
+  }
+
+  a:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+
+  footer {
+    color: #71717a;
+    font-size: 0.75rem;
+    padding-top: 2rem;
+  }
+</style>
