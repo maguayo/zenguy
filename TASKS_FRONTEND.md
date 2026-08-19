@@ -236,13 +236,13 @@ export default defineConfig({
 # Phase 5 — Overview
 
 ### FE-022: Overview page
-- [ ] `src/api/overview.ts` (`getOverview(wsId)`) + `pages/overview/OverviewPage.tsx`, query `["ws", wsId, "overview"]` with `refetchInterval: 30_000`.
-- [ ] Layout: `PageHeader` `Overview`. Then a 3-card grid (stack on mobile):
+- [x] `src/api/overview.ts` (`getOverview(wsId)`) + `pages/overview/OverviewPage.tsx`, query `["ws", wsId, "overview"]` with `refetchInterval: 30_000`.
+- [x] Layout: `PageHeader` `Overview`. Then a 3-card grid (stack on mobile):
   1. **Usage this cycle** — `UsageMeter` component (build in `components/UsageMeter.tsx`, reused by Billing page): `X of 300 runs used`, progress bar (accent; turns warn ≥ 80%, danger when overage), rows: `Included runs 300`, `Used <billableRuns>`, `Remaining <remainingRuns>`, and when overage > 0: `Extra runs <overageRuns>` + `Extra cost <formatEuros(overageAmountCents)>`; footer `Projected total <formatEuros(projectedTotalCents)> · resets <formatDateTime(periodEnd)>`.
   2. **Browser tests** — big number `total` tests; rows with dot indicators: `Running now <runningRuns>`, `Open incidents <openIncidents>` (danger when > 0, links to incidents filtered), `Failures (24 h) <failed24h>`; footer link `View tests →`.
   3. **Uptime** — `UP <up>` (ok), `DOWN <down>` (danger), `UNKNOWN <unknown>` (neutral) as three inline stats; `Open incidents` row; `Avg response (24 h) <ms> ms`; footer link `View monitors →`.
-- [ ] **Recent activity** Card below: list of `activity` items — icon+tone by type (Appendix B activity table), title, `formatRelative(occurredAt)`; each row links via its `link` object (`runId` → `/w/:wsId/runs/:id`, `incidentId` → incident, `monitorId` → monitor, `channelId` → notifications). Empty → EmptyState `No activity yet` / `Create your first browser test to see activity here.` + button (hidden for Member).
-- [ ] Loading: 3 skeleton cards + list skeleton. Error: ErrorState with retry.
+- [x] **Recent activity** Card below: list of `activity` items — icon+tone by type (Appendix B activity table), title, `formatRelative(occurredAt)`; each row links via its `link` object (`runId` → `/w/:wsId/runs/:id`, `incidentId` → incident, `monitorId` → monitor, `channelId` → notifications). Empty → EmptyState `No activity yet` / `Create your first browser test to see activity here.` + button (hidden for Member).
+- [x] Loading: 3 skeleton cards + list skeleton. Error: ErrorState with retry.
 
 # Phase 6 — Browser Tests
 
