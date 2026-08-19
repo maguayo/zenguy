@@ -691,17 +691,17 @@ CREATE INDEX idx_deliveries_incident ON notification_deliveries(incident_id);
 - [x] D1 impls + fakes + `.itest.ts` (config encrypted at rest: read raw column, assert it does not contain the webhook URL plaintext).
 
 ### BE-040: Provider senders
-- [ ] Create `apps/api/src/domain/channels/notifier.ts`: `interface ChannelSender { send(channel: { type; config: unknown }, message: NotificationMessage): Promise<{ providerMessageId: string | null }> }` where `NotificationMessage = { eventType: "FAILURE" | "RECOVERY" | "TEST"; title: string; lines: string[]; link: string; speakText: string; shortText: string; color: "red" | "green" | "gray" }` (built by BE-041 templates).
-- [ ] `infrastructure/notify/email_sender.ts`: uses `EmailSender` (BE-016) — subject = `title`, body = `renderBasicEmail({ title, bodyLines: lines, ctaLabel: "View in Zenguy", ctaUrl: link })`.
-- [ ] `infrastructure/notify/twilio.ts`: `TwilioApi(accountSid, authToken, fetchFn)` with basic-auth `Authorization: Basic base64(sid:token)`, form-encoded bodies:
+- [x] Create `apps/api/src/domain/channels/notifier.ts`: `interface ChannelSender { send(channel: { type; config: unknown }, message: NotificationMessage): Promise<{ providerMessageId: string | null }> }` where `NotificationMessage = { eventType: "FAILURE" | "RECOVERY" | "TEST"; title: string; lines: string[]; link: string; speakText: string; shortText: string; color: "red" | "green" | "gray" }` (built by BE-041 templates).
+- [x] `infrastructure/notify/email_sender.ts`: uses `EmailSender` (BE-016) — subject = `title`, body = `renderBasicEmail({ title, bodyLines: lines, ctaLabel: "View in Zenguy", ctaUrl: link })`.
+- [x] `infrastructure/notify/twilio.ts`: `TwilioApi(accountSid, authToken, fetchFn)` with basic-auth `Authorization: Basic base64(sid:token)`, form-encoded bodies:
   - `sendSms(to, from, body)` → `POST https://api.twilio.com/2010-04-01/Accounts/<sid>/Messages.json` (`To`, `From`, `Body`) → returns `sid`.
   - `sendWhatsapp(to, from, body)` → same endpoint with `To=whatsapp:<to>`, `From=whatsapp:<from>`.
   - `startCall(to, from, twiml)` → `POST .../Calls.json` (`To`, `From`, `Twiml`) where twiml = `<Response><Say voice="alice">${escapeXml(speakText)}</Say></Response>`.
   - SMS/WhatsApp body = `shortText`; call uses `speakText`. Non-2xx → throw `Error("twilio error <status>")` (log status + first 100 chars of sanitized body via `logEvent("twilio_error")`).
-- [ ] `infrastructure/notify/slack.ts`: POST to webhook URL, body `{ "text": "<title>", "blocks": [ header(title), section(joined lines), context("<link|Open in Zenguy>") ] }` per Appendix E skeleton. 2xx = ok.
-- [ ] `infrastructure/notify/discord.ts`: POST `{ "embeds": [{ "title", "description": lines joined with \n, "url": link, "color": red 0xDC2626 / green 0x16A34A / gray 0x6B7280 }] }`.
-- [ ] `infrastructure/notify/index.ts`: `buildChannelSender(cfg, emailSender)` returning a composite `ChannelSender` that decodes config with `channelConfigSchema` and dispatches by type.
-- [ ] Tests (fake fetch): each provider called with exact URL/auth/payload; XML escaping in TwiML; errors sanitized (assert thrown message contains no phone number/webhook path).
+- [x] `infrastructure/notify/slack.ts`: POST to webhook URL, body `{ "text": "<title>", "blocks": [ header(title), section(joined lines), context("<link|Open in Zenguy>") ] }` per Appendix E skeleton. 2xx = ok.
+- [x] `infrastructure/notify/discord.ts`: POST `{ "embeds": [{ "title", "description": lines joined with \n, "url": link, "color": red 0xDC2626 / green 0x16A34A / gray 0x6B7280 }] }`.
+- [x] `infrastructure/notify/index.ts`: `buildChannelSender(cfg, emailSender)` returning a composite `ChannelSender` that decodes config with `channelConfigSchema` and dispatches by type.
+- [x] Tests (fake fetch): each provider called with exact URL/auth/payload; XML escaping in TwiML; errors sanitized (assert thrown message contains no phone number/webhook path).
 
 ### BE-041: Notification templates
 - [ ] Create `apps/api/src/domain/channels/templates.ts`: `buildNotificationMessage(input): NotificationMessage` where `input = { eventType: "FAILURE" | "RECOVERY" | "TEST"; resourceType: "BROWSER_TEST" | "UPTIME_MONITOR"; resourceName: string; workspaceName: string; appUrl: string; workspaceId: string; incidentId?: string; runId?: string; occurredAtIso: string; durationMs?: number; failureSummary?: string }`. Exact copy — Appendix E. Highlights:
