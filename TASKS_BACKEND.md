@@ -981,9 +981,9 @@ interface RunSnapshot {
 - [x] Tests: `formatPageState` snapshot from a fixture `PageState`; script string contains no backtick-breaking syntax (evaluate it with `new Function` on a jsdom-free fake `document`? — instead: assert it compiles via `new Function("return (" + SERIALIZE_SCRIPT + ")")`).
 
 ### BE-055: LLM client (Anthropic)
-- [ ] Create `apps/api/src/infrastructure/llm/anthropic.ts`.
-- [ ] `interface LlmClient { decideAction(input: { system: string; userText: string; screenshotJpegBase64: string | null }): Promise<{ action: AgentAction; tokensUsed: number }> }`.
-- [ ] `AgentAction` zod schema in `apps/api/src/domain/browser_tests/agent_types.ts`:
+- [x] Create `apps/api/src/infrastructure/llm/anthropic.ts`.
+- [x] `interface LlmClient { decideAction(input: { system: string; userText: string; screenshotJpegBase64: string | null }): Promise<{ action: AgentAction; tokensUsed: number }> }`.
+- [x] `AgentAction` zod schema in `apps/api/src/domain/browser_tests/agent_types.ts`:
 ```ts
 {
   thought: string,                    // one short sentence, no secrets
@@ -995,10 +995,10 @@ interface RunSnapshot {
 }
 ```
   plus `validateAgentAction(a)`: per-action required params (`finish` requires outcome+summary+expected_result+actual_result, and failure_reason when FAILED) → invalid returns error string (fed back to the model, BE-056).
-- [ ] `AnthropicLlmClient(cfg, fetchFn)`: `POST https://api.anthropic.com/v1/messages`, headers `x-api-key: <ANTHROPIC_API_KEY>`, `anthropic-version: 2023-06-01`, `content-type: application/json`; body `{ model: cfg.llmModel, max_tokens: 2048, system, messages: [{ role: "user", content: [ ...(screenshot ? [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }] : []), { type: "text", text: userText } ] }], tools: [{ name: "browser_action", description: "Perform one browser action or finish the test", input_schema: <JSON schema mirroring AgentAction> }], tool_choice: { type: "tool", name: "browser_action" } }`.
+- [x] `AnthropicLlmClient(cfg, fetchFn)`: `POST https://api.anthropic.com/v1/messages`, headers `x-api-key: <ANTHROPIC_API_KEY>`, `anthropic-version: 2023-06-01`, `content-type: application/json`; body `{ model: cfg.llmModel, max_tokens: 2048, system, messages: [{ role: "user", content: [ ...(screenshot ? [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }] : []), { type: "text", text: userText } ] }], tools: [{ name: "browser_action", description: "Perform one browser action or finish the test", input_schema: <JSON schema mirroring AgentAction> }], tool_choice: { type: "tool", name: "browser_action" } }`.
   - Parse response: find content block `type === "tool_use"` → validate its `input` with the zod schema (invalid → throw `LlmProtocolError`); `tokensUsed = usage.input_tokens + usage.output_tokens`.
   - Per-call timeout 60 s (AbortController); on 429/5xx/network error retry twice (1 s, 4 s backoff); still failing → throw `LlmUnavailableError` (→ SYSTEM_ERROR `LLM_UNAVAILABLE`, §24.7).
-- [ ] Tests (fake fetch): request shape exact (assert tool_choice forced, image block present when given); tool_use parsing; token summing; retry-then-throw on 500s; malformed tool input → LlmProtocolError.
+- [x] Tests (fake fetch): request shape exact (assert tool_choice forced, image block present when given); tool_use parsing; token summing; retry-then-throw on 500s; malformed tool input → LlmProtocolError.
 
 ### BE-056: Agent loop & action executor
 - [ ] Create `apps/api/src/application/execution/run_agent.ts` — `runAgentAttempt(deps, input): Promise<AgentResult>` with `deps = { session: BrowserSession, llm: LlmClient, clock, redactor: Redactor, secrets: ResolvedSecrets, onStep?: (step) => Promise<void> }`, `input = { snapshot: RunSnapshot, deadlineAt: number }`, and:
