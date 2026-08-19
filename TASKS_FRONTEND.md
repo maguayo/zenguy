@@ -125,9 +125,9 @@ export default defineConfig({
 > Rules for every UI component: typed props with sensible defaults; `className` passthrough merged with `clsx`; no business logic; keyboard accessible. Build them all before any page — pages must never hand-roll buttons/inputs.
 
 ### FE-005: Button, IconButton, Spinner
-- [ ] `Button.tsx`: props `variant: "primary" | "secondary" | "danger" | "ghost"` (default secondary), `size: "sm" | "md"` (default md, h-9; sm h-8), `loading?: boolean` (shows Spinner, disables), `disabled`, `type` (default "button"), `children`, all button HTML props. Styles: primary `bg-accent-600 hover:bg-accent-700 text-white`; secondary `bg-white border border-zinc-300 hover:bg-zinc-50 text-zinc-800`; danger `bg-danger-600 hover:bg-danger-700 text-white`; ghost `text-zinc-600 hover:bg-zinc-100`. Rounded-md, font-medium, disabled `opacity-50 pointer-events-none`.
-- [ ] `IconButton.tsx`: square h-8 w-8 ghost button wrapping a lucide icon, `aria-label` **required**.
-- [ ] `Spinner.tsx`: lucide `Loader2` with `animate-spin`, sizes 4/5/6.
+- [x] `Button.tsx`: props `variant: "primary" | "secondary" | "danger" | "ghost"` (default secondary), `size: "sm" | "md"` (default md, h-9; sm h-8), `loading?: boolean` (shows Spinner, disables), `disabled`, `type` (default "button"), `children`, all button HTML props. Styles: primary `bg-accent-600 hover:bg-accent-700 text-white`; secondary `bg-white border border-zinc-300 hover:bg-zinc-50 text-zinc-800`; danger `bg-danger-600 hover:bg-danger-700 text-white`; ghost `text-zinc-600 hover:bg-zinc-100`. Rounded-md, font-medium, disabled `opacity-50 pointer-events-none`.
+- [x] `IconButton.tsx`: square h-8 w-8 ghost button wrapping a lucide icon, `aria-label` **required**.
+- [x] `Spinner.tsx`: lucide `Loader2` with `animate-spin`, sizes 4/5/6.
 
 ### FE-006: Form controls
 - [ ] `Input.tsx`, `Textarea.tsx` (auto min-h-28 for instructions), `Select.tsx` (native `<select>` styled), `Checkbox.tsx`, `Toggle.tsx` (accessible switch: `role="switch"`, `aria-checked`, accent when on): all `forwardRef` (react-hook-form compatible), error state prop `invalid?: boolean` → `border-danger-600`.
