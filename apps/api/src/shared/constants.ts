@@ -30,7 +30,7 @@ export const SCREENSHOT_JPEG_QUALITY = 60;
 
 export const UPTIME_FREQUENCIES_SECONDS = [
   300, 600, 900, 1800, 3600, 10800, 21600, 43200, 86400,
-];
+] as const;
 export const MAX_REDIRECTS = 5;
 export const UPTIME_BODY_CAP = 524_288;
 export const UPTIME_EXCERPT_MAX = 2048;
