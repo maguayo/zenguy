@@ -51,6 +51,7 @@ export function Dropdown({
   triggerWrapperClassName,
 }: DropdownProps) {
   const menuId = useId();
+  const generatedTriggerId = useId();
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -65,9 +66,17 @@ export function Dropdown({
   const positionMenu = () => {
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = Math.max(176, rect.width);
+    const viewportPadding = 8;
+    const width = Math.min(
+      Math.max(176, rect.width),
+      Math.max(0, window.innerWidth - viewportPadding * 2),
+    );
+    const preferredLeft = align === "end" ? rect.right - width : rect.left;
     setPosition({
-      left: align === "end" ? Math.max(8, rect.right - width) : rect.left,
+      left: Math.min(
+        Math.max(viewportPadding, preferredLeft),
+        Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
+      ),
       top: rect.bottom + 6,
       width,
     });
@@ -84,11 +93,19 @@ export function Dropdown({
       }
     };
     const handlePosition = () => positionMenu();
+    const handleFocus = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("focusin", handleFocus);
     window.addEventListener("resize", handlePosition);
     window.addEventListener("scroll", handlePosition, true);
     return () => {
       document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("focusin", handleFocus);
       window.removeEventListener("resize", handlePosition);
       window.removeEventListener("scroll", handlePosition, true);
     };
@@ -118,10 +135,12 @@ export function Dropdown({
     });
   };
 
+  const triggerId = typeof trigger.props.id === "string" ? trigger.props.id : generatedTriggerId;
   const renderedTrigger = cloneElement(trigger, {
     "aria-controls": open ? menuId : undefined,
     "aria-expanded": open,
     "aria-haspopup": "menu",
+    id: triggerId,
   });
 
   return (
@@ -146,7 +165,7 @@ export function Dropdown({
         ? createPortal(
             <div
               ref={menuRef}
-              aria-labelledby={menuId}
+              aria-labelledby={triggerId}
               className="fixed z-[60] rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
               id={menuId}
               role="menu"
@@ -274,10 +293,14 @@ export function Dropdown({
                                   children,
                                 ),
                               );
-                            } else if (event.key === "ArrowLeft" || event.key === "Escape") {
+                            } else if (event.key === "ArrowLeft") {
                               event.preventDefault();
                               setSubmenuIndex(null);
                               focusItem(index);
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setOpen(false);
+                              triggerElement()?.focus();
                             }
                           }}
                         >

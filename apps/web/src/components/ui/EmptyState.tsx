@@ -25,7 +25,7 @@ export function EmptyState({
       )}
       {...props}
     >
-      {icon ? <div className="mb-3 text-zinc-400">{icon}</div> : null}
+      {icon ? <div className="mb-3 text-zinc-500">{icon}</div> : null}
       <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
       {description ? <p className="mt-1 max-w-md text-sm text-zinc-500">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}

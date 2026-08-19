@@ -5,7 +5,7 @@ import { StatusBadge } from "./StatusBadge";
 import { Badge } from "./ui/Badge";
 import { LoadMore } from "./ui/LoadMore";
 import { Table } from "./ui/Table";
-import { Tabs } from "./ui/Tabs";
+import { nextTabIndex, Tabs } from "./ui/Tabs";
 
 describe("data display", () => {
   it("renders semantic table headers and rows", () => {
@@ -40,7 +40,15 @@ describe("data display", () => {
     );
 
     expect(html).toContain('role="tablist"');
+    expect(html).toContain('aria-label="Sections"');
     expect(html).toContain('aria-selected="true"');
+  });
+
+  it("wraps tab navigation in both directions", () => {
+    expect(nextTabIndex(0, 3, 1)).toBe(1);
+    expect(nextTabIndex(2, 3, 1)).toBe(0);
+    expect(nextTabIndex(0, 3, -1)).toBe(2);
+    expect(nextTabIndex(0, 0, 1)).toBe(-1);
   });
 
   it("maps every documented status to text", () => {

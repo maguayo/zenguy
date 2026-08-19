@@ -404,9 +404,9 @@ export default defineConfig({
 - [x] Defense-in-depth: a 403 `FORBIDDEN` from the API anywhere → toast `You don't have permission to do that.` (add to the shared mutation error helper); a 402 `BILLING_REQUIRED` → toast + navigate to `setup/billing`.
 
 ### FE-043: Responsive & accessibility pass
-- [ ] ≤ 767 px: drawer nav works on every page; all Tables scroll horizontally without breaking the page; form Cards stack single-column; modals become near-full-screen (`max-h-[90dvh] overflow-y-auto`, side drawer full width); PageHeader actions wrap; ScreenshotViewer fits viewport.
-- [ ] Keyboard: full journey with keyboard only — nav, switcher, dropdowns (arrows + Enter + Escape), tabs (arrows), modals (trap + Escape), lightbox (arrows), forms. Focus visible everywhere (FE-002 ring).
-- [ ] a11y details: every input labeled (`Field` enforces), icons in icon-only buttons have `aria-label`, StatusBadge always pairs color with text (never a bare dot), toasts `aria-live`, images have alt text, pulsing/`animate-*` wrapped in `motion-safe:` variants, text contrast ≥ 4.5:1 (zinc-500 is the lightest allowed on white).
+- [x] ≤ 767 px: drawer nav works on every page; all Tables scroll horizontally without breaking the page; form Cards stack single-column; modals become near-full-screen (`max-h-[90dvh] overflow-y-auto`, side drawer full width); PageHeader actions wrap; ScreenshotViewer fits viewport.
+- [x] Keyboard: full journey with keyboard only — nav, switcher, dropdowns (arrows + Enter + Escape), tabs (arrows), modals (trap + Escape), lightbox (arrows), forms. Focus visible everywhere (FE-002 ring).
+- [x] a11y details: every input labeled (`Field` enforces), icons in icon-only buttons have `aria-label`, StatusBadge always pairs color with text (never a bare dot), toasts `aria-live`, images have alt text, pulsing/`animate-*` wrapped in `motion-safe:` variants, text contrast ≥ 4.5:1 (zinc-500 is the lightest allowed on white).
 
 ### FE-044: Final QA & acceptance walkthrough
 - [ ] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):

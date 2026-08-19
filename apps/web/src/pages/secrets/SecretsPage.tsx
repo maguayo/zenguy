@@ -349,7 +349,7 @@ export function secretColumns(
       key: "key",
       render: (secret) => (
         <span className="inline-flex items-center gap-2 font-mono text-sm font-medium text-zinc-900">
-          <KeyRound aria-hidden="true" className="size-4 text-zinc-400" />
+          <KeyRound aria-hidden="true" className="size-4 text-zinc-500" />
           {secret.key}
         </span>
       ),

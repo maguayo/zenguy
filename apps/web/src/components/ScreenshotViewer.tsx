@@ -57,7 +57,7 @@ export function ScreenshotViewer({
 
   return (
     <Modal
-      className="p-0"
+      className="!p-0"
       contentClassName="flex h-[calc(100dvh-57px)] flex-col p-0"
       headerClassName="border-zinc-800 [&_button]:text-zinc-300 [&_button:hover]:bg-zinc-800"
       onClose={onClose}

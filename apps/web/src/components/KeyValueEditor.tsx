@@ -42,7 +42,10 @@ export function KeyValueEditor({
   return (
     <div className="space-y-2">
       {value.map((row, index) => (
-        <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_2.25rem] gap-2" key={index}>
+        <div
+          className="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_2.25rem]"
+          key={index}
+        >
           <Input
             aria-label={`Header ${index + 1} key`}
             autoComplete="off"
@@ -59,6 +62,7 @@ export function KeyValueEditor({
           />
           <IconButton
             aria-label={`Remove header ${index + 1}`}
+            className="justify-self-end sm:justify-self-auto"
             onClick={() => onChange(removeKeyValue(value, index))}
           >
             <Trash2 aria-hidden="true" className="size-4" />

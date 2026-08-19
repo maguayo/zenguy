@@ -147,7 +147,7 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
   return (
     <div>
       <p className="mb-3 text-sm text-zinc-600">Choose how Zenguy should notify your team.</p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         {channelTypes.map(({ icon: Icon, label, type }) => (
           <button
             key={type}

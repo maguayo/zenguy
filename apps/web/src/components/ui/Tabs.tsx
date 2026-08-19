@@ -9,11 +9,17 @@ export interface TabItem {
 
 export interface TabsProps {
   items: TabItem[];
+  label?: string;
   onChange: (key: string) => void;
   value: string;
 }
 
-export function Tabs({ items, onChange, value }: TabsProps) {
+export function nextTabIndex(current: number, count: number, direction: 1 | -1): number {
+  if (count <= 0) return -1;
+  return (current + direction + count) % count;
+}
+
+export function Tabs({ items, label = "Sections", onChange, value }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const move = (event: KeyboardEvent<HTMLButtonElement>, direction: 1 | -1) => {
@@ -21,7 +27,7 @@ export function Tabs({ items, onChange, value }: TabsProps) {
       listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
     );
     const current = buttons.indexOf(event.currentTarget);
-    const next = buttons[(current + direction + buttons.length) % buttons.length];
+    const next = buttons[nextTabIndex(current, buttons.length, direction)];
     if (next) {
       event.preventDefault();
       next.focus();
@@ -30,7 +36,12 @@ export function Tabs({ items, onChange, value }: TabsProps) {
   };
 
   return (
-    <div ref={listRef} className="flex gap-5 overflow-x-auto border-b border-zinc-200" role="tablist">
+    <div
+      ref={listRef}
+      aria-label={label}
+      className="flex gap-5 overflow-x-auto border-b border-zinc-200"
+      role="tablist"
+    >
       {items.map((item) => {
         const active = item.key === value;
         return (

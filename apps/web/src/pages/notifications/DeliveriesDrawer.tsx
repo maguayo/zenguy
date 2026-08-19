@@ -122,7 +122,7 @@ export function DeliveriesDrawer({ channel, onClose, open }: DeliveriesDrawerPro
 
   return (
     <Modal
-      className="items-stretch justify-end p-0"
+      className="items-stretch justify-end !p-0"
       contentClassName="p-0"
       onClose={onClose}
       open={open && Boolean(channel)}
