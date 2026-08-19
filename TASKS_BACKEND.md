@@ -345,7 +345,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Create `apps/api/src/infrastructure/email/resend.ts`: `ResendEmailSender(apiKey, from)` — `POST https://api.resend.com/emails` with `Authorization: Bearer`, body `{ from, to, subject, html, text }`; non-2xx → throw `Error("email provider error: <status>")` (never include recipient list or body in the error).
 - [x] Create `apps/api/src/infrastructure/email/dev.ts`: `DevEmailSender` that `logEvent("dev_email", { to, subject, textFirst200 })` — selected automatically when `RESEND_API_KEY` is empty (dev).
 - [x] Create `apps/api/src/infrastructure/email/templates.ts` with `renderBasicEmail({ title, bodyLines, ctaLabel?, ctaUrl? })` → `{ html, text }`. HTML: single centered 560px table, system font stack, `#111` text, indigo `#4F46E5` button, footer "Zenguy". Text: title + lines + URL.
-- [ ] Auth email copies (exact):
+- [x] Auth email copies (exact):
   - Verify: subject `Verify your email — Zenguy`; body lines `Welcome to Zenguy, <name>.`, `Confirm your email address to start using your account.`; CTA `Verify email` → `${APP_URL}/verify-email?token=<token>`; final line `This link expires in 24 hours. If you didn't create an account, ignore this email.`
   - Reset: subject `Reset your password — Zenguy`; CTA `Reset password` → `${APP_URL}/reset-password?token=<token>`; `This link expires in 1 hour. If you didn't request this, ignore this email.`
 - [x] Write tests: template renders CTA when given; Resend adapter (mock `fetch` via injected `fetchFn` parameter defaulting to `globalThis.fetch`) sends correct payload/headers and throws sanitized error on 500.
