@@ -21,8 +21,8 @@ const SUBSCRIPTION: Subscription = {
   periodStart: PERIOD_START,
   periodEnd: PERIOD_END,
   cancelAtPeriodEnd: true,
-  updatePaymentUrl: "https://paddle.test/update",
-  cancelUrl: "https://paddle.test/cancel",
+  updatePaymentUrl: null,
+  cancelUrl: null,
   createdAt: PERIOD_START,
   updatedAt: PERIOD_START,
 };
@@ -53,6 +53,10 @@ async function setup(paddle = new RecordingPaddleClient()) {
       invoiceNumber: "INV-123",
     },
   ];
+  paddle.managementUrls = {
+    updatePaymentMethodUrl: "https://paddle.test/update",
+    cancelUrl: "https://paddle.test/cancel",
+  };
   const usage = new GetCycleUsage(
     subscriptions,
     usageEvents,
@@ -102,10 +106,11 @@ describe("GetBilling", () => {
     expect(paddle.transactionLists).toEqual([
       { subscriptionId: "sub_provider", limit: 12 },
     ]);
+    expect(paddle.managementUrlRequests).toEqual(["sub_provider"]);
   });
 
   it("hides management URLs from admins and rejects members", async () => {
-    const { getBilling } = await setup();
+    const { getBilling, paddle } = await setup();
 
     await expect(
       getBilling.execute({ workspaceId: "ws_primary", role: "ADMIN" }),
@@ -118,6 +123,7 @@ describe("GetBilling", () => {
     await expect(
       getBilling.execute({ workspaceId: "ws_primary", role: "MEMBER" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(paddle.managementUrlRequests).toEqual([]);
   });
 
   it("returns an empty invoice list and sanitized log on Paddle failure", async () => {
@@ -129,12 +135,38 @@ describe("GetBilling", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await expect(
-      getBilling.execute({ workspaceId: "ws_primary", role: "OWNER" }),
+      getBilling.execute({ workspaceId: "ws_primary", role: "ADMIN" }),
     ).resolves.toMatchObject({ invoices: [] });
 
     expect(log).toHaveBeenCalledOnce();
     const output = String(log.mock.calls[0]?.[0]);
     expect(output).toContain('"event":"billing_invoice_list_failed"');
+    expect(output).not.toContain("alice@example.com");
+    log.mockRestore();
+  });
+
+  it("keeps billing usable and logs safely when management URLs fail", async () => {
+    const paddle = new RecordingPaddleClient();
+    paddle.managementUrlsFailure = new Error(
+      "Paddle PII alice@example.com must not escape",
+    );
+    const { getBilling } = await setup(paddle);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(
+      getBilling.execute({ workspaceId: "ws_primary", role: "OWNER" }),
+    ).resolves.toMatchObject({
+      subscription: {
+        updatePaymentMethodUrl: null,
+        cancelUrl: null,
+      },
+      invoices: paddle.transactions,
+    });
+
+    expect(paddle.managementUrlRequests).toEqual(["sub_provider"]);
+    expect(log).toHaveBeenCalledOnce();
+    const output = String(log.mock.calls[0]?.[0]);
+    expect(output).toContain('"event":"billing_management_urls_failed"');
     expect(output).not.toContain("alice@example.com");
     log.mockRestore();
   });
@@ -169,6 +201,7 @@ describe("GetBilling", () => {
       invoices: [],
     });
     expect(paddle.transactionLists).toEqual([]);
+    expect(paddle.managementUrlRequests).toEqual([]);
   });
 });
 

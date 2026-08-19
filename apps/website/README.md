@@ -1,8 +1,8 @@
 # @zenguy/website
 
 Public marketing site for zenguy.com — a faithful port of the approved design
-(`Zenguy Marketing Site.html`) to Astro 7 + Tailwind CSS v4, deployed as a Cloudflare
-static-assets Worker (`zenguy-website`).
+(`Zenguy Marketing Site.html`) to Astro 7 + Tailwind CSS v4, deployed through
+the Git-connected Cloudflare Pages project `zenguy`.
 
 ## Commands
 
@@ -14,14 +14,16 @@ pnpm --filter @zenguy/website preview  # serve the built site on :4400
 
 ## Deploys
 
-Git-connected **Cloudflare Pages** project `zenguy` — every push to `main` builds and deploys.
+Git-connected **Cloudflare Pages** project `zenguy` — every push to `main`
+builds and deploys the public website independently from the frontend and API.
 Required project settings (dashboard → zenguy → Settings → Build):
 
 - **Root directory:** `apps/website`
 - **Build command:** `pnpm build`
 - **Build output directory:** comes from `wrangler.jsonc` (`pages_build_output_dir: ./dist`)
 
-Attach `zenguy.com` (+ `www`) to the Pages project as custom domains at launch.
+`zenguy.com` and `www.zenguy.com` are attached to this Pages project as active
+custom domains with SSL enabled.
 
 ## Porting notes
 

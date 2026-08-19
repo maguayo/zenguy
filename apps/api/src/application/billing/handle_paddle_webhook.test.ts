@@ -89,8 +89,8 @@ describe("HandlePaddleWebhook", () => {
       periodStart: Date.parse("2026-08-01T00:00:00Z"),
       periodEnd: Date.parse("2026-09-01T00:00:00Z"),
       cancelAtPeriodEnd: false,
-      updatePaymentUrl: "https://paddle.test/update/created",
-      cancelUrl: "https://paddle.test/cancel/created",
+      updatePaymentUrl: null,
+      cancelUrl: null,
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -121,7 +121,7 @@ describe("HandlePaddleWebhook", () => {
     expect(audits.entries.size).toBe(1);
   });
 
-  it("maps period rollover, URLs, past-due status, and scheduled cancel", async () => {
+  it("maps period rollover, past-due status, and scheduled cancel", async () => {
     const { handler, subscriptions, overageReporter } = setup();
     await deliver(handler, PADDLE_SUBSCRIPTION_CREATED);
 
@@ -142,8 +142,8 @@ describe("HandlePaddleWebhook", () => {
         periodStart: Date.parse("2026-09-01T00:00:00Z"),
         periodEnd: Date.parse("2026-10-01T00:00:00Z"),
         cancelAtPeriodEnd: true,
-        updatePaymentUrl: "https://paddle.test/update/new",
-        cancelUrl: "https://paddle.test/cancel/new",
+        updatePaymentUrl: null,
+        cancelUrl: null,
       },
     );
   });

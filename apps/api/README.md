@@ -92,11 +92,14 @@ https://developer.paddle.com/build/products/create-products-prices/.
 2. Create product **Zenguy extra runs** and a one-time price of **EUR 0.20**.
    Copy its price ID to PADDLE_OVERAGE_PRICE_ID.
 3. Create a sandbox client-side token for PADDLE_CLIENT_TOKEN and an API key
-   for PADDLE_API_KEY.
+   for PADDLE_API_KEY. The API key needs subscription read access and Customer
+   portal session write access so owners receive fresh, short-lived payment and
+   cancellation links; those links are never persisted from webhooks.
 4. Under Developer tools > Notifications, create the sandbox destination at
-   https://staging-app.zenguy.com/api/webhooks/paddle. Select every
-   subscription.* and transaction.* event. Copy that destination's secret to
-   the staging PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
+   https://staging-app.zenguy.com/api/webhooks/paddle. Select exactly
+   `subscription.created`, `subscription.updated`, `subscription.canceled`, and
+   `subscription.past_due`. Copy that destination's secret to the staging
+   PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
    https://developer.paddle.com/webhooks/about/notification-destinations/.
 5. Keep PADDLE_ENVIRONMENT=sandbox locally and in staging. Recreate the catalog,
    client token, API key, prices, and notification destination in Paddle Live
@@ -131,8 +134,8 @@ personal Cloudflare account.
 4. Keep `EMAIL_FROM="Zenguy <notifications@zenguy.com>"`. The
    `send_email` binding restricts the Worker to this sender.
 5. The development binding has `remote: true`, so `wrangler dev` sends real
-   email. Use only recipient inboxes you control. Deployed bindings omit
-   `remote` because staging and production already run on Cloudflare.
+   email. Use only recipient inboxes you control. A deployed environment's
+   binding omits `remote` because it already runs on Cloudflare.
 
 Cloudflare manages the sending domain's SPF, DKIM, return-path, and bounce
 records. Check Email Service analytics and suppressions when a provider accepts
@@ -175,10 +178,17 @@ The matching Worker environment is registered only as a zone route for
 `/api/*`. This keeps frontend assets independent from API releases while
 preserving relative API requests and same-origin cookies.
 
-| Environment | Worker | Application / Pages origin | Worker Route | Paddle |
-|---|---|---|---|---|
-| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Sandbox |
-| Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` | Live |
+| Environment | Worker | Application / Pages origin | Worker Route | Paddle | Status |
+|---|---|---|---|---|---|
+| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Sandbox | Operational |
+| Production | `zenguy-api-production` | `https://app.zenguy.com` | Target: `app.zenguy.com/api/*` | Live | Isolated bootstrap; activation pending |
+
+Production resources, migrations, and an isolated bootstrap Worker are
+prepared. The bootstrap has `workers.dev` and preview URLs disabled and has no
+route, cron trigger, or Queue consumer. It must remain unreachable until Paddle
+Live credentials/catalog, Twilio production credentials and approved senders,
+the signed Paddle Live webhook, and all production secrets are ready. Never
+substitute Sandbox values to unblock a production deploy.
 
 Do not configure either complete application hostname as a Worker custom
 domain. Pages owns the hostname and static routes; the Worker Route owns only
@@ -239,11 +249,12 @@ Environment variables are fixed as follows:
 | `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
 
-Staging uses only Paddle Sandbox tokens, keys, price IDs, customers, and the
-staging webhook secret. Production uses only Paddle Live equivalents and the
-production webhook secret. Both use OpenAI Responses with `gpt-5-mini`; there
-is no Anthropic credential. Both use the native Cloudflare Email Service
-`EMAIL` binding for the enabled `zenguy.com` sending domain.
+Staging uses only Paddle Sandbox tokens, keys, price IDs, customers, and its
+verified staging webhook secret. Production must use only Paddle Live
+equivalents and its own production webhook secret once activated. Both use
+OpenAI Responses with `gpt-5-mini`; there is no Anthropic credential. Deployed
+environments use the native Cloudflare Email Service `EMAIL` binding for the
+enabled `zenguy.com` sending domain.
 
 ### 4. Migrate and deploy the selected environment
 
@@ -253,9 +264,24 @@ Apply migrations before its Worker deployment:
     pnpm --filter @zenguy/api db:migrate:staging
     pnpm --filter @zenguy/api deploy:staging
 
-    # Production
+    # Safe production bootstrap; does not add routes, cron, or consumers
+    pnpm --filter @zenguy/api deploy:production:bootstrap
+
+    # Final activation; only after every Live-provider gate is satisfied
     pnpm --filter @zenguy/api db:migrate:production
     pnpm --filter @zenguy/api deploy:production
+
+The normal production deploy is intentionally different from the bootstrap:
+it activates the `/api/*` route, three cron triggers, and all Queue consumers.
+Do not use it as a harmless first upload.
+
+The staging backend CI configuration is prepared but not connected because the
+existing Workers Builds token lacks required permissions. Until a correctly
+scoped token is installed, the commands above are the authoritative staging
+release path. A push to `staging` can
+deploy the Pages frontend, but it does not automatically migrate or deploy the
+API Worker. Keep production CI disabled until every production release gate
+listed above is complete.
 
 The API deployment does not build or upload `apps/frontend/dist`; Pages builds
 that package independently from Git. The frontend projects and branch controls
@@ -274,7 +300,8 @@ their dead-letter queues on both `zenguy-api-staging` and
 ### 5. Verify Pages domains and Worker Routes
 
 The Pages custom domain must be active and proxied before its API route is
-useful. Confirm these assignments in the `zenguy.com` zone:
+useful. Staging currently uses the first assignment; production must use the
+second assignment only when its Worker is activated:
 
     staging-app.zenguy.com/api/*  -> zenguy-api-staging
     app.zenguy.com/api/*          -> zenguy-api-production
@@ -287,12 +314,13 @@ covering `/*` would incorrectly hide the frontend.
 
 Create separate Paddle notification destinations:
 
-    Sandbox: https://staging-app.zenguy.com/api/webhooks/paddle
-    Live:    https://app.zenguy.com/api/webhooks/paddle
+    Sandbox (active):    https://staging-app.zenguy.com/api/webhooks/paddle
+    Live (release gate): https://app.zenguy.com/api/webhooks/paddle
 
-Subscribe both to the required `subscription.*` and `transaction.*` events,
-and store each destination's signing secret only in its matching Worker
-environment.
+Subscribe each destination to exactly `subscription.created`,
+`subscription.updated`, `subscription.canceled`, and `subscription.past_due`.
+Do not subscribe transaction events. Store each destination's signing secret
+only in its matching Worker environment.
 
 The cleanup cron expires operational data after 30 days. Add a 35-day R2
 lifecycle safety net to each bucket:
@@ -323,8 +351,9 @@ first failure:
    recovery delivery are recorded, then verify no plaintext secret appears in
    the API response, report, logs, or notification error.
 
-After staging passes, deploy production and repeat the non-destructive checks
-against `https://app.zenguy.com`. Confirm `/api/health` is handled by
+After the Paddle Live, Twilio, webhook, secret, and activation gates are
+complete, deploy production and repeat the non-destructive checks against
+`https://app.zenguy.com`. Confirm `/api/health` is handled by
 `zenguy-api-production`, the application shell is served by Pages, email uses
 `zenguy.com`, and billing config reports Paddle Live. Do not create a real
 charge merely as a smoke test; exercise the live checkout only as an explicitly

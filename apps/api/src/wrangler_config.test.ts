@@ -46,10 +46,49 @@ interface WranglerConfig {
   };
 }
 
+interface BootstrapConfig {
+  $schema: string;
+  name: string;
+  main: string;
+  compatibility_date: string;
+  compatibility_flags: string[];
+  workers_dev: boolean;
+  preview_urls: boolean;
+  observability: { enabled: boolean };
+  limits: { cpu_ms: number };
+  browser: EnvironmentConfig["browser"];
+  send_email: EnvironmentConfig["send_email"];
+  d1_databases: EnvironmentConfig["d1_databases"];
+  kv_namespaces: EnvironmentConfig["kv_namespaces"];
+  r2_buckets: EnvironmentConfig["r2_buckets"];
+  queues: Pick<QueueConfig, "producers"> & { consumers?: unknown };
+  vars: Record<string, string>;
+  routes?: unknown;
+  route?: unknown;
+  triggers?: unknown;
+}
+
+interface PackageConfig {
+  scripts: Record<string, string>;
+}
+
 const readConfig = (): WranglerConfig =>
   JSON.parse(
     readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
   ) as WranglerConfig;
+
+const readBootstrapConfig = (): BootstrapConfig =>
+  JSON.parse(
+    readFileSync(
+      new URL("../wrangler.production-bootstrap.jsonc", import.meta.url),
+      "utf8",
+    ),
+  ) as BootstrapConfig;
+
+const readPackageConfig = (): PackageConfig =>
+  JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as PackageConfig;
 
 function expectQueueTopology(queues: QueueConfig, prefix: string): void {
   expect(queues.producers).toEqual([
@@ -195,5 +234,88 @@ describe("wrangler environments", () => {
         },
       ]);
     }
+  });
+});
+
+describe("production bootstrap", () => {
+  it("creates only an unreachable Worker version with no event sources", () => {
+    const bootstrap = readBootstrapConfig();
+
+    expect(bootstrap.name).toBe("zenguy-api-production");
+    expect(bootstrap.workers_dev).toBe(false);
+    expect(bootstrap.preview_urls).toBe(false);
+    expect(bootstrap).not.toHaveProperty("route");
+    expect(bootstrap).not.toHaveProperty("routes");
+    expect(bootstrap).not.toHaveProperty("triggers");
+    expect(bootstrap.queues).toEqual({
+      producers: [
+        { binding: "RUN_QUEUE", queue: "zenguy-runs" },
+        { binding: "CHECK_QUEUE", queue: "zenguy-checks" },
+        { binding: "NOTIFY_QUEUE", queue: "zenguy-notify" },
+      ],
+    });
+    expect(Object.keys(bootstrap).sort()).toEqual(
+      [
+        "$schema",
+        "name",
+        "main",
+        "compatibility_date",
+        "compatibility_flags",
+        "workers_dev",
+        "preview_urls",
+        "observability",
+        "limits",
+        "browser",
+        "send_email",
+        "d1_databases",
+        "kv_namespaces",
+        "r2_buckets",
+        "queues",
+        "vars",
+      ].sort(),
+    );
+  });
+
+  it("reuses only production bindings and non-secret variables", () => {
+    const production = readConfig().env.production;
+    const bootstrap = readBootstrapConfig();
+
+    expect(bootstrap.browser).toEqual(production.browser);
+    expect(bootstrap.send_email).toEqual(production.send_email);
+    expect(bootstrap.d1_databases).toEqual(production.d1_databases);
+    expect(bootstrap.kv_namespaces).toEqual(production.kv_namespaces);
+    expect(bootstrap.r2_buckets).toEqual(production.r2_buckets);
+    expect(bootstrap.queues.producers).toEqual(production.queues.producers);
+    expect(bootstrap.vars).toEqual(production.vars);
+
+    for (const secret of [
+      "JWT_SECRET",
+      "ENCRYPTION_KEY",
+      "ARTIFACT_URL_SECRET",
+      "OPENAI_API_KEY",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_FROM_SMS",
+      "TWILIO_FROM_WHATSAPP",
+      "TWILIO_FROM_CALL",
+      "PADDLE_API_KEY",
+      "PADDLE_WEBHOOK_SECRET",
+      "PADDLE_CLIENT_TOKEN",
+      "PADDLE_PRICE_ID",
+      "PADDLE_OVERAGE_PRICE_ID",
+    ]) {
+      expect(bootstrap.vars).not.toHaveProperty(secret);
+    }
+  });
+
+  it("exposes an explicit bootstrap command without changing normal production deploys", () => {
+    const scripts = readPackageConfig().scripts;
+
+    expect(scripts["deploy:production:bootstrap"]).toBe(
+      "wrangler deploy --config wrangler.production-bootstrap.jsonc",
+    );
+    expect(scripts["deploy:production"]).toBe(
+      "wrangler deploy --env production",
+    );
   });
 });

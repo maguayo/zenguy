@@ -10,6 +10,11 @@ export interface BilledTransaction {
   invoiceNumber: string | null;
 }
 
+export interface SubscriptionManagementUrls {
+  updatePaymentMethodUrl: string | null;
+  cancelUrl: string;
+}
+
 export interface PaddleClient {
   createOneTimeCharge(
     subscriptionId: string,
@@ -21,6 +26,9 @@ export interface PaddleClient {
     subscriptionId: string,
     limit?: number,
   ): Promise<BilledTransaction[]>;
+  getSubscriptionManagementUrls(
+    subscriptionId: string,
+  ): Promise<SubscriptionManagementUrls>;
   getInvoicePdfUrl(transactionId: string): Promise<string>;
 }
 
@@ -159,6 +167,26 @@ export class HttpPaddleClient implements PaddleClient {
         invoiceNumber: nullableString(transaction, "invoice_number"),
       };
     });
+  }
+
+  async getSubscriptionManagementUrls(
+    subscriptionId: string,
+  ): Promise<SubscriptionManagementUrls> {
+    const response = await this.request(
+      "subscriptions.get",
+      `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { method: "GET" },
+    );
+    const payload: unknown = await response.json();
+    const data = asRecord(asRecord(payload).data);
+    const managementUrls = asRecord(data.management_urls);
+    return {
+      updatePaymentMethodUrl: nullableString(
+        managementUrls,
+        "update_payment_method",
+      ),
+      cancelUrl: requiredString(managementUrls, "cancel"),
+    };
   }
 
   async getInvoicePdfUrl(transactionId: string): Promise<string> {

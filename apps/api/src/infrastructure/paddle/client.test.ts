@@ -38,6 +38,14 @@ describe("HttpPaddleClient", () => {
       jsonResponse({ data: { id: "sub_123" } }),
       jsonResponse({ data: { id: "sub_123", status: "canceled" } }),
       jsonResponse({
+        data: {
+          management_urls: {
+            update_payment_method: "https://paddle.test/update-payment",
+            cancel: "https://paddle.test/cancel-subscription",
+          },
+        },
+      }),
+      jsonResponse({
         data: [
           {
             id: "txn_123",
@@ -64,6 +72,12 @@ describe("HttpPaddleClient", () => {
     ).resolves.toEqual({ transactionId: null });
     await client.cancelSubscription("sub_123");
     await expect(
+      client.getSubscriptionManagementUrls("sub_123"),
+    ).resolves.toEqual({
+      updatePaymentMethodUrl: "https://paddle.test/update-payment",
+      cancelUrl: "https://paddle.test/cancel-subscription",
+    });
+    await expect(
       client.listBilledTransactions("sub_123", 5),
     ).resolves.toEqual([
       {
@@ -79,7 +93,7 @@ describe("HttpPaddleClient", () => {
       "https://paddle.test/invoice.pdf",
     );
 
-    const [charge, cancel, list, invoice] = recorder.requests;
+    const [charge, cancel, management, list, invoice] = recorder.requests;
     expect(charge?.url).toBe(
       "https://sandbox-api.paddle.com/subscriptions/sub_123/charge",
     );
@@ -96,6 +110,11 @@ describe("HttpPaddleClient", () => {
     expect(bodyOf(cancel as RecordedRequest)).toEqual({
       effective_from: "immediately",
     });
+
+    expect(management?.url).toBe(
+      "https://sandbox-api.paddle.com/subscriptions/sub_123",
+    );
+    expect(management?.init?.method).toBe("GET");
 
     const listUrl = new URL(list?.url ?? "");
     expect(`${listUrl.origin}${listUrl.pathname}`).toBe(
@@ -119,6 +138,36 @@ describe("HttpPaddleClient", () => {
       expect(headers.get("Authorization")).toBe("Bearer pdl_test_key");
       expect(headers.get("Content-Type")).toBe("application/json");
     }
+  });
+
+  it("accepts a null update-payment URL for manual subscriptions", async () => {
+    const recorder = new RecordingFetch([
+      jsonResponse({
+        data: {
+          management_urls: {
+            update_payment_method: null,
+            cancel: "https://paddle.test/cancel-subscription",
+          },
+        },
+      }),
+    ]);
+    const client = new HttpPaddleClient(
+      {
+        apiBase: "https://sandbox-api.paddle.com",
+        apiKey: "pdl_test_key",
+      },
+      recorder.fetch,
+    );
+
+    await expect(
+      client.getSubscriptionManagementUrls("sub/manual"),
+    ).resolves.toEqual({
+      updatePaymentMethodUrl: null,
+      cancelUrl: "https://paddle.test/cancel-subscription",
+    });
+    expect(recorder.requests[0]?.url).toBe(
+      "https://sandbox-api.paddle.com/subscriptions/sub%2Fmanual",
+    );
   });
 
   it("throws a sanitized error and never logs the provider body", async () => {

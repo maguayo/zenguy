@@ -13,10 +13,6 @@ export const PADDLE_SUBSCRIPTION_CREATED = {
       ends_at: "2026-09-01T00:00:00Z",
     },
     scheduled_change: null,
-    management_urls: {
-      update_payment_method: "https://paddle.test/update/created",
-      cancel: "https://paddle.test/cancel/created",
-    },
   },
 } as const;
 
@@ -35,9 +31,5 @@ export const PADDLE_SUBSCRIPTION_UPDATED = {
       ends_at: "2026-10-01T00:00:00Z",
     },
     scheduled_change: { action: "cancel", effective_at: "next_billing_period" },
-    management_urls: {
-      update_payment_method: "https://paddle.test/update/new",
-      cancel: "https://paddle.test/cancel/new",
-    },
   },
 } as const;

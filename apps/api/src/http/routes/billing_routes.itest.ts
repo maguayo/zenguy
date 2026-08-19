@@ -135,6 +135,10 @@ describe("billing routes", () => {
       },
     ];
     paddle.invoiceUrl = "https://paddle.test/invoice.pdf";
+    paddle.managementUrls = {
+      updatePaymentMethodUrl: "https://paddle.test/fresh-update",
+      cancelUrl: "https://paddle.test/fresh-cancel",
+    };
     app = buildApp(bindings, { paddleClient: paddle });
   });
 
@@ -223,8 +227,8 @@ describe("billing routes", () => {
           periodStart: "2026-08-01T00:00:00.000Z",
           periodEnd: "2026-09-01T00:00:00.000Z",
           cancelAtPeriodEnd: false,
-          updatePaymentMethodUrl: "https://paddle.test/update",
-          cancelUrl: "https://paddle.test/cancel",
+          updatePaymentMethodUrl: "https://paddle.test/fresh-update",
+          cancelUrl: "https://paddle.test/fresh-cancel",
         },
         usage: {
           periodStart: "2026-08-01T00:00:00.000Z",
@@ -239,6 +243,7 @@ describe("billing routes", () => {
         invoices: paddle.transactions,
       },
     });
+    expect(paddle.managementUrlRequests).toEqual(["sub_provider_billing"]);
   });
 
   it("returns an invoice URL only for a listed workspace transaction", async () => {

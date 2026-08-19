@@ -1,13 +1,13 @@
 # Zenguy
 
-Zenguy is a multi-tenant SaaS for natural-language browser testing and HTTP uptime monitoring, built as a Cloudflare-first monorepo with a Hono API, React application, and Astro landing site.
+Zenguy is a multi-tenant SaaS for natural-language browser testing and HTTP uptime monitoring, built as a Cloudflare-first monorepo with a Hono API, React application, and Astro public website.
 
 ```text
 zenguy/
 ├── apps/
 │   ├── api/      # Cloudflare Worker API, queues, crons, and storage adapters
 │   ├── frontend/ # React application
-│   └── landing/  # Astro landing site
+│   └── website/  # Astro public website
 ├── PROJECT.md
 ├── TASKS_BACKEND.md
 └── TASKS_FRONTEND.md
@@ -16,24 +16,28 @@ zenguy/
 See `apps/api/README.md` / `apps/frontend/README.md` for service-specific setup and
 staging and production deployment details.
 
-## Deployed architecture
+## Deployment architecture and current status
 
 Cloudflare Pages owns each application hostname and serves the Vite build.
 Cloudflare Worker Routes intercept only `/api/*` on those same hostnames, so the
 browser can keep using relative API URLs and same-origin secure cookies. The API
 Worker does not serve frontend assets and does not own either full hostname.
 
-| Environment | Git branch | Pages project | Pages root | Application URL | API Worker route |
-| --- | --- | --- | --- | --- | --- |
-| Staging | `staging` | `zenguy-frontend-staging` | `apps/frontend` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` → `zenguy-api-staging` |
-| Production | `main` | `zenguy-frontend` | `apps/frontend` | `https://app.zenguy.com` | `app.zenguy.com/api/*` → `zenguy-api-production` |
+| Environment | Git branch | Pages project | Pages root | Application URL | API Worker route | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Staging | `staging` | `zenguy-frontend-staging` | `apps/frontend` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` → `zenguy-api-staging` | Operational |
+| Production | `main` | `zenguy-frontend` | `apps/frontend` | `https://app.zenguy.com` | Target: `app.zenguy.com/api/*` → `zenguy-api-production` | Isolated bootstrap; activation pending |
 
-The two Workers use independent D1, KV, R2, Queue, secret, and Paddle
-configuration. Staging uses Paddle Sandbox; production uses a separately
-created Paddle live catalog and live credentials. Both environments send
-transactional email through Cloudflare Email Service on `zenguy.com` and use
-the low-cost OpenAI `gpt-5-mini` model by default. No Anthropic integration is
-required.
+The environments use independent D1, KV, R2, Queue, secret, and provider
+configuration. Staging is deployed with Paddle Sandbox. Production resources,
+migrations, and an unreachable bootstrap Worker are prepared; that Worker has
+no public route, cron trigger, or Queue consumer. Production remains inactive
+until Paddle Live credentials and catalog, Twilio production
+credentials/senders, the signed Paddle Live webhook, and the final Worker
+activation are complete. Deployed
+environments send transactional email through Cloudflare Email Service on
+`zenguy.com` and use the low-cost OpenAI `gpt-5-mini` model by default. No
+Anthropic integration is required.
 
 ## Local development
 
@@ -62,8 +66,8 @@ pnpm --filter @zenguy/api dev
 # React application — http://localhost:5173
 pnpm --filter @zenguy/frontend dev
 
-# Landing site — http://localhost:4321
-pnpm --filter @zenguy/landing dev
+# Public website — http://localhost:4400
+pnpm --filter @zenguy/website dev
 ```
 
 The Vite application proxies `/api` to `http://localhost:8787`. To use an
@@ -192,6 +196,13 @@ tracks `staging`; the production project tracks `main`. Both use
 `apps/frontend` as the root directory, `pnpm build` as the build command, and
 `dist` as the output directory.
 
+The staging backend CI configuration is prepared but is not connected yet
+because the existing Workers Builds token lacks required permissions. Until a
+correctly scoped token is installed,
+an API push does not deploy the Worker automatically; use the explicit
+migration and deploy commands below. Production automation must remain disabled
+until its Paddle Live, Twilio, webhook, and secret release gates are satisfied.
+
 Apply the matching D1 migrations before deploying an API environment:
 
 ```bash
@@ -199,10 +210,17 @@ Apply the matching D1 migrations before deploying an API environment:
 pnpm --filter @zenguy/api db:migrate:staging
 pnpm --filter @zenguy/api deploy:staging
 
-# Production
+# Production bootstrap only: creates an unreachable Worker with no event sources
+pnpm --filter @zenguy/api deploy:production:bootstrap
+
+# Final production release: run only after every Live-provider gate is satisfied
 pnpm --filter @zenguy/api db:migrate:production
 pnpm --filter @zenguy/api deploy:production
 ```
+
+`deploy:production` activates the `/api/*` route, cron triggers, and Queue
+consumers. Never run it merely to create the Worker or to test Sandbox
+credentials; use `deploy:production:bootstrap` for that safe preparation step.
 
 Cloudflare resources are deliberately isolated:
 
@@ -225,7 +243,7 @@ in `apps/frontend/README.md`.
 After starting and seeding the services, use a clean browser session and check
 the following flow:
 
-1. Open the landing site at `http://localhost:4321` and verify the CTA and
+1. Open the public website at `http://localhost:4400` and verify the CTA and
    responsive layout.
 2. Sign in with the local test account.
 3. Verify Overview usage, browser-test, uptime, incident, and recent-activity
@@ -278,7 +296,7 @@ Last local verification on 2026-08-19:
 - Cloudflare Email Sending: `zenguy.com` enabled in the personal account;
   Wrangler's remote `EMAIL` binding connected with
   `notifications@zenguy.com` as the only permitted sender.
-- Browser smoke: landing, authentication, workspace modules, request testing,
+- Browser smoke: public website, authentication, workspace modules, request testing,
   responsive layout, keyboard navigation, and console inspection passed.
 - No real email was sent during verification; perform an inbox smoke only with
   an explicitly approved recipient address.

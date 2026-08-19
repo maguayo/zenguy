@@ -5,6 +5,7 @@ import type { Role } from "../../domain/workspaces/types";
 import type {
   BilledTransaction,
   PaddleClient,
+  SubscriptionManagementUrls,
 } from "../../infrastructure/paddle/client";
 import {
   INCLUDED_RUNS,
@@ -52,12 +53,15 @@ export class GetBilling {
     const usage = await this.getCycleUsage.execute({
       workspaceId: input.workspaceId,
     });
+    const providerSubscriptionId = subscription?.providerSubscriptionId;
     let invoices: BilledTransaction[] = [];
-    if (subscription?.providerSubscriptionId !== null &&
-        subscription?.providerSubscriptionId !== undefined) {
+    if (
+      providerSubscriptionId !== null &&
+      providerSubscriptionId !== undefined
+    ) {
       try {
         invoices = await this.paddle.listBilledTransactions(
-          subscription.providerSubscriptionId,
+          providerSubscriptionId,
         );
       } catch {
         logEvent("billing_invoice_list_failed", {
@@ -66,6 +70,23 @@ export class GetBilling {
       }
     }
     const canManage = can(input.role, "billing.manage");
+    let managementUrls: SubscriptionManagementUrls | null = null;
+    if (
+      canManage &&
+      providerSubscriptionId !== null &&
+      providerSubscriptionId !== undefined
+    ) {
+      try {
+        managementUrls =
+          await this.paddle.getSubscriptionManagementUrls(
+            providerSubscriptionId,
+          );
+      } catch {
+        logEvent("billing_management_urls_failed", {
+          workspaceId: input.workspaceId,
+        });
+      }
+    }
     return {
       plan: {
         pricePerMonthCents: PLAN_PRICE_CENTS,
@@ -78,10 +99,9 @@ export class GetBilling {
         periodStart: subscription?.periodStart ?? null,
         periodEnd: subscription?.periodEnd ?? null,
         cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
-        updatePaymentMethodUrl: canManage
-          ? (subscription?.updatePaymentUrl ?? null)
-          : null,
-        cancelUrl: canManage ? (subscription?.cancelUrl ?? null) : null,
+        updatePaymentMethodUrl:
+          managementUrls?.updatePaymentMethodUrl ?? null,
+        cancelUrl: managementUrls?.cancelUrl ?? null,
       },
       usage,
       invoices,

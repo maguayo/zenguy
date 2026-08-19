@@ -39,13 +39,6 @@ const subscriptionSchema = z.object({
     .object({ action: z.string().min(1) })
     .nullable()
     .optional(),
-  management_urls: z
-    .object({
-      update_payment_method: z.string().nullable().optional(),
-      cancel: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
 });
 
 const SUBSCRIPTION_EVENTS = new Set([
@@ -250,9 +243,8 @@ export class HandlePaddleWebhook {
       periodStart,
       periodEnd,
       cancelAtPeriodEnd: data.scheduled_change?.action === "cancel",
-      updatePaymentUrl:
-        data.management_urls?.update_payment_method ?? null,
-      cancelUrl: data.management_urls?.cancel ?? null,
+      updatePaymentUrl: null,
+      cancelUrl: null,
       createdAt: stored?.createdAt ?? now,
       updatedAt: now,
     };

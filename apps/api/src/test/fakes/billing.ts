@@ -2,6 +2,7 @@ import type { BillingCanceller } from "../../domain/billing/canceller";
 import type {
   BilledTransaction,
   PaddleClient,
+  SubscriptionManagementUrls,
 } from "../../infrastructure/paddle/client";
 
 export class RecordingBillingCanceller implements BillingCanceller {
@@ -23,9 +24,15 @@ export class RecordingPaddleClient implements PaddleClient {
   }[] = [];
   readonly cancellations: string[] = [];
   readonly transactionLists: { subscriptionId: string; limit: number }[] = [];
+  readonly managementUrlRequests: string[] = [];
   readonly invoiceRequests: string[] = [];
   chargeResult: { transactionId: string | null } = { transactionId: null };
   transactions: BilledTransaction[] = [];
+  managementUrls: SubscriptionManagementUrls = {
+    updatePaymentMethodUrl: "https://example.com/update-payment-method",
+    cancelUrl: "https://example.com/cancel-subscription",
+  };
+  managementUrlsFailure: Error | null = null;
   invoiceUrl = "https://example.com/invoice.pdf";
 
   constructor(private readonly failure: Error | null = null) {}
@@ -56,6 +63,17 @@ export class RecordingPaddleClient implements PaddleClient {
     this.transactionLists.push({ subscriptionId, limit });
     this.failIfConfigured();
     return this.transactions.map((transaction) => ({ ...transaction }));
+  }
+
+  async getSubscriptionManagementUrls(
+    subscriptionId: string,
+  ): Promise<SubscriptionManagementUrls> {
+    this.managementUrlRequests.push(subscriptionId);
+    if (this.managementUrlsFailure !== null) {
+      throw this.managementUrlsFailure;
+    }
+    this.failIfConfigured();
+    return { ...this.managementUrls };
   }
 
   async getInvoicePdfUrl(transactionId: string): Promise<string> {
