@@ -1,0 +1,363 @@
+import { useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Gamepad2,
+  Hash,
+  History,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Phone,
+  Plus,
+  Power,
+  Send,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+
+import {
+  deleteChannel,
+  listChannels,
+  listDeliveries,
+  testChannel,
+  updateChannel,
+} from "../../api/channels";
+import type { Channel, ChannelType, Delivery } from "../../api/types";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { Dropdown, type DropdownItem } from "../../components/ui/Dropdown";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { IconButton } from "../../components/ui/IconButton";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { useToast } from "../../contexts/ToastContext";
+import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { apiErrorMessage } from "../../lib/errors";
+import { formatRelative } from "../../lib/format";
+
+const channelIcons: Record<ChannelType, LucideIcon> = {
+  CALL: Phone,
+  DISCORD: Gamepad2,
+  EMAIL: Mail,
+  SLACK: Hash,
+  SMS: MessageSquare,
+  WHATSAPP: MessageCircle,
+};
+
+const channelTypeLabels: Record<ChannelType, string> = {
+  CALL: "Phone call",
+  DISCORD: "Discord",
+  EMAIL: "Email",
+  SLACK: "Slack",
+  SMS: "SMS",
+  WHATSAPP: "WhatsApp",
+};
+
+export function channelTarget(channel: Channel): string {
+  switch (channel.type) {
+    case "EMAIL":
+      return channel.configPreview.emails?.join(", ") || "—";
+    case "SMS":
+    case "WHATSAPP":
+    case "CALL":
+      return channel.configPreview.phoneNumber ?? "—";
+    case "SLACK":
+    case "DISCORD":
+      return channel.configPreview.webhookUrlMasked ?? "—";
+  }
+}
+
+export function lastDeliveryText(
+  status: Channel["lastDeliveryStatus"],
+  delivery?: Delivery,
+): string {
+  if (!status) return "Never used";
+  const label = status === "SENT" ? "Delivered" : "Failed";
+  return delivery ? `${label} ${formatRelative(delivery.createdAt)}` : label;
+}
+
+export function testDeliveryResult(delivery: Delivery): {
+  message: string;
+  tone: "error" | "success";
+} {
+  return delivery.status === "SENT"
+    ? { message: "Test sent", tone: "success" }
+    : {
+        message: `Test failed: ${delivery.errorSanitized ?? "Unknown error"}`,
+        tone: "error",
+      };
+}
+
+export function openChannelPanel(
+  current: URLSearchParams,
+  panel: "channel" | "deliveries",
+  value: string,
+): URLSearchParams {
+  const next = new URLSearchParams(current);
+  next.delete(panel === "channel" ? "deliveries" : "channel");
+  next.set(panel, value);
+  return next;
+}
+
+export function ChannelSummary({
+  channel,
+  lastDelivery,
+}: {
+  channel: Channel;
+  lastDelivery?: Delivery;
+}) {
+  const Icon = channelIcons[channel.type];
+  const deliveryLabel = lastDeliveryText(channel.lastDeliveryStatus, lastDelivery);
+  const deliveryTone = channel.lastDeliveryStatus === "SENT" ? "bg-ok-600" : "bg-danger-600";
+
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-zinc-700">
+          <Icon aria-hidden="true" className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-zinc-900">{channel.name}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">{channelTypeLabels[channel.type]}</p>
+        </div>
+      </div>
+
+      <p className="mt-4 truncate text-sm text-zinc-600" title={channelTarget(channel)}>
+        {channelTarget(channel)}
+      </p>
+
+      <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2">
+        {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}
+        {channel.verifiedAt ? <Badge tone="ok">Verified</Badge> : null}
+        <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+          {channel.lastDeliveryStatus ? (
+            <span aria-hidden="true" className={`size-1.5 rounded-full ${deliveryTone}`} />
+          ) : null}
+          {deliveryLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ChannelActions({ channel }: { channel: Channel }) {
+  const { can, current } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [testOpen, setTestOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const test = useMutation({ mutationFn: () => testChannel(current.id, channel.id) });
+  const remove = useMutation({ mutationFn: () => deleteChannel(current.id, channel.id) });
+  const toggle = useMutation({
+    mutationFn: () => updateChannel(current.id, channel.id, { enabled: !channel.enabled }),
+  });
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["ws", current.id, "channels"] }),
+      queryClient.invalidateQueries({
+        queryKey: ["ws", current.id, "channels", channel.id, "deliveries"],
+      }),
+    ]);
+  };
+
+  const sendTest = async () => {
+    try {
+      const delivery = await test.mutateAsync();
+      const result = testDeliveryResult(delivery);
+      if (result.tone === "success") toast.success(result.message);
+      else toast.error(result.message);
+      await refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
+  };
+
+  const toggleChannel = async () => {
+    try {
+      await toggle.mutateAsync();
+      toast.success(channel.enabled ? "Channel disabled" : "Channel enabled");
+      await refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
+  };
+
+  const removeChannel = async () => {
+    try {
+      await remove.mutateAsync();
+      toast.success("Channel deleted");
+      await refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
+  };
+
+  const items: DropdownItem[] = [
+    ...(can("channels.manage")
+      ? [
+          {
+            disabled: test.isPending,
+            icon: <Send className="size-4" />,
+            label: "Send test",
+            onSelect: () => setTestOpen(true),
+          },
+        ]
+      : []),
+    {
+      icon: <History className="size-4" />,
+      label: "View deliveries",
+      onSelect: () =>
+        setSearchParams(openChannelPanel(searchParams, "deliveries", channel.id)),
+    },
+    ...(can("channels.manage")
+      ? [
+          {
+            icon: <Pencil className="size-4" />,
+            label: "Edit",
+            onSelect: () =>
+              setSearchParams(openChannelPanel(searchParams, "channel", channel.id)),
+          },
+          {
+            disabled: toggle.isPending,
+            icon: <Power className="size-4" />,
+            label: channel.enabled ? "Disable" : "Enable",
+            onSelect: () => void toggleChannel(),
+          },
+          {
+            icon: <Trash2 className="size-4" />,
+            label: "Delete",
+            onSelect: () => setDeleteOpen(true),
+            separatorBefore: true,
+            tone: "danger" as const,
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <>
+      <Dropdown
+        items={items}
+        trigger={
+          <IconButton aria-label={`Actions for ${channel.name}`}>
+            <MoreHorizontal aria-hidden="true" className="size-4" />
+          </IconButton>
+        }
+      />
+      <ConfirmDialog
+        body="This sends a real notification to this channel."
+        confirmLabel="Send test"
+        onClose={() => setTestOpen(false)}
+        onConfirm={sendTest}
+        open={testOpen}
+        title="Send a test notification?"
+      />
+      <ConfirmDialog
+        body="It will be removed from every test and monitor that uses it."
+        confirmLabel="Delete"
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={removeChannel}
+        open={deleteOpen}
+        title={`Delete "${channel.name}"?`}
+        tone="danger"
+      />
+    </>
+  );
+}
+
+function ChannelCard({ channel }: { channel: Channel }) {
+  const { current } = useWorkspace();
+  const deliveries = useQuery({
+    enabled: Boolean(channel.lastDeliveryStatus),
+    queryFn: () => listDeliveries(current.id, channel.id, { limit: 1 }),
+    queryKey: ["ws", current.id, "channels", channel.id, "deliveries", { limit: 1 }],
+  });
+
+  return (
+    <Card className="flex min-h-44 items-start gap-3">
+      <ChannelSummary channel={channel} lastDelivery={deliveries.data?.items[0]} />
+      <ChannelActions channel={channel} />
+    </Card>
+  );
+}
+
+function ChannelGridSkeleton(): ReactNode {
+  return (
+    <div aria-label="Loading notification channels" className="grid gap-4 md:grid-cols-2" role="status">
+      {Array.from({ length: 4 }, (_, index) => (
+        <Card key={index} className="min-h-44">
+          <div className="flex gap-3">
+            <Skeleton className="size-10 shrink-0 rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+          <Skeleton className="mt-5 h-4 w-3/4" />
+          <Skeleton className="mt-5 h-5 w-28 rounded-full" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default function ChannelsPage() {
+  const { can, current } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channels = useQuery({
+    queryFn: () => listChannels(current.id),
+    queryKey: ["ws", current.id, "channels"],
+    refetchInterval: 30_000,
+  });
+  const addChannel = () =>
+    setSearchParams(openChannelPanel(searchParams, "channel", "new"));
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        actions={
+          can("channels.manage") ? (
+            <Button onClick={addChannel} variant="primary">
+              <Plus aria-hidden="true" className="size-4" />
+              Add channel
+            </Button>
+          ) : undefined
+        }
+        title="Notifications"
+      />
+
+      {channels.isPending ? (
+        <ChannelGridSkeleton />
+      ) : channels.isError ? (
+        <ErrorState onRetry={() => void channels.refetch()} />
+      ) : channels.data.length === 0 ? (
+        <EmptyState
+          action={
+            can("channels.manage") ? (
+              <Button onClick={addChannel} variant="primary">
+                Add channel
+              </Button>
+            ) : undefined
+          }
+          description="Create a channel once, then reuse it across tests and monitors."
+          icon={<Mail aria-hidden="true" className="size-7" />}
+          title="No notification channels yet"
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {channels.data.map((channel) => (
+            <ChannelCard key={channel.id} channel={channel} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

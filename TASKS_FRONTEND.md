@@ -336,10 +336,10 @@ export default defineConfig({
 # Phase 9 — Notification channels
 
 ### FE-034: Channels list
-- [ ] `src/api/channels.ts` (`listChannels`, `createChannel`, `updateChannel`, `deleteChannel`, `testChannel`, `listDeliveries`).
-- [ ] `pages/notifications/ChannelsPage.tsx` (§18.13): `PageHeader` `Notifications` + `Add channel` (gated `channels.manage`). Grid of channel Cards (2-col desktop): type icon (EMAIL `Mail`, SMS `MessageSquare`, WHATSAPP `MessageCircle`, CALL `Phone`, SLACK `Hash`, DISCORD `Gamepad2`), name, target line from `configPreview` (emails joined / phone / masked webhook), status chips: `Disabled` neutral when `!enabled`; `Verified` ok when `verifiedAt`; last delivery dot (`SENT` ok / `FAILED` danger + relative time). Card menu (gated): `Send test`, `View deliveries`, `Edit`, `Disable`/`Enable`, `Delete`.
-- [ ] `Send test` → ConfirmDialog `Send a test notification?` body `This sends a real notification to this channel.` → POST test → result toast `Test sent` / `Test failed: <errorSanitized>` + refresh list. `Delete` → ConfirmDialog danger `Delete "<name>"? It will be removed from every test and monitor that uses it.`
-- [ ] Empty: `No notification channels yet` / `Create a channel once, then reuse it across tests and monitors.` + CTA.
+- [x] `src/api/channels.ts` (`listChannels`, `createChannel`, `updateChannel`, `deleteChannel`, `testChannel`, `listDeliveries`).
+- [x] `pages/notifications/ChannelsPage.tsx` (§18.13): `PageHeader` `Notifications` + `Add channel` (gated `channels.manage`). Grid of channel Cards (2-col desktop): type icon (EMAIL `Mail`, SMS `MessageSquare`, WHATSAPP `MessageCircle`, CALL `Phone`, SLACK `Hash`, DISCORD `Gamepad2`), name, target line from `configPreview` (emails joined / phone / masked webhook), status chips: `Disabled` neutral when `!enabled`; `Verified` ok when `verifiedAt`; last delivery dot (`SENT` ok / `FAILED` danger + relative time). Card menu (gated): `Send test`, `View deliveries`, `Edit`, `Disable`/`Enable`, `Delete`.
+- [x] `Send test` → ConfirmDialog `Send a test notification?` body `This sends a real notification to this channel.` → POST test → result toast `Test sent` / `Test failed: <errorSanitized>` + refresh list. `Delete` → ConfirmDialog danger `Delete "<name>"? It will be removed from every test and monitor that uses it.`
+- [x] Empty: `No notification channels yet` / `Create a channel once, then reuse it across tests and monitors.` + CTA.
 
 ### FE-035: Channel form (per-type)
 - [ ] `pages/notifications/ChannelFormModal.tsx` — Modal launched from Add/Edit (no separate route). Step 1 (create only): type picker — 6 tile buttons (icon + label). Step 2: fields:
