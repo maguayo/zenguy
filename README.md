@@ -92,14 +92,14 @@ Running the seed command creates this reusable account and workspace:
 | Field | Value |
 | --- | --- |
 | Sign-in URL | `http://localhost:5173/signin` |
-| Email | `demo@zenguy.dev` |
-| Password | `Password123!` |
-| Workspace | `Demo Workspace` |
+| Email | `marcos@aguayo.es` |
+| Password | `abc123456` |
+| Workspace | `Aguayo Staging` |
 
-These credentials are for local development only. Do not reuse the password in
-any deployed environment. If the demo workspace unexpectedly redirects to the
-billing onboarding screen, rerun the local migration and seed commands above to
-restore the deterministic fixture.
+These credentials are the local and staging fixture only. Do not use them in
+production. A commit to the `staging` branch wipes staging application data and
+recreates this fixture. If the workspace unexpectedly redirects to billing
+onboarding, rerun migrate + seed.
 
 ## Paddle sandbox checkout
 

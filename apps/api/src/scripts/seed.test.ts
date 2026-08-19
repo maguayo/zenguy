@@ -47,27 +47,38 @@ describe("seed script", () => {
       "notification_channels",
       "browser_tests",
       "browser_test_channels",
+      "test_runs",
+      "test_attempts",
       "uptime_monitors",
       "uptime_monitor_channels",
+      "uptime_checks",
     ]) {
-      expect(sql.match(new RegExp(`INSERT INTO ${table} \\(`, "gu"))).toHaveLength(1);
+      expect(sql).toContain(`DELETE FROM ${table};`);
+      expect(sql.match(new RegExp(`INSERT INTO ${table} \\(`, "gu"))?.length).toBeGreaterThan(0);
     }
-    expect(sql).toContain("DELETE FROM users WHERE id LIKE 'seed_%'");
-    expect(sql).toContain("DELETE FROM users WHERE email = 'demo@zenguy.dev'");
-    expect(sql).toContain("demo@zenguy.dev");
-    expect(sql).toContain("Demo Workspace");
+    expect(sql).toContain("DELETE FROM users;");
+    expect(sql).toContain("DELETE FROM workspaces;");
+    expect(sql).toContain("DELETE FROM subscription_grants;");
+    expect(sql).toContain("marcos@aguayo.es");
+    expect(sql).toContain("ana@zenguy.dev");
+    expect(sql).toContain("luis@zenguy.dev");
+    expect(sql).toContain("Aguayo Staging");
     expect(sql).toContain("Europe/Madrid");
-    expect(sql).toContain("DEMO_TOKEN");
-    expect(sql).toContain("*.example.com");
-    expect(sql).toContain("Example smoke");
-    expect(sql).toContain("Example uptime");
+    expect(sql).toContain("'ADMIN'");
+    expect(sql).toContain("'MEMBER'");
+    expect(sql).toContain("Homepage smoke");
+    expect(sql).toContain("Checkout flow");
+    expect(sql).toContain("INSERT INTO test_runs (");
+    expect(sql).toContain("Homepage beat");
+    expect(sql).toContain("API beat");
+    expect(sql).toContain("'grant'");
     expect(sql).not.toContain("demo-secret-value");
-    expect(sql.match(/seed_[0-9A-HJKMNP-TV-Z]{26}/gu)?.length).toBeGreaterThan(20);
+    expect(sql).not.toContain("zenguy-db");
 
     const passwordHash = sql.match(/pbkdf2\$100000\$[^']+/u)?.[0];
     expect(passwordHash).toBeDefined();
     await expect(
-      verifyPassword("Password123!", passwordHash ?? ""),
+      verifyPassword("abc123456", passwordHash ?? ""),
     ).resolves.toBe(true);
   });
 

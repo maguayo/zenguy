@@ -17,7 +17,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply zenguy-db --remote",
     "db:migrate:staging": "wrangler d1 migrations apply zenguy-staging-db --remote --env staging",
     "db:migrate:production": "wrangler d1 migrations apply zenguy-db --remote --env production",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "seed:staging": "node scripts/reseed-staging.mjs"
   },
   "dependencies": {
     "@cloudflare/puppeteer": "^1.3.0",

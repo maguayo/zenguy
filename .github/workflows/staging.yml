@@ -1,0 +1,50 @@
+name: Staging wipe and reseed
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+jobs:
+  migrate-deploy-reseed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate staging D1
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm db:migrate:staging
+      - name: Deploy staging Worker
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm deploy:staging
+      - name: Write staging seed vars
+        env:
+          STAGING_ENCRYPTION_KEY: ${{ secrets.STAGING_ENCRYPTION_KEY }}
+        run: |
+          if [ -z "$STAGING_ENCRYPTION_KEY" ]; then
+            echo "STAGING_ENCRYPTION_KEY is required to encrypt the staging fixture secrets"
+            exit 1
+          fi
+          printf 'ENCRYPTION_KEY=%s\n' "$STAGING_ENCRYPTION_KEY" > apps/api/.ci.staging.vars
+      - name: Wipe and reseed staging application data
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm seed:staging -- --vars-file .ci.staging.vars

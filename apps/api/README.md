@@ -63,11 +63,11 @@ frontend-owned setup.
 
 The seed command recreates an idempotent fixture in local D1:
 
-- Login: demo@zenguy.dev / Password123!
-- Workspace: Demo Workspace
-- Active development subscription
+- Login: `marcos@aguayo.es` / `abc123456`
+- Workspace: Aguayo Staging, with admin and member teammates
+- Complimentary (non-Paddle) active subscription
+- Browser tests, completed runs, and uptime monitors ("beats")
 - DEMO_TOKEN secret restricted to example.com
-- Email channel, example browser test, and example uptime monitor
 
 Preview the SQL without executing it:
 
@@ -324,13 +324,12 @@ The normal production deploy is intentionally different from the bootstrap:
 it activates the `/api/*` route, three cron triggers, and all Queue consumers.
 Do not use it as a harmless first upload.
 
-The staging backend CI configuration is prepared but not connected because the
-existing Workers Builds token lacks required permissions. Until a correctly
-scoped token is installed, the commands above are the authoritative staging
-release path. A push to `staging` can
-deploy the Pages frontend, but it does not automatically migrate or deploy the
-API Worker. Keep production CI disabled until every production release gate
-listed above is complete.
+A push to the `staging` branch runs `.github/workflows/staging.yml`: it
+migrates `zenguy-staging-db`, deploys `zenguy-api-staging`, then wipes and
+reseeds application data through `scripts/reseed-staging.mjs`. That wrapper
+hardcodes `--remote --env staging --allow-remote --confirm-staging` and cannot
+target `zenguy-db` or production. Keep production CI disabled until every
+production release gate listed above is complete.
 
 The API deployment does not build or upload `apps/frontend/dist`; Pages builds
 that package independently from Git. The frontend projects and branch controls
