@@ -32,6 +32,9 @@ const input: MonitorInput = {
 const monitor: Monitor = {
   ...input,
   body: null,
+  bodyCondition: null,
+  bodyConditionPath: null,
+  bodyExpectedValue: null,
   checking: false,
   createdAt: "2026-08-19T10:00:00.000Z",
   createdBy: null,

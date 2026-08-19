@@ -300,8 +300,15 @@ export interface MonitorInput {
   url: string;
 }
 
-export interface Monitor extends Omit<MonitorInput, "body" | "headers"> {
+export interface Monitor
+  extends Omit<
+    MonitorInput,
+    "body" | "bodyCondition" | "bodyConditionPath" | "bodyExpectedValue" | "headers"
+  > {
   body: string | null;
+  bodyCondition: BodyCondition | null;
+  bodyConditionPath: string | null;
+  bodyExpectedValue: string | null;
   checking: boolean;
   createdAt: string;
   createdBy: UserRef;

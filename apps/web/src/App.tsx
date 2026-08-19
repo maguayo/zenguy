@@ -52,7 +52,7 @@ const EditTestPage = lazy(() => import("./pages/tests/TestFormPage"));
 const RunDetailPage = lazy(() => import("./pages/tests/RunDetailPage"));
 const UptimeListPage = lazy(() => import("./pages/uptime/UptimeListPage"));
 const NewMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
-const MonitorDetailPage = stub("Uptime monitor");
+const MonitorDetailPage = lazy(() => import("./pages/uptime/MonitorDetailPage"));
 const EditMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
 const IncidentsPage = stub("Incidents");
 const IncidentDetailPage = stub("Incident");

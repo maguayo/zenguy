@@ -314,11 +314,11 @@ export default defineConfig({
 - [x] Edit mode for MEMBER-masked payloads never happens (route gated), but headers may come back decrypted for OWNER/ADMIN — prefill normally. Toasts as usual.
 
 ### FE-031: Monitor detail
-- [ ] `pages/uptime/MonitorDetailPage.tsx` (§18.11): header name + StatusBadge (+ `Checking` chip) + host; actions Edit / Delete (gated, confirm). Open-incident banner as in tests.
-- [ ] Stats row (query stats, `refetchInterval: 60_000`): Cards `Uptime 24 h` / `7 days` / `30 days` (`formatPct`, ok tone ≥ 99.9, warn ≥ 99, danger below; `—` for null) + `Avg response (24 h)` in ms.
-- [ ] **Response time (24 h)** Card: `recharts` `ResponsiveContainer` + `AreaChart` of `series` — X = time (`formatTime` ticks, ~6), Y = ms (auto), area accent-600 at 15% fill 2-px line; failed points overlaid as danger dots (`Scatter` on same chart of `status === "FAILED"` entries at y = their responseTime or 0); Tooltip: time, `<ms> ms`, status word. Empty series → EmptyState `Not enough data yet.` Chart height 220, no grid clutter (dashed zinc-100 horizontal lines only).
-- [ ] **Recent checks** Card: Table Time / Result (`Passed`/`Failed` Badge) / HTTP status / Response time / Reason (mono, `—`); `LoadMore` pagination (50/page).
-- [ ] **Incidents** Card: this monitor's incidents (reuse incidents fetcher with `type=uptime` filtered client-side by resourceId, or fetch and filter — either is fine; link into incident detail). **Configuration** Card: DescriptionList of method+URL, expectations summary (`Status 200 · Body contains "healthy"`), frequency, timeout, retries, channels, recovery.
+- [x] `pages/uptime/MonitorDetailPage.tsx` (§18.11): header name + StatusBadge (+ `Checking` chip) + host; actions Edit / Delete (gated, confirm). Open-incident banner as in tests.
+- [x] Stats row (query stats, `refetchInterval: 60_000`): Cards `Uptime 24 h` / `7 days` / `30 days` (`formatPct`, ok tone ≥ 99.9, warn ≥ 99, danger below; `—` for null) + `Avg response (24 h)` in ms.
+- [x] **Response time (24 h)** Card: `recharts` `ResponsiveContainer` + `AreaChart` of `series` — X = time (`formatTime` ticks, ~6), Y = ms (auto), area accent-600 at 15% fill 2-px line; failed points overlaid as danger dots (`Scatter` on same chart of `status === "FAILED"` entries at y = their responseTime or 0); Tooltip: time, `<ms> ms`, status word. Empty series → EmptyState `Not enough data yet.` Chart height 220, no grid clutter (dashed zinc-100 horizontal lines only).
+- [x] **Recent checks** Card: Table Time / Result (`Passed`/`Failed` Badge) / HTTP status / Response time / Reason (mono, `—`); `LoadMore` pagination (50/page).
+- [x] **Incidents** Card: this monitor's incidents (reuse incidents fetcher with `type=uptime` filtered client-side by resourceId, or fetch and filter — either is fine; link into incident detail). **Configuration** Card: DescriptionList of method+URL, expectations summary (`Status 200 · Body contains "healthy"`), frequency, timeout, retries, channels, recovery.
 
 # Phase 8 — Incidents
 
