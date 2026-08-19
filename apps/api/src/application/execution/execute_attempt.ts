@@ -146,7 +146,9 @@ function requiredExecutionState(
     run === null ||
     attempt === null ||
     attempt.testRunId !== message.runId ||
-    attempt.attemptIndex !== message.attemptIndex
+    attempt.attemptIndex !== message.attemptIndex ||
+    attempt.queuedAt !== message.executionGeneration ||
+    attempt.status !== "STARTING"
   ) {
     platformAlert("attempt_state_missing_after_claim", {
       runId: message.runId,
@@ -221,6 +223,7 @@ export class ExecuteAttempt {
           message.runId,
           message.attemptId,
           message.attemptIndex,
+          message.executionGeneration,
         );
         const runningAttempt = await this.dependencies.attempts.findById(
           message.attemptId,
@@ -288,7 +291,8 @@ export class ExecuteAttempt {
                 clock: this.dependencies.clock,
                 redactor,
                 secrets,
-                llmUseVision: this.dependencies.llmUseVision,
+                llmUseVision:
+                  secrets.size === 0 && this.dependencies.llmUseVision,
                 onStep: async (step) => {
                   if (!hardTimedOut) await persist(step);
                 },
@@ -399,7 +403,11 @@ export class ExecuteAttempt {
           ? cause.message
           : "Initial navigation failed";
     }
-    const screenshot = await session.screenshotJpeg();
+    // See run_agent.ts: attempts that resolve secrets remain text-only because
+    // arbitrary page pixels cannot be redacted with a reliable guarantee.
+    const screenshot = secrets.size === 0
+      ? await session.screenshotJpeg()
+      : null;
     const baseDescription = `Initial navigation → navigate to ${sanitizeUrl(run.snapshot.startUrl)}`;
     return {
       sequence: 1,

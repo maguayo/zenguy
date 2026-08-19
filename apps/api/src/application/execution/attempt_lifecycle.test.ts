@@ -28,6 +28,8 @@ import {
   AttemptLifecycle,
   type AttemptOutcome,
 } from "./attempt_lifecycle";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const NOW = 1_700_000_000_000;
 const WORKSPACE: Workspace = {
@@ -116,11 +118,16 @@ const ATTEMPT: TestAttempt = {
 
 class RecordingAttemptQueue implements Pick<Queue<AttemptMessage>, "send"> {
   readonly calls: { message: AttemptMessage; delaySeconds: number }[] = [];
+  failures = 0;
 
   async send(
     message: AttemptMessage,
     options?: QueueSendOptions,
   ): Promise<QueueSendResponse> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("queue unavailable");
+    }
     this.calls.push({
       message: structuredClone(message),
       delaySeconds: options?.delaySeconds ?? 0,
@@ -173,12 +180,12 @@ async function fixture(options: {
 } = {}) {
   const clock = new FixedClock(NOW);
   const runs = new FakeRunRepo();
-  const attempts = new FakeAttemptRepo(runs);
+  const usageEvents = new FakeUsageEventRepo();
+  const attempts = new FakeAttemptRepo(runs, usageEvents);
   const steps = new FakeStepRepo();
   const artifacts = new FakeArtifactRepo();
   const tests = new FakeBrowserTestRepo();
   const workspaces = new FakeWorkspaceRepo();
-  const usageEvents = new FakeUsageEventRepo();
   const ids = new FakeIds();
   const queue = new RecordingAttemptQueue();
   const storage = new RecordingStorage();
@@ -196,6 +203,22 @@ async function fixture(options: {
   await tests.insert(TEST);
   await runs.insert({ ...RUN, ...options.run });
   await attempts.insert({ ...ATTEMPT, ...options.attempt });
+  const durable = new FakeDurableWorkflowRepo({
+    runs,
+    attempts,
+    steps,
+    artifacts,
+  });
+  const unusedQueue = {
+    send: async () => ({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    }),
+  };
+  const outboxPublisher = new PublishQueueOutbox(
+    durable,
+    { RUN: queue, CHECK: unusedQueue, NOTIFY: unusedQueue },
+    clock,
+  );
   const lifecycle = new AttemptLifecycle({
     runs,
     attempts,
@@ -206,7 +229,8 @@ async function fixture(options: {
     storage,
     recordUsage,
     reverseUsage,
-    queue,
+    durable,
+    outboxPublisher,
     clock,
     ids,
     runFinalizedHandler: finalized,
@@ -223,6 +247,8 @@ async function fixture(options: {
     usageEvents,
     recordUsage,
     queue,
+    durable,
+    outboxPublisher,
     storage,
     finalized,
     reverseCalls,
@@ -247,11 +273,17 @@ describe("AttemptLifecycle", () => {
       runId: RUN.id,
       attemptId: ATTEMPT.id,
       attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
     };
     await expect(value.lifecycle.claim(firstMessage)).resolves.toBe("execute");
     await expect(value.lifecycle.claim(firstMessage)).resolves.toBe("skip");
     value.clock.advance(100);
-    await value.lifecycle.markRunning(RUN.id, ATTEMPT.id, 0);
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      firstMessage.executionGeneration,
+    );
     value.clock.advance(100);
     let state = await current(value, ATTEMPT.id);
     await value.lifecycle.onAttemptFinished(state.run, state.attempt, FAILED);
@@ -264,7 +296,12 @@ describe("AttemptLifecycle", () => {
     if (retryOne === undefined) throw new Error("retry one missing");
     value.clock.advance(100);
     await expect(value.lifecycle.claim(retryOne)).resolves.toBe("execute");
-    await value.lifecycle.markRunning(RUN.id, retryOne.attemptId, 1);
+    await value.lifecycle.markRunning(
+      RUN.id,
+      retryOne.attemptId,
+      1,
+      retryOne.executionGeneration,
+    );
     value.clock.advance(100);
     state = await current(value, retryOne.attemptId);
     await value.lifecycle.onAttemptFinished(state.run, state.attempt, FAILED);
@@ -277,7 +314,12 @@ describe("AttemptLifecycle", () => {
     if (retryTwo === undefined) throw new Error("retry two missing");
     value.clock.advance(60_000);
     await expect(value.lifecycle.claim(retryTwo)).resolves.toBe("execute");
-    await value.lifecycle.markRunning(RUN.id, retryTwo.attemptId, 2);
+    await value.lifecycle.markRunning(
+      RUN.id,
+      retryTwo.attemptId,
+      2,
+      retryTwo.executionGeneration,
+    );
     value.clock.advance(100);
     state = await current(value, retryTwo.attemptId);
     await value.lifecycle.onAttemptFinished(state.run, state.attempt, PASSED);
@@ -300,6 +342,78 @@ describe("AttemptLifecycle", () => {
     });
   });
 
+  it("does not persist usage when the atomic start loses its claim", async () => {
+    const value = await fixture();
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    await expect(value.lifecycle.claim(message)).resolves.toBe("execute");
+    vi.spyOn(value.attempts, "markRunning").mockResolvedValueOnce(false);
+
+    await expect(
+      value.lifecycle.markRunning(
+        RUN.id,
+        ATTEMPT.id,
+        0,
+        message.executionGeneration,
+      ),
+    ).rejects.toThrow("Attempt is no longer claimable");
+
+    expect(value.usageEvents.events.size).toBe(0);
+    await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
+      status: "QUEUED",
+      startedAt: null,
+      usageEventId: null,
+    });
+    await expect(value.attempts.findById(ATTEMPT.id)).resolves.toMatchObject({
+      status: "STARTING",
+    });
+  });
+
+  it("recovers an existing usage event and stays idempotent on redelivery", async () => {
+    const value = await fixture();
+    await value.usageEvents.insertIfAbsent({
+      id: "ue_existing_start",
+      workspaceId: WORKSPACE.id,
+      testRunId: RUN.id,
+      type: "BROWSER_RUN",
+      quantity: 1,
+      billable: true,
+      idempotencyKey: `run:${RUN.id}`,
+      occurredAt: NOW - 10,
+      reversedAt: null,
+      createdAt: NOW - 10,
+    });
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    await expect(value.lifecycle.claim(message)).resolves.toBe("execute");
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      message.executionGeneration,
+    );
+
+    await expect(value.lifecycle.claim(message)).resolves.toBe("skip");
+    expect(value.usageEvents.events.size).toBe(1);
+    await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      usageEventId: "ue_existing_start",
+    });
+    await expect(value.attempts.findById(ATTEMPT.id)).resolves.toMatchObject({
+      status: "RUNNING",
+    });
+  });
+
   it("retries infrastructure failures on the same attempt and removes aborted evidence", async () => {
     const value = await fixture();
     const message: AttemptMessage = {
@@ -307,9 +421,15 @@ describe("AttemptLifecycle", () => {
       runId: RUN.id,
       attemptId: ATTEMPT.id,
       attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
     };
     await value.lifecycle.claim(message);
-    await value.lifecycle.markRunning(RUN.id, ATTEMPT.id, 0);
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      message.executionGeneration,
+    );
     const step: RunStep = {
       id: "step_aborted",
       attemptId: ATTEMPT.id,
@@ -362,9 +482,168 @@ describe("AttemptLifecycle", () => {
     await expect(value.artifacts.findById(artifact.id)).resolves.toBeNull();
     expect(value.storage.deleted).toEqual([[artifact.storageKey]]);
     expect(value.queue.calls).toEqual([
-      { message, delaySeconds: 30 },
+      {
+        message: {
+          ...message,
+          executionGeneration: NOW + 30_000,
+        },
+        delaySeconds: 30,
+      },
     ]);
     expect(value.usageEvents.events.size).toBe(1);
+  });
+
+  it("ignores a late result from an older infrastructure generation", async () => {
+    const value = await fixture();
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    await value.lifecycle.claim(message);
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      message.executionGeneration,
+    );
+    const oldGeneration = await current(value, ATTEMPT.id);
+    await value.lifecycle.onAttemptFinished(
+      oldGeneration.run,
+      oldGeneration.attempt,
+      {
+        status: "SYSTEM_ERROR",
+        systemErrorCode: "RUNNER_CRASH",
+        visitedUrls: [],
+        consoleErrors: [],
+        networkErrors: [],
+      },
+    );
+    value.clock.advance(30_000);
+    await expect(value.lifecycle.claim(message)).resolves.toBe("skip");
+    const currentGeneration = value.queue.calls[0]?.message;
+    if (currentGeneration === undefined) {
+      throw new Error("infrastructure retry message missing");
+    }
+    expect(currentGeneration.executionGeneration).toBe(NOW + 30_000);
+    await expect(value.lifecycle.claim(currentGeneration)).resolves.toBe(
+      "execute",
+    );
+    await expect(
+      value.lifecycle.markRunning(
+        RUN.id,
+        ATTEMPT.id,
+        0,
+        message.executionGeneration,
+      ),
+    ).rejects.toThrow("Attempt is no longer claimable");
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      currentGeneration.executionGeneration,
+    );
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await value.lifecycle.onAttemptFinished(
+      oldGeneration.run,
+      oldGeneration.attempt,
+      PASSED,
+    );
+
+    await expect(value.attempts.findById(ATTEMPT.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      finishedAt: null,
+    });
+    expect(alert.mock.calls.join(" ")).toContain(
+      '"event":"stale_attempt_generation_ignored"',
+    );
+    alert.mockRestore();
+  });
+
+  it("recovers a functional retry after Queue.send fails without shortening its delay", async () => {
+    const value = await fixture({
+      run: { status: "RUNNING", startedAt: NOW, attemptCount: 2 },
+      attempt: { attemptIndex: 1, status: "RUNNING", startedAt: NOW },
+    });
+    value.queue.failures = 1;
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const state = await current(value, ATTEMPT.id);
+
+    await expect(
+      value.lifecycle.onAttemptFinished(state.run, state.attempt, FAILED),
+    ).resolves.toBeUndefined();
+
+    expect(value.queue.calls).toEqual([]);
+    const [pending] = [...value.durable.outboxEntries.values()];
+    expect(pending).toMatchObject({
+      queueKind: "RUN",
+      availableAt: NOW + 60_000,
+      publishedAt: null,
+    });
+    const nextMessage = JSON.parse(pending?.payloadJson ?? "null") as AttemptMessage;
+    await expect(value.lifecycle.claim(nextMessage)).resolves.toBe("skip");
+    value.clock.advance(59_999);
+    await expect(value.outboxPublisher.flush()).resolves.toEqual({
+      published: 0,
+      failed: 0,
+    });
+    value.clock.advance(1);
+    await expect(value.outboxPublisher.flush()).resolves.toEqual({
+      published: 1,
+      failed: 0,
+    });
+    expect(value.queue.calls).toEqual([
+      { message: nextMessage, delaySeconds: 0 },
+    ]);
+    await expect(value.lifecycle.claim(nextMessage)).resolves.toBe("execute");
+    alert.mockRestore();
+  });
+
+  it("replays reverseUsage and terminal side effects after a partial finalization", async () => {
+    const value = await fixture({ run: { infraAttempts: 2 } });
+    const usageEventId = await value.recordUsage.execute({
+      workspaceId: WORKSPACE.id,
+      runId: RUN.id,
+      occurredAt: NOW,
+    });
+    await value.runs.setUsageEventId(RUN.id, usageEventId);
+    const handler = vi
+      .spyOn(value.finalized, "handle")
+      .mockRejectedValueOnce(new Error("report unavailable"));
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    await value.lifecycle.claim(message);
+    const state = await current(value, ATTEMPT.id);
+
+    await expect(
+      value.lifecycle.onAttemptFinished(state.run, state.attempt, {
+        status: "SYSTEM_ERROR",
+        systemErrorCode: "BROWSER_LAUNCH_FAILED",
+        visitedUrls: [],
+        consoleErrors: [],
+        networkErrors: [],
+      }),
+    ).rejects.toThrow("report unavailable");
+
+    const pending = [...value.durable.jobs.values()].find(
+      (job) => job.kind === "RUN_FINALIZATION",
+    );
+    expect(pending?.status).toBe("PENDING");
+    expect(value.reverseCalls).toEqual([RUN.id]);
+    await expect(value.lifecycle.claim(message)).resolves.toBe("skip");
+    expect(value.reverseCalls).toEqual([RUN.id, RUN.id]);
+    expect(value.usageEvents.events.get(usageEventId)?.reversedAt).toBe(NOW);
+    expect(value.finalized.runs).toHaveLength(1);
+    expect(value.durable.jobs.get(pending?.id ?? "")?.status).toBe("COMPLETED");
+    handler.mockRestore();
   });
 
   it("reverses a partially recorded usage event when no attempt ever started", async () => {
@@ -380,6 +659,7 @@ describe("AttemptLifecycle", () => {
       runId: RUN.id,
       attemptId: ATTEMPT.id,
       attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
     };
     await value.lifecycle.claim(message);
     const state = await current(value, ATTEMPT.id);
@@ -411,6 +691,7 @@ describe("AttemptLifecycle", () => {
       runId: RUN.id,
       attemptId: ATTEMPT.id,
       attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
     };
 
     await expect(value.lifecycle.claim(message)).resolves.toBe("skip");
@@ -432,6 +713,7 @@ describe("AttemptLifecycle", () => {
       runId: RUN.id,
       attemptId: ATTEMPT.id,
       attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
     };
     const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -453,6 +735,43 @@ describe("AttemptLifecycle", () => {
     alert.mockRestore();
   });
 
+  it.each(["STARTING", "RUNNING"] as const)(
+    "does not cancel a deleted test after an attempt owns %s execution",
+    async (status) => {
+      const value = await fixture({
+        run:
+          status === "RUNNING"
+            ? { status: "RUNNING", startedAt: NOW }
+            : { status: "QUEUED" },
+        attempt: {
+          status,
+          startedAt: NOW,
+        },
+      });
+      await value.tests.softDelete(TEST.id, NOW);
+      const message: AttemptMessage = {
+        kind: "attempt",
+        runId: RUN.id,
+        attemptId: ATTEMPT.id,
+        attemptIndex: 0,
+        executionGeneration: ATTEMPT.queuedAt,
+      };
+
+      await expect(value.lifecycle.claim(message)).resolves.toBe("skip");
+
+      await expect(value.attempts.findById(ATTEMPT.id)).resolves.toMatchObject({
+        status,
+        systemErrorCode: null,
+        finishedAt: null,
+      });
+      await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
+        status: status === "RUNNING" ? "RUNNING" : "QUEUED",
+        finishedAt: null,
+      });
+      expect(value.reverseCalls).toEqual([]);
+    },
+  );
+
   it("quietly cancels a run when its workspace was deleted", async () => {
     const value = await fixture();
     await value.workspaces.softDelete(WORKSPACE.id, NOW);
@@ -462,6 +781,7 @@ describe("AttemptLifecycle", () => {
         runId: RUN.id,
         attemptId: ATTEMPT.id,
         attemptIndex: 0,
+        executionGeneration: ATTEMPT.queuedAt,
       }),
     ).resolves.toBe("skip");
     await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
@@ -484,6 +804,7 @@ describe("AttemptLifecycle", () => {
         runId: "run_missing",
         attemptId: "att_missing",
         attemptIndex: 0,
+        executionGeneration: 0,
       }),
     ).resolves.toBe("skip");
     expect(alert.mock.calls.join(" ")).toContain(

@@ -4,6 +4,10 @@ import type { MonitorRepo } from "../../domain/uptime/repo";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
+import { createOutboxEntry } from "../durability/factory";
+import type { PublishQueueOutbox } from "../durability/publish_outbox";
+import { platformAlert } from "../../shared/log";
 
 const SWEEP_LIMIT = 200;
 
@@ -13,16 +17,16 @@ export interface MonitorSweepResult {
   skipped: number;
 }
 
-export interface CheckQueueSender {
-  send(message: CheckMessage): Promise<unknown>;
-}
-
 export class SweepDueMonitors {
   constructor(
-    private readonly monitors: Pick<MonitorRepo, "claimDue" | "openCycle">,
+    private readonly monitors: Pick<MonitorRepo, "claimDue">,
     private readonly workspaces: Pick<WorkspaceRepo, "findById">,
     private readonly subscriptions: Pick<SubscriptionRepo, "findByWorkspace">,
-    private readonly queue: CheckQueueSender,
+    private readonly durable: Pick<
+      DurableWorkflowRepo,
+      "openMonitorCycleWithOutbox"
+    >,
+    private readonly outboxPublisher: Pick<PublishQueueOutbox, "publishById">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -49,17 +53,39 @@ export class SweepDueMonitors {
         continue;
       }
       const cycleId = this.ids.newId("cyc");
-      if (!(await this.monitors.openCycle(monitor.id, cycleId, now))) {
-        result.skipped += 1;
-        continue;
-      }
-      await this.queue.send({
+      const message: CheckMessage = {
         kind: "check",
         monitorId: monitor.id,
         workspaceId: monitor.workspaceId,
         cycleId,
         attemptIndex: 0,
+      };
+      const outbox = createOutboxEntry({
+        dedupeKey: `check:${cycleId}:0`,
+        queueKind: "CHECK",
+        payload: message,
+        availableAt: now,
+        now,
+        ids: this.ids,
       });
+      if (!(await this.durable.openMonitorCycleWithOutbox({
+        monitorId: monitor.id,
+        cycleId,
+        at: now,
+        outbox,
+      }))) {
+        result.skipped += 1;
+        continue;
+      }
+      try {
+        await this.outboxPublisher.publishById(outbox.id);
+      } catch {
+        platformAlert("initial_check_publish_deferred", {
+          monitorId: monitor.id,
+          cycleId,
+          outboxId: outbox.id,
+        });
+      }
       result.created += 1;
     }
     return result;

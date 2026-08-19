@@ -7,6 +7,7 @@ import type {
   AttemptWithLatest,
   TestAttempt,
 } from "../../domain/browser_tests/types";
+import type { UsageEvent } from "../../domain/billing/types";
 import { all, batch, one, run } from "./d1";
 
 interface AttemptRow {
@@ -113,9 +114,9 @@ export class D1AttemptRepo implements AttemptRepo {
         .prepare(
           `UPDATE test_attempts
            SET status = 'STARTING', started_at = ?
-           WHERE id = ? AND status = 'QUEUED'`,
+           WHERE id = ? AND status = 'QUEUED' AND queued_at <= ?`,
         )
-        .bind(claimedAt, id),
+        .bind(claimedAt, id, claimedAt),
     );
     return result.meta.changes === 1;
   }
@@ -125,25 +126,130 @@ export class D1AttemptRepo implements AttemptRepo {
     runId: string,
     attemptIndex: number,
     startedAt: number,
-    usageEventId: string,
+    usageEvent: UsageEvent,
   ): Promise<boolean> {
-    const [attemptResult] = await batch(this.database, [
+    if (usageEvent.testRunId !== runId) return false;
+
+    const [, , attemptResult] = await batch(this.database, [
       this.database
         .prepare(
-          `UPDATE test_attempts
-           SET status = 'RUNNING', started_at = ?
-           WHERE id = ? AND test_run_id = ? AND attempt_index = ?
-             AND status = 'STARTING'`,
+          `INSERT OR IGNORE INTO usage_events
+            (id, workspace_id, test_run_id, type, quantity, billable,
+             idempotency_key, occurred_at, reversed_at, created_at)
+           SELECT ?, runs.workspace_id, runs.id, ?, ?, ?, ?, ?, ?, ?
+           FROM test_runs AS runs
+           JOIN test_attempts AS attempts ON attempts.test_run_id = runs.id
+           WHERE runs.id = ?
+             AND runs.workspace_id = ?
+             AND runs.status IN ('QUEUED', 'RUNNING')
+             AND attempts.id = ?
+             AND attempts.attempt_index = ?
+             AND attempts.status = 'STARTING'
+             AND (
+               runs.usage_event_id IS NULL
+               OR EXISTS (
+                 SELECT 1
+                 FROM usage_events AS current_usage
+                 WHERE current_usage.id = runs.usage_event_id
+                   AND current_usage.test_run_id = runs.id
+                   AND current_usage.workspace_id = runs.workspace_id
+                   AND current_usage.idempotency_key = ?
+               )
+             )`,
         )
-        .bind(startedAt, id, runId, attemptIndex),
+        .bind(
+          usageEvent.id,
+          usageEvent.type,
+          usageEvent.quantity,
+          usageEvent.billable ? 1 : 0,
+          usageEvent.idempotencyKey,
+          usageEvent.occurredAt,
+          usageEvent.reversedAt,
+          usageEvent.createdAt,
+          runId,
+          usageEvent.workspaceId,
+          id,
+          attemptIndex,
+          usageEvent.idempotencyKey,
+        ),
       this.database
         .prepare(
           `UPDATE test_runs
            SET status = 'RUNNING', started_at = COALESCE(started_at, ?),
-               usage_event_id = COALESCE(usage_event_id, ?)
-           WHERE id = ? AND status IN ('QUEUED', 'RUNNING')`,
+               usage_event_id = (
+                 SELECT usage.id
+                 FROM usage_events AS usage
+                 WHERE usage.test_run_id = ?
+                   AND usage.workspace_id = ?
+                   AND usage.idempotency_key = ?
+               )
+           WHERE id = ?
+             AND workspace_id = ?
+             AND status IN ('QUEUED', 'RUNNING')
+             AND EXISTS (
+               SELECT 1
+               FROM test_attempts AS attempts
+               WHERE attempts.id = ?
+                 AND attempts.test_run_id = test_runs.id
+                 AND attempts.attempt_index = ?
+                 AND attempts.status = 'STARTING'
+             )
+             AND EXISTS (
+               SELECT 1
+               FROM usage_events AS usage
+               WHERE usage.test_run_id = test_runs.id
+                 AND usage.workspace_id = test_runs.workspace_id
+                 AND usage.idempotency_key = ?
+             )
+             AND (
+               usage_event_id IS NULL
+               OR usage_event_id = (
+                 SELECT usage.id
+                 FROM usage_events AS usage
+                 WHERE usage.test_run_id = test_runs.id
+                   AND usage.workspace_id = test_runs.workspace_id
+                   AND usage.idempotency_key = ?
+               )
+             )`,
         )
-        .bind(startedAt, usageEventId, runId),
+        .bind(
+          startedAt,
+          runId,
+          usageEvent.workspaceId,
+          usageEvent.idempotencyKey,
+          runId,
+          usageEvent.workspaceId,
+          id,
+          attemptIndex,
+          usageEvent.idempotencyKey,
+          usageEvent.idempotencyKey,
+        ),
+      this.database
+        .prepare(
+          `UPDATE test_attempts
+           SET status = 'RUNNING', started_at = ?
+           WHERE id = ?
+             AND test_run_id = ?
+             AND attempt_index = ?
+             AND status = 'STARTING'
+             AND EXISTS (
+               SELECT 1
+               FROM test_runs AS runs
+               JOIN usage_events AS usage ON usage.id = runs.usage_event_id
+               WHERE runs.id = test_attempts.test_run_id
+                 AND runs.status = 'RUNNING'
+                 AND usage.test_run_id = runs.id
+                 AND usage.workspace_id = runs.workspace_id
+                 AND usage.idempotency_key = ?
+             )`,
+        )
+        .bind(
+          startedAt,
+          id,
+          runId,
+          attemptIndex,
+          usageEvent.idempotencyKey,
+        ),
     ]);
     return attemptResult?.meta.changes === 1;
   }

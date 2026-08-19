@@ -2,8 +2,38 @@ import type { OverageReportRepo } from "../../domain/billing/repo";
 import type { OverageReport } from "../../domain/billing/types";
 import { isUniqueConstraintError, one, run } from "./d1";
 
-interface ExistsRow {
-  found: number;
+interface OverageReportRow {
+  id: string;
+  workspace_id: string;
+  period_start: number;
+  period_end: number;
+  overage_runs: number;
+  amount_cents: number;
+  paddle_transaction_id: string | null;
+  reported_at: number;
+  state: OverageReport["state"];
+  provider_marker: string | null;
+  attempt_started_at: number | null;
+  completed_at: number | null;
+  provider_subscription_id: string | null;
+}
+
+function toOverageReport(row: OverageReportRow): OverageReport {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    overageRuns: row.overage_runs,
+    amountCents: row.amount_cents,
+    paddleTransactionId: row.paddle_transaction_id,
+    reportedAt: row.reported_at,
+    state: row.state,
+    providerMarker: row.provider_marker,
+    attemptStartedAt: row.attempt_started_at,
+    completedAt: row.completed_at,
+    providerSubscriptionId: row.provider_subscription_id,
+  };
 }
 
 export class D1OverageReportRepo implements OverageReportRepo {
@@ -18,8 +48,10 @@ export class D1OverageReportRepo implements OverageReportRepo {
           .prepare(
             `INSERT INTO overage_reports
               (id, workspace_id, period_start, period_end, overage_runs,
-               amount_cents, paddle_transaction_id, reported_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+               amount_cents, paddle_transaction_id, reported_at, state,
+               provider_marker, attempt_started_at, completed_at,
+               provider_subscription_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             report.id,
@@ -30,6 +62,11 @@ export class D1OverageReportRepo implements OverageReportRepo {
             report.amountCents,
             report.paddleTransactionId,
             report.reportedAt,
+            report.state,
+            report.providerMarker,
+            report.attemptStartedAt,
+            report.completedAt,
+            report.providerSubscriptionId,
           ),
       );
       return "inserted";
@@ -39,39 +76,50 @@ export class D1OverageReportRepo implements OverageReportRepo {
     }
   }
 
-  async existsFor(
+  async findFor(
     workspaceId: string,
     periodStart: number,
-  ): Promise<boolean> {
-    const row = await one<ExistsRow>(
+  ): Promise<OverageReport | null> {
+    const row = await one<OverageReportRow>(
       this.database
         .prepare(
-          `SELECT 1 AS found FROM overage_reports
+          `SELECT * FROM overage_reports
            WHERE workspace_id = ? AND period_start = ?`,
         )
         .bind(workspaceId, periodStart),
     );
-    return row !== null;
+    return row === null ? null : toOverageReport(row);
   }
 
-  async setPaddleTransactionId(
+  async beginAttempt(
+    id: string,
+    at: number,
+  ): Promise<boolean> {
+    const statement = this.database
+      .prepare(
+        `UPDATE overage_reports
+         SET state = 'AMBIGUOUS', attempt_started_at = ?
+         WHERE id = ? AND state = 'PENDING'
+           AND attempt_started_at IS NULL`,
+      )
+      .bind(at, id);
+    const result = await run(statement);
+    return result.meta.changes === 1;
+  }
+
+  async markCompleted(
     id: string,
     transactionId: string | null,
+    at: number,
   ): Promise<void> {
     await run(
       this.database
         .prepare(
-          "UPDATE overage_reports SET paddle_transaction_id = ? WHERE id = ?",
+          `UPDATE overage_reports
+           SET state = 'COMPLETED', paddle_transaction_id = ?, completed_at = ?
+           WHERE id = ?`,
         )
-        .bind(transactionId, id),
-    );
-  }
-
-  async deleteById(id: string): Promise<void> {
-    await run(
-      this.database
-        .prepare("DELETE FROM overage_reports WHERE id = ?")
-        .bind(id),
+        .bind(transactionId, at, id),
     );
   }
 }

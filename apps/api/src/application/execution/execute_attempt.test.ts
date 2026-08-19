@@ -33,6 +33,8 @@ import {
 } from "../../test/fakes/repos";
 import { AttemptLifecycle } from "./attempt_lifecycle";
 import { ExecuteAttempt } from "./execute_attempt";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const NOW = 1_800_000_000_000;
 const WORKSPACE: Workspace = {
@@ -123,6 +125,7 @@ const MESSAGE: AttemptMessage = {
   runId: RUN.id,
   attemptId: ATTEMPT.id,
   attemptIndex: 0,
+  executionGeneration: ATTEMPT.queuedAt,
 };
 
 class RecordingQueue implements Pick<Queue<AttemptMessage>, "send"> {
@@ -337,6 +340,7 @@ async function fixture(options: {
   secrets?: ResolvedSecrets;
   session?: FakeSession;
   llm?: LlmClient;
+  llmUseVision?: boolean;
   launchFailure?: Error;
   waitForHardTimeout?: (
     milliseconds: number,
@@ -346,12 +350,12 @@ async function fixture(options: {
   const clock = new FixedClock(NOW);
   const ids = new FakeIds();
   const runs = new FakeRunRepo();
-  const attempts = new FakeAttemptRepo(runs);
+  const usageEvents = new FakeUsageEventRepo();
+  const attempts = new FakeAttemptRepo(runs, usageEvents);
   const steps = new FakeStepRepo();
   const artifacts = new FakeArtifactRepo();
   const tests = new FakeBrowserTestRepo();
   const workspaces = new FakeWorkspaceRepo();
-  const usageEvents = new FakeUsageEventRepo();
   const queue = new RecordingQueue();
   const storage = new RecordingStorage();
   const finalized = new RecordingFinalizedHandler();
@@ -377,6 +381,22 @@ async function fixture(options: {
   await tests.insert(TEST);
   await runs.insert(run);
   await attempts.insert(ATTEMPT);
+  const durable = new FakeDurableWorkflowRepo({
+    runs,
+    attempts,
+    steps,
+    artifacts,
+  });
+  const unusedQueue = {
+    send: async () => ({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    }),
+  };
+  const outboxPublisher = new PublishQueueOutbox(
+    durable,
+    { RUN: queue, CHECK: unusedQueue, NOTIFY: unusedQueue },
+    clock,
+  );
   const lifecycle = new AttemptLifecycle({
     runs,
     attempts,
@@ -387,7 +407,8 @@ async function fixture(options: {
     storage,
     recordUsage,
     reverseUsage,
-    queue,
+    durable,
+    outboxPublisher,
     clock,
     ids,
     runFinalizedHandler: finalized,
@@ -406,7 +427,7 @@ async function fixture(options: {
     resolveSecrets: resolver,
     launchSession,
     llm,
-    llmUseVision: false,
+    llmUseVision: options.llmUseVision ?? false,
     clock,
     ids,
     ...(options.waitForHardTimeout === undefined
@@ -436,7 +457,7 @@ async function fixture(options: {
 }
 
 describe("ExecuteAttempt", () => {
-  it("persists a complete happy path with live steps, R2 screenshots, and redacted evidence", async () => {
+  it("keeps a secret-bearing happy path text-only while persisting redacted evidence", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const secretValue = "top-secret-value";
     const value = await fixture({
@@ -446,6 +467,7 @@ describe("ExecuteAttempt", () => {
           { value: secretValue, allowedDomains: ["shop.example.com"] },
         ],
       ]),
+      llmUseVision: true,
     });
 
     await value.executor.execute(MESSAGE);
@@ -483,18 +505,15 @@ describe("ExecuteAttempt", () => {
       { sequence: 2, actionType: "click", result: "OK" },
       { sequence: 3, actionType: "finish", result: "OK" },
     ]);
-    expect(steps.every((step) => step.artifactId !== null)).toBe(true);
-    expect(artifacts).toHaveLength(3);
-    expect(value.storage.objects.size).toBe(3);
+    expect(steps.every((step) => step.artifactId === null)).toBe(true);
+    expect(artifacts).toEqual([]);
+    expect(value.storage.objects.size).toBe(0);
+    expect(value.session.screenshotCalls).toBe(0);
+    if (!(value.llm instanceof ScriptedLlm)) {
+      throw new Error("Expected the scripted LLM fixture");
+    }
     expect(
-      artifacts.every(
-        (artifact) =>
-          artifact.mimeType === "image/jpeg" &&
-          artifact.storageKey.startsWith(
-            `ws/${WORKSPACE.id}/run/${RUN.id}/att/${ATTEMPT.id}/`,
-          ) &&
-          artifact.expiresAt === NOW + 30 * 86_400_000,
-      ),
+      value.llm.inputs.every((input) => input.screenshotJpegBase64 === null),
     ).toBe(true);
     expect(value.session.navigations).toEqual([TEST.startUrl]);
     expect(value.session.clicks).toEqual([2]);
@@ -562,6 +581,9 @@ describe("ExecuteAttempt", () => {
     });
     expect(JSON.stringify(steps)).toContain("{{SHOP_TOKEN}}");
     expect(JSON.stringify(steps)).not.toContain(secretValue);
+    expect(value.session.screenshotCalls).toBe(0);
+    expect(await value.artifacts.listForAttempt(ATTEMPT.id)).toEqual([]);
+    expect(value.storage.objects.size).toBe(0);
     await expect(value.attempts.findById(ATTEMPT.id)).resolves.not.toBeNull();
     expect(
       JSON.stringify(await value.attempts.findById(ATTEMPT.id)),
@@ -647,8 +669,14 @@ describe("ExecuteAttempt", () => {
 
     expect(value.launchSession).toHaveBeenCalledTimes(3);
     expect(value.queue.calls).toEqual([
-      { message: MESSAGE, delaySeconds: 30 },
-      { message: MESSAGE, delaySeconds: 30 },
+      {
+        message: { ...MESSAGE, executionGeneration: NOW + 30_000 },
+        delaySeconds: 30,
+      },
+      {
+        message: { ...MESSAGE, executionGeneration: NOW + 60_000 },
+        delaySeconds: 30,
+      },
     ]);
     await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
       status: "SYSTEM_ERROR",

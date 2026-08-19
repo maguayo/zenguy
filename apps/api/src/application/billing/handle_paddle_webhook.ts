@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type { WriteAudit } from "../audit/write_audit";
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
-import type { SubscriptionRepo } from "../../domain/billing/repo";
+import type {
+  PendingOveragePeriodRepo,
+  SubscriptionRepo,
+} from "../../domain/billing/repo";
 import type {
   Subscription,
   SubscriptionStatus,
@@ -11,6 +14,7 @@ import { hmacVerifyHex } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
+import { OVERAGE_SETTLEMENT_DELAY_MS } from "./report_overage_for_period";
 
 const SIGNATURE_TOLERANCE_MS = 15 * 60 * 1_000;
 const IDEMPOTENCY_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -18,6 +22,7 @@ const IDEMPOTENCY_TTL_SECONDS = 7 * 24 * 60 * 60;
 const envelopeSchema = z.object({
   event_id: z.string().min(1),
   event_type: z.string().min(1),
+  occurred_at: z.string().min(1),
   data: z.unknown(),
 });
 
@@ -53,6 +58,7 @@ export interface PeriodOverageReporter {
     workspaceId: string;
     periodStart: number;
     periodEnd: number;
+    providerSubscriptionId: string;
   }): Promise<unknown>;
 }
 
@@ -60,6 +66,7 @@ export interface HandlePaddleWebhookDependencies {
   webhookSecret: string;
   kv: KVNamespace;
   subscriptions: SubscriptionRepo;
+  pendingOveragePeriods: PendingOveragePeriodRepo;
   overageReporter: PeriodOverageReporter;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
@@ -168,8 +175,12 @@ export class HandlePaddleWebhook {
 
     let handled: "processed" | "ignored" = "ignored";
     if (SUBSCRIPTION_EVENTS.has(event.event_type)) {
-      await this.processSubscription(event.event_type, event.data, input.ip);
-      handled = "processed";
+      handled = await this.processSubscription(
+        event.event_type,
+        event.occurred_at,
+        event.data,
+        input.ip,
+      );
     }
 
     await this.dependencies.kv.put(idempotencyKey, "1", {
@@ -180,9 +191,10 @@ export class HandlePaddleWebhook {
 
   private async processSubscription(
     eventType: string,
+    occurredAtText: string,
     rawData: unknown,
     ip: string | undefined,
-  ): Promise<void> {
+  ): Promise<"processed" | "ignored"> {
     const data = subscriptionSchema.parse(rawData);
     const byProvider =
       await this.dependencies.subscriptions.findByProviderSubscriptionId(
@@ -203,6 +215,15 @@ export class HandlePaddleWebhook {
     const stored =
       byProvider ??
       (await this.dependencies.subscriptions.findByWorkspace(workspaceId));
+    const providerEventAt = parseDate(occurredAtText);
+    if (
+      stored?.lastProviderEventAt !== null &&
+      stored?.lastProviderEventAt !== undefined &&
+      providerEventAt < stored.lastProviderEventAt
+    ) {
+      logEvent("paddle_subscription_event_stale", { workspaceId });
+      return "ignored";
+    }
 
     const periodStart =
       data.current_billing_period === null ||
@@ -214,25 +235,39 @@ export class HandlePaddleWebhook {
       data.current_billing_period === undefined
         ? null
         : parseDate(data.current_billing_period.ends_at);
+    const now = this.dependencies.clock.now();
 
     if (
       stored?.periodStart !== null &&
       stored?.periodStart !== undefined &&
       stored.periodStart !== periodStart &&
-      stored.periodEnd !== null
+      stored.periodEnd !== null &&
+      stored.providerSubscriptionId !== null
     ) {
+      await this.dependencies.pendingOveragePeriods.insertIfAbsent({
+        workspaceId,
+        periodStart: stored.periodStart,
+        periodEnd: stored.periodEnd,
+        providerSubscriptionId: stored.providerSubscriptionId,
+        createdAt: now,
+        nextAttemptAt: stored.periodEnd + OVERAGE_SETTLEMENT_DELAY_MS,
+        attemptCount: 0,
+      });
       try {
         await this.dependencies.overageReporter.execute({
           workspaceId,
           periodStart: stored.periodStart,
           periodEnd: stored.periodEnd,
+          providerSubscriptionId: stored.providerSubscriptionId,
         });
       } catch {
         logEvent("overage_rollover_failed", { workspaceId });
       }
+      // Keep the durable marker after the immediate attempt. The hourly sweep
+      // clears it after the reporter has settled, so a concurrent duplicate
+      // webhook cannot erase the only retry marker while this attempt fails.
     }
 
-    const now = this.dependencies.clock.now();
     const subscription: Subscription = {
       id: stored?.id ?? this.dependencies.ids.newId("sub"),
       workspaceId,
@@ -243,10 +278,14 @@ export class HandlePaddleWebhook {
       periodStart,
       periodEnd,
       cancelAtPeriodEnd: data.scheduled_change?.action === "cancel",
+      // DEVIATION: current Paddle webhook payloads do not include the
+      // short-lived management_urls. GetBilling fetches fresh URLs from the
+      // subscription endpoint only for callers with billing.manage.
       updatePaymentUrl: null,
       cancelUrl: null,
       createdAt: stored?.createdAt ?? now,
       updatedAt: now,
+      lastProviderEventAt: providerEventAt,
     };
     await this.dependencies.subscriptions.upsertByWorkspace(subscription);
     await this.dependencies.audit.execute({
@@ -258,5 +297,6 @@ export class HandlePaddleWebhook {
       metadata: { status: subscription.status },
       ip,
     });
+    return "processed";
   }
 }

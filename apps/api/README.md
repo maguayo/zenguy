@@ -73,11 +73,17 @@ Preview the SQL without executing it:
 
     pnpm --filter @zenguy/api seed -- --dry-run
 
-Remote seeding is deliberately guarded and requires both flags:
+Remote seeding is supported only for the isolated staging D1 database. It
+requires the explicit staging environment and both confirmation flags:
 
-    pnpm --filter @zenguy/api seed -- --remote --allow-remote
+    pnpm --filter @zenguy/api seed -- --remote --env staging --allow-remote --confirm-staging
 
-Only use the remote form against an expendable development database.
+The script hardcodes `zenguy-staging-db` for that remote form and rejects any
+other environment. It never executes a remote seed against `zenguy-db` or
+production. Preview the exact Wrangler command without executing or generating
+SQL with:
+
+    pnpm --filter @zenguy/api seed -- --print-command --remote --env staging --allow-remote --confirm-staging
 
 ## Workspace API keys and the public read API
 
@@ -124,9 +130,11 @@ https://developer.paddle.com/build/products/create-products-prices/.
 2. Create product **Zenguy extra runs** and a one-time price of **EUR 0.20**.
    Copy its price ID to PADDLE_OVERAGE_PRICE_ID.
 3. Create a sandbox client-side token for PADDLE_CLIENT_TOKEN and an API key
-   for PADDLE_API_KEY. The API key needs subscription read access and Customer
-   portal session write access so owners receive fresh, short-lived payment and
-   cancellation links; those links are never persisted from webhooks.
+   for PADDLE_API_KEY. For overage billing, the API key must include
+   `price.read`, `subscription.write`, and `transaction.read`. It also needs
+   subscription read access and Customer portal session write access so owners
+   receive fresh, short-lived payment and cancellation links; those links are
+   never persisted from webhooks.
 4. Under Developer tools > Notifications, create the sandbox destination at
    https://staging-app.zenguy.com/api/webhooks/paddle. Select exactly
    `subscription.created`, `subscription.updated`, `subscription.canceled`, and
@@ -138,6 +146,15 @@ https://developer.paddle.com/build/products/create-products-prices/.
    for production. The production webhook URL is
    https://app.zenguy.com/api/webhooks/paddle. Sandbox and live IDs and secrets
    are not interchangeable.
+
+The overage price is checked immediately before charging and must remain
+exactly EUR 0.20 with no country-specific overrides. Overage settlement starts
+only at `period_end + 1 hour`; until then it creates neither a report nor a
+Paddle side effect. The pending period and report pin the subscription ID that
+owned the period. A report is durably changed from `PENDING` to `AMBIGUOUS`
+before its one allowed Paddle POST. Once `AMBIGUOUS`, every later run performs
+marker reconciliation against that pinned subscription indefinitely and logs
+an operator warning when unresolved; it never sends a second POST.
 
 ### Cloudflare Email Service
 
@@ -419,6 +436,28 @@ The injected acceptance-test sender proves dispatch, persistence, retry, and
 delivery-state behavior without contacting a real inbox. The Cloudflare Email
 Service smoke above is the external delivery check.
 
+### Deployed staging smoke record
+
+The following non-destructive checks were executed against the deployed
+staging origin on 2026-08-19. They use the isolated staging D1, R2, Browser
+Rendering, and Queue resources; they are separate from the local/remote
+first-demo walkthrough above.
+
+| Check | Recorded evidence |
+|---|---|
+| Worker health | PASS — `https://staging-app.zenguy.com/api/health` returned HTTP 200 with `data.ok=true` from Worker version `2ed3d79d-e510-4ad0-9cad-0d34b5688236` |
+| Browser validation | PASS — run `run_01m0dnyvtaepvdk2ztea1hyphq`, attempt `att_01m0dnyvta025kaz0xfe1226ge`, status `PASSED`, two steps and two screenshot artifacts |
+| Browser-run billing | PASS — cycle usage changed to one billable run (299 of 300 included runs remaining) |
+| Uptime scheduling | PASS — monitor `mon_01m0dp0x7csks3ypafm0wzkm6y` was claimed by the deployed `*/5` cron and became `UP` |
+| Uptime evidence | PASS — check `chk_01m0dpbz3ey0rtvh09w3bphfx1` finished `PASSED` in 9 ms; history and 24-hour stats each exposed the result |
+| Uptime billing isolation | PASS — browser-run usage stayed at one after the uptime check |
+
+The release acceptance is intentionally still open: a real Cloudflare Email
+Service recipient, the corrected Paddle Sandbox notification destination and
+checkout, and an external failure/recovery delivery have not yet been approved
+or exercised. Production remains isolated until its Paddle Live and Twilio
+credentials are configured and those staging checks pass.
+
 ## V1 acceptance sign-off
 
 Each PROJECT.md section 31 criterion has automated evidence or an explicit
@@ -512,7 +551,7 @@ manual release check. Paths are relative to apps/api/src unless noted.
 | 31.6.3 | Value is never displayed again | Automated: http/routes/secret_routes.itest.ts and http/routes/secret_leak.itest.ts |
 | 31.6.4 | Use {{KEY}} placeholders | Automated: application/secrets/resolve_secrets.test.ts and application/execution/execute_attempt.test.ts |
 | 31.6.5 | Respect allowed domains | Automated: application/secrets/resolve_secrets.test.ts and application/uptime/execute_check.test.ts |
-| 31.6.6 | Reports and redacted logs omit values | Automated: application/reports/generate_report.test.ts, http/run_stream.test.ts, http/routes/secret_leak.itest.ts, and application/channels/send_queued_notification.test.ts |
+| 31.6.6 | Reports and redacted logs omit values | Automated: application/reports/generate_report.test.ts, http/run_stream.test.ts, http/routes/secret_leak.itest.ts, application/channels/send_queued_notification.test.ts, and the inline-delivery case in http/routes/channel_routes.itest.ts |
 | 31.6.7 | Show staging-credentials warning | Manual frontend release check: TASKS_FRONTEND.md requires the exact warning on both the Secrets page and Browser Test form |
 
 ### 31.7 Billing
@@ -549,8 +588,8 @@ Run the complete release gate from the repository root:
     pnpm test
     pnpm --filter @zenguy/api test:integration
 
-Final BE-074 release result on 2026-08-19:
+Latest local automated verification on 2026-08-19:
 
 - Root typecheck: PASS.
-- Unit suite: PASS — 81 files, 528 tests.
-- Integration suite: PASS — 36 files, 182 tests.
+- Unit suite: PASS — 81 files, 543 tests.
+- Integration suite: PASS — 36 files, 185 tests.

@@ -106,7 +106,7 @@ function artifact(index: number): RunArtifact {
   return {
     id: `art_${index}`,
     workspaceId: "ws_cleanup",
-    runId: "run_young",
+    runId: `run_young_${index}`,
     attemptId: null,
     type: "MARKDOWN_REPORT",
     storageKey: `orphan-key-${index}`,

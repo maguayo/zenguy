@@ -5,6 +5,7 @@ import {
   apiGetPage,
   apiPatch,
   apiPost,
+  apiPostText,
   type ApiPage,
 } from "../lib/api";
 import type {
@@ -51,6 +52,38 @@ export function updateTest(
 export function deleteTest(workspaceId: string, testId: string): Promise<void> {
   return apiDelete(
     `${workspacePath(workspaceId)}/browser-tests/${encodeURIComponent(testId)}`,
+  );
+}
+
+export type ExportFormat = "yaml" | "json";
+
+export interface ImportTestsSummary {
+  created: number;
+  updated: number;
+  tests: BrowserTest[];
+}
+
+export function exportTestsPath(
+  workspaceId: string,
+  format: ExportFormat,
+): string {
+  return `${workspacePath(workspaceId)}/browser-tests/export?format=${format}`;
+}
+
+export function exportTests(
+  workspaceId: string,
+  format: ExportFormat,
+): Promise<{ blob: Blob; filename: string }> {
+  return apiGetBlob(exportTestsPath(workspaceId, format));
+}
+
+export function importTests(
+  workspaceId: string,
+  fileText: string,
+): Promise<ImportTestsSummary> {
+  return apiPostText(
+    `${workspacePath(workspaceId)}/browser-tests/import`,
+    fileText,
   );
 }
 

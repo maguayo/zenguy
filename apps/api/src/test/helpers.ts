@@ -4,7 +4,9 @@ import type { Bindings } from "../shared/config";
 const DELETE_STATEMENTS = [
   // Test isolation only. Production purge jobs must NEVER touch billing or
   // audit retention tables: subscriptions, usage_events, overage_reports,
-  // and audit_logs.
+  // pending_overage_periods, and audit_logs.
+  "DELETE FROM durable_jobs",
+  "DELETE FROM queue_outbox",
   "DELETE FROM uptime_checks",
   "DELETE FROM uptime_monitor_channels",
   "DELETE FROM uptime_monitors",
@@ -20,6 +22,7 @@ const DELETE_STATEMENTS = [
   "DELETE FROM notification_channels",
   "DELETE FROM workspace_secrets",
   "DELETE FROM workspace_api_keys",
+  "DELETE FROM pending_overage_periods",
   "DELETE FROM overage_reports",
   "DELETE FROM usage_events",
   "DELETE FROM subscriptions",

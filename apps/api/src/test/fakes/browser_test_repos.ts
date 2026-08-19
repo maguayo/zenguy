@@ -5,6 +5,7 @@ import type {
   BrowserTestRepo,
   BrowserTestUpdate,
   RunFinalize,
+  RunIncidentOrder,
   RunRepo,
   StepRepo,
 } from "../../domain/browser_tests/repo";
@@ -19,6 +20,7 @@ import type {
   TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
+import type { UsageEvent } from "../../domain/billing/types";
 import type { Cursor } from "../../shared/pagination";
 
 function copy<T>(value: T): T {
@@ -252,6 +254,28 @@ export class FakeRunRepo implements RunRepo {
     if (run !== undefined) this.runs.set(runId, { ...run, incidentId });
   }
 
+  async hasLaterIncidentResult(order: RunIncidentOrder): Promise<boolean> {
+    return [...this.runs.values()].some((run) => {
+      if (
+        run.browserTestId !== order.browserTestId ||
+        run.source === "VALIDATION" ||
+        run.finishedAt === null ||
+        (run.status !== "PASSED" &&
+          run.status !== "FAILED" &&
+          run.status !== "TIMEOUT")
+      ) {
+        return false;
+      }
+      return (
+        run.finishedAt > order.finishedAt ||
+        (run.finishedAt === order.finishedAt && run.createdAt > order.createdAt) ||
+        (run.finishedAt === order.finishedAt &&
+          run.createdAt === order.createdAt &&
+          run.id > order.runId)
+      );
+    });
+  }
+
   async incrementInfraAttempts(runId: string): Promise<number> {
     const run = this.runs.get(runId);
     if (run === undefined) return 0;
@@ -328,7 +352,10 @@ export class FakeAttemptRepo implements AttemptRepo {
     Pick<AttemptWithLatest, "latestStep" | "latestScreenshot">
   >();
 
-  constructor(private readonly runs?: FakeRunRepo) {}
+  constructor(
+    private readonly runs?: FakeRunRepo,
+    private readonly usageEvents?: { readonly events: Map<string, UsageEvent> },
+  ) {}
 
   async insert(attempt: TestAttempt): Promise<void> {
     if (
@@ -351,7 +378,11 @@ export class FakeAttemptRepo implements AttemptRepo {
 
   async claimQueued(id: string, claimedAt: number): Promise<boolean> {
     const attempt = this.attempts.get(id);
-    if (attempt === undefined || attempt.status !== "QUEUED") return false;
+    if (
+      attempt === undefined ||
+      attempt.status !== "QUEUED" ||
+      attempt.queuedAt > claimedAt
+    ) return false;
     this.attempts.set(id, {
       ...attempt,
       status: "STARTING",
@@ -365,27 +396,54 @@ export class FakeAttemptRepo implements AttemptRepo {
     runId: string,
     attemptIndex: number,
     startedAt: number,
-    usageEventId: string,
+    usageEvent: UsageEvent,
   ): Promise<boolean> {
     const attempt = this.attempts.get(id);
+    const runs = this.runs;
+    const run = runs?.runs.get(runId);
     if (
       attempt === undefined ||
+      runs === undefined ||
+      run === undefined ||
+      this.usageEvents === undefined ||
       attempt.status !== "STARTING" ||
       attempt.testRunId !== runId ||
-      attempt.attemptIndex !== attemptIndex
+      attempt.attemptIndex !== attemptIndex ||
+      (run.status !== "QUEUED" && run.status !== "RUNNING") ||
+      usageEvent.testRunId !== runId ||
+      usageEvent.workspaceId !== run.workspaceId
     ) {
       return false;
     }
-    this.attempts.set(id, { ...attempt, status: "RUNNING", startedAt });
-    const run = this.runs?.runs.get(runId);
-    if (run !== undefined) {
-      this.runs?.runs.set(runId, {
-        ...run,
-        status: "RUNNING",
-        startedAt: run.startedAt ?? startedAt,
-        usageEventId: run.usageEventId ?? usageEventId,
-      });
+
+    const existing = [...this.usageEvents.events.values()].find(
+      (candidate) => candidate.testRunId === runId,
+    );
+    const selected = existing ?? usageEvent;
+    if (
+      selected.workspaceId !== run.workspaceId ||
+      selected.idempotencyKey !== usageEvent.idempotencyKey ||
+      (run.usageEventId !== null && run.usageEventId !== selected.id) ||
+      (existing === undefined &&
+        (this.usageEvents.events.has(usageEvent.id) ||
+          [...this.usageEvents.events.values()].some(
+            (candidate) =>
+              candidate.idempotencyKey === usageEvent.idempotencyKey,
+          )))
+    ) {
+      return false;
     }
+
+    if (existing === undefined) {
+      this.usageEvents.events.set(usageEvent.id, copy(usageEvent));
+    }
+    this.attempts.set(id, { ...attempt, status: "RUNNING", startedAt });
+    runs.runs.set(runId, {
+      ...run,
+      status: "RUNNING",
+      startedAt: run.startedAt ?? startedAt,
+      usageEventId: selected.id,
+    });
     return true;
   }
 
@@ -507,7 +565,11 @@ export class FakeArtifactRepo implements ArtifactRepo {
     if (
       this.artifacts.has(artifact.id) ||
       [...this.artifacts.values()].some(
-        (candidate) => candidate.storageKey === artifact.storageKey,
+        (candidate) =>
+          candidate.storageKey === artifact.storageKey ||
+          (artifact.type === "MARKDOWN_REPORT" &&
+            candidate.type === "MARKDOWN_REPORT" &&
+            candidate.runId === artifact.runId),
       )
     ) {
       throw new Error("artifact constraint violation");

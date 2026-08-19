@@ -7,12 +7,14 @@ import type {
   TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
+import type { UsageEvent } from "../../domain/billing/types";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1ArtifactRepo } from "./artifact_repo";
 import { D1AttemptRepo } from "./attempt_repo";
 import { D1BrowserTestRepo } from "./browser_test_repo";
 import { D1RunRepo } from "./run_repo";
 import { D1StepRepo } from "./step_repo";
+import { D1UsageEventRepo } from "./usage_event_repo";
 
 const SNAPSHOT: RunSnapshot = {
   name: "Checkout",
@@ -108,6 +110,25 @@ function attempt(id = "att_1"): TestAttempt {
     runnerVersion: "runner-test",
     systemErrorCode: "WORKER_LOST",
     createdAt: 100,
+  };
+}
+
+function runUsage(
+  run: TestRun,
+  id: string,
+  occurredAt: number,
+): UsageEvent {
+  return {
+    id,
+    workspaceId: run.workspaceId,
+    testRunId: run.id,
+    type: "BROWSER_RUN",
+    quantity: 1,
+    billable: true,
+    idempotencyKey: `run:${run.id}`,
+    occurredAt,
+    reversedAt: null,
+    createdAt: occurredAt,
   };
 }
 
@@ -497,7 +518,7 @@ describe("D1 browser test repositories", () => {
         queuedRun.id,
         0,
         600,
-        "ue_claim",
+        runUsage(queuedRun, "ue_claim", 600),
       ),
     ).resolves.toBe(true);
     await runs.setAttemptCount(queuedRun.id, 1);
@@ -517,12 +538,193 @@ describe("D1 browser test repositories", () => {
         queuedRun.id,
         0,
         700,
-        "ue_other",
+        runUsage(queuedRun, "ue_other", 700),
       ),
     ).resolves.toBe(false);
     await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
       startedAt: 600,
       usageEventId: "ue_claim",
+    });
+  });
+
+  it("deduplicates concurrent attempt starts into one linked usage event", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    const firstWorker = new D1AttemptRepo(database);
+    const secondWorker = new D1AttemptRepo(database);
+    const queuedRun = testRun({
+      id: "run_start_race",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 100,
+    });
+    const queuedAttempt: TestAttempt = {
+      ...attempt("att_start_race"),
+      testRunId: queuedRun.id,
+      status: "QUEUED",
+      retryDelaySeconds: 0,
+      queuedAt: 100,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+    };
+    await runs.insert(queuedRun);
+    await firstWorker.insert(queuedAttempt);
+    await firstWorker.claimQueued(queuedAttempt.id, 500);
+
+    const results = await Promise.all([
+      firstWorker.markRunning(
+        queuedAttempt.id,
+        queuedRun.id,
+        0,
+        600,
+        runUsage(queuedRun, "ue_start_race_a", 600),
+      ),
+      secondWorker.markRunning(
+        queuedAttempt.id,
+        queuedRun.id,
+        0,
+        601,
+        runUsage(queuedRun, "ue_start_race_b", 601),
+      ),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const usage = await database
+      .prepare(
+        `SELECT id, test_run_id
+         FROM usage_events
+         WHERE test_run_id = ?`,
+      )
+      .bind(queuedRun.id)
+      .all<{ id: string; test_run_id: string }>();
+    expect(usage.results).toHaveLength(1);
+    const usageEventId = usage.results[0]?.id;
+    expect(usageEventId).toMatch(/^ue_start_race_[ab]$/u);
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      usageEventId,
+    });
+    await expect(firstWorker.findById(queuedAttempt.id)).resolves.toMatchObject({
+      status: "RUNNING",
+    });
+  });
+
+  it("recovers and links a usage event left by an earlier delivery", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    const attempts = new D1AttemptRepo(database);
+    const usageEvents = new D1UsageEventRepo(database);
+    const queuedRun = testRun({
+      id: "run_start_recovery",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 100,
+    });
+    const queuedAttempt: TestAttempt = {
+      ...attempt("att_start_recovery"),
+      testRunId: queuedRun.id,
+      status: "QUEUED",
+      retryDelaySeconds: 0,
+      queuedAt: 100,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+    };
+    await runs.insert(queuedRun);
+    await attempts.insert(queuedAttempt);
+    await usageEvents.insertIfAbsent(
+      runUsage(queuedRun, "ue_start_existing", 450),
+    );
+    await attempts.claimQueued(queuedAttempt.id, 500);
+
+    await expect(
+      attempts.markRunning(
+        queuedAttempt.id,
+        queuedRun.id,
+        0,
+        600,
+        runUsage(queuedRun, "ue_start_unused_candidate", 600),
+      ),
+    ).resolves.toBe(true);
+
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      usageEventId: "ue_start_existing",
+    });
+    await expect(usageEvents.findByRunId(queuedRun.id)).resolves.toMatchObject({
+      id: "ue_start_existing",
+      occurredAt: 450,
+    });
+    const usageRows = await database
+      .prepare("SELECT id FROM usage_events WHERE test_run_id = ?")
+      .bind(queuedRun.id)
+      .all();
+    expect(usageRows.results).toEqual([{ id: "ue_start_existing" }]);
+  });
+
+  it("rolls back usage creation when the run transition fails", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    const attempts = new D1AttemptRepo(database);
+    const queuedRun = testRun({
+      id: "run_start_rollback",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 100,
+    });
+    const queuedAttempt: TestAttempt = {
+      ...attempt("att_start_rollback"),
+      testRunId: queuedRun.id,
+      status: "QUEUED",
+      retryDelaySeconds: 0,
+      queuedAt: 100,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+    };
+    await runs.insert(queuedRun);
+    await attempts.insert(queuedAttempt);
+    await attempts.claimQueued(queuedAttempt.id, 500);
+    await database
+      .prepare(
+        `CREATE TRIGGER reject_atomic_run_start
+         BEFORE UPDATE OF status, usage_event_id ON test_runs
+         WHEN NEW.id = 'run_start_rollback' AND NEW.status = 'RUNNING'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced run transition failure');
+         END`,
+      )
+      .run();
+
+    try {
+      await expect(
+        attempts.markRunning(
+          queuedAttempt.id,
+          queuedRun.id,
+          0,
+          600,
+          runUsage(queuedRun, "ue_start_rollback", 600),
+        ),
+      ).rejects.toThrow(/forced run transition failure/u);
+    } finally {
+      await database.prepare("DROP TRIGGER reject_atomic_run_start").run();
+    }
+
+    await expect(
+      database
+        .prepare("SELECT id FROM usage_events WHERE test_run_id = ?")
+        .bind(queuedRun.id)
+        .all(),
+    ).resolves.toMatchObject({ results: [] });
+    await expect(attempts.findById(queuedAttempt.id)).resolves.toMatchObject({
+      status: "STARTING",
+      startedAt: 500,
+    });
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
+      status: "QUEUED",
+      startedAt: null,
+      usageEventId: null,
     });
   });
 });

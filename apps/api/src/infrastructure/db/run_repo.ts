@@ -1,5 +1,6 @@
 import type {
   RunFinalize,
+  RunIncidentOrder,
   RunRepo,
 } from "../../domain/browser_tests/repo";
 import type {
@@ -282,6 +283,36 @@ export class D1RunRepo implements RunRepo {
         .prepare("UPDATE test_runs SET incident_id = ? WHERE id = ?")
         .bind(incidentId, runId),
     );
+  }
+
+  async hasLaterIncidentResult(order: RunIncidentOrder): Promise<boolean> {
+    const row = await one<{ present: number }>(
+      this.database
+        .prepare(
+          `SELECT 1 AS present
+           FROM test_runs
+           WHERE browser_test_id = ?
+             AND source != 'VALIDATION'
+             AND status IN ('PASSED', 'FAILED', 'TIMEOUT')
+             AND finished_at IS NOT NULL
+             AND (
+               finished_at > ?
+               OR (finished_at = ? AND created_at > ?)
+               OR (finished_at = ? AND created_at = ? AND id > ?)
+             )
+           LIMIT 1`,
+        )
+        .bind(
+          order.browserTestId,
+          order.finishedAt,
+          order.finishedAt,
+          order.createdAt,
+          order.finishedAt,
+          order.createdAt,
+          order.runId,
+        ),
+    );
+    return row !== null;
   }
 
   async incrementInfraAttempts(runId: string): Promise<number> {

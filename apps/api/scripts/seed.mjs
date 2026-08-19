@@ -8,6 +8,9 @@ import { ulid } from "ulid";
 const PBKDF2_ITERATIONS = 100_000;
 const DEMO_EMAIL = "demo@zenguy.dev";
 const DEMO_PASSWORD = "Password123!";
+const LOCAL_DATABASE = "zenguy-db";
+const STAGING_DATABASE = "zenguy-staging-db";
+const STAGING_ENVIRONMENT = "staging";
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const API_DIRECTORY = path.resolve(SCRIPT_DIRECTORY, "..");
 const GENERATED_SQL_PATH = path.join(SCRIPT_DIRECTORY, ".seed.generated.sql");
@@ -16,17 +19,29 @@ const encoder = new TextEncoder();
 function parseArguments(argv) {
   const options = {
     dryRun: false,
+    printCommand: false,
     remote: false,
     allowRemote: false,
+    confirmStaging: false,
+    environment: null,
     varsFile: path.join(API_DIRECTORY, ".dev.vars"),
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
     if (argument === "--dry-run") options.dryRun = true;
+    else if (argument === "--print-command") options.printCommand = true;
     else if (argument === "--remote") options.remote = true;
     else if (argument === "--allow-remote") options.allowRemote = true;
-    else if (argument === "--vars-file") {
+    else if (argument === "--confirm-staging") options.confirmStaging = true;
+    else if (argument === "--env") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error("--env requires a value");
+      }
+      options.environment = value;
+      index += 1;
+    } else if (argument === "--vars-file") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
         throw new Error("--vars-file requires a path");
@@ -37,9 +52,24 @@ function parseArguments(argv) {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
-  if (options.remote && !options.allowRemote) {
+  if (options.remote) {
+    if (options.environment !== STAGING_ENVIRONMENT) {
+      throw new Error(
+        "Remote seed target must be explicitly set with --env staging; production is never supported",
+      );
+    }
+    if (!options.allowRemote || !options.confirmStaging) {
+      throw new Error(
+        "Remote staging seed requires both --allow-remote and --confirm-staging",
+      );
+    }
+  } else if (
+    options.environment !== null ||
+    options.allowRemote ||
+    options.confirmStaging
+  ) {
     throw new Error(
-      "Refusing to seed remote D1 without the explicit --allow-remote flag",
+      "--env, --allow-remote, and --confirm-staging are valid only with --remote",
     );
   }
   return options;
@@ -190,16 +220,21 @@ async function generateSql(encryptionKey) {
   return statements.join("\n");
 }
 
-async function executeSql(remote) {
-  const arguments_ = [
+function wranglerArguments(remote) {
+  return [
     "wrangler",
     "d1",
     "execute",
-    "zenguy-db",
+    remote ? STAGING_DATABASE : LOCAL_DATABASE,
     remote ? "--remote" : "--local",
+    ...(remote ? ["--env", STAGING_ENVIRONMENT] : []),
     "--file",
     "scripts/.seed.generated.sql",
   ];
+}
+
+async function executeSql(remote) {
+  const arguments_ = wranglerArguments(remote);
   await new Promise((resolve, reject) => {
     const child = spawn("npx", arguments_, {
       cwd: API_DIRECTORY,
@@ -224,6 +259,13 @@ async function executeSql(remote) {
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
+  if (options.printCommand) {
+    process.stdout.write(`${JSON.stringify({
+      executable: "npx",
+      arguments: wranglerArguments(options.remote),
+    })}\n`);
+    return;
+  }
   let varsContents;
   try {
     varsContents = await readFile(options.varsFile, "utf8");

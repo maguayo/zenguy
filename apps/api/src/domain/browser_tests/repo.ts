@@ -1,4 +1,5 @@
 import type { Cursor } from "../../shared/pagination";
+import type { UsageEvent } from "../billing/types";
 import type {
   ArtifactType,
   AttemptStatus,
@@ -48,6 +49,13 @@ export interface RunFinalize {
   incidentId?: string | null;
 }
 
+export interface RunIncidentOrder {
+  browserTestId: string;
+  finishedAt: number;
+  createdAt: number;
+  runId: string;
+}
+
 export interface RunRepo {
   insert(run: TestRun): Promise<void>;
   insertWithAttempt(run: TestRun, attempt: TestAttempt): Promise<void>;
@@ -68,6 +76,7 @@ export interface RunRepo {
   setAttemptCount(runId: string, attemptCount: number): Promise<void>;
   setUsageEventId(runId: string, usageEventId: string): Promise<void>;
   setIncidentId(runId: string, incidentId: string | null): Promise<void>;
+  hasLaterIncidentResult(order: RunIncidentOrder): Promise<boolean>;
   incrementInfraAttempts(runId: string): Promise<number>;
   lastRunSummaryPerTest(
     workspaceId: string,
@@ -109,7 +118,7 @@ export interface AttemptRepo {
     runId: string,
     attemptIndex: number,
     startedAt: number,
-    usageEventId: string,
+    usageEvent: UsageEvent,
   ): Promise<boolean>;
   findByRunAndIndex(
     runId: string,

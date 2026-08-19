@@ -370,14 +370,71 @@ describe("HandleRunFinalized", () => {
     expect(value.reports.runIds).toEqual([]);
   });
 
-  it("logs report failures without breaking incident finalization", async () => {
+  it("does not open or append an incident when a newer browser result is already terminal", async () => {
+    const value = await fixture();
+    const olderFailure = run("run_order_older_failure", "FAILED", {
+      finishedAt: NOW,
+      createdAt: NOW - 5_000,
+    });
+    const newerPass = run("run_order_newer_pass", "PASSED", {
+      finishedAt: NOW + 1_000,
+      createdAt: NOW + 500,
+      scheduledFor: NOW - 9_000,
+    });
+    await value.addRun(olderFailure);
+    await value.addRun(newerPass, { failureReason: null });
+
+    await value.handler.handle(olderFailure, olderFailure.snapshot);
+
+    expect(value.incidents.incidents.size).toBe(0);
+    expect(value.events.events.size).toBe(0);
+    expect(value.dispatch.calls).toEqual([]);
+    // Reports are independent of customer-visible incident ordering.
+    expect(value.reports.runIds).toEqual([olderFailure.id]);
+  });
+
+  it("does not let an older pass resolve the incident opened by a newer failure", async () => {
+    const value = await fixture();
+    const olderPass = run("run_order_older_pass", "PASSED", {
+      finishedAt: NOW,
+      createdAt: NOW - 5_000,
+    });
+    const newerFailure = run("run_order_newer_failure", "FAILED", {
+      finishedAt: NOW + 1_000,
+      createdAt: NOW + 500,
+      scheduledFor: NOW - 9_000,
+    });
+    await value.addRun(olderPass, { failureReason: null });
+    await value.addRun(newerFailure);
+    await value.handler.handle(newerFailure, newerFailure.snapshot);
+    const incident = await value.incidents.findOpenForTest("bt_checkout");
+    if (incident === null) throw new Error("newer incident missing");
+
+    await value.handler.handle(olderPass, olderPass.snapshot);
+
+    await expect(
+      value.incidents.findById(WORKSPACE.id, incident.id),
+    ).resolves.toMatchObject({
+      status: "OPEN",
+      openedByRunId: newerFailure.id,
+      resolvedByRunId: null,
+    });
+    expect(value.dispatch.calls).toHaveLength(1);
+    expect(await value.events.listForIncident(incident.id)).toMatchObject([
+      { type: "OPENED", sourceId: newerFailure.id },
+    ]);
+  });
+
+  it("logs and propagates report failures so durable finalization retries", async () => {
     const value = await fixture();
     value.reports.fail = true;
     const failed = run("run_report_failure", "FAILED");
     await value.addRun(failed);
     const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(value.handler.handle(failed, failed.snapshot)).resolves.toBeUndefined();
+    await expect(value.handler.handle(failed, failed.snapshot)).rejects.toThrow(
+      "R2 unavailable",
+    );
 
     expect(await value.incidents.findOpenForTest("bt_checkout")).not.toBeNull();
     expect(alert.mock.calls.join(" ")).toContain(

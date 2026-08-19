@@ -14,6 +14,8 @@ import { D1RunRepo } from "../../infrastructure/db/run_repo";
 import { D1SubscriptionRepo } from "../../infrastructure/db/subscription_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
+import { D1DurableWorkflowRepo } from "../../infrastructure/db/durable_workflow_repo";
+import { PublishQueueOutbox } from "../../application/durability/publish_outbox";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
 import { FakeIds } from "../../test/fakes/ids";
@@ -91,11 +93,16 @@ const DRAFT = {
 
 class RecordingRunQueue implements Pick<Queue<AttemptMessage>, "send"> {
   readonly messages: AttemptMessage[] = [];
+  failures = 0;
 
   async send(
     message: AttemptMessage,
     _options?: QueueSendOptions,
   ): Promise<QueueSendResponse> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("queue unavailable");
+    }
     this.messages.push(structuredClone(message));
     return { metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } } };
   }
@@ -195,6 +202,7 @@ describe("browser test run creation routes", () => {
         runId: body.data.runId,
         attemptId: initialAttempts[0]?.id,
         attemptIndex: 0,
+        executionGeneration: initialAttempts[0]?.queuedAt,
       },
     ]);
 
@@ -219,6 +227,51 @@ describe("browser test run creation routes", () => {
       action: "test.run_manual",
       resourceId: TEST.id,
     });
+  });
+
+  it("keeps the initial attempt recoverable when Queue.send fails", async () => {
+    queue.failures = 1;
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST.id}/run-now`,
+      { method: "POST", headers: headers(ownerToken) },
+    );
+
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { data: { runId: string } };
+    const [attempt] = await attempts.listForRun(body.data.runId);
+    expect(attempt).toMatchObject({ status: "QUEUED", attemptIndex: 0 });
+    const durable = new D1DurableWorkflowRepo(testEnv().DB);
+    const pending = await durable.listPending(10, NOW, NOW);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({
+      queueKind: "RUN",
+      publishingAt: null,
+      publishedAt: null,
+    });
+
+    const unusedQueue = {
+      send: async () => ({
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      }),
+    };
+    const publisher = new PublishQueueOutbox(
+      durable,
+      { RUN: queue, CHECK: unusedQueue, NOTIFY: unusedQueue },
+      new FixedClock(NOW),
+    );
+    await expect(publisher.flush()).resolves.toMatchObject({ published: 1 });
+    expect(queue.messages).toEqual([
+      {
+        kind: "attempt",
+        runId: body.data.runId,
+        attemptId: attempt?.id,
+        attemptIndex: 0,
+        executionGeneration: attempt?.queuedAt,
+      },
+    ]);
+    alert.mockRestore();
   });
 
   it("creates validation runs with a null test id and draft snapshot", async () => {

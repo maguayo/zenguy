@@ -138,6 +138,7 @@ onExpiringSoon(() => {
 
 interface RequestOptions {
   page?: boolean;
+  rawText?: boolean;
 }
 
 async function request<T>(
@@ -149,9 +150,14 @@ async function request<T>(
 ): Promise<T> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
   const response = await fetch(apiUrl(path), {
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : options.rawText
+          ? String(body)
+          : JSON.stringify(body),
     credentials: "include",
-    headers: requestHeaders(true),
+    headers: requestHeaders(!options.rawText),
     method,
   });
 
@@ -187,6 +193,10 @@ export function apiGetPage<T>(path: string): Promise<ApiPage<T>> {
 
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return request<T>("POST", path, body);
+}
+
+export function apiPostText<T>(path: string, text: string): Promise<T> {
+  return request<T>("POST", path, text, { rawText: true });
 }
 
 export function apiPatch<T>(path: string, body?: unknown): Promise<T> {

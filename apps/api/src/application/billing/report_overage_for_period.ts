@@ -1,8 +1,8 @@
 import type {
   OverageReportRepo,
-  SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
+import type { OverageReport } from "../../domain/billing/types";
 import type { PaddleClient } from "../../infrastructure/paddle/client";
 import type { Clock } from "../../shared/clock";
 import {
@@ -12,14 +12,25 @@ import {
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
 
+export const OVERAGE_SETTLEMENT_DELAY_MS = 60 * 60 * 1_000;
+
 export type OverageReportResult =
   | { status: "already_reported" }
   | { status: "no_overage" }
+  | { status: "settling" }
+  | { status: "reconciling" }
+  | { status: "reconciled"; transactionId: string }
   | { status: "charged"; overage: number };
+
+export function overageProviderMarker(
+  workspaceId: string,
+  periodStart: number,
+): string {
+  return `zenguy:overage:v1:${workspaceId}:${periodStart}`;
+}
 
 export class ReportOverageForPeriod {
   constructor(
-    private readonly subscriptions: SubscriptionRepo,
     private readonly usageEvents: UsageEventRepo,
     private readonly reports: OverageReportRepo,
     private readonly paddle: PaddleClient,
@@ -32,17 +43,100 @@ export class ReportOverageForPeriod {
     workspaceId: string;
     periodStart: number;
     periodEnd: number;
+    providerSubscriptionId: string;
   }): Promise<OverageReportResult> {
-    if (await this.reports.existsFor(input.workspaceId, input.periodStart)) {
+    let report = await this.reports.findFor(
+      input.workspaceId,
+      input.periodStart,
+    );
+    const now = this.clock.now();
+    const settledPeriodEnd = report?.periodEnd ?? input.periodEnd;
+    if (now < settledPeriodEnd + OVERAGE_SETTLEMENT_DELAY_MS) {
+      return { status: "settling" };
+    }
+    if (report === null) {
+      const created = await this.createReport(input);
+      const inserted = await this.reports.insertIfAbsent(created);
+      if (inserted === "inserted") {
+        if (created.state === "COMPLETED") {
+          return { status: "no_overage" };
+        }
+        report = created;
+      } else {
+        report = await this.reports.findFor(
+          input.workspaceId,
+          input.periodStart,
+        );
+        if (report === null) {
+          throw new Error("Overage report claim missing");
+        }
+      }
+    }
+
+    if (report.state === "COMPLETED") {
       return { status: "already_reported" };
     }
+    const providerMarker = report.providerMarker;
+    if (providerMarker === null) {
+      throw new Error("Overage report marker missing");
+    }
+    const providerSubscriptionId = report.providerSubscriptionId;
+    if (providerSubscriptionId === null) {
+      logEvent("overage_reconciliation_requires_subscription", {
+        workspaceId: report.workspaceId,
+      });
+      return { status: "reconciling" };
+    }
+
+    if (report.state === "AMBIGUOUS") {
+      const reconciled = await this.reconcile(
+        report,
+        providerSubscriptionId,
+        providerMarker,
+      );
+      if (reconciled !== null) return reconciled;
+      // Paddle has no idempotency key for this operation. A missing transaction
+      // is not proof that an ambiguous POST failed, so retrying could double bill.
+      logEvent("overage_reconciliation_pending", {
+        workspaceId: report.workspaceId,
+      });
+      return { status: "reconciling" };
+    }
+
+    // DEVIATION: Paddle has no client idempotency key for subscription charges.
+    // Persist AMBIGUOUS before the only allowed POST. Ambiguous attempts are
+    // reconciled indefinitely and are never submitted a second time.
+    const began = await this.reports.beginAttempt(report.id, now);
+    if (!began) return { status: "reconciling" };
+
+    const { transactionId } = await this.paddle.createOneTimeCharge(
+      providerSubscriptionId,
+      this.overagePriceId,
+      report.overageRuns,
+      providerMarker,
+    );
+    await this.reports.markCompleted(report.id, transactionId, this.clock.now());
+    logEvent("overage_reported", {
+      workspaceId: report.workspaceId,
+      overage: report.overageRuns,
+    });
+    return { status: "charged", overage: report.overageRuns };
+  }
+
+  private async createReport(input: {
+    workspaceId: string;
+    periodStart: number;
+    periodEnd: number;
+    providerSubscriptionId: string;
+  }): Promise<OverageReport> {
     const billable = await this.usageEvents.countBillable(
       input.workspaceId,
       input.periodStart,
       input.periodEnd,
     );
     const overage = Math.max(0, billable - INCLUDED_RUNS);
-    const report = {
+    const now = this.clock.now();
+    return {
       id: this.ids.newId("ovr"),
       workspaceId: input.workspaceId,
       periodStart: input.periodStart,
@@ -50,47 +144,40 @@ export class ReportOverageForPeriod {
       overageRuns: overage,
       amountCents: overage * OVERAGE_CENTS_PER_RUN,
       paddleTransactionId: null,
-      reportedAt: this.clock.now(),
+      reportedAt: now,
+      state: overage === 0 ? "COMPLETED" : "PENDING",
+      providerMarker:
+        overage === 0
+          ? null
+          : overageProviderMarker(input.workspaceId, input.periodStart),
+      attemptStartedAt: null,
+      completedAt: overage === 0 ? now : null,
+      providerSubscriptionId: input.providerSubscriptionId,
     };
-    if (overage === 0) {
-      const inserted = await this.reports.insertIfAbsent(report);
-      return inserted === "duplicate"
-        ? { status: "already_reported" }
-        : { status: "no_overage" };
-    }
+  }
 
-    const subscription = await this.subscriptions.findByWorkspace(
-      input.workspaceId,
+  private async reconcile(
+    report: OverageReport,
+    subscriptionId: string,
+    providerMarker: string,
+  ): Promise<OverageReportResult | null> {
+    const match = await this.paddle.findSubscriptionChargeByMarker(
+      subscriptionId,
+      providerMarker,
     );
-    if (subscription?.providerSubscriptionId === null ||
-        subscription?.providerSubscriptionId === undefined) {
-      throw new Error("Paddle subscription required for overage");
-    }
-
-    // DEVIATION: claim the unique period row before the external charge. The
-    // requested charge-then-insert order permits two concurrent workers to
-    // charge twice; this claim makes the stated never-double-charge guarantee.
-    const claimed = await this.reports.insertIfAbsent(report);
-    if (claimed === "duplicate") return { status: "already_reported" };
-
-    let transactionId: string | null;
-    try {
-      ({ transactionId } = await this.paddle.createOneTimeCharge(
-        subscription.providerSubscriptionId,
-        this.overagePriceId,
-        overage,
-      ));
-    } catch (error) {
-      await this.reports.deleteById(report.id);
-      throw error;
-    }
-    if (transactionId !== null) {
-      await this.reports.setPaddleTransactionId(report.id, transactionId);
-    }
-    logEvent("overage_reported", {
-      workspaceId: input.workspaceId,
-      overage,
+    if (match === null) return null;
+    await this.reports.markCompleted(
+      report.id,
+      match.transactionId,
+      this.clock.now(),
+    );
+    logEvent("overage_reconciled", {
+      workspaceId: report.workspaceId,
+      overage: report.overageRuns,
     });
-    return { status: "charged", overage };
+    return {
+      status: "reconciled",
+      transactionId: match.transactionId,
+    };
   }
 }

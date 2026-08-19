@@ -269,15 +269,19 @@ export class D1MonitorRepo implements MonitorRepo {
     return result.meta.changes === 1;
   }
 
-  async closeCycle(id: string, changes: CloseMonitorCycle): Promise<void> {
-    await run(
+  async closeCycle(
+    id: string,
+    changes: CloseMonitorCycle,
+    expectedCycleId: string,
+  ): Promise<boolean> {
+    const result = await run(
       this.database
         .prepare(
           `UPDATE uptime_monitors
            SET current_status = ?, current_cycle_id = NULL,
                cycle_started_at = NULL, last_check_at = ?,
                last_response_time_ms = ?, updated_at = ?
-           WHERE id = ? AND deleted_at IS NULL`,
+           WHERE id = ? AND deleted_at IS NULL AND current_cycle_id = ?`,
         )
         .bind(
           changes.status,
@@ -285,8 +289,10 @@ export class D1MonitorRepo implements MonitorRepo {
           changes.lastResponseTimeMs,
           changes.lastCheckAt,
           id,
+          expectedCycleId,
         ),
     );
+    return result.meta.changes === 1;
   }
 
   async listZombieCycles(before: number): Promise<UptimeMonitor[]> {
@@ -302,16 +308,17 @@ export class D1MonitorRepo implements MonitorRepo {
     return rows.map(toMonitor);
   }
 
-  async clearCycle(id: string): Promise<void> {
-    await run(
+  async clearCycle(id: string, expectedCycleId: string): Promise<boolean> {
+    const result = await run(
       this.database
         .prepare(
           `UPDATE uptime_monitors
            SET current_cycle_id = NULL, cycle_started_at = NULL
-           WHERE id = ?`,
+           WHERE id = ? AND current_cycle_id = ?`,
         )
-        .bind(id),
+        .bind(id, expectedCycleId),
     );
+    return result.meta.changes === 1;
   }
 
   async setChannels(monitorId: string, channelIds: string[]): Promise<void> {

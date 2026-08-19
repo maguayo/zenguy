@@ -16,6 +16,8 @@ import { FakeCheckRepo, FakeMonitorRepo } from "../../test/fakes/uptime_repos";
 import type { CheckOutcome } from "./execute_check";
 import { HandleCheckMessage } from "./handle_check_message";
 import { encryptMonitorSensitive } from "./monitor_secrets";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const NOW = Date.UTC(2026, 7, 19, 12, 0, 0);
 const KEY = new Uint8Array(32).fill(8);
@@ -81,11 +83,16 @@ function pass(): CheckOutcome {
 
 class RecordingDispatch {
   readonly calls: Array<Parameters<DispatchNotifications["execute"]>[0]> = [];
+  failures = 0;
 
   async execute(
     input: Parameters<DispatchNotifications["execute"]>[0],
   ): Promise<string[]> {
     this.calls.push(structuredClone(input));
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("dispatch unavailable");
+    }
     return [];
   }
 }
@@ -95,11 +102,16 @@ class RecordingCheckQueue {
     message: CheckMessage;
     options: QueueSendOptions | undefined;
   }> = [];
+  failures = 0;
 
   async send(
     message: CheckMessage,
     options?: QueueSendOptions,
   ): Promise<QueueSendResponse> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("queue unavailable");
+    }
     this.calls.push({
       message: structuredClone(message),
       options: options === undefined ? undefined : structuredClone(options),
@@ -144,6 +156,7 @@ function openIncident(monitorId = MESSAGE.monitorId): Incident {
 
 async function fixture(input: {
   outcomes: CheckOutcome[];
+  executeCheck?: (config: MonitorConfig) => Promise<CheckOutcome>;
   maxRetries?: number;
   notifyOnRecovery?: boolean;
   currentStatus?: MonitorStatus;
@@ -194,6 +207,18 @@ async function fixture(input: {
   await monitors.setChannels(monitor.id, ["ch_check_cycle"]);
   await workspaces.insert(WORKSPACE);
   await channels.insert(channel());
+  const clock = new FixedClock(NOW);
+  const durable = new FakeDurableWorkflowRepo({ checks, monitors });
+  const unusedQueue = {
+    send: async () => ({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    }),
+  };
+  const outboxPublisher = new PublishQueueOutbox(
+    durable,
+    { RUN: unusedQueue, CHECK: queue, NOTIFY: unusedQueue },
+    clock,
+  );
   const handler = new HandleCheckMessage({
     monitors,
     checks,
@@ -202,11 +227,12 @@ async function fixture(input: {
     channels,
     workspaces,
     dispatchNotifications: dispatch,
-    checkQueue: queue,
-    executeCheck: (config) => executor.execute(config),
+    durable,
+    outboxPublisher,
+    executeCheck: input.executeCheck ?? ((config) => executor.execute(config)),
     encryptionKey: KEY,
     appUrl: "https://app.zenguy.test",
-    clock: new FixedClock(NOW),
+    clock,
     ids: new FakeIds(),
   });
   return {
@@ -218,6 +244,9 @@ async function fixture(input: {
     workspaces,
     dispatch,
     queue,
+    durable,
+    clock,
+    outboxPublisher,
     executor,
     monitor,
     handler,
@@ -225,6 +254,128 @@ async function fixture(input: {
 }
 
 describe("HandleCheckMessage", () => {
+  it.each([
+    { name: "pass", outcome: pass() },
+    { name: "failure", outcome: failure() },
+  ])(
+    "does not apply an old $name continuation after closeCycle loses its CAS",
+    async ({ outcome }) => {
+      let monitorRepo: FakeMonitorRepo | undefined;
+      const value = await fixture({
+        outcomes: [],
+        maxRetries: 0,
+        currentStatus: "DOWN",
+        executeCheck: async () => {
+          const repo = monitorRepo;
+          if (repo === undefined) throw new Error("monitor repo unavailable");
+          const current = repo.monitors.get(MESSAGE.monitorId);
+          if (current === undefined) throw new Error("monitor missing");
+          repo.monitors.set(MESSAGE.monitorId, {
+            ...current,
+            currentCycleId: "cyc_newer_owner",
+            cycleStartedAt: NOW,
+            lastCheckAt: null,
+          });
+          return outcome;
+        },
+      });
+      monitorRepo = value.monitors;
+      const newer: Incident = {
+        ...openIncident(),
+        id: `inc_newer_${outcome.status.toLowerCase()}`,
+        openedAt: NOW + 1,
+        openedByCheckId: "chk_newer_owner",
+        lastEventAt: NOW + 1,
+        createdAt: NOW + 1,
+      };
+      await value.incidents.insertOpen(newer);
+
+      await value.handler.execute(MESSAGE);
+
+      await expect(
+        value.monitors.findById(WORKSPACE.id, MESSAGE.monitorId),
+      ).resolves.toMatchObject({ currentCycleId: "cyc_newer_owner" });
+      await expect(
+        value.incidents.findById(WORKSPACE.id, newer.id),
+      ).resolves.toMatchObject({
+        status: "OPEN",
+        lastEventAt: NOW + 1,
+      });
+      await expect(value.events.listForIncident(newer.id)).resolves.toEqual([]);
+      expect(value.dispatch.calls).toEqual([]);
+    },
+  );
+
+  it("leases a cycle attempt before a non-idempotent HTTP check", async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const value = await fixture({
+      outcomes: [],
+      executeCheck: async () => {
+        calls += 1;
+        entered();
+        await gate;
+        return pass();
+      },
+    });
+
+    const owner = value.handler.execute(MESSAGE);
+    await started;
+    await expect(value.handler.execute(MESSAGE)).resolves.toBeUndefined();
+    expect(calls).toBe(1);
+
+    release();
+    await owner;
+    expect(calls).toBe(1);
+    expect(value.checks.checks.size).toBe(1);
+  });
+
+  it("releases an HTTP check lease on failure so Queue retry can execute", async () => {
+    let calls = 0;
+    const value = await fixture({
+      outcomes: [],
+      executeCheck: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("request aborted");
+        return pass();
+      },
+    });
+
+    await expect(value.handler.execute(MESSAGE)).rejects.toThrow(
+      "request aborted",
+    );
+    await expect(value.handler.execute(MESSAGE)).resolves.toBeUndefined();
+
+    expect(calls).toBe(2);
+    expect(value.checks.checks.size).toBe(1);
+  });
+
+  it("reclaims a check execution lease left by a crashed worker", async () => {
+    const value = await fixture({ outcomes: [pass()] });
+    await value.durable.claimCheckExecution({
+      cycleId: MESSAGE.cycleId,
+      attemptIndex: MESSAGE.attemptIndex,
+      claimToken: "job_abandoned",
+      claimedAt: NOW,
+      staleBefore: NOW - 1,
+    });
+
+    await value.handler.execute(MESSAGE);
+    expect(value.executor.calls).toBe(0);
+
+    value.clock.advance(15 * 60_000 + 1);
+    await value.handler.execute(MESSAGE);
+    expect(value.executor.calls).toBe(1);
+    expect(value.checks.checks.size).toBe(1);
+  });
+
   it("matches the fail-then-immediate-pass example without opening an incident", async () => {
     const value = await fixture({
       outcomes: [failure(), pass()],
@@ -307,6 +458,39 @@ describe("HandleCheckMessage", () => {
     });
   });
 
+  it("recovers a retry Queue.send failure and preserves the remaining delay", async () => {
+    const value = await fixture({ outcomes: [failure()], maxRetries: 2 });
+    value.queue.failures = 1;
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await value.handler.execute({ ...MESSAGE, attemptIndex: 1 });
+
+    expect(value.queue.calls).toEqual([]);
+    const [pending] = [...value.durable.outboxEntries.values()];
+    expect(pending).toMatchObject({
+      queueKind: "CHECK",
+      availableAt: NOW + 60_000,
+      publishedAt: null,
+    });
+    value.clock.advance(59_999);
+    await expect(value.outboxPublisher.flush()).resolves.toEqual({
+      published: 0,
+      failed: 0,
+    });
+    value.clock.advance(1);
+    await expect(value.outboxPublisher.flush()).resolves.toEqual({
+      published: 1,
+      failed: 0,
+    });
+    expect(value.queue.calls).toEqual([
+      {
+        message: { ...MESSAGE, attemptIndex: 2 },
+        options: { delaySeconds: 0 },
+      },
+    ]);
+    alert.mockRestore();
+  });
+
   it("resolves an open incident and sends recovery when configured", async () => {
     const value = await fixture({
       outcomes: [pass()],
@@ -351,6 +535,122 @@ describe("HandleCheckMessage", () => {
       { type: "FAILURE_RECORDED", sourceId: expect.stringMatching(/^chk_/u) },
     ]);
     expect(value.dispatch.calls).toHaveLength(0);
+  });
+
+  it("resumes an opened incident after dispatch fails without reclassifying it", async () => {
+    const value = await fixture({ outcomes: [failure()], maxRetries: 0 });
+    value.dispatch.failures = 1;
+
+    await expect(value.handler.execute(MESSAGE)).rejects.toThrow(
+      "dispatch unavailable",
+    );
+    const incident = [...value.incidents.incidents.values()][0]!;
+    expect(incident.openedByCheckId).toMatch(/^chk_/u);
+    await expect(value.handler.execute(MESSAGE)).resolves.toBeUndefined();
+
+    await expect(value.events.listForIncident(incident.id)).resolves.toEqual([
+      expect.objectContaining({
+        type: "OPENED",
+        sourceId: incident.openedByCheckId,
+      }),
+    ]);
+    expect(value.dispatch.calls).toHaveLength(2);
+    expect(
+      [...value.durable.jobs.values()].find(
+        (job) => job.kind === "CHECK_CONTINUATION",
+      )?.status,
+    ).toBe("COMPLETED");
+  });
+
+  it("resumes recovery after resolve+dispatch failure using the original incident", async () => {
+    const value = await fixture({ outcomes: [pass()], currentStatus: "DOWN" });
+    const incident = openIncident();
+    await value.incidents.insertOpen(incident);
+    value.dispatch.failures = 1;
+
+    await expect(value.handler.execute(MESSAGE)).rejects.toThrow(
+      "dispatch unavailable",
+    );
+    await expect(value.handler.execute(MESSAGE)).resolves.toBeUndefined();
+
+    await expect(value.incidents.findById(WORKSPACE.id, incident.id)).resolves.toMatchObject({
+      status: "RESOLVED",
+      resolvedByCheckId: expect.stringMatching(/^chk_/u),
+    });
+    await expect(value.events.listForIncident(incident.id)).resolves.toHaveLength(1);
+    expect(value.dispatch.calls).toHaveLength(2);
+  });
+
+  it("does not let an old pass continuation resolve a newer incident", async () => {
+    const value = await fixture({ outcomes: [pass()], currentStatus: "DOWN" });
+    const oldIncident = openIncident();
+    await value.incidents.insertOpen(oldIncident);
+    value.dispatch.failures = 1;
+    await expect(value.handler.execute(MESSAGE)).rejects.toThrow(
+      "dispatch unavailable",
+    );
+    const current = value.monitors.monitors.get(MESSAGE.monitorId)!;
+    value.monitors.monitors.set(MESSAGE.monitorId, {
+      ...current,
+      currentStatus: "DOWN",
+      currentCycleId: null,
+      cycleStartedAt: null,
+      lastCheckAt: NOW + 1_000,
+      updatedAt: NOW + 1_000,
+    });
+    const newer: Incident = {
+      ...openIncident(),
+      id: "inc_newer_failure",
+      openedAt: NOW + 1_000,
+      openedByCheckId: "chk_newer_failure",
+      lastEventAt: NOW + 1_000,
+      createdAt: NOW + 1_000,
+    };
+    await value.incidents.insertOpen(newer);
+
+    await value.handler.execute(MESSAGE);
+
+    await expect(
+      value.incidents.findById(WORKSPACE.id, newer.id),
+    ).resolves.toMatchObject({ status: "OPEN", resolvedByCheckId: null });
+  });
+
+  it("does not append an old failure continuation to a newer incident", async () => {
+    const value = await fixture({ outcomes: [failure()], maxRetries: 0 });
+    vi.spyOn(value.incidents, "findByCheckSource").mockRejectedValueOnce(
+      new Error("incident read unavailable"),
+    );
+    await expect(value.handler.execute(MESSAGE)).rejects.toThrow(
+      "incident read unavailable",
+    );
+    const current = value.monitors.monitors.get(MESSAGE.monitorId)!;
+    value.monitors.monitors.set(MESSAGE.monitorId, {
+      ...current,
+      currentStatus: "DOWN",
+      currentCycleId: null,
+      cycleStartedAt: null,
+      lastCheckAt: NOW + 1_000,
+      updatedAt: NOW + 1_000,
+    });
+    const newer: Incident = {
+      ...openIncident(),
+      id: "inc_newer_after_old_failure",
+      openedAt: NOW + 1_000,
+      openedByCheckId: "chk_newer_after_old_failure",
+      lastEventAt: NOW + 1_000,
+      createdAt: NOW + 1_000,
+    };
+    await value.incidents.insertOpen(newer);
+
+    await value.handler.execute(MESSAGE);
+
+    await expect(value.events.listForIncident(newer.id)).resolves.toEqual([]);
+    await expect(
+      value.incidents.findById(WORKSPACE.id, newer.id),
+    ).resolves.toMatchObject({
+      status: "OPEN",
+      lastEventAt: NOW + 1_000,
+    });
   });
 
   it("acks sequential redelivery without executing or producing effects twice", async () => {

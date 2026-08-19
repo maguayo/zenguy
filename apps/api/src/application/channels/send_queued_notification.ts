@@ -27,6 +27,8 @@ function retryDelay(attemptCount: number): number {
   return Math.min(300, 30 * 2 ** Math.max(0, attemptCount - 1));
 }
 
+const DELIVERY_LEASE_MS = 5 * 60_000;
+
 function configValues(value: unknown): string[] {
   if (typeof value === "string") return value.length === 0 ? [] : [value];
   if (Array.isArray(value)) return value.flatMap(configValues);
@@ -59,12 +61,32 @@ export class SendQueuedNotification {
     input: NotifyMessage,
     queueMessage: NotificationQueueControl,
   ): Promise<void> {
-    const delivery = await this.deliveries.findById(
+    const found = await this.deliveries.findById(
       input.workspaceId,
       input.deliveryId,
     );
-    if (delivery === null || delivery.status !== "PENDING") {
+    if (found === null) {
       queueMessage.ack();
+      return;
+    }
+    if (found.status !== "PENDING") {
+      const channel = await this.channels.findById(
+        input.workspaceId,
+        found.notificationChannelId,
+      );
+      await this.reconcileTerminal(found, channel);
+      queueMessage.ack();
+      return;
+    }
+    const claimedAt = this.clock.now();
+    const delivery = await this.deliveries.claimPending(
+      input.workspaceId,
+      input.deliveryId,
+      claimedAt,
+      claimedAt - DELIVERY_LEASE_MS,
+    );
+    if (delivery === null) {
+      queueMessage.retry({ delaySeconds: 30 });
       return;
     }
     const channel = await this.channels.findById(
@@ -113,12 +135,14 @@ export class SendQueuedNotification {
         errorSanitized,
         attemptCount,
       });
-      await this.channels.setLastDeliveryStatus(channel.id, "FAILED");
-      await this.writeIncidentEvent(
-        delivery,
+      await this.reconcileTerminal(
+        {
+          ...delivery,
+          status: "FAILED",
+          errorSanitized,
+          attemptCount,
+        },
         channel,
-        "NOTIFICATION_FAILED",
-        "FAILED",
       );
       logEvent("notification_delivery_failed", {
         deliveryId: delivery.id,
@@ -137,13 +161,16 @@ export class SendQueuedNotification {
       attemptCount,
       sentAt,
     });
-    await this.channels.setLastDeliveryStatus(channel.id, "SENT");
-    await this.channels.setVerified(channel.id, sentAt);
-    await this.writeIncidentEvent(
-      delivery,
+    await this.reconcileTerminal(
+      {
+        ...delivery,
+        status: "SENT",
+        providerMessageId: sent.providerMessageId,
+        errorSanitized: null,
+        attemptCount,
+        sentAt,
+      },
       channel,
-      "NOTIFICATION_SENT",
-      "SENT",
     );
     queueMessage.ack();
   }
@@ -157,20 +184,14 @@ export class SendQueuedNotification {
       errorSanitized: "channel removed",
       attemptCount: delivery.attemptCount,
     });
-    if (channel !== null) {
-      await this.channels.setLastDeliveryStatus(channel.id, "FAILED");
-    }
-    if (delivery.incidentId !== null) {
-      await this.incidentEvents.write({
-        workspaceId: delivery.workspaceId,
-        incidentId: delivery.incidentId,
-        type: "NOTIFICATION_FAILED",
-        channelId: delivery.notificationChannelId,
-        channelName: channel?.name ?? "Removed channel",
-        deliveryId: delivery.id,
+    await this.reconcileTerminal(
+      {
+        ...delivery,
         status: "FAILED",
-      });
-    }
+        errorSanitized: "channel removed",
+      },
+      channel,
+    );
     logEvent("notification_delivery_failed", {
       deliveryId: delivery.id,
       channelId: delivery.notificationChannelId,
@@ -179,21 +200,38 @@ export class SendQueuedNotification {
     });
   }
 
-  private async writeIncidentEvent(
+  /**
+   * Provider delivery and local follow-up effects are intentionally separate:
+   * a provider call cannot participate in our D1 transaction. Replaying this
+   * method for an already-terminal delivery completes the local effects
+   * without ever calling the provider twice.
+   */
+  private async reconcileTerminal(
     delivery: NotificationDelivery,
-    channel: NotificationChannel,
-    type: "NOTIFICATION_SENT" | "NOTIFICATION_FAILED",
-    status: "SENT" | "FAILED",
+    channel: NotificationChannel | null,
   ): Promise<void> {
+    if (delivery.status !== "SENT" && delivery.status !== "FAILED") return;
+    if (channel !== null) {
+      await this.channels.setLastDeliveryStatus(channel.id, delivery.status);
+      if (delivery.status === "SENT") {
+        await this.channels.setVerified(
+          channel.id,
+          delivery.sentAt ?? delivery.createdAt,
+        );
+      }
+    }
     if (delivery.incidentId === null) return;
     await this.incidentEvents.write({
       workspaceId: delivery.workspaceId,
       incidentId: delivery.incidentId,
-      type,
-      channelId: channel.id,
-      channelName: channel.name,
+      type:
+        delivery.status === "SENT"
+          ? "NOTIFICATION_SENT"
+          : "NOTIFICATION_FAILED",
+      channelId: delivery.notificationChannelId,
+      channelName: channel?.name ?? "Removed channel",
       deliveryId: delivery.id,
-      status,
+      status: delivery.status,
     });
   }
 }

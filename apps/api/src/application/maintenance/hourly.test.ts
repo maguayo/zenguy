@@ -21,6 +21,8 @@ import {
 } from "../../test/fakes/repos";
 import { FakeMonitorRepo } from "../../test/fakes/uptime_repos";
 import { HourlyMaintenance } from "./hourly";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const NOW = 1_800_000_000_000;
 const STALE_AT = NOW - ATTEMPT_TIMEOUT_MS - 600_001;
@@ -145,17 +147,36 @@ describe("HourlyMaintenance", () => {
     });
     await monitors.insert(monitor("mon_stale", NOW - 900_001));
     await monitors.insert(monitor("mon_boundary", NOW - 900_000));
+    const steps = new FakeStepRepo();
+    const artifacts = new FakeArtifactRepo();
+    const durable = new FakeDurableWorkflowRepo({
+      runs,
+      attempts,
+      steps,
+      artifacts,
+    });
+    const queue = new NoopQueue();
+    const outboxPublisher = new PublishQueueOutbox(
+      durable,
+      { RUN: queue, CHECK: queue, NOTIFY: queue },
+      clock,
+    );
     const lifecycle = new AttemptLifecycle({
       runs,
       attempts,
-      steps: new FakeStepRepo(),
-      artifacts: new FakeArtifactRepo(),
+      steps,
+      artifacts,
       tests: new FakeBrowserTestRepo(),
       workspaces: new FakeWorkspaceRepo(),
       storage: { delete: async () => undefined },
-      recordUsage: { execute: async () => "unused" },
+      recordUsage: {
+        buildEvent: () => {
+          throw new Error("unused");
+        },
+      },
       reverseUsage: new ReverseRunUsage(usage, clock),
-      queue: new NoopQueue(),
+      durable,
+      outboxPublisher,
       clock,
       ids: new FakeIds(),
       runFinalizedHandler: new NoopRunFinalizedHandler(),

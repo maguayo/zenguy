@@ -424,6 +424,8 @@ export class GenerateReport implements ReportGenerator {
       await this.dependencies.artifacts.insert(artifact);
     } catch (error) {
       await this.dependencies.storage.delete([storageKey]).catch(() => undefined);
+      const winner = await this.dependencies.artifacts.findReportForRun(run.id);
+      if (winner !== null) return winner;
       throw error;
     }
     return artifact;

@@ -74,6 +74,7 @@ export const RATE_LIMITS = {
   channel_test: { limit: 5, windowSeconds: 3600 },
   monitor_create: { limit: 30, windowSeconds: 3600 },
   test_request: { limit: 30, windowSeconds: 3600 },
+  test_import: { limit: 10, windowSeconds: 3600 },
   report_download: { limit: 60, windowSeconds: 3600 },
   public_api: { limit: 120, windowSeconds: 60 },
 } as const;

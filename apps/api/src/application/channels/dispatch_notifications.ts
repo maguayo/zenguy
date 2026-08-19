@@ -1,18 +1,24 @@
 import type {
   ChannelRepo,
-  DeliveryRepo,
 } from "../../domain/channels/repo";
 import type { NotificationMessage } from "../../domain/channels/notifier";
 import type { NotifyMessage } from "../../domain/queues";
 import type { NotificationDelivery } from "../../domain/channels/types";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
+import { createOutboxEntry } from "../durability/factory";
+import type { PublishQueueOutbox } from "../durability/publish_outbox";
+import { platformAlert } from "../../shared/log";
 
 export class DispatchNotifications {
   constructor(
     private readonly channels: ChannelRepo,
-    private readonly deliveries: DeliveryRepo,
-    private readonly queue: Pick<Queue<NotifyMessage>, "send">,
+    private readonly durable: Pick<
+      DurableWorkflowRepo,
+      "insertDeliveryWithOutbox"
+    >,
+    private readonly outboxPublisher: Pick<PublishQueueOutbox, "publishById">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -22,6 +28,7 @@ export class DispatchNotifications {
     channelIds: string[];
     message: NotificationMessage;
     incidentId: string | null;
+    dedupeKey: string;
   }): Promise<string[]> {
     const channels = (
       await this.channels.listByIds(input.workspaceId, input.channelIds)
@@ -40,15 +47,36 @@ export class DispatchNotifications {
         sentAt: null,
         createdAt: this.clock.now(),
       };
-      await this.deliveries.insert(delivery);
-      await this.queue.send({
+      const message: NotifyMessage = {
         kind: "notify",
         deliveryId: delivery.id,
         workspaceId: input.workspaceId,
         channelId: channel.id,
         message: input.message,
+      };
+      const dedupeKey = `${input.dedupeKey}:${channel.id}`;
+      const outbox = createOutboxEntry({
+        dedupeKey: `notify:${dedupeKey}`,
+        queueKind: "NOTIFY",
+        payload: message,
+        availableAt: delivery.createdAt,
+        now: delivery.createdAt,
+        ids: this.ids,
       });
-      return delivery.id;
+      const inserted = await this.durable.insertDeliveryWithOutbox({
+        delivery,
+        dedupeKey,
+        outbox,
+      });
+      try {
+        await this.outboxPublisher.publishById(inserted.outboxId);
+      } catch {
+        platformAlert("notification_publish_deferred", {
+          deliveryId: inserted.deliveryId,
+          outboxId: inserted.outboxId,
+        });
+      }
+      return inserted.deliveryId;
     });
     return Promise.all(deliveries);
   }

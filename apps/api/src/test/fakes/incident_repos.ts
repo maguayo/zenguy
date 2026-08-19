@@ -76,6 +76,23 @@ export class FakeIncidentRepo implements IncidentRepo {
     return incident === undefined ? null : copy(incident);
   }
 
+  async findByRunSource(runId: string): Promise<Incident | null> {
+    const incident = [...this.incidents.values()].find(
+      (candidate) =>
+        candidate.resolvedByRunId === runId || candidate.openedByRunId === runId,
+    );
+    return incident === undefined ? null : copy(incident);
+  }
+
+  async findByCheckSource(checkId: string): Promise<Incident | null> {
+    const incident = [...this.incidents.values()].find(
+      (candidate) =>
+        candidate.resolvedByCheckId === checkId ||
+        candidate.openedByCheckId === checkId,
+    );
+    return incident === undefined ? null : copy(incident);
+  }
+
   async listOverlappingMonitor(
     monitorId: string,
     fromMs: number,
@@ -168,6 +185,17 @@ export class FakeIncidentEventRepo implements IncidentEventRepo {
   readonly events = new Map<string, IncidentEvent>();
 
   async insert(event: IncidentEvent): Promise<void> {
+    if (
+      event.sourceId !== null &&
+      [...this.events.values()].some(
+        (candidate) =>
+          candidate.incidentId === event.incidentId &&
+          candidate.type === event.type &&
+          candidate.sourceId === event.sourceId,
+      )
+    ) {
+      return;
+    }
     if (this.events.has(event.id)) {
       throw new Error("incident event constraint violation");
     }

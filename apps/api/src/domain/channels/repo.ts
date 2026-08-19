@@ -43,6 +43,12 @@ export interface DeliveryRepo {
     workspaceId: string,
     id: string,
   ): Promise<NotificationDelivery | null>;
+  claimPending(
+    workspaceId: string,
+    id: string,
+    claimedAt: number,
+    staleBefore: number,
+  ): Promise<NotificationDelivery | null>;
   update(id: string, changes: DeliveryUpdate): Promise<void>;
   listForChannel(
     channelId: string,

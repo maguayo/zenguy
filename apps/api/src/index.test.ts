@@ -1,4 +1,4 @@
-import type { CheckMessage, NotifyMessage } from "./domain/queues";
+import type { AttemptMessage, CheckMessage, NotifyMessage } from "./domain/queues";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
@@ -104,12 +104,14 @@ describe("queue routing", () => {
       runId: "run_failed",
       attemptId: "att_failed",
       attemptIndex: 0,
+      executionGeneration: 1,
     });
     const valid = new RecordingMessage("msg_valid", {
       kind: "attempt",
       runId: "run_valid",
       attemptId: "att_valid",
       attemptIndex: 1,
+      executionGeneration: 2,
     });
     const execute = vi.fn(async (message: { runId: string }) => {
       if (message.runId === "run_failed") throw new Error("boom");
@@ -178,12 +180,14 @@ describe("queue routing", () => {
   });
 
   it("routes every staging queue and acknowledges every staging dead-letter queue", async () => {
-    const attemptMessage = new RecordingMessage("msg_staging_run", {
+    const attemptBody: AttemptMessage = {
       kind: "attempt",
       runId: "run_staging",
       attemptId: "att_staging",
       attemptIndex: 0,
-    });
+      executionGeneration: 3,
+    };
+    const attemptMessage = new RecordingMessage("msg_staging_run", attemptBody);
     const checkBody: CheckMessage = {
       kind: "check",
       monitorId: "mon_staging",
@@ -278,6 +282,7 @@ function scheduledJobs(): {
   const calls = {
     tests: vi.fn(async () => undefined),
     monitors: vi.fn(async () => undefined),
+    durability: vi.fn(async () => undefined),
     retention: vi.fn(async () => undefined),
     hourly: vi.fn(async () => undefined),
   };
@@ -286,6 +291,7 @@ function scheduledJobs(): {
     jobs: {
       tests: { execute: calls.tests },
       monitors: { execute: calls.monitors },
+      durability: { execute: calls.durability },
       retention: { execute: calls.retention },
       hourly: { execute: calls.hourly },
     },
@@ -298,6 +304,7 @@ describe("scheduled routing", () => {
     await processScheduledCron("*/5 * * * *", scheduler.jobs);
     expect(scheduler.calls.tests).toHaveBeenCalledOnce();
     expect(scheduler.calls.monitors).toHaveBeenCalledOnce();
+    expect(scheduler.calls.durability).toHaveBeenCalledOnce();
     expect(scheduler.calls.retention).not.toHaveBeenCalled();
     expect(scheduler.calls.hourly).not.toHaveBeenCalled();
 

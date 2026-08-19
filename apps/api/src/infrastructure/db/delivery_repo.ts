@@ -100,12 +100,32 @@ export class D1DeliveryRepo implements DeliveryRepo {
     return row === null ? null : toDelivery(row);
   }
 
+  async claimPending(
+    workspaceId: string,
+    id: string,
+    claimedAt: number,
+    staleBefore: number,
+  ): Promise<NotificationDelivery | null> {
+    const row = await one<DeliveryRow>(
+      this.database
+        .prepare(
+          `UPDATE notification_deliveries SET processing_at = ?
+           WHERE workspace_id = ? AND id = ? AND status = 'PENDING'
+             AND (processing_at IS NULL OR processing_at <= ?)
+           RETURNING *`,
+        )
+        .bind(claimedAt, workspaceId, id, staleBefore),
+    );
+    return row === null ? null : toDelivery(row);
+  }
+
   async update(id: string, changes: DeliveryUpdate): Promise<void> {
     await run(
       this.database
         .prepare(
           `UPDATE notification_deliveries
            SET status = ?,
+               processing_at = NULL,
                provider_message_id = CASE WHEN ? = 1 THEN ? ELSE provider_message_id END,
                error_sanitized = CASE WHEN ? = 1 THEN ? ELSE error_sanitized END,
                attempt_count = ?,

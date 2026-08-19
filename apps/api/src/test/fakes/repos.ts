@@ -43,11 +43,13 @@ import type {
 } from "../../domain/secrets/types";
 import type {
   OverageReportRepo,
+  PendingOveragePeriodRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
 import type {
   OverageReport,
+  PendingOveragePeriod,
   Subscription,
   UsageEvent,
 } from "../../domain/billing/types";
@@ -559,11 +561,29 @@ export class FakeSubscriptionRepo implements SubscriptionRepo {
 
   async upsertByWorkspace(subscription: Subscription): Promise<void> {
     const existing = this.subscriptions.get(subscription.workspaceId);
-    this.subscriptions.set(subscription.workspaceId, {
+    if (
+      existing?.lastProviderEventAt !== null &&
+      existing?.lastProviderEventAt !== undefined &&
+      subscription.lastProviderEventAt !== null &&
+      subscription.lastProviderEventAt !== undefined &&
+      subscription.lastProviderEventAt < existing.lastProviderEventAt
+    ) {
+      return;
+    }
+    const updated: Subscription = {
       ...clone(subscription),
       id: existing?.id ?? subscription.id,
       createdAt: existing?.createdAt ?? subscription.createdAt,
-    });
+    };
+    if (
+      (subscription.lastProviderEventAt === null ||
+        subscription.lastProviderEventAt === undefined) &&
+      existing?.lastProviderEventAt !== null &&
+      existing?.lastProviderEventAt !== undefined
+    ) {
+      updated.lastProviderEventAt = existing.lastProviderEventAt;
+    }
+    this.subscriptions.set(subscription.workspaceId, updated);
   }
 
   async findByWorkspace(workspaceId: string): Promise<Subscription | null> {
@@ -585,12 +605,17 @@ export class FakeSubscriptionRepo implements SubscriptionRepo {
   async listPeriodEnded(
     before: number,
     limit: number,
+    after?: { periodEnd: number; id: string },
   ): Promise<Subscription[]> {
     return [...this.subscriptions.values()]
       .filter(
         (subscription) =>
           subscription.periodEnd !== null &&
-          subscription.periodEnd <= before,
+          subscription.periodEnd <= before &&
+          (after === undefined ||
+            subscription.periodEnd > after.periodEnd ||
+            (subscription.periodEnd === after.periodEnd &&
+              subscription.id > after.id)),
       )
       .sort(
         (left, right) =>
@@ -678,32 +703,112 @@ export class FakeOverageReportRepo implements OverageReportRepo {
     return "inserted";
   }
 
-  async existsFor(
+  async findFor(
     workspaceId: string,
     periodStart: number,
-  ): Promise<boolean> {
-    return [...this.reports.values()].some(
+  ): Promise<OverageReport | null> {
+    const report = [...this.reports.values()].find(
       (report) =>
         report.workspaceId === workspaceId &&
         report.periodStart === periodStart,
     );
+    return report === undefined ? null : clone(report);
   }
 
-  async setPaddleTransactionId(
+  async beginAttempt(
+    id: string,
+    at: number,
+  ): Promise<boolean> {
+    const report = this.reports.get(id);
+    if (report === undefined) return false;
+    if (report.state !== "PENDING" || report.attemptStartedAt !== null) {
+      return false;
+    }
+    this.reports.set(id, {
+      ...report,
+      state: "AMBIGUOUS",
+      attemptStartedAt: at,
+    });
+    return true;
+  }
+
+  async markCompleted(
     id: string,
     transactionId: string | null,
+    at: number,
   ): Promise<void> {
     const report = this.reports.get(id);
-    if (report !== undefined) {
-      this.reports.set(id, {
-        ...report,
-        paddleTransactionId: transactionId,
-      });
-    }
+    if (report === undefined) return;
+    this.reports.set(id, {
+      ...report,
+      state: "COMPLETED",
+      paddleTransactionId: transactionId,
+      completedAt: at,
+    });
+  }
+}
+
+export class FakePendingOveragePeriodRepo implements PendingOveragePeriodRepo {
+  readonly periods = new Map<string, PendingOveragePeriod>();
+
+  private key(workspaceId: string, periodStart: number): string {
+    return JSON.stringify([workspaceId, periodStart]);
   }
 
-  async deleteById(id: string): Promise<void> {
-    this.reports.delete(id);
+  async insertIfAbsent(
+    period: PendingOveragePeriod,
+  ): Promise<"inserted" | "duplicate"> {
+    const key = this.key(period.workspaceId, period.periodStart);
+    if (this.periods.has(key)) return "duplicate";
+    this.periods.set(key, clone(period));
+    return "inserted";
+  }
+
+  async list(limit: number): Promise<PendingOveragePeriod[]> {
+    return [...this.periods.values()]
+      .sort(
+        (left, right) =>
+          left.createdAt - right.createdAt ||
+          left.workspaceId.localeCompare(right.workspaceId) ||
+          left.periodStart - right.periodStart,
+      )
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async listReady(
+    at: number,
+    limit: number,
+  ): Promise<PendingOveragePeriod[]> {
+    return [...this.periods.values()]
+      .filter((period) => period.nextAttemptAt <= at)
+      .sort(
+        (left, right) =>
+          left.nextAttemptAt - right.nextAttemptAt ||
+          left.workspaceId.localeCompare(right.workspaceId) ||
+          left.periodStart - right.periodStart,
+      )
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async rescheduleFor(
+    workspaceId: string,
+    periodStart: number,
+    nextAttemptAt: number,
+  ): Promise<void> {
+    const key = this.key(workspaceId, periodStart);
+    const period = this.periods.get(key);
+    if (period === undefined) return;
+    this.periods.set(key, {
+      ...period,
+      nextAttemptAt,
+      attemptCount: period.attemptCount + 1,
+    });
+  }
+
+  async deleteFor(workspaceId: string, periodStart: number): Promise<void> {
+    this.periods.delete(this.key(workspaceId, periodStart));
   }
 }
 
@@ -887,6 +992,7 @@ export class FakeChannelRepo implements ChannelRepo {
 
 export class FakeDeliveryRepo implements DeliveryRepo {
   readonly deliveries = new Map<string, NotificationDelivery>();
+  readonly processingAt = new Map<string, number>();
   readonly incidentChannelDetails = new Map<
     string,
     { name: string; type: ChannelType }
@@ -920,7 +1026,28 @@ export class FakeDeliveryRepo implements DeliveryRepo {
     const delivery = this.deliveries.get(id);
     if (delivery !== undefined) {
       this.deliveries.set(id, { ...delivery, ...changes });
+      this.processingAt.delete(id);
     }
+  }
+
+  async claimPending(
+    workspaceId: string,
+    id: string,
+    claimedAt: number,
+    staleBefore: number,
+  ): Promise<NotificationDelivery | null> {
+    const delivery = this.deliveries.get(id);
+    const lease = this.processingAt.get(id);
+    if (
+      delivery === undefined ||
+      delivery.workspaceId !== workspaceId ||
+      delivery.status !== "PENDING" ||
+      (lease !== undefined && lease > staleBefore)
+    ) {
+      return null;
+    }
+    this.processingAt.set(id, claimedAt);
+    return clone(delivery);
   }
 
   async listForChannel(

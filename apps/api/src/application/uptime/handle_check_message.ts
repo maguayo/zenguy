@@ -6,6 +6,8 @@ import type { CheckMessage } from "../../domain/queues";
 import type { MonitorConfig } from "../../domain/uptime/rules";
 import type { CheckRepo, MonitorRepo } from "../../domain/uptime/repo";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
+import type { DurableJob } from "../../domain/durability/types";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import { RETRY_DELAY_SECONDS } from "../../shared/constants";
@@ -14,12 +16,17 @@ import { truncate } from "../../shared/redact";
 import type { DispatchNotifications } from "../channels/dispatch_notifications";
 import type { CheckOutcome } from "./execute_check";
 import { decryptMonitorSensitive } from "./monitor_secrets";
+import { createDurableJob, createOutboxEntry } from "../durability/factory";
+import type { PublishQueueOutbox } from "../durability/publish_outbox";
+import { platformAlert } from "../../shared/log";
 
 type NotificationDispatch = Pick<DispatchNotifications, "execute">;
 type CheckExecutor = (
   config: MonitorConfig,
   workspaceId: string,
 ) => Promise<CheckOutcome>;
+
+const CHECK_EXECUTION_LEASE_MS = 15 * 60_000;
 
 export interface HandleCheckMessageDependencies {
   monitors: MonitorRepo;
@@ -29,12 +36,26 @@ export interface HandleCheckMessageDependencies {
   channels: Pick<ChannelRepo, "listByIds">;
   workspaces: Pick<WorkspaceRepo, "findById">;
   dispatchNotifications: NotificationDispatch;
-  checkQueue: Pick<Queue<CheckMessage>, "send">;
+  durable: DurableWorkflowRepo;
+  outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   executeCheck: CheckExecutor;
   encryptionKey: Uint8Array;
   appUrl: string;
   clock: Clock;
   ids: IdGenerator;
+}
+
+interface CheckContinuationPayload {
+  workspaceId: string;
+  monitorId: string;
+  cycleId: string;
+  attemptIndex: number;
+  checkId: string;
+  failureSummary: string | null;
+}
+
+function jobPayload(job: DurableJob): CheckContinuationPayload {
+  return JSON.parse(job.payloadJson) as CheckContinuationPayload;
 }
 
 export class HandleCheckMessage {
@@ -49,14 +70,55 @@ export class HandleCheckMessage {
         message.attemptIndex,
       ),
     ]);
-    if (
-      monitor === null ||
-      workspace === null ||
-      existing !== null ||
-      monitor.currentCycleId !== message.cycleId
-    ) {
+    if (monitor === null || workspace === null) return;
+    if (existing !== null) {
+      const job = await this.dependencies.durable.findJob(
+        "CHECK_CONTINUATION",
+        existing.id,
+      );
+      if (job?.status === "PENDING") {
+        await this.resumeCheckContinuation(job);
+      }
       return;
     }
+    if (monitor.currentCycleId !== message.cycleId) return;
+
+    const claimedAt = this.dependencies.clock.now();
+    const claimToken = this.dependencies.ids.newId("job");
+    const claim = await this.dependencies.durable.claimCheckExecution({
+      cycleId: message.cycleId,
+      attemptIndex: message.attemptIndex,
+      claimToken,
+      claimedAt,
+      staleBefore: claimedAt - CHECK_EXECUTION_LEASE_MS,
+    });
+    if (claim !== "claimed") {
+      if (claim === "completed") {
+        await this.resumePersistedCheck(message);
+      }
+      return;
+    }
+
+    try {
+      await this.executeClaimed(message, monitor, claimToken);
+    } catch (error) {
+      // Ordinary failures release immediately so the Queue retry can run. A
+      // Worker crash leaves the durable lease behind and is recovered only
+      // after it is stale, fencing the abandoned execution.
+      await this.dependencies.durable.releaseCheckExecution({
+        cycleId: message.cycleId,
+        attemptIndex: message.attemptIndex,
+        claimToken,
+      });
+      throw error;
+    }
+  }
+
+  private async executeClaimed(
+    message: CheckMessage,
+    monitor: UptimeMonitor,
+    claimToken: string,
+  ): Promise<void> {
 
     const [sensitive, channelIds] = await Promise.all([
       decryptMonitorSensitive(monitor, this.dependencies.encryptionKey),
@@ -79,28 +141,143 @@ export class HandleCheckMessage {
       checkedAt,
       createdAt: checkedAt,
     };
-    if ((await this.dependencies.checks.insertIfAbsent(check)) === "duplicate") {
+    const failedCondition = outcome.conditions.find(
+      (condition) => !condition.passed,
+    );
+    const failureSummary =
+      outcome.status === "PASSED"
+        ? null
+        : `${outcome.failureReason ?? "FAILED"}: ${failedCondition?.detail ?? "check failed"}`;
+    const job = createDurableJob({
+      kind: "CHECK_CONTINUATION",
+      aggregateKey: check.id,
+      payload: {
+        workspaceId: message.workspaceId,
+        monitorId: message.monitorId,
+        cycleId: message.cycleId,
+        attemptIndex: message.attemptIndex,
+        checkId: check.id,
+        failureSummary,
+      } satisfies CheckContinuationPayload,
+      now: checkedAt,
+      ids: this.dependencies.ids,
+    });
+    const inserted = await this.dependencies.durable.insertCheckWithJob(
+      check,
+      job,
+      claimToken,
+    );
+    if (inserted === "duplicate") {
+      await this.resumePersistedCheck(message);
       return;
     }
+    await this.resumeCheckContinuation(job);
+  }
 
-    if (outcome.status === "PASSED") {
-      await this.recordPass(monitor, check, workspace.name, channelIds);
+  private async resumePersistedCheck(message: CheckMessage): Promise<void> {
+    const persisted = await this.dependencies.checks.findByCycleAttempt(
+      message.cycleId,
+      message.attemptIndex,
+    );
+    if (persisted === null) return;
+    const job = await this.dependencies.durable.findJob(
+      "CHECK_CONTINUATION",
+      persisted.id,
+    );
+    if (job?.status === "PENDING") {
+      await this.resumeCheckContinuation(job);
+    }
+  }
+
+  async resumePendingJobs(limit = 100): Promise<void> {
+    const jobs = await this.dependencies.durable.listPendingJobs(
+      ["CHECK_CONTINUATION"],
+      limit,
+    );
+    for (const job of jobs) {
+      try {
+        if (job.kind === "CHECK_CONTINUATION") {
+          await this.resumeCheckContinuation(job);
+        }
+      } catch (error) {
+        platformAlert("durable_check_job_failed", {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : "unknown error",
+        });
+      }
+    }
+  }
+
+  private async resumeCheckContinuation(job: DurableJob): Promise<void> {
+    if (job.status !== "PENDING") return;
+    const payload = jobPayload(job);
+    const [monitor, workspace, check, channelIds] = await Promise.all([
+      this.dependencies.monitors.findById(payload.workspaceId, payload.monitorId),
+      this.dependencies.workspaces.findById(payload.workspaceId),
+      this.dependencies.checks.findByCycleAttempt(
+        payload.cycleId,
+        payload.attemptIndex,
+      ),
+      this.dependencies.monitors.getChannelIds(payload.monitorId),
+    ]);
+    if (monitor === null || workspace === null || check === null) {
+      await this.dependencies.durable.completeJob(
+        job.id,
+        this.dependencies.clock.now(),
+      );
       return;
     }
-    if (message.attemptIndex < monitor.maxRetries) {
-      const nextAttemptIndex = message.attemptIndex + 1;
-      await this.dependencies.checkQueue.send(
-        { ...message, attemptIndex: nextAttemptIndex },
-        { delaySeconds: RETRY_DELAY_SECONDS[nextAttemptIndex] ?? 120 },
+    if (check.status === "PASSED") {
+      await this.recordPass(monitor, check, workspace.name, channelIds);
+      await this.dependencies.durable.completeJob(
+        job.id,
+        this.dependencies.clock.now(),
       );
+      return;
+    }
+    if (payload.attemptIndex < monitor.maxRetries) {
+      const nextAttemptIndex = payload.attemptIndex + 1;
+      const delaySeconds = RETRY_DELAY_SECONDS[nextAttemptIndex] ?? 120;
+      const now = this.dependencies.clock.now();
+      const outbox = createOutboxEntry({
+        dedupeKey: `check:${payload.cycleId}:${nextAttemptIndex}`,
+        queueKind: "CHECK",
+        payload: {
+          kind: "check",
+          monitorId: payload.monitorId,
+          workspaceId: payload.workspaceId,
+          cycleId: payload.cycleId,
+          attemptIndex: nextAttemptIndex,
+        } satisfies CheckMessage,
+        availableAt: now + delaySeconds * 1_000,
+        now,
+        ids: this.dependencies.ids,
+      });
+      await this.dependencies.durable.scheduleCheckRetry({
+        jobId: job.id,
+        outbox,
+        at: now,
+      });
+      try {
+        await this.dependencies.outboxPublisher.publishById(outbox.id);
+      } catch {
+        platformAlert("check_retry_publish_deferred", {
+          checkId: check.id,
+          outboxId: outbox.id,
+        });
+      }
       return;
     }
     await this.recordFinalFailure(
       monitor,
       check,
-      outcome,
       workspace.name,
       channelIds,
+      payload.failureSummary ?? `${check.failureReason ?? "FAILED"}: check failed`,
+    );
+    await this.dependencies.durable.completeJob(
+      job.id,
+      this.dependencies.clock.now(),
     );
   }
 
@@ -139,18 +316,34 @@ export class HandleCheckMessage {
     workspaceName: string,
     channelIds: string[],
   ): Promise<void> {
-    await this.dependencies.monitors.closeCycle(monitor.id, {
+    const closed = await this.dependencies.monitors.closeCycle(monitor.id, {
       status: "UP",
       lastCheckAt: check.checkedAt,
       lastResponseTimeMs: check.responseTimeMs,
-    });
-    const incident = await this.dependencies.incidents.findOpenForMonitor(
-      monitor.id,
+    }, check.cycleId);
+    const sourceIncident = await this.dependencies.incidents.findByCheckSource(
+      check.id,
     );
+    const stale =
+      monitor.lastCheckAt !== null && monitor.lastCheckAt > check.checkedAt;
+    const canTouchCurrent = closed || monitor.lastCheckAt === check.checkedAt;
+    const openIncident = stale || !canTouchCurrent
+      ? null
+      : await this.dependencies.incidents.findOpenForMonitor(monitor.id);
+    const incident =
+      sourceIncident?.resolvedByCheckId === check.id
+        ? sourceIncident
+        : openIncident;
     if (incident === null || incident.workspaceId !== monitor.workspaceId) return;
-    await this.dependencies.incidents.resolve(incident.id, check.checkedAt, {
-      checkId: check.id,
-    });
+    if (
+      incident.status === "RESOLVED" &&
+      incident.resolvedByCheckId !== check.id
+    ) return;
+    if (incident.status === "OPEN") {
+      await this.dependencies.incidents.resolve(incident.id, check.checkedAt, {
+        checkId: check.id,
+      });
+    }
     await this.dependencies.events.insert(
       this.event(
         incident.id,
@@ -168,6 +361,7 @@ export class HandleCheckMessage {
         channelIds,
         "RECOVERY",
         check.checkedAt,
+        check.id,
       );
     }
   }
@@ -175,18 +369,40 @@ export class HandleCheckMessage {
   private async recordFinalFailure(
     monitor: UptimeMonitor,
     check: UptimeCheck,
-    outcome: CheckOutcome,
     workspaceName: string,
     channelIds: string[],
+    failureSummary: string,
   ): Promise<void> {
-    await this.dependencies.monitors.closeCycle(monitor.id, {
+    const closed = await this.dependencies.monitors.closeCycle(monitor.id, {
       status: "DOWN",
       lastCheckAt: check.checkedAt,
       lastResponseTimeMs: check.responseTimeMs,
-    });
-    const existing = await this.dependencies.incidents.findOpenForMonitor(
-      monitor.id,
-    );
+    }, check.cycleId);
+    const stale =
+      monitor.lastCheckAt !== null && monitor.lastCheckAt > check.checkedAt;
+    const canTouchCurrent = closed || monitor.lastCheckAt === check.checkedAt;
+    const [sourceIncident, existing] = await Promise.all([
+      this.dependencies.incidents.findByCheckSource(check.id),
+      stale || !canTouchCurrent
+        ? Promise.resolve(null)
+        : this.dependencies.incidents.findOpenForMonitor(monitor.id),
+    ]);
+    if (
+      sourceIncident !== null &&
+      sourceIncident.workspaceId === monitor.workspaceId &&
+      sourceIncident.openedByCheckId === check.id
+    ) {
+      await this.completeOpenedFailure(
+        monitor,
+        sourceIncident,
+        check,
+        workspaceName,
+        channelIds,
+        failureSummary,
+      );
+      return;
+    }
+    if (stale || !canTouchCurrent) return;
     if (existing !== null && existing.workspaceId === monitor.workspaceId) {
       await this.appendFailure(existing, check);
       return;
@@ -208,10 +424,28 @@ export class HandleCheckMessage {
       createdAt: check.checkedAt,
     };
     const opened = await this.dependencies.incidents.insertOpen(candidate);
-    if (opened.id !== candidate.id) {
+    if (opened.openedByCheckId !== check.id) {
       await this.appendFailure(opened, check);
       return;
     }
+    await this.completeOpenedFailure(
+      monitor,
+      opened,
+      check,
+      workspaceName,
+      channelIds,
+      failureSummary,
+    );
+  }
+
+  private async completeOpenedFailure(
+    monitor: UptimeMonitor,
+    opened: Incident,
+    check: UptimeCheck,
+    workspaceName: string,
+    channelIds: string[],
+    failureSummary: string,
+  ): Promise<void> {
     await this.dependencies.events.insert(
       this.event(
         opened.id,
@@ -221,10 +455,6 @@ export class HandleCheckMessage {
         check.checkedAt,
       ),
     );
-    const failedCondition = outcome.conditions.find(
-      (condition) => !condition.passed,
-    );
-    const failureSummary = `${outcome.failureReason ?? "FAILED"}: ${failedCondition?.detail ?? "check failed"}`;
     await this.dispatch(
       monitor,
       opened,
@@ -232,6 +462,7 @@ export class HandleCheckMessage {
       channelIds,
       "FAILURE",
       check.checkedAt,
+      check.id,
       failureSummary,
     );
   }
@@ -259,6 +490,7 @@ export class HandleCheckMessage {
     channelIds: string[],
     eventType: "FAILURE" | "RECOVERY",
     occurredAt: number,
+    sourceId: string,
     failureSummary?: string,
   ): Promise<void> {
     const enabledIds = (
@@ -271,6 +503,7 @@ export class HandleCheckMessage {
       workspaceId: monitor.workspaceId,
       channelIds: enabledIds,
       incidentId: incident.id,
+      dedupeKey: `uptime-check:${sourceId}:${eventType}`,
       message: buildNotificationMessage({
         eventType,
         resourceType: "UPTIME_MONITOR",

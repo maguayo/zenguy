@@ -15,7 +15,7 @@ import type {
   RunRepo,
   StepRepo,
 } from "./domain/browser_tests/repo";
-import type { AttemptMessage } from "./domain/queues";
+import type { AttemptMessage, CheckMessage, NotifyMessage } from "./domain/queues";
 import type { IncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
 import { CloseIncidentOnTestDelete } from "./application/incidents/close_incident_on_test_delete";
 import type {
@@ -31,6 +31,7 @@ import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
+  PendingOveragePeriodRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "./domain/billing/repo";
@@ -67,6 +68,9 @@ import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
+import {
+  D1PendingOveragePeriodRepo,
+} from "./infrastructure/db/pending_overage_period_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
@@ -80,6 +84,7 @@ import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1CheckRepo } from "./infrastructure/db/check_repo";
 import { D1OverviewRepo } from "./infrastructure/db/overview_repo";
+import { D1DurableWorkflowRepo } from "./infrastructure/db/durable_workflow_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
@@ -110,6 +115,7 @@ import { loadConfig, type Bindings } from "./shared/config";
 import type { IdGenerator } from "./shared/ids";
 import { realIds } from "./shared/ids";
 import { KvRateLimiter, type RateLimiter } from "./shared/ratelimit";
+import { PublishQueueOutbox } from "./application/durability/publish_outbox";
 
 export interface AppOverrides {
   clock?: Clock;
@@ -126,6 +132,7 @@ export interface AppOverrides {
   subscriptions?: SubscriptionRepo;
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
+  pendingOveragePeriods?: PendingOveragePeriodRepo;
   secrets?: SecretRepo;
   channels?: ChannelRepo;
   deliveries?: DeliveryRepo;
@@ -179,6 +186,9 @@ export function buildApp(
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
   const overageReports =
     overrides.overageReports ?? new D1OverageReportRepo(env.DB);
+  const pendingOveragePeriods =
+    overrides.pendingOveragePeriods ??
+    new D1PendingOveragePeriodRepo(env.DB);
   const secrets = overrides.secrets ?? new D1SecretRepo(env.DB);
   const resolveSecrets = new ResolveSecrets(secrets, config.encryptionKey);
   const channels = overrides.channels ?? new D1ChannelRepo(env.DB);
@@ -200,6 +210,19 @@ export function buildApp(
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
   const apiKeys = overrides.apiKeys ?? new D1ApiKeyRepo(env.DB);
+  const durableWorkflows = new D1DurableWorkflowRepo(env.DB);
+  const runQueue =
+    overrides.runQueue ??
+    (env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">);
+  const outboxPublisher = new PublishQueueOutbox(
+    durableWorkflows,
+    {
+      RUN: runQueue,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    clock,
+  );
   const uptimeCheckExecutor =
     overrides.uptimeCheckExecutor ??
     ((monitorConfig: MonitorConfig, workspaceId: string) =>
@@ -224,7 +247,6 @@ export function buildApp(
   const overageReporter =
     overrides.overageReporter ??
     new ReportOverageForPeriod(
-      subscriptions,
       usageEvents,
       overageReports,
       paddleClient,
@@ -478,9 +500,8 @@ export function buildApp(
       artifacts,
       artifactStorage,
       incidents: incidentCloserOnTestDelete,
-      runQueue:
-        overrides.runQueue ??
-        (env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">),
+      durableWorkflows,
+      outboxPublisher,
       rateLimiter,
       audit,
       resolveSecrets,
@@ -495,6 +516,7 @@ export function buildApp(
       webhookSecret: config.paddle.webhookSecret,
       kv: env.KV,
       subscriptions,
+      pendingOveragePeriods,
       overageReporter,
       audit,
       clock,

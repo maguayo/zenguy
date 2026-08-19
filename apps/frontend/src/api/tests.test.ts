@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { runsPath } from "./tests";
+import { exportTestsPath, runsPath } from "./tests";
 
 describe("browser-test API paths", () => {
   it("encodes identifiers and requests 100 run rows by default", () => {
     expect(runsPath("ws/one", "test two")).toBe(
       "/api/workspaces/ws%2Fone/browser-tests/test%20two/runs?limit=100",
+    );
+  });
+
+  it("builds the export path with the requested format", () => {
+    expect(exportTestsPath("ws/one", "json")).toBe(
+      "/api/workspaces/ws%2Fone/browser-tests/export?format=json",
+    );
+    expect(exportTestsPath("ws_1", "yaml")).toBe(
+      "/api/workspaces/ws_1/browser-tests/export?format=yaml",
     );
   });
 

@@ -67,11 +67,26 @@ describe("uptime repository fakes", () => {
       status: "UP",
       lastCheckAt: 3_000,
       lastResponseTimeMs: 25,
-    });
+    }, "cyc_one");
     await expect(repo.findById(MONITOR.workspaceId, MONITOR.id)).resolves.toMatchObject({
       currentStatus: "UP",
       currentCycleId: null,
       lastResponseTimeMs: 25,
+    });
+  });
+
+  it("clears a zombie cycle only when the expected cycle still owns it", async () => {
+    const repo = new FakeMonitorRepo();
+    await repo.insert(MONITOR);
+    await repo.openCycle(MONITOR.id, "cyc_new", 2_000);
+
+    await expect(repo.clearCycle(MONITOR.id, "cyc_old")).resolves.toBe(false);
+    await expect(repo.findById(MONITOR.workspaceId, MONITOR.id)).resolves.toMatchObject({
+      currentCycleId: "cyc_new",
+    });
+    await expect(repo.clearCycle(MONITOR.id, "cyc_new")).resolves.toBe(true);
+    await expect(repo.findById(MONITOR.workspaceId, MONITOR.id)).resolves.toMatchObject({
+      currentCycleId: null,
     });
   });
 

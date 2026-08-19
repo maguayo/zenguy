@@ -1,10 +1,12 @@
 import type {
   OverageReport,
+  PendingOveragePeriod,
   Subscription,
   UsageEvent,
 } from "../../domain/billing/types";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1OverageReportRepo } from "./overage_report_repo";
+import { D1PendingOveragePeriodRepo } from "./pending_overage_period_repo";
 import { D1SubscriptionRepo } from "./subscription_repo";
 import { D1UsageEventRepo } from "./usage_event_repo";
 
@@ -84,6 +86,67 @@ describe("D1 billing repositories", () => {
     });
   });
 
+  it("rejects stale provider state and paginates only unqueued reports", async () => {
+    const subscriptions = new D1SubscriptionRepo(testEnv().DB);
+    const reports = new D1OverageReportRepo(testEnv().DB);
+    const pendingPeriods = new D1PendingOveragePeriodRepo(testEnv().DB);
+    const completed = {
+      ...subscription("sub_completed", "ws_completed", 1_000),
+      lastProviderEventAt: 200,
+    };
+    const queued = subscription("sub_queued", "ws_queued", 2_000);
+    const first = subscription("sub_first", "ws_first", 3_000);
+    const second = subscription("sub_second", "ws_second", 4_000);
+    for (const value of [completed, queued, first, second]) {
+      await subscriptions.upsertByWorkspace(value);
+    }
+    await reports.insertIfAbsent({
+      id: "ovr_completed",
+      workspaceId: completed.workspaceId,
+      periodStart: completed.periodStart ?? 0,
+      periodEnd: completed.periodEnd ?? 0,
+      overageRuns: 0,
+      amountCents: 0,
+      paddleTransactionId: null,
+      reportedAt: 1_100,
+      state: "COMPLETED",
+      providerMarker: null,
+      attemptStartedAt: null,
+      completedAt: 1_100,
+      providerSubscriptionId: completed.providerSubscriptionId,
+    });
+    await pendingPeriods.insertIfAbsent({
+      workspaceId: queued.workspaceId,
+      periodStart: queued.periodStart ?? 0,
+      periodEnd: queued.periodEnd ?? 0,
+      createdAt: 2_100,
+      providerSubscriptionId: queued.providerSubscriptionId,
+      nextAttemptAt: 5_000,
+      attemptCount: 0,
+    });
+
+    await expect(subscriptions.listPeriodEnded(5_000, 1)).resolves.toEqual([
+      first,
+    ]);
+    await expect(
+      subscriptions.listPeriodEnded(5_000, 1, {
+        periodEnd: first.periodEnd ?? 0,
+        id: first.id,
+      }),
+    ).resolves.toEqual([second]);
+
+    await subscriptions.upsertByWorkspace({
+      ...completed,
+      status: "CANCELED",
+      periodStart: 9_000,
+      periodEnd: 10_000,
+      lastProviderEventAt: 100,
+    });
+    await expect(subscriptions.findByWorkspace(completed.workspaceId)).resolves.toEqual(
+      completed,
+    );
+  });
+
   it("deduplicates, reverses, and counts only billable usage in [from,to)", async () => {
     const repo = new D1UsageEventRepo(testEnv().DB);
     const counted = usage("ue_counted", "run_counted", 100, {
@@ -125,24 +188,66 @@ describe("D1 billing repositories", () => {
       amountCents: 100,
       paddleTransactionId: null,
       reportedAt: 2_100,
+      state: "PENDING",
+      providerMarker: "zenguy:overage:v1:ws_overage:1000",
+      attemptStartedAt: null,
+      completedAt: null,
+      providerSubscriptionId: "provider_sub_overage",
     };
 
-    await expect(repo.existsFor("ws_overage", 1_000)).resolves.toBe(false);
+    await expect(repo.findFor("ws_overage", 1_000)).resolves.toBeNull();
     await expect(repo.insertIfAbsent(report)).resolves.toBe("inserted");
     await expect(
       repo.insertIfAbsent({ ...report, id: "ovr_duplicate" }),
     ).resolves.toBe("duplicate");
-    await expect(repo.existsFor("ws_overage", 1_000)).resolves.toBe(true);
-    await repo.setPaddleTransactionId("ovr_123", "txn_overage");
-    await expect(
-      testEnv()
-        .DB.prepare(
-          "SELECT paddle_transaction_id FROM overage_reports WHERE id = ?",
-        )
-        .bind("ovr_123")
-        .first(),
-    ).resolves.toEqual({ paddle_transaction_id: "txn_overage" });
-    await repo.deleteById("ovr_123");
-    await expect(repo.existsFor("ws_overage", 1_000)).resolves.toBe(false);
+    await expect(repo.findFor("ws_overage", 1_000)).resolves.toEqual(report);
+
+    await expect(repo.beginAttempt("ovr_123", 2_200)).resolves.toBe(
+      true,
+    );
+    await expect(repo.beginAttempt("ovr_123", 2_201)).resolves.toBe(
+      false,
+    );
+    await expect(repo.findFor("ws_overage", 1_000)).resolves.toEqual({
+      ...report,
+      state: "AMBIGUOUS",
+      attemptStartedAt: 2_200,
+    });
+
+    await repo.markCompleted("ovr_123", "txn_overage", 2_400);
+    await expect(repo.findFor("ws_overage", 1_000)).resolves.toEqual({
+      ...report,
+      state: "COMPLETED",
+      attemptStartedAt: 2_200,
+      paddleTransactionId: "txn_overage",
+      completedAt: 2_400,
+    });
+  });
+
+  it("persists pending rollover periods until they are cleared", async () => {
+    const writer = new D1PendingOveragePeriodRepo(testEnv().DB);
+    const period: PendingOveragePeriod = {
+      workspaceId: "ws_pending_overage",
+      periodStart: 1_000,
+      periodEnd: 2_000,
+      createdAt: 2_100,
+      providerSubscriptionId: "provider_sub_pending",
+      nextAttemptAt: 2_500,
+      attemptCount: 0,
+    };
+
+    await expect(writer.insertIfAbsent(period)).resolves.toBe("inserted");
+    await expect(writer.insertIfAbsent(period)).resolves.toBe("duplicate");
+
+    const reader = new D1PendingOveragePeriodRepo(testEnv().DB);
+    await expect(reader.list(10)).resolves.toEqual([period]);
+    await expect(reader.listReady(2_499, 10)).resolves.toEqual([]);
+    await expect(reader.listReady(2_500, 10)).resolves.toEqual([period]);
+    await reader.rescheduleFor(period.workspaceId, period.periodStart, 3_000);
+    await expect(reader.list(10)).resolves.toEqual([
+      { ...period, nextAttemptAt: 3_000, attemptCount: 1 },
+    ]);
+    await reader.deleteFor(period.workspaceId, period.periodStart);
+    await expect(reader.list(10)).resolves.toEqual([]);
   });
 });

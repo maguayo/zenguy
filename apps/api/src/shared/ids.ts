@@ -24,6 +24,8 @@ export const ID_PREFIXES = {
   check: "chk",
   incident: "inc",
   incidentEvent: "evt",
+  queueOutbox: "out",
+  durableJob: "job",
   apiKey: "ak",
 } as const;
 

@@ -265,6 +265,33 @@ describe("auth routes", () => {
     });
   });
 
+  it("rate limits login by normalized email across different IPs", async () => {
+    const email = "email-scope@example.com";
+    for (let attempt = 0; attempt < RATE_LIMITS.login.limit; attempt += 1) {
+      const response = await app.request(
+        "/api/auth/login",
+        jsonRequest(
+          { email, password: "wrong-password" },
+          { "CF-Connecting-IP": `198.51.100.${80 + attempt}` },
+        ),
+      );
+      expect(response.status).toBe(401);
+    }
+
+    const limited = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: email.toUpperCase(), password: "wrong-password" },
+        { "CF-Connecting-IP": "198.51.100.100" },
+      ),
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+    await expect(limited.json()).resolves.toEqual({
+      error: { code: "RATE_LIMITED", message: "Too many requests" },
+    });
+  });
+
   it("rate limits register, forgot-password, and resend-verification", async () => {
     const registerIp = "198.51.100.31";
     for (let attempt = 0; attempt < RATE_LIMITS.register.limit; attempt += 1) {

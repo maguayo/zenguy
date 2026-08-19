@@ -36,7 +36,9 @@ export class D1IncidentEventRepo implements IncidentEventRepo {
         .prepare(
           `INSERT INTO incident_events
             (id, incident_id, type, source_id, message, metadata_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(incident_id, type, source_id)
+             WHERE source_id IS NOT NULL DO NOTHING`,
         )
         .bind(
           event.id,

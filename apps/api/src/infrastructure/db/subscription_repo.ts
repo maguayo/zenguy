@@ -16,13 +16,14 @@ interface SubscriptionRow {
   cancel_url: string | null;
   created_at: number;
   updated_at: number;
+  last_provider_event_at: number | null;
 }
 
 function toSubscription(row: SubscriptionRow): Subscription {
   if (row.provider !== "paddle") {
     throw new Error("Unsupported billing provider");
   }
-  return {
+  const subscription: Subscription = {
     id: row.id,
     workspaceId: row.workspace_id,
     provider: "paddle",
@@ -37,6 +38,10 @@ function toSubscription(row: SubscriptionRow): Subscription {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  if (row.last_provider_event_at !== null) {
+    subscription.lastProviderEventAt = row.last_provider_event_at;
+  }
+  return subscription;
 }
 
 export class D1SubscriptionRepo implements SubscriptionRepo {
@@ -50,8 +55,8 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
             (id, workspace_id, provider, provider_customer_id,
              provider_subscription_id, status, period_start, period_end,
              cancel_at_period_end, update_payment_url, cancel_url,
-             created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_at, updated_at, last_provider_event_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id) DO UPDATE SET
              provider = excluded.provider,
              provider_customer_id = excluded.provider_customer_id,
@@ -62,7 +67,14 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
              cancel_at_period_end = excluded.cancel_at_period_end,
              update_payment_url = excluded.update_payment_url,
              cancel_url = excluded.cancel_url,
-             updated_at = excluded.updated_at`,
+             updated_at = excluded.updated_at,
+             last_provider_event_at = COALESCE(
+               excluded.last_provider_event_at,
+               subscriptions.last_provider_event_at
+             )
+           WHERE subscriptions.last_provider_event_at IS NULL
+              OR excluded.last_provider_event_at IS NULL
+              OR excluded.last_provider_event_at >= subscriptions.last_provider_event_at`,
         )
         .bind(
           subscription.id,
@@ -78,6 +90,7 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
           subscription.cancelUrl,
           subscription.createdAt,
           subscription.updatedAt,
+          subscription.lastProviderEventAt ?? null,
         ),
     );
   }
@@ -107,16 +120,41 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
   async listPeriodEnded(
     before: number,
     limit: number,
+    after?: { periodEnd: number; id: string },
   ): Promise<Subscription[]> {
+    const afterPeriodEnd = after?.periodEnd ?? null;
+    const afterId = after?.id ?? null;
     const rows = await all<SubscriptionRow>(
       this.database
         .prepare(
-          `SELECT * FROM subscriptions
-           WHERE period_end IS NOT NULL AND period_end <= ?
-           ORDER BY period_end ASC, id ASC
+          `SELECT s.* FROM subscriptions AS s
+           WHERE s.period_end IS NOT NULL AND s.period_end <= ?
+             AND (
+               ? IS NULL OR s.period_end > ?
+               OR (s.period_end = ? AND s.id > ?)
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM overage_reports AS o
+               WHERE o.workspace_id = s.workspace_id
+                 AND o.period_start = s.period_start
+                 AND o.state = 'COMPLETED'
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM pending_overage_periods AS p
+               WHERE p.workspace_id = s.workspace_id
+                 AND p.period_start = s.period_start
+             )
+           ORDER BY s.period_end ASC, s.id ASC
            LIMIT ?`,
         )
-        .bind(before, limit),
+        .bind(
+          before,
+          afterPeriodEnd,
+          afterPeriodEnd,
+          afterPeriodEnd,
+          afterId,
+          limit,
+        ),
     );
     return rows.map(toSubscription);
   }

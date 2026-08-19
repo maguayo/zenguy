@@ -11,11 +11,15 @@ import type {
   TestRun,
 } from "../../domain/browser_tests/types";
 import type { AttemptMessage } from "../../domain/queues";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import { AppError, notFound, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
+import { platformAlert } from "../../shared/log";
+import { createOutboxEntry } from "../durability/factory";
+import type { PublishQueueOutbox } from "../durability/publish_outbox";
 import { parseBrowserTestConfig } from "./input";
 
 export class CreateRun {
@@ -24,7 +28,8 @@ export class CreateRun {
     private readonly runs: RunRepo,
     private readonly workspaces: WorkspaceRepo,
     private readonly subscriptions: SubscriptionRepo,
-    private readonly queue: Pick<Queue<AttemptMessage>, "send">,
+    private readonly durable: Pick<DurableWorkflowRepo, "insertRunWithAttempt">,
+    private readonly outboxPublisher: Pick<PublishQueueOutbox, "publishById">,
     private readonly config: Pick<AppConfig, "llmModel">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
@@ -130,8 +135,23 @@ export class CreateRun {
       systemErrorCode: null,
       createdAt: now,
     };
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId,
+      attemptId,
+      attemptIndex: 0,
+      executionGeneration: attempt.queuedAt,
+    };
+    const outbox = createOutboxEntry({
+      dedupeKey: `attempt:${attemptId}:initial`,
+      queueKind: "RUN",
+      payload: message,
+      availableAt: now,
+      now,
+      ids: this.ids,
+    });
     try {
-      await this.runs.insertWithAttempt(run, attempt);
+      await this.durable.insertRunWithAttempt(run, attempt, outbox);
     } catch (error) {
       if (
         testId !== null &&
@@ -154,12 +174,11 @@ export class CreateRun {
       }
       throw error;
     }
-    await this.queue.send({
-      kind: "attempt",
-      runId,
-      attemptId,
-      attemptIndex: 0,
-    });
+    try {
+      await this.outboxPublisher.publishById(outbox.id);
+    } catch {
+      platformAlert("initial_attempt_publish_deferred", { runId, attemptId });
+    }
     return run;
   }
 }

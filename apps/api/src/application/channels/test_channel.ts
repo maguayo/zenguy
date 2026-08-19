@@ -19,11 +19,33 @@ import { decryptSecret } from "../../shared/crypto";
 import { AppError, forbidden, notFound } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
-import { truncate } from "../../shared/redact";
+import { Redactor, truncate } from "../../shared/redact";
 import { deliveryOutput, type DeliveryOutput } from "./types";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "notification error";
+}
+
+function configValues(value: unknown): string[] {
+  if (typeof value === "string") return value.length === 0 ? [] : [value];
+  if (Array.isArray(value)) return value.flatMap(configValues);
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).flatMap(configValues);
+  }
+  return [];
+}
+
+function channelConfigRedactor(plaintext: string, config?: unknown): Redactor {
+  const values =
+    config === undefined
+      ? [plaintext]
+      : [plaintext, ...configValues(config)];
+  return new Redactor(
+    values.map((value, index) => ({
+      key: `CHANNEL_CONFIG_${index + 1}`,
+      value,
+    })),
+  );
 }
 
 export class TestChannel {
@@ -94,13 +116,17 @@ export class TestChannel {
     });
 
     let result: NotificationDelivery;
+    let redactor = new Redactor([]);
     try {
       const plaintext = await decryptSecret(
         channel.encryptedConfig,
         this.config.encryptionKey,
       );
+      redactor = channelConfigRedactor(plaintext);
+      const parsedConfig = JSON.parse(plaintext) as unknown;
+      redactor = channelConfigRedactor(plaintext, parsedConfig);
       const sent = await this.sender.send(
-        { type: channel.type, config: JSON.parse(plaintext) },
+        { type: channel.type, config: parsedConfig },
         message,
       );
       result = {
@@ -120,7 +146,10 @@ export class TestChannel {
       await this.channels.setVerified(channel.id, now);
       await this.channels.setLastDeliveryStatus(channel.id, "SENT");
     } catch (error) {
-      const errorSanitized = truncate(errorMessage(error), 300);
+      const errorSanitized = truncate(
+        redactor.redact(errorMessage(error)),
+        300,
+      );
       result = {
         ...delivery,
         status: "FAILED",

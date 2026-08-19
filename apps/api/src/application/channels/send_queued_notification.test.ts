@@ -40,6 +40,33 @@ class RecordingIncidentEvents implements IncidentEventWriter {
   }
 }
 
+class FailOnceIncidentEvents extends RecordingIncidentEvents {
+  private failed = false;
+
+  override async write(event: IncidentNotificationEvent): Promise<void> {
+    if (!this.failed) {
+      this.failed = true;
+      throw new Error("incident event unavailable");
+    }
+    await super.write(event);
+  }
+}
+
+class FailOnceChannelRepo extends FakeChannelRepo {
+  private failed = false;
+
+  override async setLastDeliveryStatus(
+    id: string,
+    status: string,
+  ): Promise<void> {
+    if (!this.failed) {
+      this.failed = true;
+      throw new Error("channel update unavailable");
+    }
+    await super.setLastDeliveryStatus(id, status);
+  }
+}
+
 class SelectiveSender implements ChannelSender {
   readonly calls: ChannelType[] = [];
   readonly failures = new Set<ChannelType>();
@@ -150,6 +177,64 @@ function consumerFixture() {
 }
 
 describe("SendQueuedNotification", () => {
+  it.each([
+    {
+      boundary: "channel status",
+      channels: () => new FailOnceChannelRepo(),
+      incidents: () => new RecordingIncidentEvents(),
+    },
+    {
+      boundary: "incident event",
+      channels: () => new FakeChannelRepo(),
+      incidents: () => new FailOnceIncidentEvents(),
+    },
+  ])(
+    "reconciles terminal delivery after a $boundary failure without resending",
+    async ({ channels, incidents }) => {
+      const channelRepo = channels();
+      const deliveryRepo = new FakeDeliveryRepo();
+      const sender = new SelectiveSender();
+      const eventWriter = incidents();
+      const clock = new FixedClock(5_000);
+      const consumer = new SendQueuedNotification(
+        deliveryRepo,
+        channelRepo,
+        sender,
+        eventWriter,
+        ENCRYPTION_KEY,
+        clock,
+      );
+      await channelRepo.insert(await channel("ch_reconcile", "EMAIL"));
+      await deliveryRepo.insert(delivery("del_reconcile", "ch_reconcile"));
+      const body = notify("del_reconcile", "ch_reconcile");
+
+      await expect(
+        consumer.execute(body, new RecordingMessage("msg_first", body)),
+      ).rejects.toThrow();
+      await expect(
+        deliveryRepo.findById("ws_1", "del_reconcile"),
+      ).resolves.toMatchObject({ status: "SENT", attemptCount: 1 });
+
+      const replay = new RecordingMessage("msg_replay", body, 2);
+      await consumer.execute(body, replay);
+
+      expect(replay.ackCount).toBe(1);
+      expect(sender.calls).toEqual(["EMAIL"]);
+      await expect(
+        channelRepo.findById("ws_1", "ch_reconcile"),
+      ).resolves.toMatchObject({
+        lastDeliveryStatus: "SENT",
+        verifiedAt: 5_000,
+      });
+      expect(eventWriter.events).toEqual([
+        expect.objectContaining({
+          deliveryId: "del_reconcile",
+          type: "NOTIFICATION_SENT",
+        }),
+      ]);
+    },
+  );
+
   it("retries with backoff twice, then records a sanitized terminal failure", async () => {
     const fixture = consumerFixture();
     await fixture.channels.insert(await channel("ch_email", "EMAIL"));
@@ -311,6 +396,32 @@ describe("SendQueuedNotification", () => {
         channelId: "ch_sms",
       }),
     ]);
+  });
+
+  it("retries a leased PENDING delivery and sends it after the crash lease expires", async () => {
+    const fixture = consumerFixture();
+    await fixture.channels.insert(await channel("ch_email", "EMAIL"));
+    await fixture.deliveries.insert(delivery("del_leased", "ch_email"));
+    fixture.deliveries.processingAt.set("del_leased", fixture.clock.now());
+    const body = notify("del_leased", "ch_email");
+    const busy = new RecordingMessage("msg_busy", body);
+
+    await fixture.consumer.execute(body, busy);
+
+    expect(busy.retryOptions).toEqual([{ delaySeconds: 30 }]);
+    expect(fixture.sender.calls).toEqual([]);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_leased"),
+    ).resolves.toMatchObject({ status: "PENDING", attemptCount: 0 });
+
+    fixture.clock.advance(300_001);
+    const recovered = new RecordingMessage("msg_recovered", body, 2);
+    await fixture.consumer.execute(body, recovered);
+    expect(recovered.ackCount).toBe(1);
+    expect(fixture.sender.calls).toEqual(["EMAIL"]);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_leased"),
+    ).resolves.toMatchObject({ status: "SENT", attemptCount: 1 });
   });
 
   it("acknowledges poison messages and continues processing valid ones", async () => {

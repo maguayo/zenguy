@@ -7,6 +7,7 @@ import { FakeIds } from "../../test/fakes/ids";
 import { FakeKv } from "../../test/fakes/kv";
 import {
   FakeAuditRepo,
+  FakePendingOveragePeriodRepo,
   FakeSubscriptionRepo,
 } from "../../test/fakes/repos";
 import {
@@ -22,6 +23,7 @@ class RecordingOverageReporter implements PeriodOverageReporter {
     workspaceId: string;
     periodStart: number;
     periodEnd: number;
+    providerSubscriptionId: string;
   }[] = [];
 
   constructor(private readonly failure: Error | null = null) {}
@@ -30,6 +32,7 @@ class RecordingOverageReporter implements PeriodOverageReporter {
     workspaceId: string;
     periodStart: number;
     periodEnd: number;
+    providerSubscriptionId: string;
   }): Promise<void> {
     this.calls.push({ ...input });
     if (this.failure !== null) throw this.failure;
@@ -47,17 +50,25 @@ async function signature(rawBody: string, timestamp = NOW / 1_000) {
 function setup(overageReporter = new RecordingOverageReporter()) {
   const clock = new FixedClock(NOW);
   const subscriptions = new FakeSubscriptionRepo();
+  const pendingOveragePeriods = new FakePendingOveragePeriodRepo();
   const audits = new FakeAuditRepo();
   const handler = new HandlePaddleWebhook({
     webhookSecret: SIGNING_SECRET,
     kv: new FakeKv(clock),
     subscriptions,
+    pendingOveragePeriods,
     overageReporter,
     audit: new WriteAudit({ audits, clock, ids: new FakeIds() }),
     clock,
     ids: new FakeIds(),
   });
-  return { handler, subscriptions, audits, overageReporter };
+  return {
+    handler,
+    subscriptions,
+    pendingOveragePeriods,
+    audits,
+    overageReporter,
+  };
 }
 
 async function deliver(
@@ -93,6 +104,7 @@ describe("HandlePaddleWebhook", () => {
       cancelUrl: null,
       createdAt: NOW,
       updatedAt: NOW,
+      lastProviderEventAt: Date.parse("2026-08-01T00:00:01Z"),
     });
     expect([...audits.entries.values()][0]).toMatchObject({
       workspaceId: "ws_primary",
@@ -122,7 +134,12 @@ describe("HandlePaddleWebhook", () => {
   });
 
   it("maps period rollover, past-due status, and scheduled cancel", async () => {
-    const { handler, subscriptions, overageReporter } = setup();
+    const {
+      handler,
+      subscriptions,
+      pendingOveragePeriods,
+      overageReporter,
+    } = setup();
     await deliver(handler, PADDLE_SUBSCRIPTION_CREATED);
 
     await expect(deliver(handler, PADDLE_SUBSCRIPTION_UPDATED)).resolves.toEqual(
@@ -134,6 +151,18 @@ describe("HandlePaddleWebhook", () => {
         workspaceId: "ws_primary",
         periodStart: Date.parse("2026-08-01T00:00:00Z"),
         periodEnd: Date.parse("2026-09-01T00:00:00Z"),
+        providerSubscriptionId: "sub_provider_123",
+      },
+    ]);
+    await expect(pendingOveragePeriods.list(10)).resolves.toEqual([
+      {
+        workspaceId: "ws_primary",
+        periodStart: Date.parse("2026-08-01T00:00:00Z"),
+        periodEnd: Date.parse("2026-09-01T00:00:00Z"),
+        createdAt: NOW,
+        providerSubscriptionId: "sub_provider_123",
+        nextAttemptAt: Date.parse("2026-09-01T01:00:00Z"),
+        attemptCount: 0,
       },
     ]);
     await expect(subscriptions.findByWorkspace("ws_primary")).resolves.toMatchObject(
@@ -144,6 +173,7 @@ describe("HandlePaddleWebhook", () => {
         cancelAtPeriodEnd: true,
         updatePaymentUrl: null,
         cancelUrl: null,
+        lastProviderEventAt: Date.parse("2026-09-01T00:00:01Z"),
       },
     );
   });
@@ -191,6 +221,7 @@ describe("HandlePaddleWebhook", () => {
     const unknown = {
       event_id: "evt_unknown",
       event_type: "transaction.completed",
+      occurred_at: "2026-09-01T00:00:01Z",
       data: { id: "txn_123" },
     };
 
@@ -206,7 +237,7 @@ describe("HandlePaddleWebhook", () => {
     const reporter = new RecordingOverageReporter(
       new Error("billing unavailable with PII alice@example.com"),
     );
-    const { handler, subscriptions } = setup(reporter);
+    const { handler, subscriptions, pendingOveragePeriods } = setup(reporter);
     await deliver(handler, PADDLE_SUBSCRIPTION_CREATED);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
@@ -222,6 +253,48 @@ describe("HandlePaddleWebhook", () => {
     await expect(subscriptions.findByWorkspace("ws_primary")).resolves.toMatchObject(
       { status: "PAST_DUE" },
     );
+    await expect(pendingOveragePeriods.list(10)).resolves.toEqual([
+      {
+        workspaceId: "ws_primary",
+        periodStart: Date.parse("2026-08-01T00:00:00Z"),
+        periodEnd: Date.parse("2026-09-01T00:00:00Z"),
+        createdAt: NOW,
+        providerSubscriptionId: "sub_provider_123",
+        nextAttemptAt: Date.parse("2026-09-01T01:00:00Z"),
+        attemptCount: 0,
+      },
+    ]);
     log.mockRestore();
+  });
+
+  it("ignores an out-of-order provider event without rolling billing backward", async () => {
+    const { handler, subscriptions, pendingOveragePeriods, overageReporter } =
+      setup();
+    await deliver(handler, PADDLE_SUBSCRIPTION_CREATED);
+    await deliver(handler, PADDLE_SUBSCRIPTION_UPDATED);
+    const stale = {
+      ...PADDLE_SUBSCRIPTION_CREATED,
+      event_id: "evt_subscription_stale",
+      event_type: "subscription.updated",
+      occurred_at: "2026-08-15T00:00:00Z",
+    };
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(deliver(handler, stale)).resolves.toEqual({
+      handled: "ignored",
+    });
+
+    await expect(subscriptions.findByWorkspace("ws_primary")).resolves.toMatchObject(
+      {
+        periodStart: Date.parse("2026-09-01T00:00:00Z"),
+        periodEnd: Date.parse("2026-10-01T00:00:00Z"),
+        lastProviderEventAt: Date.parse("2026-09-01T00:00:01Z"),
+      },
+    );
+    expect(overageReporter.calls).toHaveLength(1);
+    await expect(pendingOveragePeriods.list(10)).resolves.toHaveLength(1);
+    expect(String(log.mock.calls[0]?.[0])).toContain(
+      '"event":"paddle_subscription_event_stale"',
+    );
   });
 });

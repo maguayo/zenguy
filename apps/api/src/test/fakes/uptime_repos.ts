@@ -119,9 +119,17 @@ export class FakeMonitorRepo implements MonitorRepo {
     return true;
   }
 
-  async closeCycle(id: string, changes: CloseMonitorCycle): Promise<void> {
+  async closeCycle(
+    id: string,
+    changes: CloseMonitorCycle,
+    expectedCycleId: string,
+  ): Promise<boolean> {
     const monitor = this.monitors.get(id);
-    if (monitor === undefined || monitor.deletedAt !== null) return;
+    if (
+      monitor === undefined ||
+      monitor.deletedAt !== null ||
+      monitor.currentCycleId !== expectedCycleId
+    ) return false;
     this.monitors.set(id, {
       ...monitor,
       currentStatus: changes.status,
@@ -131,6 +139,7 @@ export class FakeMonitorRepo implements MonitorRepo {
       lastResponseTimeMs: changes.lastResponseTimeMs,
       updatedAt: changes.lastCheckAt,
     });
+    return true;
   }
 
   async listZombieCycles(before: number): Promise<UptimeMonitor[]> {
@@ -149,15 +158,17 @@ export class FakeMonitorRepo implements MonitorRepo {
       .map(copy);
   }
 
-  async clearCycle(id: string): Promise<void> {
+  async clearCycle(id: string, expectedCycleId: string): Promise<boolean> {
     const monitor = this.monitors.get(id);
-    if (monitor !== undefined) {
-      this.monitors.set(id, {
-        ...monitor,
-        currentCycleId: null,
-        cycleStartedAt: null,
-      });
+    if (monitor === undefined || monitor.currentCycleId !== expectedCycleId) {
+      return false;
     }
+    this.monitors.set(id, {
+      ...monitor,
+      currentCycleId: null,
+      cycleStartedAt: null,
+    });
+    return true;
   }
 
   async setChannels(monitorId: string, channelIds: string[]): Promise<void> {

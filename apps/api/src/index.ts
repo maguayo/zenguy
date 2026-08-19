@@ -5,6 +5,9 @@ import { ReportOverageForPeriod } from "./application/billing/report_overage_for
 import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
 import { SweepOverages } from "./application/billing/sweep_overages";
 import { DispatchNotifications } from "./application/channels/dispatch_notifications";
+import { PublishQueueOutbox } from "./application/durability/publish_outbox";
+import { DurableWorkflowMaintenance } from "./application/durability/maintenance";
+import { RedriveDeadLetter } from "./application/durability/redrive_dead_letter";
 import {
   SendQueuedNotification,
   type NotificationQueueControl,
@@ -27,6 +30,7 @@ import {
   notifyMessageSchema,
   type AttemptMessage,
   type CheckMessage,
+  type NotifyMessage,
 } from "./domain/queues";
 import { launchSession } from "./infrastructure/browser/session";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
@@ -36,10 +40,14 @@ import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1CheckRepo } from "./infrastructure/db/check_repo";
 import { D1CleanupRepo } from "./infrastructure/db/cleanup_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
+import { D1DurableWorkflowRepo } from "./infrastructure/db/durable_workflow_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
+import {
+  D1PendingOveragePeriodRepo,
+} from "./infrastructure/db/pending_overage_period_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
@@ -69,6 +77,7 @@ export interface QueueConsumers {
   attempts: AttemptQueueConsumer;
   checks: CheckQueueConsumer;
   notifications: NotifyConsumer;
+  deadLetters?: Pick<RedriveDeadLetter, "execute">;
 }
 
 export interface ScheduledJob {
@@ -78,6 +87,7 @@ export interface ScheduledJob {
 export interface ScheduledJobs {
   tests: ScheduledJob;
   monitors: ScheduledJob;
+  durability?: ScheduledJob;
   retention: ScheduledJob;
   hourly: ScheduledJob;
 }
@@ -202,13 +212,30 @@ function queueBodyPreview(body: unknown): string {
   }
 }
 
-export function processDeadLetterBatch(batch: MessageBatch<unknown>): void {
+export async function processDeadLetterBatch(
+  batch: MessageBatch<unknown>,
+  consumer?: Pick<RedriveDeadLetter, "execute">,
+): Promise<void> {
   for (const queueMessage of batch.messages) {
     platformAlert("dlq_message", {
       queue: batch.queue,
       body: queueBodyPreview(queueMessage.body),
     });
-    queueMessage.ack();
+    if (consumer === undefined) {
+      queueMessage.ack();
+      continue;
+    }
+    try {
+      await consumer.execute(batch.queue, queueMessage);
+    } catch {
+      platformAlert("dlq_redrive_failed", {
+        queue: batch.queue,
+        messageId: queueMessage.id,
+      });
+      queueMessage.retry({
+        delaySeconds: queueRetryDelay(queueMessage.attempts),
+      });
+    }
   }
 }
 
@@ -218,7 +245,7 @@ export async function processQueueBatch(
   context: ExecutionContext,
 ): Promise<void> {
   if (batch.queue.endsWith("-dlq")) {
-    processDeadLetterBatch(batch);
+    await processDeadLetterBatch(batch, consumers.deadLetters);
     return;
   }
   switch (classifyQueue(batch.queue)) {
@@ -244,7 +271,11 @@ export async function processScheduledCron(
   try {
     switch (cron) {
       case "*/5 * * * *":
-        await Promise.all([jobs.tests.execute(), jobs.monitors.execute()]);
+        await Promise.all([
+          jobs.tests.execute(),
+          jobs.monitors.execute(),
+          jobs.durability?.execute() ?? Promise.resolve(),
+        ]);
         return;
       case "0 3 * * *":
         await jobs.retention.execute();
@@ -294,14 +325,24 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
   const incidents = new D1IncidentRepo(env.DB);
   const incidentEvents = new D1IncidentEventRepo(env.DB);
   const storage = new ArtifactStorage(env.ARTIFACTS);
+  const durable = new D1DurableWorkflowRepo(env.DB);
+  const outboxPublisher = new PublishQueueOutbox(
+    durable,
+    {
+      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    systemClock,
+  );
   const secretResolver = new ResolveSecrets(
     new D1SecretRepo(env.DB),
     config.encryptionKey,
   );
   const dispatchNotifications = new DispatchNotifications(
     channels,
-    deliveries,
-    env.NOTIFY_QUEUE as Pick<Queue, "send">,
+    durable,
+    outboxPublisher,
     systemClock,
     realIds,
   );
@@ -315,7 +356,8 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
     storage,
     recordUsage: new RecordRunUsage(usageEvents, systemClock, realIds),
     reverseUsage: new ReverseRunUsage(usageEvents, systemClock),
-    queue: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+    durable,
+    outboxPublisher,
     clock: systemClock,
     ids: realIds,
     runFinalizedHandler: new HandleRunFinalized({
@@ -373,6 +415,16 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
 export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
   const config = loadConfig(env);
   const monitors = new D1MonitorRepo(env.DB);
+  const durableWorkflows = new D1DurableWorkflowRepo(env.DB);
+  const outboxPublisher = new PublishQueueOutbox(
+    durableWorkflows,
+    {
+      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    systemClock,
+  );
   const checks = new D1CheckRepo(env.DB);
   const incidents = new D1IncidentRepo(env.DB);
   const events = new D1IncidentEventRepo(env.DB);
@@ -385,8 +437,8 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
   );
   const dispatchNotifications = new DispatchNotifications(
     channels,
-    deliveries,
-    env.NOTIFY_QUEUE as Pick<Queue, "send">,
+    durableWorkflows,
+    outboxPublisher,
     systemClock,
     realIds,
   );
@@ -398,7 +450,8 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
     channels,
     workspaces,
     dispatchNotifications,
-    checkQueue: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+    durable: durableWorkflows,
+    outboxPublisher,
     executeCheck: (monitorConfig, workspaceId) =>
       executeCheck(
         {
@@ -425,6 +478,16 @@ export function buildSchedulerJobs(
   const workspaces = new D1WorkspaceRepo(env.DB);
   const subscriptions = new D1SubscriptionRepo(env.DB);
   const monitors = new D1MonitorRepo(env.DB);
+  const durableWorkflows = new D1DurableWorkflowRepo(env.DB);
+  const outboxPublisher = new PublishQueueOutbox(
+    durableWorkflows,
+    {
+      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    systemClock,
+  );
   return {
     tests: new SweepDueTests(
       browserTests,
@@ -436,7 +499,8 @@ export function buildSchedulerJobs(
         runs,
         workspaces,
         subscriptions,
-        env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+        durableWorkflows,
+        outboxPublisher,
         config,
         systemClock,
         realIds,
@@ -447,7 +511,8 @@ export function buildSchedulerJobs(
       monitors,
       workspaces,
       subscriptions,
-      env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      durableWorkflows,
+      outboxPublisher,
       systemClock,
       realIds,
     ),
@@ -464,16 +529,52 @@ export function buildRetentionJob(env: Bindings): PurgeExpired {
   );
 }
 
+export function buildDurabilityJob(env: Bindings): DurableWorkflowMaintenance {
+  const durable = new D1DurableWorkflowRepo(env.DB);
+  const publisher = new PublishQueueOutbox(
+    durable,
+    {
+      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    systemClock,
+  );
+  return new DurableWorkflowMaintenance(
+    buildAttemptLifecycle(env),
+    buildCheckConsumer(env),
+    publisher,
+    durable,
+    durable,
+    systemClock,
+  );
+}
+
+export function buildDeadLetterConsumer(env: Bindings): RedriveDeadLetter {
+  const durable = new D1DurableWorkflowRepo(env.DB);
+  const publisher = new PublishQueueOutbox(
+    durable,
+    {
+      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
+    },
+    systemClock,
+  );
+  return new RedriveDeadLetter(durable, publisher, systemClock, realIds);
+}
+
 export function buildHourlyJob(env: Bindings): HourlyMaintenance {
   const config = loadConfig(env);
   const subscriptions = new D1SubscriptionRepo(env.DB);
   const reports = new D1OverageReportRepo(env.DB);
+  const pendingPeriods = new D1PendingOveragePeriodRepo(env.DB);
   const usageEvents = new D1UsageEventRepo(env.DB);
   const overages = new SweepOverages(
     subscriptions,
     reports,
+    pendingPeriods,
     new ReportOverageForPeriod(
-      subscriptions,
       usageEvents,
       reports,
       new HttpPaddleClient(config.paddle),
@@ -500,6 +601,7 @@ export async function scheduled(
 ): Promise<void> {
   await processScheduledCron(controller.cron, {
     ...buildSchedulerJobs(env),
+    durability: buildDurabilityJob(env),
     retention: buildRetentionJob(env),
     hourly: buildHourlyJob(env),
   });
@@ -511,7 +613,7 @@ export async function queue(
   context: ExecutionContext,
 ): Promise<void> {
   if (batch.queue.endsWith("-dlq")) {
-    processDeadLetterBatch(batch);
+    await processDeadLetterBatch(batch, buildDeadLetterConsumer(env));
     return;
   }
   switch (classifyQueue(batch.queue)) {

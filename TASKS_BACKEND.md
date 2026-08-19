@@ -597,13 +597,13 @@ CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, perio
 - [x] Tests: MEMBER 403 on billing; ADMIN sees data but null management urls; OWNER sees urls; gate middleware blocks a probe route when status NONE/CANCELED and passes when ACTIVE/PAST_DUE.
 
 ### BE-035: Overage reporter
-- [x] `application/billing/report_overage_for_period.ts`: `execute({ workspaceId, periodStart, periodEnd })`:
-  1. `existsFor(workspaceId, periodStart)` → return `{ status: "already_reported" }`.
-  2. `billable = countBillable(workspaceId, periodStart, periodEnd)`; `overage = max(0, billable - INCLUDED_RUNS)`.
-  3. If `overage === 0` → insert report row (amount 0, no transaction) → `{ status: "no_overage" }`.
-  4. Else `createOneTimeCharge(providerSubscriptionId, overagePriceId, overage)` → insert report row with `paddle_transaction_id`, `amount_cents = overage * OVERAGE_CENTS_PER_RUN` → `{ status: "charged", overage }`. `logEvent("overage_reported", { workspaceId, overage })`.
-  - Concurrency-safe by the unique `(workspace_id, period_start)` index: `insertIfAbsent` — if duplicate, treat as already reported (never double-charge).
-- [x] `application/billing/sweep_overages.ts` (hourly cron, wired BE-069): `listPeriodEnded(now - 1h, 50)` → for each subscription whose stored period has ended and has no report row for `period_start`, call `report_overage_for_period` with the stored period. (The webhook rollover in BE-032 is the primary path; this sweep is the safety net when webhooks were missed.)
+- [x] `application/billing/report_overage_for_period.ts`: `execute({ workspaceId, periodStart, periodEnd, providerSubscriptionId })`:
+  1. Before `periodEnd + 1h`, return `{ status: "settling" }` without counting usage, inserting a report, or calling Paddle.
+  2. After settlement, count billable runs and atomically claim the unique `(workspace_id, period_start)` report, pinning `providerSubscriptionId`; zero overage is stored directly as `COMPLETED` with no provider call.
+  3. A positive report changes from `PENDING` to durable `AMBIGUOUS` before the only permitted `createOneTimeCharge` POST. The Paddle catalog snapshot is accepted only when the price is exactly EUR 0.20 with no country overrides; the API key requires `price.read`, `subscription.write`, and `transaction.read`.
+  4. An `AMBIGUOUS` report only searches its pinned subscription for the deterministic marker. A match completes the report; a missing match remains `AMBIGUOUS`, emits the sanitized reconciliation-pending operator log, and never sends another POST.
+  - Concurrency-safe by the unique report claim and the one-way state transition: concurrent or later executions can reconcile but cannot double-charge.
+- [x] `application/billing/sweep_overages.ts` (hourly cron, wired BE-069): paginate ended subscription periods into durable pending rows with the original subscription ID pinned and `next_attempt_at = period_end + 1h`; process only ready rows in paginated batches, deleting terminal work and rescheduling settling, unresolved, or failed work with durable backoff so poison rows cannot starve later periods. (The webhook rollover in BE-032 is the primary path; this sweep is the safety net when webhooks were missed.)
 - [x] Tests: no-overage row written once; charge path calls Paddle with quantity = overage; duplicate call → single report; sweep picks only ended+unreported.
 
 # Phase 5 — Secrets
@@ -715,7 +715,7 @@ CREATE INDEX idx_deliveries_incident ON notification_deliveries(incident_id);
 - [x] `application/channels/create_channel.ts` (`channels.manage` + subscription): validate `{ name 1–80, type, config }` via `channelConfigSchema` → encrypt config JSON (`encryptSecret`) → insert (enabled=1, verified_at=null) → audit `channel.created` (metadata: name, type — never config).
 - [x] `application/channels/update_channel.ts`: `{ name?, enabled?, config? }` — config revalidated + re-encrypted when present; audit `channel.updated`.
 - [x] `application/channels/delete_channel.ts`: delete channel + all `browser_test_channels`/`uptime_monitor_channels` junction rows (tables exist after BE-044/BE-062 — write the deletes with `DELETE FROM ... WHERE notification_channel_id = ?` guarded by table existence now: run them, they're valid once migrations land; order this task's final wiring check after Phase 10 in BE-072). Audit `channel.deleted`.
-- [x] `application/channels/test_channel.ts` (`channels.manage`, rate `channel_test` 5/h/channel): build TEST message via templates → create delivery row (PENDING, event TEST, incident null) → call sender inline (not queued) → update delivery SENT (+provider id, sent_at, attempt_count 1, `setVerified` if first success) or FAILED (+`errorSanitized` = error message passed through `Redactor`-less `truncate(…, 300)`) → `setLastDeliveryStatus` → return the delivery.
+- [x] `application/channels/test_channel.ts` (`channels.manage`, rate `channel_test` 5/h/channel): build TEST message via templates → create delivery row (PENDING, event TEST, incident null) → call sender inline (not queued) → update delivery SENT (+provider id, sent_at, attempt_count 1, `setVerified` if first success) or FAILED (+`errorSanitized` = error message redacted with the decrypted channel-config values, then `truncate(…, 300)`) → `setLastDeliveryStatus` → return the delivery.
 - [x] `application/channels/list_channels.ts` (any member; uses `configPreview`) and `list_deliveries.ts` (any member, keyset).
 - [x] Routes: `GET /api/workspaces/:workspaceId/channels`; `POST ...` 201; `PATCH .../channels/:channelId`; `DELETE .../channels/:channelId` 204; `POST .../channels/:channelId/test`; `GET .../channels/:channelId/deliveries?cursor&limit`.
 - [x] Tests: config validation per type (bad E.164, non-Slack URL rejected); webhook URL never appears in any response JSON (stringify + search); test send records delivery both outcomes; MEMBER 403 on mutations.
@@ -1278,12 +1278,21 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Create `apps/api/scripts/seed.mjs` (Node ≥ 22, uses `node:crypto` `webcrypto` — same PBKDF2 + AES-GCM formats as BE-008):
   - Reads `ENCRYPTION_KEY` from `apps/api/.dev.vars` (simple line parse; error with a clear message if missing).
   - Generates `apps/api/scripts/.seed.generated.sql` containing: user `demo@zenguy.dev` / password `Password123!` (email verified); workspace `Demo Workspace` (owner = demo, timezone `Europe/Madrid`); subscription `ACTIVE` with period `now … now + 30 d` (provider ids `seed-local`); secret `DEMO_TOKEN` = `demo-secret-value` allowed on `*.example.com`; EMAIL channel `Demo email` → `demo@zenguy.dev`; browser test `Example smoke` (`https://example.com`, instructions `Check that the page shows the heading 'Example Domain' and contains a link labeled 'More information'.`, DESKTOP, 24 h, 1 retry, recovery on, the email channel); uptime monitor `Example uptime` (GET `https://example.com`, expected 200, freq 300 s, timeout 10, 1 retry, same channel). All ids `seed_`-prefixed ULIDs; `next_run_at`/`next_check_at` = now + interval.
-  - Then executes `npx wrangler d1 execute zenguy-db --local --file scripts/.seed.generated.sql` (spawn; `--remote` guard: refuse unless `--allow-remote` flag).
+  - Then executes `npx wrangler d1 execute zenguy-db --local --file scripts/.seed.generated.sql` (spawn). Remote seeding is restricted to the exact `zenguy-staging-db` target and requires all of `--remote --env staging --allow-remote --confirm-staging`; every other environment or incomplete confirmation is rejected, so this script can never seed production remotely.
   - Idempotent: generated SQL starts by deleting prior `seed_%` rows (`DELETE FROM ... WHERE id LIKE 'seed_%'` per table + the demo user by email).
 - [x] Add `.seed.generated.sql` to `.gitignore`. Document in `apps/api/README.md` (login credentials included).
-- [x] Test: run with `--dry-run` (prints SQL, no exec) in a unit test; assert the SQL contains one INSERT per expected table and the password hash parses with `verifyPassword`.
+- [x] Test: run with `--dry-run` (prints SQL, no exec) in a unit test; assert the SQL contains one INSERT per expected table and the password hash parses with `verifyPassword`. Use `--print-command` tests to prove local-by-default behavior, the exact staging remote destination, and rejection of production, implicit targets, or either missing confirmation.
 
 ### BE-074: Deployment, docs & acceptance
+- [ ] Overall deployed release acceptance is still open. Implementation, documentation, and local automated gates below are complete; remaining operator/provider work:
+  - [x] Deploy and verify the isolated staging Worker, D1, KV, R2, Queues, crons, Browser Rendering, and `/api/*` route.
+  - [ ] Correct the Paddle Sandbox notification destination to the staging `/api/webhooks/paddle` route, complete a sandbox checkout, verify billing becomes ACTIVE, and replay the webhook idempotently.
+  - [ ] Register an explicitly authorized real recipient, verify delivery through Cloudflare Email Service, and complete the external failure/recovery notification smoke.
+  - [ ] Configure and verify the production Paddle Live catalog and credentials.
+  - [ ] Configure and verify production Twilio credentials and SMS, WhatsApp, and voice senders.
+  - [ ] Create and verify the production Paddle webhook destination with exactly `subscription.created`, `subscription.updated`, `subscription.canceled`, and `subscription.past_due`.
+  - [ ] Activate the production Worker route and Queue consumers after all production secrets exist, then repeat the non-destructive deployed smoke.
+  - [ ] Connect the prepared staging CI workflow after a scoped Cloudflare API token is available to GitHub Actions.
 - [x] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
   - **Provider setup:** Paddle Sandbox for staging (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://staging-app.zenguy.com/api/webhooks/paddle`) and a separate Paddle Live catalog/destination at `https://app.zenguy.com/api/webhooks/paddle`; Cloudflare Email Service on `zenguy.com`; Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key with `gpt-5-mini`. Note: Browser Rendering + Queues require the Workers Paid plan.
@@ -1303,11 +1312,13 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 - BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
-- BE-035: The report's unique `(workspace_id, period_start)` row is claimed before calling Paddle, then updated with the returned transaction ID; charging first and inserting afterward cannot satisfy the stated never-double-charge guarantee under concurrent workers. A failed provider call releases the uncharged claim for a later retry.
+- BE-032: Current Paddle subscription webhooks do not include `management_urls`, and Paddle management links are temporary. The webhook therefore stores no links; `GetBilling` fetches fresh links with `GET /subscriptions/{id}` only for an OWNER with `billing.manage`, while ADMIN/MEMBER responses keep them null.
+- BE-035: Paddle's subscription-charge endpoint has no client idempotency key and returns the updated subscription rather than the created transaction. Catalog charge items also cannot carry per-charge `custom_data`, so the client snapshots the configured overage catalog price into an equivalent non-catalog price object with a deterministic marker in `price.custom_data`; reconciliation reads that marker from `transaction.items[].price.custom_data`. The snapshot is rejected unless it is exactly EUR 0.20 with no country overrides. This requires the Paddle API key to have `price.read`, `subscription.write`, and `transaction.read` permissions. Billing waits until one hour after the actual `period_end`, pins the original Paddle subscription ID to the pending period and report, and enters durable `AMBIGUOUS` state before the only permitted POST. Because a missing transaction is not proof that an ambiguous POST failed, ambiguous reports reconcile indefinitely and are never POSTed again; operators receive a sanitized reconciliation-pending log instead of risking a duplicate charge. Ready pending rows use durable backoff, and both pending work and missed ended periods are paginated without head-of-line starvation. Provider/time-out failures never delete the report claim.
 - BE-057: Current Wrangler remote mode does not support Queue consumers, so the manual smoke runs the Worker and queue locally while using remote D1, R2, and Browser Rendering bindings. This preserves the complete API → queue → browser → evidence path with live Cloudflare resources.
 - BE-057: Per the user's explicit provider override, the execution engine uses OpenAI Responses with the low-cost `gpt-5-mini` model instead of Anthropic; the agent action and error contracts are unchanged.
 - BE-016: Per the user's explicit provider override, transactional email uses the native Cloudflare Email Service Worker binding instead of Resend. The sender is restricted to `notifications@zenguy.com` and Cloudflare authentication is isolated in the personal `zenguy-personal` Wrangler profile.
 - BE-057: The live `example.com` page now labels its informational link `Learn more` rather than `More information`; the manual smoke therefore verifies the same heading-and-informational-link behavior using the current label instead of forcing an incorrect PASS for stale external content.
+- BE-056/BE-057: Reliable pixel-level redaction cannot be guaranteed for normal inputs or page-controlled reflections. An attempt that resolves any workspace secret therefore runs in text-only evidence mode: it sends no image block to OpenAI and captures/persists no screenshots; DOM state, action traces, and textual evidence remain redacted.
 - Post-plan (user-requested 2026-08-19): Workspace API keys and a key-authenticated public read API were added beyond the original V1 scope. Migration `0012_api_keys.sql` creates `workspace_api_keys` (SHA-256 key hash, display prefix, `last_used_at`, `revoked_at`). Management endpoints `GET/POST /api/workspaces/:id/api-keys` and `DELETE /api/workspaces/:id/api-keys/:apiKeyId` follow the standard middleware chain with the new `api_keys.manage` action (OWNER/ADMIN; members may list) and audit actions `api_key.created`/`api_key.revoked`; creation is subscription-gated and capped at 20 active keys per workspace, revocation is deliberately not gated. Keys use the `zgk_` prefix (`ak_` entity ids), are shown once at creation, and authenticate the read-only `/api/v1` surface (`workspace`, `uptime-monitors` with MEMBER-view presentation, `browser-tests`, `browser-tests/:testId/runs`, `runs/:runId`) via `Authorization: Bearer` or `X-Api-Key`, rate-limited per key (`public_api`, Appendix I) and served with open CORS because the key itself is the credential. See `apps/api/README.md` § "Workspace API keys and the public read API".
 
 ---
@@ -1530,65 +1541,29 @@ OUTPUT
 
 Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
 
-# Appendix H — `apps/api/wrangler.jsonc` (complete)
+# Appendix H — Wrangler deployment topology contract
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "zenguy-api",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-08-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
-  "limits": { "cpu_ms": 300000 },
-  "browser": { "binding": "BROWSER" },
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "remote": true,
-      "allowed_sender_addresses": ["notifications@zenguy.com"]
-    }
-  ],
-  "d1_databases": [
-    { "binding": "DB", "database_name": "zenguy-db", "database_id": "TODO-FILL-ID", "migrations_dir": "migrations" }
-  ],
-  "kv_namespaces": [{ "binding": "KV", "id": "TODO-FILL-ID" }],
-  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }],
-  "queues": {
-    "producers": [
-      { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
-      { "binding": "CHECK_QUEUE", "queue": "zenguy-checks" },
-      { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
-    ],
-    "consumers": [
-      { "queue": "zenguy-runs", "max_batch_size": 1, "max_concurrency": 4, "max_retries": 3, "dead_letter_queue": "zenguy-runs-dlq" },
-      { "queue": "zenguy-checks", "max_batch_size": 5, "max_concurrency": 10, "max_retries": 3, "dead_letter_queue": "zenguy-checks-dlq" },
-      { "queue": "zenguy-notify", "max_batch_size": 5, "max_concurrency": 5, "max_retries": 3, "dead_letter_queue": "zenguy-notify-dlq" },
-      { "queue": "zenguy-runs-dlq", "max_batch_size": 10, "max_retries": 0 },
-      { "queue": "zenguy-checks-dlq", "max_batch_size": 10, "max_retries": 0 },
-      { "queue": "zenguy-notify-dlq", "max_batch_size": 10, "max_retries": 0 }
-    ]
-  },
-  "triggers": { "crons": ["*/5 * * * *", "0 3 * * *", "30 * * * *"] },
-  "vars": {
-    "ENVIRONMENT": "development",
-    "APP_URL": "http://localhost:5173",
-    "LLM_MODEL": "gpt-5-mini",
-    "LLM_USE_VISION": "true",
-    "PADDLE_ENVIRONMENT": "sandbox",
-    "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
-  }
-}
-```
-The final config has explicit, non-inherited `env.staging` and
-`env.production` blocks. Staging binds the `zenguy-staging-*` inventory and the
-zone route `{ "pattern": "staging-app.zenguy.com/api/*", "zone_name":
-"zenguy.com" }`; production binds the `zenguy-*` inventory and
-`{ "pattern": "app.zenguy.com/api/*", "zone_name": "zenguy.com" }`. Duplicate
-Browser, Email, D1, KV, R2, Queue, cron, and vars configuration in each named
-environment because Wrangler does not inherit those bindings. Deploy with
-`deploy:staging` or `deploy:production`; Pages owns both complete application
-hostnames.
+`apps/api/wrangler.jsonc`, not this appendix, is the authoritative
+configuration. This summary intentionally records invariants rather than
+duplicating resource IDs or a copy of the JSON that can drift.
+
+| Environment | D1 / KV / R2 | Queues | Route and provider mode |
+|---|---|---|---|
+| Local | Local emulation for bindings `DB`, `KV`, and `ARTIFACTS`; the D1 logical name is `zenguy-db` but commands use `--local` | Local `RUN_QUEUE`, `CHECK_QUEUE`, and `NOTIFY_QUEUE` bindings | No zone route; `APP_URL=http://localhost:5173`; Paddle sandbox; OpenAI `gpt-5-mini` |
+| Staging | `zenguy-staging-db`, staging KV namespace, `zenguy-staging-artifacts` | `zenguy-staging-runs`, `zenguy-staging-checks`, `zenguy-staging-notify`, and matching DLQs | Worker Route `staging-app.zenguy.com/api/*` in zone `zenguy.com`; Paddle sandbox |
+| Production | `zenguy-db`, production KV namespace, `zenguy-artifacts` | `zenguy-runs`, `zenguy-checks`, `zenguy-notify`, and matching DLQs | Worker Route `app.zenguy.com/api/*` in zone `zenguy.com`; Paddle Live/production |
+
+The root and both named environments declare Browser Rendering, Cloudflare
+Email (`notifications@zenguy.com` only), D1, KV, R2, all Queue producers and
+consumers, and the three crons (`*/5 * * * *`, `0 3 * * *`, and
+`30 * * * *`). Named-environment bindings are explicit because Wrangler does
+not inherit them. Run/Check/Notify consumers retain the batching, concurrency,
+retry, and DLQ settings specified in BE-050; each DLQ has its own consumer.
+
+Deploy with `deploy:staging` or `deploy:production`, and migrate with
+`db:migrate:staging` or `db:migrate:production`. Cloudflare Pages owns the full
+application hostnames; the API Worker intercepts only `/api/*` through Worker
+Routes and has no frontend asset binding or full-hostname custom domain.
 
 # Appendix I — Rate limits (key → scope)
 

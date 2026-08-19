@@ -7,8 +7,8 @@ import type {
   TestRun,
 } from "../../domain/browser_tests/types";
 import type { NotificationChannel } from "../../domain/channels/types";
-import type { WorkspaceApiKey } from "../../domain/api_keys/types";
 import type { Incident, IncidentEvent } from "../../domain/incidents/types";
+import type { WorkspaceApiKey } from "../../domain/api_keys/types";
 import type { WorkspaceSecret } from "../../domain/secrets/types";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
 import type { User } from "../../domain/users/types";
@@ -709,6 +709,7 @@ const ROUTES: RouteCase[] = [
       const rawBody = JSON.stringify({
         event_id: `evt_rbac_${caller}`,
         event_type: "transaction.completed",
+        occurred_at: new Date(NOW).toISOString(),
         data: {},
       });
       const timestamp = Math.floor(NOW / 1_000);
@@ -936,6 +937,23 @@ const ROUTES: RouteCase[] = [
     202,
     `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST_ID}/run-now`,
     { method: "POST" },
+    true,
+  ),
+  route(
+    "GET .../browser-tests/export",
+    "M",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/browser-tests/export`,
+  ),
+  route(
+    "POST .../browser-tests/import",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/browser-tests/import`,
+    json("POST", {
+      version: 1,
+      tests: [{ ...BROWSER_CONFIG, name: "Imported matrix browser test" }],
+    }),
     true,
   ),
   route("GET .../runs/:runId", "M", 200, `/api/workspaces/${WORKSPACE.id}/runs/${RUN_ID}`),

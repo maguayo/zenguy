@@ -17,6 +17,8 @@ import {
   type ScheduledRunCreator,
   SweepDueTests,
 } from "./sweep_due_tests";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const HOUR_MS = 3_600_000;
 const NOW = 20 * HOUR_MS;
@@ -127,9 +129,21 @@ class RecordingRunCreator implements ScheduledRunCreator {
 
 class RecordingCheckQueue {
   readonly messages: CheckMessage[] = [];
+  failures = 0;
 
-  async send(message: CheckMessage): Promise<void> {
+  async send(message: CheckMessage): Promise<QueueSendResponse> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("queue unavailable");
+    }
     this.messages.push(structuredClone(message));
+    return { metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } } };
+  }
+}
+
+class NoopAnyQueue {
+  async send(): Promise<QueueSendResponse> {
+    return { metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } } };
   }
 }
 
@@ -345,12 +359,20 @@ describe("SweepDueMonitors", () => {
     ]) {
       await monitors.insert(value);
     }
+    const clock = new FixedClock(NOW);
+    const durable = new FakeDurableWorkflowRepo({ monitors });
+    const publisher = new PublishQueueOutbox(
+      durable,
+      { RUN: new NoopAnyQueue(), CHECK: queue, NOTIFY: new NoopAnyQueue() },
+      clock,
+    );
     const sweep = new SweepDueMonitors(
       monitors,
       eligible.workspaces,
       eligible.subscriptions,
-      queue,
-      new FixedClock(NOW),
+      durable,
+      publisher,
+      clock,
       new FakeIds(),
     );
 
@@ -384,12 +406,20 @@ describe("SweepDueMonitors", () => {
     await monitors.insert(
       monitor("mon_paused", NOW, { workspaceId: "ws_unsubscribed" }),
     );
+    const clock = new FixedClock(NOW);
+    const durable = new FakeDurableWorkflowRepo({ monitors });
+    const publisher = new PublishQueueOutbox(
+      durable,
+      { RUN: new NoopAnyQueue(), CHECK: queue, NOTIFY: new NoopAnyQueue() },
+      clock,
+    );
     const sweep = new SweepDueMonitors(
       monitors,
       eligible.workspaces,
       eligible.subscriptions,
-      queue,
-      new FixedClock(NOW),
+      durable,
+      publisher,
+      clock,
       new FakeIds(),
     );
 
@@ -410,17 +440,82 @@ describe("SweepDueMonitors", () => {
     const queue = new RecordingCheckQueue();
     const eligible = await eligibility();
     await monitors.insert(monitor("mon_race", NOW));
+    const clock = new FixedClock(NOW);
+    const durable = new FakeDurableWorkflowRepo({ monitors });
+    const publisher = new PublishQueueOutbox(
+      durable,
+      { RUN: new NoopAnyQueue(), CHECK: queue, NOTIFY: new NoopAnyQueue() },
+      clock,
+    );
     const sweep = new SweepDueMonitors(
       monitors,
       eligible.workspaces,
       eligible.subscriptions,
-      queue,
-      new FixedClock(NOW),
+      durable,
+      publisher,
+      clock,
       new FakeIds(),
     );
 
     await Promise.all([sweep.execute(), sweep.execute()]);
     expect(queue.messages).toHaveLength(1);
     expect(monitors.monitors.get("mon_race")?.currentCycleId).toMatch(/^cyc_/u);
+  });
+
+  it("keeps an opened cycle recoverable when the initial Queue.send fails", async () => {
+    const monitors = new FakeMonitorRepo();
+    const queue = new RecordingCheckQueue();
+    queue.failures = 1;
+    const eligible = await eligibility();
+    await monitors.insert(monitor("mon_queue_failure", NOW));
+    const clock = new FixedClock(NOW);
+    const durable = new FakeDurableWorkflowRepo({ monitors });
+    const publisher = new PublishQueueOutbox(
+      durable,
+      {
+        RUN: new NoopAnyQueue(),
+        CHECK: queue,
+        NOTIFY: new NoopAnyQueue(),
+      },
+      clock,
+    );
+    const sweep = new SweepDueMonitors(
+      monitors,
+      eligible.workspaces,
+      eligible.subscriptions,
+      durable,
+      publisher,
+      clock,
+      new FakeIds(),
+    );
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(sweep.execute()).resolves.toEqual({
+      due: 1,
+      created: 1,
+      skipped: 0,
+    });
+    expect(queue.messages).toEqual([]);
+    expect(monitors.monitors.get("mon_queue_failure")?.currentCycleId).toMatch(
+      /^cyc_/u,
+    );
+    expect(
+      [...durable.outboxEntries.values()].filter(
+        (entry) => entry.publishedAt === null,
+      ),
+    ).toHaveLength(1);
+
+    await expect(publisher.flush()).resolves.toEqual({
+      published: 1,
+      failed: 0,
+    });
+    expect(queue.messages).toHaveLength(1);
+    await expect(sweep.execute()).resolves.toEqual({
+      due: 0,
+      created: 0,
+      skipped: 0,
+    });
+    expect(queue.messages).toHaveLength(1);
+    alert.mockRestore();
   });
 });

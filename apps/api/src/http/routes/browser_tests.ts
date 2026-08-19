@@ -7,6 +7,7 @@ import { DownloadReport } from "../../application/browser_tests/download_report"
 import { GetAttempt } from "../../application/browser_tests/get_attempt";
 import { GetBrowserTest } from "../../application/browser_tests/get_browser_test";
 import { GetRun } from "../../application/browser_tests/get_run";
+import { ImportBrowserTests } from "../../application/browser_tests/import_tests";
 import type { IncidentCloserOnDelete } from "../../application/browser_tests/incident_closer";
 import { ListBrowserTests } from "../../application/browser_tests/list_browser_tests";
 import { ListRuns } from "../../application/browser_tests/list_runs";
@@ -23,8 +24,10 @@ import type {
   StepRepo,
 } from "../../domain/browser_tests/repo";
 import { browserTestConfigSchema } from "../../domain/browser_tests/rules";
+import { serializeTestsFile } from "../../domain/browser_tests/transfer";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import type { AttemptMessage } from "../../domain/queues";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   MemberRepo,
@@ -35,6 +38,7 @@ import type { AppConfig } from "../../shared/config";
 import type { ArtifactStorage } from "../../infrastructure/storage/artifacts";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
+import type { PublishQueueOutbox } from "../../application/durability/publish_outbox";
 import { z } from "zod";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
@@ -61,7 +65,8 @@ export interface BrowserTestRoutesDependencies {
   artifacts: ArtifactRepo;
   artifactStorage: Pick<ArtifactStorage, "get">;
   incidents: IncidentCloserOnDelete;
-  runQueue: Pick<Queue<AttemptMessage>, "send">;
+  durableWorkflows: Pick<DurableWorkflowRepo, "insertRunWithAttempt">;
+  outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
   resolveSecrets: RunSecretResolver;
@@ -77,6 +82,10 @@ const updateSchema = browserTestConfigSchema.partial().refine(
   (value) => Object.keys(value).length > 0,
   { message: "At least one field is required" },
 );
+
+const exportQuerySchema = z.object({
+  format: z.enum(["yaml", "json"]).default("yaml"),
+});
 
 const runStatusSchema = z.enum([
   "QUEUED",
@@ -174,7 +183,8 @@ export function browserTestRoutes(
     dependencies.runs,
     dependencies.workspaces,
     dependencies.subscriptions,
-    dependencies.runQueue,
+    dependencies.durableWorkflows,
+    dependencies.outboxPublisher,
     dependencies.config,
     dependencies.clock,
     dependencies.ids,
@@ -187,6 +197,14 @@ export function browserTestRoutes(
   );
   const validateDraft = new ValidateDraft(
     createRun,
+    dependencies.subscriptions,
+    dependencies.rateLimiter,
+  );
+  const importBrowserTests = new ImportBrowserTests(
+    createBrowserTest,
+    updateBrowserTest,
+    dependencies.tests,
+    dependencies.channels,
     dependencies.subscriptions,
     dependencies.rateLimiter,
   );
@@ -221,6 +239,75 @@ export function browserTestRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentBrowserTest(result) }, 201);
+    },
+  );
+
+  // Registered before the ":testId" routes so the static segments win.
+  app.get(
+    "/:workspaceId/browser-tests/export",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    zquery(exportQuerySchema),
+    async (context) => {
+      const workspaceEntity = context.get("workspace");
+      const format = context.req.valid("query").format;
+      const result = await listBrowserTests.execute({
+        workspaceId: workspaceEntity.id,
+      });
+      const body = serializeTestsFile(
+        result.map((test) => ({
+          id: test.id,
+          name: test.name,
+          startUrl: test.startUrl,
+          instructions: test.instructions,
+          device: test.device,
+          intervalHours: test.intervalHours,
+          maxRetries: test.maxRetries,
+          notifyOnRecovery: test.notifyOnRecovery,
+          channelIds: test.channelIds,
+        })),
+        format,
+      );
+      const date = new Date(dependencies.clock.now())
+        .toISOString()
+        .slice(0, 10);
+      const filename = `zenguy-tests-${workspaceEntity.slug}-${date}.${format}`;
+      return new Response(body, {
+        headers: {
+          "Content-Type":
+            format === "yaml"
+              ? "text/yaml; charset=utf-8"
+              : "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+    },
+  );
+
+  app.post(
+    "/:workspaceId/browser-tests/import",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    requireAction("tests.manage"),
+    active,
+    async (context) => {
+      const fileText = await context.req.text();
+      const result = await importBrowserTests.execute({
+        workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        fileText,
+        ip: requestIp(context),
+      });
+      return context.json({
+        data: {
+          created: result.created,
+          updated: result.updated,
+          tests: result.tests.map(presentBrowserTest),
+        },
+      });
     },
   );
 

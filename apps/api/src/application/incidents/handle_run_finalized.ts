@@ -31,7 +31,7 @@ type NotificationDispatch = Pick<DispatchNotifications, "execute">;
 export interface HandleRunFinalizedDependencies {
   incidents: IncidentRepo;
   events: IncidentEventRepo;
-  runs: Pick<RunRepo, "setIncidentId">;
+  runs: Pick<RunRepo, "setIncidentId" | "hasLaterIncidentResult">;
   attempts: Pick<AttemptRepo, "listForRun">;
   dispatchNotifications: NotificationDispatch;
   channels: Pick<ChannelRepo, "listByIds">;
@@ -75,6 +75,17 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     }
 
     if (
+      run.browserTestId !== null &&
+      run.finishedAt !== null &&
+      (run.status === "PASSED" ||
+        run.status === "FAILED" ||
+        run.status === "TIMEOUT") &&
+      (await this.hasLaterIncidentResult(run))
+    ) {
+      return;
+    }
+
+    if (
       shouldOpenIncident({
         runStatus: run.status,
         source: run.source,
@@ -97,11 +108,33 @@ export class HandleRunFinalized implements RunFinalizedHandler {
   ): Promise<void> {
     const testId = run.browserTestId as string;
     const at = run.finishedAt ?? this.dependencies.clock.now();
-    const existing = await this.dependencies.incidents.findOpenForTest(testId);
-    if (existing !== null && existing.workspaceId === run.workspaceId) {
+    const [sourceIncident, existing] = await Promise.all([
+      this.dependencies.incidents.findByRunSource(run.id),
+      this.dependencies.incidents.findOpenForTest(testId),
+    ]);
+    if (
+      sourceIncident !== null &&
+      sourceIncident.workspaceId === run.workspaceId &&
+      sourceIncident.openedByRunId === run.id
+    ) {
+      await this.completeOpenedFailure(sourceIncident, run, snapshot, lastAttempt);
+      return;
+    }
+    if (
+      existing !== null &&
+      existing.workspaceId === run.workspaceId &&
+      existing.openedAt <= at
+    ) {
       await this.appendFailure(existing, run, at);
       return;
     }
+
+    if (existing !== null) return;
+
+    // Recheck immediately before opening. If a newer terminal run appeared
+    // while this continuation was loading incident state, that newer result
+    // owns the customer-visible transition.
+    if (await this.hasLaterIncidentResult(run)) return;
 
     const candidate: Incident = {
       id: this.dependencies.ids.newId("inc"),
@@ -121,18 +154,33 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     };
     const opened = await this.dependencies.incidents.insertOpen(candidate);
     if (opened.id !== candidate.id) {
+      if (opened.openedAt > at) return;
       await this.appendFailure(opened, run, at);
       return;
     }
 
+    if (opened.openedByRunId === run.id) {
+      await this.completeOpenedFailure(opened, run, snapshot, lastAttempt);
+      return;
+    }
+    await this.appendFailure(opened, run, at);
+  }
+
+  private async completeOpenedFailure(
+    incident: Incident,
+    run: TestRun,
+    snapshot: RunSnapshot,
+    lastAttempt: TestAttempt | null,
+  ): Promise<void> {
+    const at = run.finishedAt ?? this.dependencies.clock.now();
     await this.dependencies.events.insert(
-      this.event(opened.id, "OPENED", run.id, this.runMessage(run), at),
+      this.event(incident.id, "OPENED", run.id, this.runMessage(run), at),
     );
-    await this.dependencies.runs.setIncidentId(run.id, opened.id);
+    await this.dependencies.runs.setIncidentId(run.id, incident.id);
     await this.dispatch(
       run,
       snapshot,
-      opened,
+      incident,
       "FAILURE",
       lastAttempt?.failureReason ?? undefined,
     );
@@ -160,14 +208,30 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     run: TestRun,
     snapshot: RunSnapshot,
   ): Promise<void> {
-    const incident = await this.dependencies.incidents.findOpenForTest(
+    const sourceIncident = await this.dependencies.incidents.findByRunSource(
+      run.id,
+    );
+    const openIncident = await this.dependencies.incidents.findOpenForTest(
       run.browserTestId as string,
     );
+    const incident =
+      sourceIncident?.resolvedByRunId === run.id
+        ? sourceIncident
+        : openIncident;
     if (incident === null || incident.workspaceId !== run.workspaceId) return;
     const at = run.finishedAt ?? this.dependencies.clock.now();
-    await this.dependencies.incidents.resolve(incident.id, at, {
-      runId: run.id,
-    });
+    if (incident.openedAt > at) return;
+    if (
+      incident.status === "RESOLVED" &&
+      incident.resolvedByRunId !== run.id
+    ) {
+      return;
+    }
+    if (incident.status === "OPEN") {
+      await this.dependencies.incidents.resolve(incident.id, at, {
+        runId: run.id,
+      });
+    }
     await this.dependencies.events.insert(
       this.event(incident.id, "RESOLVED", run.id, this.runMessage(run), at),
     );
@@ -175,6 +239,18 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     if (snapshot.notifyOnRecovery) {
       await this.dispatch(run, snapshot, incident, "RECOVERY");
     }
+  }
+
+  private hasLaterIncidentResult(run: TestRun): Promise<boolean> {
+    if (run.browserTestId === null || run.finishedAt === null) {
+      return Promise.resolve(false);
+    }
+    return this.dependencies.runs.hasLaterIncidentResult({
+      browserTestId: run.browserTestId,
+      finishedAt: run.finishedAt,
+      createdAt: run.createdAt,
+      runId: run.id,
+    });
   }
 
   private async dispatch(
@@ -200,6 +276,7 @@ export class HandleRunFinalized implements RunFinalizedHandler {
       workspaceId: run.workspaceId,
       channelIds: enabledIds,
       incidentId: incident.id,
+      dedupeKey: `browser-run:${run.id}:${eventType}`,
       message: buildNotificationMessage({
         eventType,
         resourceType: "BROWSER_TEST",
@@ -245,8 +322,9 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     if (!shouldGenerateReport(run.status)) return;
     try {
       await this.dependencies.reports.generateForRun(run);
-    } catch {
+    } catch (error) {
       platformAlert("report_generation_failed", { runId: run.id });
+      throw error;
     }
   }
 }

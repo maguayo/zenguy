@@ -100,6 +100,13 @@ function redactedPageState(state: PageState, redactor: Redactor): PageState {
   return redactor.redactDeep(state);
 }
 
+function screenshotsAllowed(dependencies: RunAgentDependencies): boolean {
+  // DEVIATION: Pixel-level redaction cannot reliably remove a secret from every
+  // possible rendering (for example, a normal input or page-controlled mirror).
+  // Keep the whole attempt text-only whenever it resolved a real secret.
+  return dependencies.secrets.size === 0;
+}
+
 function buildUserText(input: {
   snapshot: RunSnapshot;
   state: PageState;
@@ -265,7 +272,12 @@ async function captureStepScreenshot(
   dependencies: RunAgentDependencies,
   screenshotsStored: number,
 ): Promise<Uint8Array | null> {
-  if (screenshotsStored >= MAX_SCREENSHOTS_PER_ATTEMPT) return null;
+  if (
+    !screenshotsAllowed(dependencies) ||
+    screenshotsStored >= MAX_SCREENSHOTS_PER_ATTEMPT
+  ) {
+    return null;
+  }
   return dependencies.session.screenshotJpeg();
 }
 
@@ -320,10 +332,11 @@ export async function runAgentAttempt(
   dependencies: RunAgentDependencies,
   input: RunAgentInput,
 ): Promise<AgentResult> {
+  const canCaptureScreenshots = screenshotsAllowed(dependencies);
   const steps: StepRecord[] = (input.initialSteps ?? []).map((step) => ({
     ...step,
     screenshotJpeg:
-      step.screenshotJpeg === null
+      !canCaptureScreenshots || step.screenshotJpeg === null
         ? null
         : new Uint8Array(step.screenshotJpeg),
   }));
@@ -346,7 +359,7 @@ export async function runAgentAttempt(
 
     const state = await dependencies.session.serialize();
     const llmScreenshot =
-      dependencies.llmUseVision === false
+      !canCaptureScreenshots || dependencies.llmUseVision === false
         ? null
         : await dependencies.session.screenshotJpeg();
     const userText = buildUserText({
@@ -364,6 +377,17 @@ export async function runAgentAttempt(
         llmScreenshot === null ? null : bytesToBase64(llmScreenshot),
     });
     tokensUsed += decision.tokensUsed;
+
+    // The model call can consume the rest of the attempt budget. Re-check before
+    // accepting even a terminal decision so a late `finish` cannot beat 300 s.
+    if (dependencies.clock.now() >= input.deadlineAt) {
+      return agentTimeoutResult(
+        input.snapshot,
+        steps,
+        tokensUsed,
+        dependencies.redactor,
+      );
+    }
 
     const validationError = validateAgentAction(decision.action);
     if (validationError !== null) {
@@ -383,7 +407,10 @@ export async function runAgentAttempt(
 
     if (decision.action.action === "finish") {
       let screenshot: Uint8Array | null = null;
-      if (screenshotsStored < MAX_SCREENSHOTS_PER_ATTEMPT) {
+      if (
+        canCaptureScreenshots &&
+        screenshotsStored < MAX_SCREENSHOTS_PER_ATTEMPT
+      ) {
         // The image supplied to the model is already the terminal page state.
         // Reuse it when available; text-only runs still capture final evidence.
         screenshot =

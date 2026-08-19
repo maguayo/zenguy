@@ -155,6 +155,21 @@ destination reachable, and replay its `subscription.created` notification.
 The UI polls for up to two minutes and then presents `Check again`; once the
 signed notification has been processed, that action completes onboarding.
 
+### Overage billing safety
+
+The server-side Paddle API key used for overage billing must include
+`price.read`, `subscription.write`, and `transaction.read`. Zenguy validates
+that `PADDLE_OVERAGE_PRICE_ID` is exactly EUR 0.20 with no country-specific
+overrides before requesting a charge.
+
+An ended billing period is not settled until one hour after its actual
+`period_end`. The pending period and its durable overage report both pin the
+original Paddle subscription ID, so a later subscription replacement cannot
+redirect the charge. Before its single permitted charge request, the report is
+persisted as `AMBIGUOUS`; if the request outcome cannot be proved, subsequent
+runs only reconcile the deterministic marker against Paddle and emit a
+sanitized operator log. They never repeat the charge request.
+
 ## Provider configuration for testing
 
 - Cloudflare commands for this repository must run through the
@@ -288,10 +303,10 @@ pnpm --filter @zenguy/api test:integration
 
 Last local verification on 2026-08-19:
 
-- API unit tests: 528 passed across 81 files.
+- API unit tests: 543 passed across 81 files.
 - Web unit tests: 180 passed across 61 files.
-- API integration tests: 182 passed across 36 files.
-- Total: 890 passed tests.
+- API integration tests: 185 passed across 36 files.
+- Total: 908 passed tests.
 - Monorepo typecheck and production builds: passed.
 - Cloudflare Email Sending: `zenguy.com` enabled in the personal account;
   Wrangler's remote `EMAIL` binding connected with

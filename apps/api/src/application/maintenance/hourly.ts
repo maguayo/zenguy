@@ -73,14 +73,21 @@ export class HourlyMaintenance {
     const staleCycles = await this.monitors.listZombieCycles(
       now - ZOMBIE_CYCLE_MS,
     );
+    let zombieCycles = 0;
     for (const monitor of staleCycles) {
-      await this.monitors.clearCycle(monitor.id);
+      if (monitor.currentCycleId === null) continue;
+      const cleared = await this.monitors.clearCycle(
+        monitor.id,
+        monitor.currentCycleId,
+      );
+      if (!cleared) continue;
+      zombieCycles += 1;
       this.alert("zombie_cycle", {
         workspaceId: monitor.workspaceId,
         monitorId: monitor.id,
         cycleId: monitor.currentCycleId,
       });
     }
-    return { zombieAttempts, zombieCycles: staleCycles.length };
+    return { zombieAttempts, zombieCycles };
   }
 }

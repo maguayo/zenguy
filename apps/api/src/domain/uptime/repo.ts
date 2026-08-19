@@ -45,9 +45,13 @@ export interface MonitorRepo {
   softDelete(id: string, at: number): Promise<void>;
   claimDue(now: number, limit: number): Promise<ClaimedUptimeMonitor[]>;
   openCycle(id: string, cycleId: string, at: number): Promise<boolean>;
-  closeCycle(id: string, changes: CloseMonitorCycle): Promise<void>;
+  closeCycle(
+    id: string,
+    changes: CloseMonitorCycle,
+    expectedCycleId: string,
+  ): Promise<boolean>;
   listZombieCycles(before: number): Promise<UptimeMonitor[]>;
-  clearCycle(id: string): Promise<void>;
+  clearCycle(id: string, expectedCycleId: string): Promise<boolean>;
   setChannels(monitorId: string, channelIds: string[]): Promise<void>;
   getChannelIds(monitorId: string): Promise<string[]>;
   statusCounts(workspaceId: string): Promise<MonitorStatusCounts>;

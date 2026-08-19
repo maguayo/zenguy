@@ -17,12 +17,16 @@ import type {
   TestRun,
 } from "../../domain/browser_tests/types";
 import type { AttemptMessage } from "../../domain/queues";
+import type { DurableWorkflowRepo } from "../../domain/durability/repo";
+import type { DurableJob } from "../../domain/durability/types";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { ArtifactStorage } from "../../infrastructure/storage/artifacts";
 import type { Clock } from "../../shared/clock";
 import { ATTEMPT_TIMEOUT_MS } from "../../shared/constants";
 import type { IdGenerator } from "../../shared/ids";
 import { platformAlert } from "../../shared/log";
+import { createDurableJob, createOutboxEntry } from "../durability/factory";
+import type { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const WORKER_LOST_GRACE_MS = 120_000;
 
@@ -49,9 +53,10 @@ export interface AttemptLifecycleDependencies {
   tests: BrowserTestRepo;
   workspaces: WorkspaceRepo;
   storage: Pick<ArtifactStorage, "delete">;
-  recordUsage: Pick<RecordRunUsage, "execute">;
+  recordUsage: Pick<RecordRunUsage, "buildEvent">;
   reverseUsage: Pick<ReverseRunUsage, "execute">;
-  queue: Pick<Queue<AttemptMessage>, "send">;
+  durable: DurableWorkflowRepo;
+  outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   clock: Clock;
   ids: IdGenerator;
   runFinalizedHandler: RunFinalizedHandler;
@@ -75,7 +80,8 @@ function queuedAttempt(input: {
   runId: string;
   attemptIndex: number;
   retryDelaySeconds: number;
-  now: number;
+  queuedAt: number;
+  createdAt: number;
 }): TestAttempt {
   return {
     id: input.id,
@@ -83,7 +89,7 @@ function queuedAttempt(input: {
     attemptIndex: input.attemptIndex,
     status: "QUEUED",
     retryDelaySeconds: input.retryDelaySeconds,
-    queuedAt: input.now,
+    queuedAt: input.queuedAt,
     startedAt: null,
     finishedAt: null,
     durationMs: null,
@@ -98,8 +104,27 @@ function queuedAttempt(input: {
     modelName: null,
     runnerVersion: null,
     systemErrorCode: null,
-    createdAt: input.now,
+    createdAt: input.createdAt,
   };
+}
+
+interface AttemptContinuationPayload {
+  runId: string;
+  attemptId: string;
+}
+
+interface RunFinalizationPayload {
+  runId: string;
+  reverseUsage: boolean;
+  handleFinalized?: boolean;
+}
+
+function attemptJobKey(attemptId: string, infraAttempts: number): string {
+  return `${attemptId}:${infraAttempts}`;
+}
+
+function parsePayload<T>(job: DurableJob): T {
+  return JSON.parse(job.payloadJson) as T;
 }
 
 export class AttemptLifecycle {
@@ -122,18 +147,38 @@ export class AttemptLifecycle {
       });
       return "skip";
     }
-    if (isRunTerminal(run)) return "skip";
+    if (isRunTerminal(run)) {
+      await this.resumeRunFinalization(run.id);
+      return "skip";
+    }
+    if (attempt.queuedAt !== message.executionGeneration) {
+      platformAlert("stale_attempt_message_ignored", {
+        runId: message.runId,
+        attemptId: message.attemptId,
+      });
+      return "skip";
+    }
+    const continuation = await this.dependencies.durable.findJob(
+      "ATTEMPT_CONTINUATION",
+      attemptJobKey(attempt.id, run.infraAttempts),
+    );
+    if (continuation?.status === "PENDING") {
+      await this.resumeAttemptContinuation(continuation);
+      return "skip";
+    }
     const [workspace, test] = await Promise.all([
       this.dependencies.workspaces.findById(run.workspaceId),
       run.browserTestId === null
         ? Promise.resolve(null)
         : this.dependencies.tests.findById(run.workspaceId, run.browserTestId),
     ]);
-    if (
-      workspace === null ||
-      (run.browserTestId !== null && test === null)
-    ) {
-      await this.cancelDeletedRun(run, attempt);
+    if (workspace === null || (run.browserTestId !== null && test === null)) {
+      // A QUEUED attempt has not acquired execution ownership and can be
+      // cancelled safely. Once STARTING/RUNNING, deletion must not let a
+      // redelivery terminalise work owned by the active worker.
+      if (attempt.status === "QUEUED") {
+        await this.cancelDeletedRun(run, attempt);
+      }
       return "skip";
     }
 
@@ -165,6 +210,7 @@ export class AttemptLifecycle {
     runId: string,
     attemptId: string,
     attemptIndex: number,
+    executionGeneration: number,
   ): Promise<void> {
     const [run, attempt] = await Promise.all([
       this.dependencies.runs.findByIdForExecution(runId),
@@ -175,25 +221,24 @@ export class AttemptLifecycle {
       attempt === null ||
       attempt.testRunId !== runId ||
       attempt.attemptIndex !== attemptIndex ||
+      attempt.queuedAt !== executionGeneration ||
       attempt.status !== "STARTING" ||
       isRunTerminal(run)
     ) {
       throw new Error("Attempt is no longer claimable");
     }
     const now = this.dependencies.clock.now();
-    const usageEventId =
-      run.usageEventId ??
-      (await this.dependencies.recordUsage.execute({
-        workspaceId: run.workspaceId,
-        runId: run.id,
-        occurredAt: now,
-      }));
+    const usageEvent = this.dependencies.recordUsage.buildEvent({
+      workspaceId: run.workspaceId,
+      runId: run.id,
+      occurredAt: now,
+    });
     const started = await this.dependencies.attempts.markRunning(
       attempt.id,
       run.id,
       attemptIndex,
       now,
-      usageEventId,
+      usageEvent,
     );
     if (!started) throw new Error("Attempt is no longer claimable");
   }
@@ -207,45 +252,126 @@ export class AttemptLifecycle {
       this.dependencies.runs.findByIdForExecution(run.id),
       this.dependencies.attempts.findById(attempt.id),
     ]);
-    if (
-      freshRun === null ||
-      freshAttempt === null ||
-      isRunTerminal(freshRun) ||
-      freshAttempt.finishedAt !== null
-    ) {
+    if (freshRun === null || freshAttempt === null) return;
+    if (freshAttempt.queuedAt !== attempt.queuedAt) {
+      platformAlert("stale_attempt_generation_ignored", {
+        runId: run.id,
+        attemptId: attempt.id,
+      });
       return;
     }
-    const finishedAt = this.dependencies.clock.now();
-    await this.dependencies.attempts.update(freshAttempt.id, {
-      status: outcome.status,
-      finishedAt,
-      durationMs: attemptDuration(freshAttempt, finishedAt),
-      summary: outcome.summary ?? null,
-      expectedResult: outcome.expectedResult ?? null,
-      actualResult: outcome.actualResult ?? null,
-      failureReason: outcome.failureReason ?? null,
-      visitedUrlsJson: JSON.stringify(outcome.visitedUrls),
-      consoleErrorsJson: JSON.stringify(outcome.consoleErrors),
-      networkErrorsJson: JSON.stringify(outcome.networkErrors),
-      tokenUsage: outcome.tokenUsage ?? null,
-      modelName: outcome.modelName ?? null,
-      runnerVersion: outcome.runnerVersion ?? null,
-      systemErrorCode: outcome.systemErrorCode ?? null,
-    });
-    const [currentRun, allAttempts] = await Promise.all([
-      this.dependencies.runs.findByIdForExecution(freshRun.id),
-      this.dependencies.attempts.listForRun(freshRun.id),
+    if (isRunTerminal(freshRun)) {
+      await this.resumeRunFinalization(freshRun.id);
+      return;
+    }
+    const aggregateKey = attemptJobKey(
+      freshAttempt.id,
+      freshRun.infraAttempts,
+    );
+    let job = await this.dependencies.durable.findJob(
+      "ATTEMPT_CONTINUATION",
+      aggregateKey,
+    );
+    if (job === null && freshAttempt.finishedAt === null) {
+      const finishedAt = this.dependencies.clock.now();
+      job = await this.dependencies.durable.recordAttemptCompletion({
+        attemptId: freshAttempt.id,
+        fields: {
+          status: outcome.status,
+          finishedAt,
+          durationMs: attemptDuration(freshAttempt, finishedAt),
+          summary: outcome.summary ?? null,
+          expectedResult: outcome.expectedResult ?? null,
+          actualResult: outcome.actualResult ?? null,
+          failureReason: outcome.failureReason ?? null,
+          visitedUrlsJson: JSON.stringify(outcome.visitedUrls),
+          consoleErrorsJson: JSON.stringify(outcome.consoleErrors),
+          networkErrorsJson: JSON.stringify(outcome.networkErrors),
+          tokenUsage: outcome.tokenUsage ?? null,
+          modelName: outcome.modelName ?? null,
+          runnerVersion: outcome.runnerVersion ?? null,
+          systemErrorCode: outcome.systemErrorCode ?? null,
+        },
+        job: createDurableJob({
+          kind: "ATTEMPT_CONTINUATION",
+          aggregateKey,
+          payload: {
+            runId: freshRun.id,
+            attemptId: freshAttempt.id,
+          } satisfies AttemptContinuationPayload,
+          now: finishedAt,
+          ids: this.dependencies.ids,
+        }),
+      });
+    }
+    if (job?.status === "PENDING") {
+      await this.resumeAttemptContinuation(job);
+    }
+  }
+
+  async resumePendingJobs(limit = 100): Promise<void> {
+    const jobs = await this.dependencies.durable.listPendingJobs(
+      ["ATTEMPT_CONTINUATION", "RUN_FINALIZATION"],
+      limit,
+    );
+    for (const job of jobs) {
+      try {
+        if (job.kind === "ATTEMPT_CONTINUATION") {
+          await this.resumeAttemptContinuation(job);
+        } else if (job.kind === "RUN_FINALIZATION") {
+          await this.resumeRunFinalization(job.aggregateKey);
+        }
+      } catch (error) {
+        platformAlert("durable_attempt_job_failed", {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : "unknown error",
+        });
+      }
+    }
+  }
+
+  private async resumeAttemptContinuation(job: DurableJob): Promise<void> {
+    if (job.status !== "PENDING") return;
+    const payload = parsePayload<AttemptContinuationPayload>(job);
+    const [currentRun, currentAttempt, allAttempts] = await Promise.all([
+      this.dependencies.runs.findByIdForExecution(payload.runId),
+      this.dependencies.attempts.findById(payload.attemptId),
+      this.dependencies.attempts.listForRun(payload.runId),
     ]);
-    if (currentRun === null || isRunTerminal(currentRun)) return;
+    if (currentRun === null || currentAttempt === null) {
+      platformAlert("attempt_continuation_missing", {
+        jobId: job.id,
+        runId: payload.runId,
+        attemptId: payload.attemptId,
+      });
+      return;
+    }
+    if (isRunTerminal(currentRun)) {
+      await this.resumeRunFinalization(currentRun.id);
+      await this.dependencies.durable.completeJob(
+        job.id,
+        this.dependencies.clock.now(),
+      );
+      return;
+    }
+    if (
+      currentAttempt.finishedAt === null ||
+      (currentAttempt.status !== "PASSED" &&
+        currentAttempt.status !== "FAILED" &&
+        currentAttempt.status !== "TIMEOUT" &&
+        currentAttempt.status !== "SYSTEM_ERROR")
+    ) {
+      throw new Error("Attempt continuation has no completed outcome");
+    }
     const action = decideAfterAttempt({
-      attemptIndex: freshAttempt.attemptIndex,
-      attemptStatus: outcome.status,
+      attemptIndex: currentAttempt.attemptIndex,
+      attemptStatus: currentAttempt.status,
       maxRetries: currentRun.snapshot.maxRetries,
       infraAttempts: currentRun.infraAttempts,
       priorFunctionalStatuses: allAttempts
         .filter(
           (candidate) =>
-            candidate.id !== freshAttempt.id &&
+            candidate.id !== currentAttempt.id &&
             (candidate.status === "FAILED" || candidate.status === "TIMEOUT"),
         )
         .map((candidate) =>
@@ -255,19 +381,21 @@ export class AttemptLifecycle {
     });
 
     if (action.kind === "retry") {
-      await this.scheduleFunctionalRetry(currentRun, action);
+      await this.scheduleFunctionalRetry(job, currentRun, action);
       return;
     }
     if (action.kind === "infra_retry") {
       await this.scheduleInfrastructureRetry(
+        job,
         currentRun,
-        freshAttempt,
+        currentAttempt,
         allAttempts.length,
         action.delaySeconds,
       );
       return;
     }
     const attemptCount = allAttempts.length;
+    const finishedAt = currentAttempt.finishedAt;
     const finalChanges = {
       status: action.runStatus,
       finishedAt,
@@ -276,18 +404,28 @@ export class AttemptLifecycle {
       passedAfterRetry: action.passedAfterRetry,
       billable: !action.reverseUsage,
     } as const;
-    await this.dependencies.runs.finalize(currentRun.id, finalChanges);
-    if (action.reverseUsage) {
-      await this.dependencies.reverseUsage.execute({ runId: currentRun.id });
-    }
-    const finalizedRun: TestRun = { ...currentRun, ...finalChanges };
-    await this.dependencies.runFinalizedHandler.handle(
-      finalizedRun,
-      finalizedRun.snapshot,
-    );
+    const finalizationJob = createDurableJob({
+      kind: "RUN_FINALIZATION",
+      aggregateKey: currentRun.id,
+      payload: {
+        runId: currentRun.id,
+        reverseUsage: action.reverseUsage,
+      } satisfies RunFinalizationPayload,
+      now: finishedAt,
+      ids: this.dependencies.ids,
+    });
+    await this.dependencies.durable.finalizeRun({
+      jobId: job.id,
+      runId: currentRun.id,
+      changes: finalChanges,
+      finalizationJob,
+      at: finishedAt,
+    });
+    await this.resumeRunFinalization(currentRun.id);
   }
 
   private async scheduleFunctionalRetry(
+    job: DurableJob,
     run: TestRun,
     action: Extract<
       ReturnType<typeof decideAfterAttempt>,
@@ -295,6 +433,7 @@ export class AttemptLifecycle {
     >,
   ): Promise<void> {
     const now = this.dependencies.clock.now();
+    const availableAt = now + action.delaySeconds * 1_000;
     let nextAttempt = await this.dependencies.attempts.findByRunAndIndex(
       run.id,
       action.nextIndex,
@@ -305,55 +444,107 @@ export class AttemptLifecycle {
         runId: run.id,
         attemptIndex: action.nextIndex,
         retryDelaySeconds: action.delaySeconds,
-        now,
+        queuedAt: availableAt,
+        createdAt: now,
       });
-      await this.dependencies.attempts.insert(nextAttempt);
     }
-    const attemptCount = (await this.dependencies.attempts.listForRun(run.id))
-      .length;
-    await this.dependencies.runs.setAttemptCount(run.id, attemptCount);
-    await this.dependencies.queue.send(
-      {
-        kind: "attempt",
-        runId: run.id,
-        attemptId: nextAttempt.id,
-        attemptIndex: nextAttempt.attemptIndex,
-      },
-      { delaySeconds: action.delaySeconds },
-    );
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: run.id,
+      attemptId: nextAttempt.id,
+      attemptIndex: nextAttempt.attemptIndex,
+      executionGeneration: nextAttempt.queuedAt,
+    };
+    const outbox = createOutboxEntry({
+      dedupeKey: `attempt:${nextAttempt.id}:functional`,
+      queueKind: "RUN",
+      payload: message,
+      availableAt,
+      now,
+      ids: this.dependencies.ids,
+    });
+    await this.dependencies.durable.scheduleFunctionalRetry({
+      jobId: job.id,
+      runId: run.id,
+      nextAttempt,
+      outbox,
+      at: now,
+    });
+    await this.publishDeferred(outbox.id, "functional_retry_publish_deferred");
   }
 
   private async scheduleInfrastructureRetry(
+    job: DurableJob,
     run: TestRun,
     attempt: TestAttempt,
     attemptCount: number,
     delaySeconds: number,
   ): Promise<void> {
-    await this.dependencies.runs.incrementInfraAttempts(run.id);
-    await this.dependencies.runs.setAttemptCount(run.id, attemptCount);
     const screenshots = (
       await this.dependencies.artifacts.listForAttempt(attempt.id)
     ).filter((artifact) => artifact.type === "SCREENSHOT");
-    await this.dependencies.steps.deleteForAttempt(attempt.id);
     await this.dependencies.storage.delete(
       screenshots.map((artifact) => artifact.storageKey),
     );
-    await this.dependencies.artifacts.deleteByIds(
-      screenshots.map((artifact) => artifact.id),
+    const now = this.dependencies.clock.now();
+    const availableAt = now + delaySeconds * 1_000;
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: run.id,
+      attemptId: attempt.id,
+      attemptIndex: attempt.attemptIndex,
+      executionGeneration: availableAt,
+    };
+    const outbox = createOutboxEntry({
+      dedupeKey: `attempt:${attempt.id}:infra:${run.infraAttempts + 1}`,
+      queueKind: "RUN",
+      payload: message,
+      availableAt,
+      now,
+      ids: this.dependencies.ids,
+    });
+    await this.dependencies.durable.scheduleInfrastructureRetry({
+      jobId: job.id,
+      runId: run.id,
+      attemptId: attempt.id,
+      attemptCount,
+      queuedAt: availableAt,
+      artifactIds: screenshots.map((artifact) => artifact.id),
+      outbox,
+      at: now,
+    });
+    await this.publishDeferred(outbox.id, "infra_retry_publish_deferred");
+  }
+
+  private async resumeRunFinalization(runId: string): Promise<void> {
+    const job = await this.dependencies.durable.findJob(
+      "RUN_FINALIZATION",
+      runId,
     );
-    await this.dependencies.attempts.resetForInfraRetry(
-      attempt.id,
+    if (job === null || job.status !== "PENDING") return;
+    const payload = parsePayload<RunFinalizationPayload>(job);
+    const run = await this.dependencies.runs.findByIdForExecution(runId);
+    if (run === null || !isRunTerminal(run)) {
+      throw new Error("Run finalization has no terminal run");
+    }
+    if (payload.reverseUsage) {
+      await this.dependencies.reverseUsage.execute({ runId });
+    }
+    if (payload.handleFinalized !== false) {
+      await this.dependencies.runFinalizedHandler.handle(run, run.snapshot);
+    }
+    await this.dependencies.durable.completeJob(
+      job.id,
       this.dependencies.clock.now(),
     );
-    await this.dependencies.queue.send(
-      {
-        kind: "attempt",
-        runId: run.id,
-        attemptId: attempt.id,
-        attemptIndex: attempt.attemptIndex,
-      },
-      { delaySeconds },
-    );
+  }
+
+  private async publishDeferred(outboxId: string, alert: string): Promise<void> {
+    try {
+      await this.dependencies.outboxPublisher.publishById(outboxId);
+    } catch {
+      platformAlert(alert, { outboxId });
+    }
   }
 
   private async cancelDeletedRun(
@@ -361,30 +552,66 @@ export class AttemptLifecycle {
     attempt: TestAttempt,
   ): Promise<void> {
     const finishedAt = this.dependencies.clock.now();
-    await this.dependencies.attempts.update(attempt.id, {
-      status: "SYSTEM_ERROR",
-      finishedAt,
-      durationMs: attemptDuration(attempt, finishedAt),
-      summary: null,
-      expectedResult: null,
-      actualResult: null,
-      failureReason: null,
-      visitedUrlsJson: "[]",
-      consoleErrorsJson: "[]",
-      networkErrorsJson: "[]",
-      tokenUsage: null,
-      systemErrorCode: "CANCELLED",
-    });
+    const aggregateKey = attemptJobKey(attempt.id, run.infraAttempts);
+    let job = await this.dependencies.durable.findJob(
+      "ATTEMPT_CONTINUATION",
+      aggregateKey,
+    );
+    if (job === null) {
+      job = await this.dependencies.durable.recordAttemptCompletion({
+        attemptId: attempt.id,
+        fields: {
+          status: "SYSTEM_ERROR",
+          finishedAt,
+          durationMs: attemptDuration(attempt, finishedAt),
+          summary: null,
+          expectedResult: null,
+          actualResult: null,
+          failureReason: null,
+          visitedUrlsJson: "[]",
+          consoleErrorsJson: "[]",
+          networkErrorsJson: "[]",
+          tokenUsage: null,
+          modelName: null,
+          runnerVersion: null,
+          systemErrorCode: "CANCELLED",
+        },
+        job: createDurableJob({
+          kind: "ATTEMPT_CONTINUATION",
+          aggregateKey,
+          payload: { runId: run.id, attemptId: attempt.id },
+          now: finishedAt,
+          ids: this.dependencies.ids,
+        }),
+      });
+    }
+    if (job.status !== "PENDING") {
+      await this.resumeRunFinalization(run.id);
+      return;
+    }
     const attemptCount = (await this.dependencies.attempts.listForRun(run.id))
       .length;
-    await this.dependencies.runs.finalize(run.id, {
+    const finalizationJob = createDurableJob({
+      kind: "RUN_FINALIZATION",
+      aggregateKey: run.id,
+      payload: { runId: run.id, reverseUsage: true, handleFinalized: false },
+      now: finishedAt,
+      ids: this.dependencies.ids,
+    });
+    await this.dependencies.durable.finalizeRun({
+      jobId: job.id,
+      runId: run.id,
+      changes: {
       status: "SYSTEM_ERROR",
       finishedAt,
       durationMs: computeRunDuration(run.queuedAt, finishedAt),
       attemptCount,
       passedAfterRetry: false,
       billable: false,
+      },
+      finalizationJob,
+      at: finishedAt,
     });
-    await this.dependencies.reverseUsage.execute({ runId: run.id });
+    await this.resumeRunFinalization(run.id);
   }
 }

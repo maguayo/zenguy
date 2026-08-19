@@ -1,5 +1,6 @@
 import type {
   OverageReport,
+  PendingOveragePeriod,
   Subscription,
   UsageEvent,
 } from "./types";
@@ -10,7 +11,11 @@ export interface SubscriptionRepo {
   upsertByWorkspace(subscription: Subscription): Promise<void>;
   findByWorkspace(workspaceId: string): Promise<Subscription | null>;
   findByProviderSubscriptionId(id: string): Promise<Subscription | null>;
-  listPeriodEnded(before: number, limit: number): Promise<Subscription[]>;
+  listPeriodEnded(
+    before: number,
+    limit: number,
+    after?: { periodEnd: number; id: string },
+  ): Promise<Subscription[]>;
 }
 
 export interface UsageEventRepo {
@@ -26,10 +31,29 @@ export interface UsageEventRepo {
 
 export interface OverageReportRepo {
   insertIfAbsent(report: OverageReport): Promise<InsertResult>;
-  existsFor(workspaceId: string, periodStart: number): Promise<boolean>;
-  setPaddleTransactionId(
+  findFor(
+    workspaceId: string,
+    periodStart: number,
+  ): Promise<OverageReport | null>;
+  beginAttempt(
+    id: string,
+    at: number,
+  ): Promise<boolean>;
+  markCompleted(
     id: string,
     transactionId: string | null,
+    at: number,
   ): Promise<void>;
-  deleteById(id: string): Promise<void>;
+}
+
+export interface PendingOveragePeriodRepo {
+  insertIfAbsent(period: PendingOveragePeriod): Promise<InsertResult>;
+  list(limit: number): Promise<PendingOveragePeriod[]>;
+  listReady(at: number, limit: number): Promise<PendingOveragePeriod[]>;
+  rescheduleFor(
+    workspaceId: string,
+    periodStart: number,
+    nextAttemptAt: number,
+  ): Promise<void>;
+  deleteFor(workspaceId: string, periodStart: number): Promise<void>;
 }

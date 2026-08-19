@@ -18,6 +18,8 @@ export interface Subscription {
   cancelUrl: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Provider event time used to reject stale/out-of-order Paddle webhooks. */
+  lastProviderEventAt?: number | null;
 }
 
 export interface UsageEvent {
@@ -42,4 +44,21 @@ export interface OverageReport {
   amountCents: number;
   paddleTransactionId: string | null;
   reportedAt: number;
+  state: "PENDING" | "AMBIGUOUS" | "COMPLETED";
+  providerMarker: string | null;
+  attemptStartedAt: number | null;
+  completedAt: number | null;
+  /** Paddle subscription pinned before the first external charge attempt. */
+  providerSubscriptionId: string | null;
+}
+
+export interface PendingOveragePeriod {
+  workspaceId: string;
+  periodStart: number;
+  periodEnd: number;
+  createdAt: number;
+  /** Paddle subscription that owned this billing period at rollover time. */
+  providerSubscriptionId: string | null;
+  nextAttemptAt: number;
+  attemptCount: number;
 }

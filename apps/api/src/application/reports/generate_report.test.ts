@@ -349,4 +349,24 @@ describe("GenerateReport", () => {
     expect(value.resolveSecrets.calls).toEqual([]);
     expect(value.storage.objects.size).toBe(0);
   });
+
+  it("converges concurrent finalization resumes on one report artifact", async () => {
+    const value = await fixture();
+    await value.attempts.insert(ATTEMPT_ZERO);
+    await value.attempts.insert(ATTEMPT_ONE);
+
+    const reports = await Promise.all([
+      value.generator.generateForRun(RUN),
+      value.generator.generateForRun(RUN),
+    ]);
+
+    expect(reports[0]).not.toBeNull();
+    expect(reports[1]?.id).toBe(reports[0]?.id);
+    expect(
+      [...value.artifacts.artifacts.values()].filter(
+        (artifact) => artifact.type === "MARKDOWN_REPORT",
+      ),
+    ).toHaveLength(1);
+    expect(value.storage.objects.size).toBe(1);
+  });
 });

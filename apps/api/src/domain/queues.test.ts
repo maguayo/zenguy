@@ -40,12 +40,14 @@ describe("attemptMessageSchema", () => {
         runId: "run_1",
         attemptId: "att_1",
         attemptIndex: 0,
+        executionGeneration: 1_700_000_000_000,
       }),
     ).toEqual({
       kind: "attempt",
       runId: "run_1",
       attemptId: "att_1",
       attemptIndex: 0,
+      executionGeneration: 1_700_000_000_000,
     });
     expect(
       attemptMessageSchema.safeParse({
@@ -53,6 +55,7 @@ describe("attemptMessageSchema", () => {
         runId: "run_1",
         attemptId: "att_1",
         attemptIndex: 4,
+        executionGeneration: 1_700_000_000_000,
       }).success,
     ).toBe(false);
   });

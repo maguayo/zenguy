@@ -289,7 +289,7 @@ describe("runAgentAttempt", () => {
     );
   });
 
-  it("substitutes a secret only on its allowed domain and never exposes the value", async () => {
+  it("keeps a secret-bearing attempt screenshot-free even when a normal input reflects the value", async () => {
     const secretValue = "ultra-secret-password";
     const secrets: ResolvedSecrets = new Map([
       [
@@ -303,7 +303,7 @@ describe("runAgentAttempt", () => {
       {
         i: 12,
         tag: "input",
-        type: "password",
+        type: "text",
         text: "",
         aria: "Password",
         href: null,
@@ -339,6 +339,11 @@ describe("runAgentAttempt", () => {
     expect(test.llm.inputs.every((input) => !input.userText.includes(secretValue))).toBe(
       true,
     );
+    expect(
+      test.llm.inputs.every((input) => input.screenshotJpegBase64 === null),
+    ).toBe(true);
+    expect(result.steps.every((step) => step.screenshotJpeg === null)).toBe(true);
+    expect(session.screenshotCalls).toBe(0);
     expect(test.llm.inputs[1]?.userText).toContain(
       "Page text: Account value: {{SHOP_PASSWORD}}",
     );
@@ -465,7 +470,7 @@ describe("runAgentAttempt", () => {
     expect(result.steps[0]?.description).not.toContain(literal);
   });
 
-  it("checks the deadline again after an in-flight action and returns TIMEOUT", async () => {
+  it("checks the deadline again after an in-flight model call and returns TIMEOUT", async () => {
     const clock = new FixedClock(20_000);
     const deadlineAt = deadline(clock);
     const test = harness({
@@ -487,7 +492,31 @@ describe("runAgentAttempt", () => {
       failureReason: "Attempt timed out after 5 minutes",
       tokensUsed: 4,
     });
-    expect(result.steps).toHaveLength(1);
+    expect(result.steps).toHaveLength(0);
+    expect(test.session.clicks).toHaveLength(0);
+  });
+
+  it("rejects a finish decision returned after the five-minute deadline", async () => {
+    const clock = new FixedClock(20_000);
+    const deadlineAt = deadline(clock);
+    const test = harness({
+      clock,
+      decisions: [{ action: finish(), tokensUsed: 7 }],
+      beforeReturn: () => clock.advance(ATTEMPT_TIMEOUT_MS),
+    });
+
+    const result = await runAgentAttempt(test.dependencies, {
+      snapshot,
+      deadlineAt,
+    });
+
+    expect(result).toMatchObject({
+      status: "TIMEOUT",
+      summary: "Attempt exceeded the 5 minute limit",
+      failureReason: "Attempt timed out after 5 minutes",
+      tokensUsed: 7,
+    });
+    expect(result.steps).toEqual([]);
   });
 
   it("fails after exactly forty actions without a finish decision", async () => {

@@ -324,7 +324,7 @@ describe("channel routes", () => {
       message: { eventType: "TEST", color: "gray" },
     });
 
-    sender.failure = new Error("provider unavailable");
+    sender.failure = new Error(`provider echoed ${WEBHOOK_URL}`);
     const failed = await app.request(
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}/test`,
       { method: "POST", headers: headers("owner") },
@@ -337,7 +337,7 @@ describe("channel routes", () => {
         delivery: {
           status: "FAILED",
           attemptCount: 1,
-          errorSanitized: "provider unavailable",
+          errorSanitized: "provider echoed {{CHANNEL_CONFIG_2}}",
         },
       },
     });
@@ -356,6 +356,7 @@ describe("channel routes", () => {
       "FAILED",
       "SENT",
     ]);
+    expect(JSON.stringify(storedDeliveries)).not.toContain(WEBHOOK_URL);
 
     const firstPage = await app.request(
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}/deliveries?limit=1`,

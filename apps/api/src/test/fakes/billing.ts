@@ -21,12 +21,20 @@ export class RecordingPaddleClient implements PaddleClient {
     subscriptionId: string;
     priceId: string;
     quantity: number;
+    marker: string;
   }[] = [];
   readonly cancellations: string[] = [];
   readonly transactionLists: { subscriptionId: string; limit: number }[] = [];
+  readonly subscriptionChargeLookups: {
+    subscriptionId: string;
+    marker: string;
+  }[] = [];
   readonly managementUrlRequests: string[] = [];
   readonly invoiceRequests: string[] = [];
   chargeResult: { transactionId: string | null } = { transactionId: null };
+  chargeFailure: Error | null = null;
+  acceptChargeBeforeFailure = false;
+  readonly subscriptionCharges = new Map<string, string>();
   transactions: BilledTransaction[] = [];
   managementUrls: SubscriptionManagementUrls = {
     updatePaymentMethodUrl: "https://example.com/update-payment-method",
@@ -41,14 +49,44 @@ export class RecordingPaddleClient implements PaddleClient {
     if (this.failure !== null) throw this.failure;
   }
 
+  private subscriptionChargeKey(subscriptionId: string, marker: string): string {
+    return JSON.stringify([subscriptionId, marker]);
+  }
+
   async createOneTimeCharge(
     subscriptionId: string,
     priceId: string,
     quantity: number,
+    marker: string,
   ): Promise<{ transactionId: string | null }> {
-    this.charges.push({ subscriptionId, priceId, quantity });
+    this.charges.push({ subscriptionId, priceId, quantity, marker });
     this.failIfConfigured();
+    if (this.acceptChargeBeforeFailure) {
+      this.subscriptionCharges.set(
+        this.subscriptionChargeKey(subscriptionId, marker),
+        `txn_accepted_${String(this.charges.length).padStart(4, "0")}`,
+      );
+    }
+    if (this.chargeFailure !== null) throw this.chargeFailure;
+    if (this.chargeResult.transactionId !== null) {
+      this.subscriptionCharges.set(
+        this.subscriptionChargeKey(subscriptionId, marker),
+        this.chargeResult.transactionId,
+      );
+    }
     return { ...this.chargeResult };
+  }
+
+  async findSubscriptionChargeByMarker(
+    subscriptionId: string,
+    marker: string,
+  ): Promise<{ transactionId: string } | null> {
+    this.subscriptionChargeLookups.push({ subscriptionId, marker });
+    this.failIfConfigured();
+    const transactionId = this.subscriptionCharges.get(
+      this.subscriptionChargeKey(subscriptionId, marker),
+    );
+    return transactionId === undefined ? null : { transactionId };
   }
 
   async cancelSubscription(subscriptionId: string): Promise<void> {

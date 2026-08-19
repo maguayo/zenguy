@@ -1,10 +1,12 @@
 import { decryptMonitorSensitive, encryptMonitorSensitive } from "../../application/uptime/monitor_secrets";
 import type { Incident } from "../../domain/incidents/types";
+import type { DurableJob } from "../../domain/durability/types";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1CheckRepo } from "./check_repo";
 import { D1IncidentRepo } from "./incident_repo";
 import { D1MonitorRepo } from "./monitor_repo";
+import { D1DurableWorkflowRepo } from "./durable_workflow_repo";
 
 const KEY = new Uint8Array(32).fill(5);
 const RAW_HEADER = "Bearer database-secret";
@@ -155,14 +157,37 @@ describe("D1 uptime repositories", () => {
       repo.openCycle(value.id, "cyc_second", 1_001),
     ]);
     expect(results.sort()).toEqual([false, true]);
+    const opened = await repo.findById(value.workspaceId, value.id);
+    const owningCycle = opened?.currentCycleId;
+    if (owningCycle === null || owningCycle === undefined) {
+      throw new Error("cycle owner missing");
+    }
     await expect(repo.listZombieCycles(1_100)).resolves.toMatchObject([
       { id: value.id, currentCycleId: expect.stringMatching(/^cyc_/u) },
     ]);
-    await repo.closeCycle(value.id, {
-      status: "DOWN",
-      lastCheckAt: 2_000,
-      lastResponseTimeMs: 750,
-    });
+    await expect(repo.clearCycle(value.id, "cyc_stale")).resolves.toBe(false);
+    await expect(
+      repo.closeCycle(
+        value.id,
+        {
+          status: "DOWN",
+          lastCheckAt: 2_000,
+          lastResponseTimeMs: 750,
+        },
+        "cyc_stale",
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      repo.closeCycle(
+        value.id,
+        {
+          status: "DOWN",
+          lastCheckAt: 2_000,
+          lastResponseTimeMs: 750,
+        },
+        owningCycle,
+      ),
+    ).resolves.toBe(true);
     await expect(repo.findById(value.workspaceId, value.id)).resolves.toMatchObject({
       currentStatus: "DOWN",
       currentCycleId: null,
@@ -175,6 +200,64 @@ describe("D1 uptime repositories", () => {
       down: 1,
       unknown: 0,
     });
+  });
+
+  it("leases a check execution before persisting its outcome and continuation", async () => {
+    const monitorValue = monitor("mon_check_lease");
+    await new D1MonitorRepo(testEnv().DB).insert(monitorValue);
+    const durable = new D1DurableWorkflowRepo(testEnv().DB);
+    const claim = {
+      cycleId: "cyc_check_lease",
+      attemptIndex: 0,
+      claimedAt: 1_000,
+      staleBefore: 0,
+    };
+
+    await expect(
+      durable.claimCheckExecution({ ...claim, claimToken: "job_owner" }),
+    ).resolves.toBe("claimed");
+    await expect(
+      durable.claimCheckExecution({ ...claim, claimToken: "job_concurrent" }),
+    ).resolves.toBe("busy");
+
+    const persistedCheck = check({
+      id: "chk_leased",
+      monitorId: monitorValue.id,
+      cycleId: claim.cycleId,
+      attemptIndex: claim.attemptIndex,
+      checkedAt: 2_000,
+    });
+    const job: DurableJob = {
+      id: "job_check_continuation",
+      kind: "CHECK_CONTINUATION",
+      aggregateKey: persistedCheck.id,
+      payloadJson: JSON.stringify({
+        workspaceId: persistedCheck.workspaceId,
+        monitorId: persistedCheck.uptimeMonitorId,
+        cycleId: persistedCheck.cycleId,
+        attemptIndex: persistedCheck.attemptIndex,
+        checkId: persistedCheck.id,
+        failureSummary: null,
+      }),
+      status: "PENDING",
+      createdAt: 2_000,
+      updatedAt: 2_000,
+      completedAt: null,
+    };
+    await expect(
+      durable.insertCheckWithJob(persistedCheck, job, "job_owner"),
+    ).resolves.toBe("inserted");
+    await expect(
+      durable.claimCheckExecution({
+        ...claim,
+        claimToken: "job_after_completion",
+        claimedAt: 3_000,
+        staleBefore: 3_000,
+      }),
+    ).resolves.toBe("completed");
+    await expect(
+      durable.findJob("CHECK_CONTINUATION", persistedCheck.id),
+    ).resolves.toMatchObject({ id: job.id, status: "PENDING" });
   });
 
   it("deduplicates checks and provides paginated, chronological, aggregate, and purge reads", async () => {

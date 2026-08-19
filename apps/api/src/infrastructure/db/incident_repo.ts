@@ -175,6 +175,34 @@ export class D1IncidentRepo implements IncidentRepo {
     return row === null ? null : toIncident(row);
   }
 
+  async findByRunSource(runId: string): Promise<Incident | null> {
+    const row = await one<IncidentRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM incidents
+           WHERE opened_by_run_id = ? OR resolved_by_run_id = ?
+           ORDER BY CASE WHEN resolved_by_run_id = ? THEN 0 ELSE 1 END, created_at DESC
+           LIMIT 1`,
+        )
+        .bind(runId, runId, runId),
+    );
+    return row === null ? null : toIncident(row);
+  }
+
+  async findByCheckSource(checkId: string): Promise<Incident | null> {
+    const row = await one<IncidentRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM incidents
+           WHERE opened_by_check_id = ? OR resolved_by_check_id = ?
+           ORDER BY CASE WHEN resolved_by_check_id = ? THEN 0 ELSE 1 END, created_at DESC
+           LIMIT 1`,
+        )
+        .bind(checkId, checkId, checkId),
+    );
+    return row === null ? null : toIncident(row);
+  }
+
   async listOverlappingMonitor(
     monitorId: string,
     fromMs: number,

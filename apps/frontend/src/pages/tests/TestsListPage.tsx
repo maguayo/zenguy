@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { Download, MoreHorizontal, Plus, Upload } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { deleteTest, listTests } from "../../api/tests";
+import {
+  deleteTest,
+  exportTests,
+  importTests,
+  listTests,
+  type ExportFormat,
+  type ImportTestsSummary,
+} from "../../api/tests";
 import type { BrowserTest } from "../../api/types";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Dropdown, type DropdownItem } from "../../components/ui/Dropdown";
@@ -18,9 +26,29 @@ import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
+import { ApiError } from "../../lib/api";
+import { saveBlob } from "../../lib/download";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatInterval, formatRelative } from "../../lib/format";
 import { isActiveRun, useRunNow } from "./hooks";
+
+export function importSummaryMessage(
+  summary: Pick<ImportTestsSummary, "created" | "updated">,
+): string {
+  return `Import complete: ${summary.created} created, ${summary.updated} updated`;
+}
+
+export function importErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.details && error.details.length > 0) {
+    const shown = error.details
+      .slice(0, 3)
+      .map((detail) => `${detail.field}: ${detail.message}`)
+      .join("; ");
+    const remaining = error.details.length - 3;
+    return remaining > 0 ? `${shown} (+${remaining} more)` : shown;
+  }
+  return apiErrorMessage(error);
+}
 
 function TestActions({ test }: { test: BrowserTest }) {
   const navigate = useNavigate();
@@ -162,25 +190,99 @@ export function testColumns(workspaceId: string): TableColumn<BrowserTest>[] {
 
 export default function TestsListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const handleMutationError = useMutationError();
   const { can, current } = useWorkspace();
+  const fileInput = useRef<HTMLInputElement>(null);
   const tests = useQuery({
     queryFn: () => listTests(current.id),
     queryKey: ["ws", current.id, "tests"],
   });
   const columns = testColumns(current.id);
+  const importFile = useMutation({
+    mutationFn: (text: string) => importTests(current.id, text),
+  });
+
+  const runImport = async (file: File) => {
+    try {
+      const summary = await importFile.mutateAsync(await file.text());
+      await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
+      toast.success(importSummaryMessage(summary));
+    } catch (error) {
+      if (!handleMutationError(error)) toast.error(importErrorMessage(error));
+    }
+  };
+
+  const runExport = async (format: ExportFormat) => {
+    try {
+      const { blob, filename } = await exportTests(current.id, format);
+      saveBlob(blob, filename);
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
+  };
+
+  const canManage = can("tests.manage");
+  const hasTests = (tests.data?.length ?? 0) > 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
-          can("tests.manage") ? (
-            <Link
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
-              to={`/w/${current.id}/tests/new`}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              New test
-            </Link>
+          canManage || hasTests ? (
+            <div className="flex items-center gap-2">
+              {hasTests ? (
+                <Dropdown
+                  align="end"
+                  items={[
+                    {
+                      label: "Export as YAML",
+                      onSelect: () => void runExport("yaml"),
+                    },
+                    {
+                      label: "Export as JSON",
+                      onSelect: () => void runExport("json"),
+                    },
+                  ]}
+                  trigger={
+                    <Button>
+                      <Download aria-hidden="true" className="size-4" />
+                      Export
+                    </Button>
+                  }
+                />
+              ) : null}
+              {canManage ? (
+                <>
+                  <input
+                    ref={fileInput}
+                    accept=".yaml,.yml,.json"
+                    className="hidden"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void runImport(file);
+                    }}
+                  />
+                  <Button
+                    loading={importFile.isPending}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    <Upload aria-hidden="true" className="size-4" />
+                    Import
+                  </Button>
+                  <Link
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
+                    to={`/w/${current.id}/tests/new`}
+                  >
+                    <Plus aria-hidden="true" className="size-4" />
+                    New test
+                  </Link>
+                </>
+              ) : null}
+            </div>
           ) : undefined
         }
         title="Browser Tests"
