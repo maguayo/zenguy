@@ -4,7 +4,7 @@
 
 **Goal:** Build the complete Zenguy V1 backend: a multi-tenant SaaS API for natural-language browser tests (LLM agent driving a real browser) and simple HTTP uptime monitors, with workspaces, RBAC, Paddle billing (39 €/month, 300 runs included, 0.20 €/extra run), incidents, notifications (Email/SMS/WhatsApp/Call/Slack/Discord), encrypted secrets, evidence artifacts, and Markdown failure reports.
 
-**Architecture (fixed):** One Cloudflare Worker (`apps/api`) built with **Hono + TypeScript** exposes the REST API under `/api/*`, serves the built React SPA as static assets for all other paths, consumes **Cloudflare Queues** (browser attempts, uptime checks, notification sends), and runs **Cron Triggers** (scheduler, retention purge, hourly maintenance). Data in **D1** (SQLite), cache/rate-limits in **KV**, screenshots/reports in **R2**, browsers via **Browser Rendering** (`@cloudflare/puppeteer`), LLM via the **OpenAI Responses API**. Payments via **Paddle Billing** (the spec mentions Stripe; Paddle is the final decision per `PROJECT.md` §0). The spec's "Python browser-use worker" (§21) is replaced by a TypeScript agent loop on Browser Rendering — same contract, same semantics.
+**Architecture (fixed):** Cloudflare Pages serves the React SPA from `apps/frontend` on `app.zenguy.com` (production) and `staging-app.zenguy.com` (staging). Matching `apps/api` Cloudflare Worker environments, built with **Hono + TypeScript**, intercept only `/api/*` on those hostnames through zone Worker Routes; the Worker does not serve frontend assets or own either complete hostname. The API consumes **Cloudflare Queues** (browser attempts, uptime checks, notification sends) and runs **Cron Triggers** (scheduler, retention purge, hourly maintenance). Staging and production have independent **D1**, **KV**, **R2**, Queues, and secrets. Browsers use **Browser Rendering** (`@cloudflare/puppeteer`) and the LLM uses the **OpenAI Responses API**. Payments use **Paddle Billing**: Sandbox in staging and Live in production. The spec's "Python browser-use worker" (§21) is replaced by a TypeScript agent loop on Browser Rendering — same contract, same semantics.
 
 **Clean architecture (mandatory):** use-case design. One file per use case under `src/application/<module>/<use_case>.ts` (e.g. `application/browser_tests/create_browser_test.ts`). Never a giant `service.ts`. Layers:
 
@@ -16,7 +16,7 @@
 
 **Spec:** `PROJECT.md` (repo root). Read §5 (concepts), §10 (browser tests), §15 (incidents), §24 (edge cases) before starting Phase 8.
 
-**Companion doc:** `TASKS_FRONTEND.md` (built by another agent). The API contract in its Appendix A is the same contract defined task-by-task here — do not change routes/shapes without updating both files. Backend owns `apps/api/**` and the repo root files. **Never modify `apps/frontend/**` or `apps/landing/**`.**
+**Companion doc:** `TASKS_FRONTEND.md` (built by another agent). The API contract in its Appendix A is the same contract defined task-by-task here — do not change routes/shapes without updating both files. Backend owns `apps/api/**` and the repo root files. **Never modify `apps/frontend/**` or `apps/website/**`.**
 
 ---
 
@@ -50,7 +50,7 @@
 - Token limit: nominal **200,000 tokens/attempt** — record usage, expose constant, do **not** hard-enforce in V1.
 - Retention: **30 days** for runs, attempts, artifacts, checks, delivery details. Billing data (usage events, overage reports, subscriptions) is kept and **never purged**.
 - `SYSTEM_ERROR` never opens a customer incident and never alerts customer channels; it must alert Zenguy internally (structured `platform_alert` log).
-- No marketing site, no status pages, no pause state, no cron expressions, no custom viewports in V1 (§29).
+- No additional marketing surface beyond the static `apps/website` Pages project, no status pages, no pause state, no user-defined cron expressions, and no custom viewports in V1 (§29).
 
 ---
 
@@ -67,7 +67,7 @@ zenguy/
 ├── .gitignore
 ├── .editorconfig
 └── apps/
-    ├── api/                  ← THIS PLAN. Hono Worker: API + queues + crons + serves SPA
+    ├── api/                  ← THIS PLAN. Hono Worker: /api/* + queues + crons
     │   ├── wrangler.jsonc
     │   ├── package.json
     │   ├── tsconfig.json
@@ -85,8 +85,8 @@ zenguy/
     │       ├── infrastructure/ (db/, email/, paddle/, twilio/, llm/, browser/, storage/, container.ts)
     │       ├── http/       (middleware/, routes/, presenters/, cookies.ts, sse.ts)
     │       └── test/       (fakes/, fixtures/, helpers)
-    ├── frontend/             ← frontend agent's territory (do not touch)
-    └── landing/              ← frontend agent's territory (do not touch)
+    ├── frontend/             ← React app on Cloudflare Pages (do not touch)
+    └── website/              ← public Astro site on Cloudflare Pages (do not touch)
 ```
 
 ---
@@ -160,20 +160,18 @@ export default defineConfig({
 - [x] Verify `pnpm --filter @zenguy/api typecheck` passes. Commit.
 
 ### BE-003: Cloudflare resources & wrangler.jsonc
-- [x] Create the Cloudflare resources (run these once; paste resulting IDs into `wrangler.jsonc`):
-  - `wrangler d1 create zenguy-db`
-  - `wrangler kv namespace create zenguy-kv`
-  - `wrangler r2 bucket create zenguy-artifacts`
-  - `wrangler queues create zenguy-runs` / `zenguy-runs-dlq` / `zenguy-checks` / `zenguy-checks-dlq` / `zenguy-notify` / `zenguy-notify-dlq`
+- [x] Create isolated Cloudflare resources for both deployed environments (run once; paste the D1/KV IDs into their matching `wrangler.jsonc` environment):
+  - Production: `zenguy-db`, `zenguy-kv`, `zenguy-artifacts`, plus `zenguy-runs`, `zenguy-checks`, `zenguy-notify` and each matching `-dlq` Queue.
+  - Staging: `zenguy-staging-db`, `zenguy-staging-kv`, `zenguy-staging-artifacts`, plus `zenguy-staging-runs`, `zenguy-staging-checks`, `zenguy-staging-notify` and each matching `-dlq` Queue.
   - (If a command needs an authenticated account and you cannot authenticate, still write the full config with placeholder IDs `"TODO-FILL-ID"` and note it in the Deviations log; local dev with `wrangler dev` works with placeholder IDs for D1/KV/R2/queues simulation.)
-- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, `EMAIL`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../frontend/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
+- [x] Create `apps/api/wrangler.jsonc` with the topology in **Appendix H**: bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, `EMAIL`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, `nodejs_compat`, observability on, and `cpu_ms` limit 300000. Declare independent `env.staging` and `env.production` bindings and zone routes for only `staging-app.zenguy.com/api/*` and `app.zenguy.com/api/*`; do not add an `ASSETS` binding or a full-hostname custom domain.
 - [x] Create `apps/api/.dev.vars.example` listing every variable from **Appendix A** with safe example values; copy to `.dev.vars` locally with real dev values (never commit `.dev.vars`).
 - [x] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
 
 ### BE-004: Typed env & config
 - [x] Create `apps/api/src/shared/config.ts`:
-  - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: BrowserRun`, `EMAIL: SendEmail`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var).
-  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `emailFrom`, `openaiApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
+  - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: BrowserRun`, `EMAIL: SendEmail`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var). There is no frontend-assets binding.
+  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "staging" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `emailFrom`, `openaiApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
   - Export `loadConfig(env: Bindings): AppConfig` validating with zod; throw `Error("Missing env: X")` listing all missing vars at once.
 - [x] Create `apps/api/src/shared/constants.ts` with every constant from **Appendix D**, exported by the exact names given there. All later tasks import from here — never re-declare literals.
 - [x] Write unit tests: `loadConfig` throws naming missing vars; parses a complete fake env; decodes base64 `ENCRYPTION_KEY` to 32 bytes and rejects wrong length.
@@ -343,7 +341,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 ### BE-016: Email sender port + Cloudflare Email Service adapter
 - [x] Create `apps/api/src/domain/email/sender.ts`: `interface EmailSender { send(msg: { to: string[]; subject: string; html: string; text: string }): Promise<{ providerMessageId: string | null }> }` (throws `Error` with sanitized message on failure).
 - [x] Create `apps/api/src/infrastructure/email/cloudflare.ts`: `CloudflareEmailSender(binding, from)` sends `{ from, to, subject, html, text }` through the native `SendEmail` binding and returns its message ID; provider failures use a sanitized error that never includes recipients or body content.
-- [x] Configure `send_email` as `EMAIL`, restrict it to `notifications@zenguy.com`, use `remote: true` for local real delivery, and omit `remote` in production. No provider API key is required.
+- [x] Configure `send_email` as `EMAIL`, restrict it to `notifications@zenguy.com`, use `remote: true` for local real delivery, and omit `remote` in both deployed environments. No provider API key is required.
 - [x] Create `apps/api/src/infrastructure/email/templates.ts` with `renderBasicEmail({ title, bodyLines, ctaLabel?, ctaUrl? })` → `{ html, text }`. HTML: single centered 560px table, system font stack, `#111` text, indigo `#4F46E5` button, footer "Zenguy". Text: title + lines + URL.
 - [x] Auth email copies (exact):
   - Verify: subject `Verify your email — Zenguy`; body lines `Welcome to Zenguy, <name>.`, `Confirm your email address to start using your account.`; CTA `Verify email` → `${APP_URL}/verify-email?token=<token>`; final line `This link expires in 24 hours. If you didn't create an account, ignore this email.`
@@ -913,8 +911,8 @@ interface RunSnapshot {
 
 ### BE-050: Queue plumbing
 - [x] In `apps/api/src/domain/queues.ts` add `AttemptMessage = { kind: "attempt"; runId: string; attemptId: string; attemptIndex: number }` (zod schema; `CheckMessage` comes in Phase 10).
-- [x] Implement `queue(batch: MessageBatch, env, ctx)` in `src/index.ts`: switch on `batch.queue` (`zenguy-runs` → attempt consumer (BE-057), `zenguy-checks` → check consumer (BE-064), `zenguy-notify` → BE-043, `*-dlq` → for each message `platformAlert("dlq_message", { queue, body: JSON.stringify(msg.body).slice(0, 200) })` + ack). Per-message isolation: try/catch each; validation failure → ack + alert; handler throw → `message.retry()` (up to queue `max_retries: 3`, then DLQ).
-- [x] Consumer settings live in wrangler.jsonc (Appendix H): `zenguy-runs` `max_batch_size: 1`, `max_concurrency: 4` (Browser Rendering concurrent-session limits), `max_retries: 3`; `zenguy-checks` batch 5 / concurrency 10; `zenguy-notify` batch 5 / concurrency 5.
+- [x] Implement `queue(batch: MessageBatch, env, ctx)` in `src/index.ts`: switch on the logical queue kind (`zenguy-runs` or `zenguy-staging-runs` → attempt consumer (BE-057), the production/staging `checks` Queue → check consumer (BE-064), the production/staging `notify` Queue → BE-043, `*-dlq` → for each message `platformAlert("dlq_message", { queue, body: JSON.stringify(msg.body).slice(0, 200) })` + ack). Per-message isolation: try/catch each; validation failure → ack + alert; handler throw → `message.retry()` (up to queue `max_retries: 3`, then DLQ).
+- [x] Consumer settings live in wrangler.jsonc (Appendix H) and are duplicated for the isolated staging names: each `runs` Queue uses `max_batch_size: 1`, `max_concurrency: 4` (Browser Rendering concurrent-session limits), `max_retries: 3`; each `checks` Queue uses batch 5 / concurrency 10; each `notify` Queue uses batch 5 / concurrency 5.
 - [x] Tests: message parse + routing with fake handlers; poison message acked and alerted.
 
 ### BE-051: Run lifecycle rules (pure functions — the semantics core)
@@ -1288,9 +1286,9 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 ### BE-074: Deployment, docs & acceptance
 - [x] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
-  - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Cloudflare Email Service (onboard sending domain + `send_email` binding); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
-  - **Deploy:** `pnpm --filter @zenguy/frontend build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
-  - **Post-deploy smoke:** curl `/api/health`; register → verify (real email) → login; create workspace; Paddle sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min.
+  - **Provider setup:** Paddle Sandbox for staging (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://staging-app.zenguy.com/api/webhooks/paddle`) and a separate Paddle Live catalog/destination at `https://app.zenguy.com/api/webhooks/paddle`; Cloudflare Email Service on `zenguy.com`; Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key with `gpt-5-mini`. Note: Browser Rendering + Queues require the Workers Paid plan.
+  - **Deploy:** create the separate BE-003 resources → set every Appendix A secret independently in `staging` and `production` → run `db:migrate:staging` + `deploy:staging`, then `db:migrate:production` + `deploy:production` after staging passes. Pages builds `apps/frontend` independently from branch `staging` (`zenguy-frontend-staging`) or `main` (`zenguy-frontend`); configure only the matching `/api/*` Worker Routes and verify crons. No frontend build is bundled with an API deploy.
+  - **Post-deploy smoke:** curl staging `/api/health`; register → verify (real Cloudflare email) → login; create workspace; Paddle Sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min. After staging passes, repeat non-destructive checks on production and verify it exposes Paddle Live configuration.
 - [x] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
 - [x] Run the entire suite one final time: root `pnpm typecheck && pnpm test` + `pnpm --filter @zenguy/api test:integration`. Fix anything red. Final commit `BE-074: release readiness`.
 
@@ -1301,7 +1299,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 > Append entries here as `- BE-0XX: <what differed and why>`. Keep it empty if nothing deviated.
 
 - BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
-- BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/frontend/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
+- BE-003: The local API smoke used port 8790 because port 8787 was already occupied by an unrelated local service; Wrangler returned `zenguy api` with status 200. Frontend delivery was later separated into Cloudflare Pages and is not part of the API Worker bundle.
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 - BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
@@ -1315,20 +1313,20 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 
 # Appendix A — Environment variables & bindings
 
-**Bindings (wrangler.jsonc):** `DB` (D1 `zenguy-db`), `KV` (KV namespace), `ARTIFACTS` (R2 `zenguy-artifacts`), `BROWSER` (Browser Rendering), `EMAIL` (Cloudflare Email Service; remote in local development), `RUN_QUEUE`→`zenguy-runs`, `CHECK_QUEUE`→`zenguy-checks`, `NOTIFY_QUEUE`→`zenguy-notify`, `ASSETS` (static assets `../frontend/dist`).
+**Bindings (wrangler.jsonc):** `DB`, `KV`, `ARTIFACTS`, `BROWSER` (Browser Rendering), `EMAIL` (Cloudflare Email Service; remote only in local development), `RUN_QUEUE`, `CHECK_QUEUE`, and `NOTIFY_QUEUE`. Production uses `zenguy-db`, `zenguy-kv`, `zenguy-artifacts`, and `zenguy-{runs,checks,notify}` plus their DLQs. Staging uses the corresponding `zenguy-staging-*` resources. There is no `ASSETS` binding; Cloudflare Pages serves the frontend.
 
 **Vars (non-secret, in wrangler.jsonc):**
 
-| Var | Dev value | Prod value |
-|---|---|---|
-| `ENVIRONMENT` | `development` | `production` |
-| `APP_URL` | `http://localhost:5173` | `https://app.zenguy.com` |
-| `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` |
-| `LLM_USE_VISION` | `true` | `true` |
-| `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
-| `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | same |
+| Var | Dev value | Staging value | Production value |
+|---|---|---|---|
+| `ENVIRONMENT` | `development` | `staging` | `production` |
+| `APP_URL` | `http://localhost:5173` | `https://staging-app.zenguy.com` | `https://app.zenguy.com` |
+| `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` | `gpt-5-mini` |
+| `LLM_USE_VISION` | `true` | `true` | `true` |
+| `PADDLE_ENVIRONMENT` | `sandbox` | `sandbox` | `production` |
+| `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | same | same |
 
-**Secrets (`.dev.vars` locally, `wrangler secret put` in prod):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`. Cloudflare Email Service uses the `EMAIL` binding and needs no API-key secret.
+**Secrets (`.dev.vars` locally, `wrangler secret put --env staging|production` when deployed):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`. Cryptographic and Paddle secrets are environment-specific. Cloudflare Email Service uses the `EMAIL` binding and needs no API-key secret.
 
 # Appendix B — Response envelope & error codes
 
@@ -1537,12 +1535,6 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
-  "assets": {
-    "directory": "../frontend/dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
   "browser": { "binding": "BROWSER" },
   "send_email": [
     {
@@ -1582,7 +1574,15 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
   }
 }
 ```
-(Prod values for `vars` are set at deploy time — either a `env.production` block or dashboard overrides; keep it simple: add an `"env": { "production": { "vars": { ... } } }` block in BE-074 with `APP_URL: "https://app.zenguy.com"`, `ENVIRONMENT: "production"`, `PADDLE_ENVIRONMENT: "production"` and duplicate bindings, and deploy with `wrangler deploy --env production`.)
+The final config has explicit, non-inherited `env.staging` and
+`env.production` blocks. Staging binds the `zenguy-staging-*` inventory and the
+zone route `{ "pattern": "staging-app.zenguy.com/api/*", "zone_name":
+"zenguy.com" }`; production binds the `zenguy-*` inventory and
+`{ "pattern": "app.zenguy.com/api/*", "zone_name": "zenguy.com" }`. Duplicate
+Browser, Email, D1, KV, R2, Queue, cron, and vars configuration in each named
+environment because Wrangler does not inherit those bindings. Deploy with
+`deploy:staging` or `deploy:production`; Pages owns both complete application
+hostnames.
 
 # Appendix I — Rate limits (key → scope)
 

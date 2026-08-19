@@ -177,6 +177,77 @@ describe("queue routing", () => {
     alert.mockRestore();
   });
 
+  it("routes every staging queue and acknowledges every staging dead-letter queue", async () => {
+    const attemptMessage = new RecordingMessage("msg_staging_run", {
+      kind: "attempt",
+      runId: "run_staging",
+      attemptId: "att_staging",
+      attemptIndex: 0,
+    });
+    const checkBody: CheckMessage = {
+      kind: "check",
+      monitorId: "mon_staging",
+      workspaceId: "ws_staging",
+      cycleId: "cyc_staging",
+      attemptIndex: 0,
+    };
+    const checkMessage = new RecordingMessage("msg_staging_check", checkBody);
+    const notifyMessage = new RecordingMessage("msg_staging_notify", NOTIFY);
+    const attemptExecute = vi.fn(async () => undefined);
+    const checkExecute = vi.fn(async () => undefined);
+    const notifyExecute = vi.fn(async (_message, control: Pick<Message, "ack">) => {
+      control.ack();
+    });
+    const configured = consumers({
+      attempts: { execute: attemptExecute },
+      checks: { execute: checkExecute },
+      notifications: { execute: notifyExecute },
+    });
+
+    await processQueueBatch(
+      batch("zenguy-staging-runs", [attemptMessage]),
+      configured,
+      CONTEXT,
+    );
+    await processQueueBatch(
+      batch("zenguy-staging-checks", [checkMessage]),
+      configured,
+      CONTEXT,
+    );
+    await processQueueBatch(
+      batch("zenguy-staging-notify", [notifyMessage]),
+      configured,
+      CONTEXT,
+    );
+
+    expect(attemptExecute).toHaveBeenCalledOnce();
+    expect(checkExecute).toHaveBeenCalledWith(checkBody, CONTEXT);
+    expect(notifyExecute).toHaveBeenCalledWith(NOTIFY, notifyMessage);
+    expect(attemptMessage.ackCount).toBe(1);
+    expect(checkMessage.ackCount).toBe(1);
+    expect(notifyMessage.ackCount).toBe(1);
+
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    for (const queueName of [
+      "zenguy-staging-runs-dlq",
+      "zenguy-staging-checks-dlq",
+      "zenguy-staging-notify-dlq",
+    ]) {
+      const deadLetterMessage = new RecordingMessage(`msg_${queueName}`, {
+        source: queueName,
+      });
+      await processQueueBatch(
+        batch(queueName, [deadLetterMessage]),
+        configured,
+        CONTEXT,
+      );
+      expect(deadLetterMessage.ackCount).toBe(1);
+      expect(deadLetterMessage.retryOptions).toEqual([]);
+    }
+    expect(alert).toHaveBeenCalledTimes(3);
+    alert.mockRestore();
+  });
+
   it("alerts and acknowledges every dead-letter message with a bounded body", async () => {
     const message = new RecordingMessage("msg_dlq", { value: "x".repeat(400) });
     const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);

@@ -8,7 +8,6 @@ export interface Bindings {
   RUN_QUEUE: Queue;
   CHECK_QUEUE: Queue;
   NOTIFY_QUEUE: Queue;
-  ASSETS: Fetcher;
   ENVIRONMENT: string;
   APP_URL: string;
   JWT_SECRET: string;
@@ -34,7 +33,7 @@ export interface Bindings {
 
 export interface AppConfig {
   appUrl: string;
-  environment: "development" | "production";
+  environment: "development" | "staging" | "production";
   jwtSecret: string;
   encryptionKey: Uint8Array;
   artifactUrlSecret: string;
@@ -85,7 +84,7 @@ const requiredEnvKeys = [
 
 const envSchema = z.object({
   APP_URL: z.url(),
-  ENVIRONMENT: z.enum(["development", "production"]),
+  ENVIRONMENT: z.enum(["development", "staging", "production"]),
   JWT_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(1),
   ARTIFACT_URL_SECRET: z.string().min(32),

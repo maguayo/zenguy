@@ -82,6 +82,24 @@ export interface ScheduledJobs {
   hourly: ScheduledJob;
 }
 
+type QueueKind = "runs" | "checks" | "notify";
+
+export function classifyQueue(queueName: string): QueueKind | undefined {
+  switch (queueName) {
+    case "zenguy-runs":
+    case "zenguy-staging-runs":
+      return "runs";
+    case "zenguy-checks":
+    case "zenguy-staging-checks":
+      return "checks";
+    case "zenguy-notify":
+    case "zenguy-staging-notify":
+      return "notify";
+    default:
+      return undefined;
+  }
+}
+
 function queueRetryDelay(attempts: number): number {
   return Math.min(300, 30 * 2 ** Math.max(0, attempts - 1));
 }
@@ -203,14 +221,14 @@ export async function processQueueBatch(
     processDeadLetterBatch(batch);
     return;
   }
-  switch (batch.queue) {
-    case "zenguy-runs":
+  switch (classifyQueue(batch.queue)) {
+    case "runs":
       await processAttemptBatch(batch, consumers.attempts, context);
       return;
-    case "zenguy-checks":
+    case "checks":
       await processCheckBatch(batch, consumers.checks, context);
       return;
-    case "zenguy-notify":
+    case "notify":
       await processNotifyBatch(batch, consumers.notifications);
       return;
     default:
@@ -496,14 +514,14 @@ export async function queue(
     processDeadLetterBatch(batch);
     return;
   }
-  switch (batch.queue) {
-    case "zenguy-runs":
+  switch (classifyQueue(batch.queue)) {
+    case "runs":
       await processAttemptBatch(batch, buildAttemptConsumer(env), context);
       return;
-    case "zenguy-checks":
+    case "checks":
       await processCheckBatch(batch, buildCheckConsumer(env), context);
       return;
-    case "zenguy-notify":
+    case "notify":
       await processNotifyBatch(batch, notifyConsumer(env));
       return;
     default:

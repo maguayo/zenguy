@@ -8,8 +8,8 @@ notifications, billing, encrypted secrets, reports, and operational cleanup.
 
 - Node.js 22 or newer and pnpm.
 - A Cloudflare account authenticated with Wrangler.
-- Workers Paid for this production deployment. Zenguy relies on Browser
-  Rendering and Queues at production capacity.
+- Workers Paid for the deployed environments. Zenguy relies on Browser
+  Rendering, five-minute CPU limits, Queues, and Cloudflare Email Service.
 - Provider accounts described below.
 
 All commands in this document run from the repository root unless a section
@@ -47,12 +47,11 @@ Browser Rendering requires a remote Cloudflare binding:
 
     pnpm --filter @zenguy/api dev:remote
 
-Current Wrangler remote mode does not consume Queue messages. Use a deployed
-development Worker for the complete API-to-Queue-to-browser path, or use the
+Current Wrangler remote mode does not consume Queue messages. Use the deployed
+staging Worker for the complete API-to-Queue-to-browser path, or use the
 hybrid local-worker/remote-Browser procedure recorded in the BE-057 deviation.
 
-The frontend has no runtime environment variables. Once apps/frontend exists, run
-it in a second terminal:
+The frontend has no runtime environment variables. Run it in a second terminal:
 
     pnpm --filter @zenguy/frontend dev
 
@@ -94,14 +93,16 @@ https://developer.paddle.com/build/products/create-products-prices/.
    Copy its price ID to PADDLE_OVERAGE_PRICE_ID.
 3. Create a sandbox client-side token for PADDLE_CLIENT_TOKEN and an API key
    for PADDLE_API_KEY.
-4. Under Developer tools > Notifications, create a URL destination at
-   https://your-domain.example/api/webhooks/paddle. Select every subscription.* and
-   transaction.* event. Copy the destination secret to
-   PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
+4. Under Developer tools > Notifications, create the sandbox destination at
+   https://staging-app.zenguy.com/api/webhooks/paddle. Select every
+   subscription.* and transaction.* event. Copy that destination's secret to
+   the staging PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
    https://developer.paddle.com/webhooks/about/notification-destinations/.
-5. Keep PADDLE_ENVIRONMENT=sandbox locally. Recreate the catalog and
-   credentials in the live Paddle account before production; price IDs are
-   environment-specific.
+5. Keep PADDLE_ENVIRONMENT=sandbox locally and in staging. Recreate the catalog,
+   client token, API key, prices, and notification destination in Paddle Live
+   for production. The production webhook URL is
+   https://app.zenguy.com/api/webhooks/paddle. Sandbox and live IDs and secrets
+   are not interchangeable.
 
 ### Cloudflare Email Service
 
@@ -130,8 +131,8 @@ personal Cloudflare account.
 4. Keep `EMAIL_FROM="Zenguy <notifications@zenguy.com>"`. The
    `send_email` binding restricts the Worker to this sender.
 5. The development binding has `remote: true`, so `wrangler dev` sends real
-   email. Use only recipient inboxes you control. The production binding omits
-   `remote` because it already runs on Cloudflare.
+   email. Use only recipient inboxes you control. Deployed bindings omit
+   `remote` because staging and production already run on Cloudflare.
 
 Cloudflare manages the sending domain's SPF, DKIM, return-path, and bounce
 records. Check Email Service analytics and suppressions when a provider accepts
@@ -167,105 +168,167 @@ consumers. Review current limits and pricing before launch:
 - https://developers.cloudflare.com/queues/platform/pricing/
 - https://developers.cloudflare.com/workers/platform/limits/
 
-## Production deployment
+## Staging and production deployment
 
-### 1. Create Cloudflare resources once
+Cloudflare Pages serves the React application on each application hostname.
+The matching Worker environment is registered only as a zone route for
+`/api/*`. This keeps frontend assets independent from API releases while
+preserving relative API requests and same-origin cookies.
 
-Authenticate, enter the API package, and create all resources:
+| Environment | Worker | Application / Pages origin | Worker Route | Paddle |
+|---|---|---|---|---|
+| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Sandbox |
+| Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` | Live |
 
-    cd apps/api
-    pnpm exec wrangler login
-    pnpm exec wrangler d1 create zenguy-db
-    pnpm exec wrangler kv namespace create zenguy-kv
-    pnpm exec wrangler r2 bucket create zenguy-artifacts
-    pnpm exec wrangler queues create zenguy-runs
-    pnpm exec wrangler queues create zenguy-runs-dlq
-    pnpm exec wrangler queues create zenguy-checks
-    pnpm exec wrangler queues create zenguy-checks-dlq
-    pnpm exec wrangler queues create zenguy-notify
-    pnpm exec wrangler queues create zenguy-notify-dlq
-    cd ../..
+Do not configure either complete application hostname as a Worker custom
+domain. Pages owns the hostname and static routes; the Worker Route owns only
+the `/api/*` path.
 
-Paste the returned D1 and KV IDs into both the top-level bindings and
-env.production bindings in apps/api/wrangler.jsonc. Confirm the R2 and Queue
-names match exactly. Resource commands and current syntax are indexed at
-https://developers.cloudflare.com/workers/wrangler/commands/.
+### 1. Confirm the Cloudflare account
 
-### 2. Build, migrate, and configure secrets
+All mutations must use the directory-scoped personal profile:
 
-The Worker serves apps/frontend/dist, so the frontend build must succeed first:
+    pnpm --filter @zenguy/api exec wrangler whoami
 
-    pnpm --filter @zenguy/frontend build
-    pnpm --filter @zenguy/api db:migrate:remote
+Continue only when it reports `zenguy-personal`,
+`marcosaguayomora@gmail.com`, and account
+`ec11e46fe3c39a5eac9951db9c91244a`.
 
-Set every Appendix A secret in the production environment. Wrangler prompts
-for each value without echoing it:
+### 2. Keep resources isolated
 
-    pnpm --filter @zenguy/api exec wrangler secret put JWT_SECRET --env production
-    pnpm --filter @zenguy/api exec wrangler secret put ENCRYPTION_KEY --env production
-    pnpm --filter @zenguy/api exec wrangler secret put ARTIFACT_URL_SECRET --env production
-    pnpm --filter @zenguy/api exec wrangler secret put OPENAI_API_KEY --env production
-    pnpm --filter @zenguy/api exec wrangler secret put TWILIO_ACCOUNT_SID --env production
-    pnpm --filter @zenguy/api exec wrangler secret put TWILIO_AUTH_TOKEN --env production
-    pnpm --filter @zenguy/api exec wrangler secret put TWILIO_FROM_SMS --env production
-    pnpm --filter @zenguy/api exec wrangler secret put TWILIO_FROM_WHATSAPP --env production
-    pnpm --filter @zenguy/api exec wrangler secret put TWILIO_FROM_CALL --env production
-    pnpm --filter @zenguy/api exec wrangler secret put PADDLE_API_KEY --env production
-    pnpm --filter @zenguy/api exec wrangler secret put PADDLE_WEBHOOK_SECRET --env production
-    pnpm --filter @zenguy/api exec wrangler secret put PADDLE_CLIENT_TOKEN --env production
-    pnpm --filter @zenguy/api exec wrangler secret put PADDLE_PRICE_ID --env production
-    pnpm --filter @zenguy/api exec wrangler secret put PADDLE_OVERAGE_PRICE_ID --env production
+Each environment has its own stateful resources. The configured inventory is:
 
-The production block already fixes APP_URL=https://app.zenguy.com,
-ENVIRONMENT=production, PADDLE_ENVIRONMENT=production, and
-LLM_MODEL=gpt-5-mini.
+| Binding | Staging | Production |
+|---|---|---|
+| D1 `DB` | `zenguy-staging-db` | `zenguy-db` |
+| KV `KV` | `zenguy-staging-kv` | `zenguy-kv` |
+| R2 `ARTIFACTS` | `zenguy-staging-artifacts` | `zenguy-artifacts` |
+| `RUN_QUEUE` | `zenguy-staging-runs` | `zenguy-runs` |
+| Run DLQ | `zenguy-staging-runs-dlq` | `zenguy-runs-dlq` |
+| `CHECK_QUEUE` | `zenguy-staging-checks` | `zenguy-checks` |
+| Check DLQ | `zenguy-staging-checks-dlq` | `zenguy-checks-dlq` |
+| `NOTIFY_QUEUE` | `zenguy-staging-notify` | `zenguy-notify` |
+| Notification DLQ | `zenguy-staging-notify-dlq` | `zenguy-notify-dlq` |
 
-### 3. Deploy and attach the application domain
+The D1 and KV IDs in `apps/api/wrangler.jsonc` must match the resources in this
+account. Wrangler environment bindings are not inherited, so every binding is
+declared independently under `env.staging` and `env.production`. Never reuse a
+production ID in staging or a staging ID in production.
 
-    pnpm --filter @zenguy/api exec wrangler deploy --env production
+### 3. Configure secrets and provider environments
 
-In Cloudflare, attach the custom domain app.zenguy.com to the production API
-Worker. Do not attach zenguy.com: the landing Worker owns the root domain.
+Wrangler secrets are also environment-specific. Put each Appendix A secret in
+both environments, using independent cryptographic values and the appropriate
+provider credentials:
 
-The deploy registers these Cron Triggers:
+    pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env staging
+    pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env production
+
+Repeat those commands for `JWT_SECRET`, `ENCRYPTION_KEY`,
+`ARTIFACT_URL_SECRET`, `OPENAI_API_KEY`, all five `TWILIO_*` values, and all
+five `PADDLE_*` values. Do not paste secret values into shell history,
+documentation, `wrangler.jsonc`, or Git.
+
+Environment variables are fixed as follows:
+
+| Variable | Staging | Production |
+|---|---|---|
+| `ENVIRONMENT` | `staging` | `production` |
+| `APP_URL` | `https://staging-app.zenguy.com` | `https://app.zenguy.com` |
+| `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
+| `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` |
+| `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
+
+Staging uses only Paddle Sandbox tokens, keys, price IDs, customers, and the
+staging webhook secret. Production uses only Paddle Live equivalents and the
+production webhook secret. Both use OpenAI Responses with `gpt-5-mini`; there
+is no Anthropic credential. Both use the native Cloudflare Email Service
+`EMAIL` binding for the enabled `zenguy.com` sending domain.
+
+### 4. Migrate and deploy the selected environment
+
+Apply migrations before its Worker deployment:
+
+    # Staging
+    pnpm --filter @zenguy/api db:migrate:staging
+    pnpm --filter @zenguy/api deploy:staging
+
+    # Production
+    pnpm --filter @zenguy/api db:migrate:production
+    pnpm --filter @zenguy/api deploy:production
+
+The API deployment does not build or upload `apps/frontend/dist`; Pages builds
+that package independently from Git. The frontend projects and branch controls
+are documented in `apps/frontend/README.md`.
+
+Each deploy registers these Cron Triggers for that environment:
 
 - Every five minutes: scheduled browser tests and uptime monitors.
 - Daily at 03:00 UTC: retention cleanup.
 - At minute 30 of every hour: stale work and billing maintenance.
 
-Verify all three under Workers & Pages > zenguy-api-production > Triggers, and
-check the first invocations in Workers Logs. Also confirm all six Queue
-consumers and their dead-letter queues are attached.
+Under Workers & Pages, verify the three triggers, all six Queue consumers, and
+their dead-letter queues on both `zenguy-api-staging` and
+`zenguy-api-production`.
 
-### 4. Configure the R2 lifecycle safety net
+### 5. Verify Pages domains and Worker Routes
 
-The cleanup cron expires operational data after 30 days. Add a second R2
-lifecycle guard that expires all objects in zenguy-artifacts after 35 days:
+The Pages custom domain must be active and proxied before its API route is
+useful. Confirm these assignments in the `zenguy.com` zone:
 
+    staging-app.zenguy.com/api/*  -> zenguy-api-staging
+    app.zenguy.com/api/*          -> zenguy-api-production
+
+Requests outside `/api/*` must continue to reach the corresponding Pages
+project. A missing route commonly appears as a Pages 404 for API calls; a route
+covering `/*` would incorrectly hide the frontend.
+
+### 6. Configure webhook destinations and R2 retention
+
+Create separate Paddle notification destinations:
+
+    Sandbox: https://staging-app.zenguy.com/api/webhooks/paddle
+    Live:    https://app.zenguy.com/api/webhooks/paddle
+
+Subscribe both to the required `subscription.*` and `transaction.*` events,
+and store each destination's signing secret only in its matching Worker
+environment.
+
+The cleanup cron expires operational data after 30 days. Add a 35-day R2
+lifecycle safety net to each bucket:
+
+    pnpm --filter @zenguy/api exec wrangler r2 bucket lifecycle add zenguy-staging-artifacts retention-safety-net --expire-days 35
     pnpm --filter @zenguy/api exec wrangler r2 bucket lifecycle add zenguy-artifacts retention-safety-net --expire-days 35
 
 ## Post-deploy smoke
 
-Run these checks in order and stop the release on the first failure:
+Run the full functional smoke in staging first and stop the release on the
+first failure:
 
-1. Health:
-
-       curl --fail --show-error https://app.zenguy.com/api/health
-
-   Expect HTTP 200 and a JSON data envelope with ok=true.
-2. Register a new address, receive the real Cloudflare Email Service verification email, verify
-   it, and log in. Confirm refresh and secure cookies work on app.zenguy.com.
-3. Create a workspace and complete a Paddle sandbox checkout. Poll
-   GET /api/workspaces/{workspaceId}/billing until status is ACTIVE, then
-   confirm replaying the webhook does not duplicate the subscription or usage.
-4. Create an example.com Browser Test and run Test it. Confirm the run reaches
-   PASSED, its attempt and screenshots load, and usage increases by exactly
-   one.
-5. Create a GET monitor for https://example.com expecting 200. Confirm it
-   becomes UP within five minutes without changing browser-run usage.
+1. Call `https://staging-app.zenguy.com/api/health`; expect HTTP 200 and a JSON
+   data envelope with `ok=true`. Load the hostname without `/api` and confirm
+   Pages returns the React application.
+2. Register an address you control, receive the real Cloudflare Email Service
+   verification email from `notifications@zenguy.com`, verify it, and log in.
+   Confirm refresh and secure cookies stay on `staging-app.zenguy.com`.
+3. Create a workspace and complete a Paddle Sandbox checkout. Poll
+   `GET /api/workspaces/{workspaceId}/billing` until it is `ACTIVE`, then replay
+   the sandbox webhook and confirm it does not duplicate subscription or usage.
+4. Create an `example.com` Browser Test and run **Test it**. Confirm the run
+   reaches `PASSED`, its attempt and screenshots load, and usage increases by
+   exactly one.
+5. Create a GET monitor for `https://example.com` expecting 200. Confirm it
+   becomes `UP` within five minutes without changing browser-run usage.
 6. Trigger one safe failure and recovery. Confirm one failure delivery and one
    recovery delivery are recorded, then verify no plaintext secret appears in
    the API response, report, logs, or notification error.
+
+After staging passes, deploy production and repeat the non-destructive checks
+against `https://app.zenguy.com`. Confirm `/api/health` is handled by
+`zenguy-api-production`, the application shell is served by Pages, email uses
+`zenguy.com`, and billing config reports Paddle Live. Do not create a real
+charge merely as a smoke test; exercise the live checkout only as an explicitly
+approved release transaction.
 
 ## First-demo acceptance record
 

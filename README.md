@@ -14,7 +14,26 @@ zenguy/
 ```
 
 See `apps/api/README.md` / `apps/frontend/README.md` for service-specific setup and
-production deployment details.
+staging and production deployment details.
+
+## Deployed architecture
+
+Cloudflare Pages owns each application hostname and serves the Vite build.
+Cloudflare Worker Routes intercept only `/api/*` on those same hostnames, so the
+browser can keep using relative API URLs and same-origin secure cookies. The API
+Worker does not serve frontend assets and does not own either full hostname.
+
+| Environment | Git branch | Pages project | Pages root | Application URL | API Worker route |
+| --- | --- | --- | --- | --- | --- |
+| Staging | `staging` | `zenguy-frontend-staging` | `apps/frontend` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` → `zenguy-api-staging` |
+| Production | `main` | `zenguy-frontend` | `apps/frontend` | `https://app.zenguy.com` | `app.zenguy.com/api/*` → `zenguy-api-production` |
+
+The two Workers use independent D1, KV, R2, Queue, secret, and Paddle
+configuration. Staging uses Paddle Sandbox; production uses a separately
+created Paddle live catalog and live credentials. Both environments send
+transactional email through Cloudflare Email Service on `zenguy.com` and use
+the low-cost OpenAI `gpt-5-mini` model by default. No Anthropic integration is
+required.
 
 ## Local development
 
@@ -165,6 +184,41 @@ pnpm --filter @zenguy/api exec wrangler whoami
 
 The final command must show `Active profile: zenguy-personal` and the expected
 personal email before continuing.
+
+## Staging and production releases
+
+Pages deploys the frontend automatically from Git. The staging Pages project
+tracks `staging`; the production project tracks `main`. Both use
+`apps/frontend` as the root directory, `pnpm build` as the build command, and
+`dist` as the output directory.
+
+Apply the matching D1 migrations before deploying an API environment:
+
+```bash
+# Staging
+pnpm --filter @zenguy/api db:migrate:staging
+pnpm --filter @zenguy/api deploy:staging
+
+# Production
+pnpm --filter @zenguy/api db:migrate:production
+pnpm --filter @zenguy/api deploy:production
+```
+
+Cloudflare resources are deliberately isolated:
+
+| Binding | Staging | Production |
+| --- | --- | --- |
+| D1 | `zenguy-staging-db` | `zenguy-db` |
+| KV | `zenguy-staging-kv` | `zenguy-kv` |
+| R2 | `zenguy-staging-artifacts` | `zenguy-artifacts` |
+| Run Queue / DLQ | `zenguy-staging-runs` / `zenguy-staging-runs-dlq` | `zenguy-runs` / `zenguy-runs-dlq` |
+| Check Queue / DLQ | `zenguy-staging-checks` / `zenguy-staging-checks-dlq` | `zenguy-checks` / `zenguy-checks-dlq` |
+| Notification Queue / DLQ | `zenguy-staging-notify` / `zenguy-staging-notify-dlq` | `zenguy-notify` / `zenguy-notify-dlq` |
+
+Do not point a production binding at a staging resource, copy sandbox Paddle
+IDs into production, or commit any secret. The full secret, migration, route,
+and webhook procedure is in `apps/api/README.md`; the exact Pages settings are
+in `apps/frontend/README.md`.
 
 ## Browser smoke test
 

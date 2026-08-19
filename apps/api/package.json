@@ -6,12 +6,16 @@
     "dev": "wrangler dev",
     "dev:remote": "wrangler dev --remote",
     "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:migrate:local": "wrangler d1 migrations apply zenguy-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply zenguy-db --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply zenguy-staging-db --remote --env staging",
+    "db:migrate:production": "wrangler d1 migrations apply zenguy-db --remote --env production",
     "seed": "node scripts/seed.mjs"
   },
   "dependencies": {

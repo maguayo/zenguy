@@ -145,6 +145,48 @@ describe("auth routes", () => {
     );
   });
 
+  it("uses secure refresh cookies throughout the staging session lifecycle", async () => {
+    const stagingEnv = {
+      ...testEnv(),
+      ENVIRONMENT: "staging",
+      APP_URL: "https://staging-app.zenguy.com",
+    };
+    const stagingApp = buildApp(stagingEnv, { emailSender: emails });
+    await registerUser(stagingApp, "198.51.100.12");
+
+    const loginResponse = await stagingApp.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "alice@example.com", password: "initial-password" },
+        { "CF-Connecting-IP": "198.51.100.13" },
+      ),
+    );
+    expect(loginResponse.status).toBe(200);
+    const loginCookie = loginResponse.headers.get("Set-Cookie");
+    expect(loginCookie).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000; Secure$/u,
+    );
+
+    const refreshResponse = await stagingApp.request("/api/auth/refresh", {
+      method: "POST",
+      headers: { Cookie: cookiePair(loginCookie) },
+    });
+    expect(refreshResponse.status).toBe(200);
+    const refreshCookie = refreshResponse.headers.get("Set-Cookie");
+    expect(refreshCookie).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000; Secure$/u,
+    );
+
+    const logoutResponse = await stagingApp.request("/api/auth/logout", {
+      method: "POST",
+      headers: { Cookie: cookiePair(refreshCookie) },
+    });
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.headers.get("Set-Cookie")).toBe(
+      "zenguy_rt=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0; Secure",
+    );
+  });
+
   it("returns the same 401 for a wrong password and missing bearer token", async () => {
     await registerUser(app, "198.51.100.20");
     const wrongPassword = await app.request(

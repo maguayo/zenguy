@@ -13,7 +13,6 @@ function completeBindings(): Bindings {
     RUN_QUEUE: {} as Queue,
     CHECK_QUEUE: {} as Queue,
     NOTIFY_QUEUE: {} as Queue,
-    ASSETS: {} as Fetcher,
     EMAIL: {} as SendEmail,
     ENVIRONMENT: "development",
     APP_URL: "http://localhost:5173",
@@ -91,6 +90,18 @@ describe("loadConfig", () => {
       priceId: "pri_monthly",
       overagePriceId: "pri_overage",
     });
+  });
+
+  it("accepts staging as an application environment", () => {
+    const env = completeBindings();
+    env.ENVIRONMENT = "staging";
+    env.APP_URL = "https://staging-app.zenguy.com";
+
+    const config = loadConfig(env);
+
+    expect(config.environment).toBe("staging");
+    expect(config.appUrl).toBe("https://staging-app.zenguy.com");
+    expect(env).not.toHaveProperty("ASSETS");
   });
 
   it("rejects an encryption key that does not decode to 32 bytes", () => {

@@ -1,14 +1,14 @@
 # Zenguy — Frontend Implementation Tasks (TASKS_FRONTEND.md)
 
-> **For the implementing agent:** This document is your complete work order for the Zenguy web app (and the tiny Astro landing). Work through the tasks **strictly in order**. Every decision is already made — do not redesign, swap libraries, or invent features. The API contract in **Appendix A** is authoritative and matches what the backend agent builds from `TASKS_BACKEND.md`: build against it exactly. If this file and `PROJECT.md` conflict, this file wins.
+> **For the implementing agent:** This document is your complete work order for the Zenguy web app and Astro public website. Work through the tasks **strictly in order**. Every decision is already made — do not redesign, swap libraries, or invent features. The API contract in **Appendix A** is authoritative and matches what the backend agent builds from `TASKS_BACKEND.md`: build against it exactly. If this file and `PROJECT.md` conflict, this file wins.
 
-**Goal:** Build the complete Zenguy V1 web application: auth, workspaces with RBAC-aware UI, Paddle billing onboarding, natural-language Browser Tests with live run progress and rich evidence viewers, Uptime monitors with charts, Incidents, Notification channels, Secrets, Members, Usage & Billing, and Workspace settings — plus a one-page Astro "Coming soon" landing.
+**Goal:** Build the complete Zenguy V1 web application: auth, workspaces with RBAC-aware UI, Paddle billing onboarding, natural-language Browser Tests with live run progress and rich evidence viewers, Uptime monitors with charts, Incidents, Notification channels, Secrets, Members, Usage & Billing, and Workspace settings — plus the public Astro website.
 
-**Stack (fixed, per PROJECT.md §0):** React 19 + Vite + TypeScript (strict) + **Tailwind CSS v4** (`@tailwindcss/vite`). Routing: `react-router-dom`. Server state: `@tanstack/react-query`. Forms: `react-hook-form` + `zod` (`@hookform/resolvers`). Charts: `recharts`. Icons: `lucide-react`. Class joining: `clsx`. Landing: **Astro** (static). No other UI/state libraries — no Redux, no component kits, no CSS-in-JS.
+**Stack (fixed, per PROJECT.md §0):** React 19 + Vite + TypeScript (strict) + **Tailwind CSS v4** (`@tailwindcss/vite`). Routing: `react-router-dom`. Server state: `@tanstack/react-query`. Forms: `react-hook-form` + `zod` (`@hookform/resolvers`). Charts: `recharts`. Icons: `lucide-react`. Class joining: `clsx`. Public website: **Astro** (static). No other UI/state libraries — no Redux, no component kits, no CSS-in-JS.
 
-**How it runs:** In production the backend Worker serves `apps/frontend/dist` as static assets and the API under `/api/*` on the **same origin** (`app.zenguy.com`) — so the app always calls the API with relative URLs (`/api/...`), no CORS anywhere. In development Vite (port 5173) proxies `/api` to `wrangler dev` (port 8787). The refresh token lives in an HttpOnly cookie set by the API; the frontend never touches it. The access token (30-min JWT) lives **in memory only** and auto-refreshes.
+**How it runs:** Cloudflare Pages serves `apps/frontend` from Git: project `zenguy-frontend` tracks `main` on `app.zenguy.com`, and `zenguy-frontend-staging` tracks `staging` on `staging-app.zenguy.com`; both use root `apps/frontend`. Matching API Worker environments intercept only `/api/*` through zone Worker Routes on the **same origin**, so the app always calls relative URLs (`/api/...`) without CORS. In development Vite (port 5173) proxies `/api` to `wrangler dev` (port 8787). The refresh token lives in an HttpOnly cookie set by the API; the frontend never touches it. The access token (30-min JWT) lives **in memory only** and auto-refreshes.
 
-**Boundaries:** Frontend owns `apps/frontend/**` and `apps/landing/**`. **Never modify `apps/api/**`.** Repo-root workspace files are created by the backend agent (`TASKS_BACKEND.md` BE-001) — if they don't exist yet, create them with exactly the contents replicated in FE-001 below.
+**Boundaries:** Frontend owns `apps/frontend/**` and `apps/website/**`. **Never modify `apps/api/**`.** Repo-root workspace files are created by the backend agent (`TASKS_BACKEND.md` BE-001) — if they don't exist yet, create them with exactly the contents replicated in FE-001 below.
 
 ---
 
@@ -57,14 +57,14 @@ apps/frontend/
     │                            KeyValueEditor, ScreenshotViewer, IncidentTimeline, UsageMeter, …)
     └── pages/                  (auth/, onboarding/, overview/, tests/, uptime/, incidents/,
                                  notifications/, secrets/, members/, billing/, settings/, NotFound.tsx)
-apps/landing/                   (Astro coming-soon, FE-004)
+apps/website/                   (Astro public website, FE-004)
 ```
 
 Query-key convention (used everywhere): `["me"]`, `["workspaces"]`, `["ws", wsId]`, `["ws", wsId, "overview"]`, `["ws", wsId, "tests"]`, `["ws", wsId, "tests", testId]`, `["ws", wsId, "tests", testId, "runs", filters]`, `["ws", wsId, "runs", runId]`, `["ws", wsId, "attempts", attemptId]`, `["ws", wsId, "monitors"]`, `["ws", wsId, "monitors", monitorId, "stats"]`, `["ws", wsId, "incidents", filters]`, `["ws", wsId, "channels"]`, `["ws", wsId, "secrets"]`, `["ws", wsId, "members"]`, `["ws", wsId, "billing"]`, `["ws", wsId, "audit"]`. Mutations invalidate their module's keys.
 
 ---
 
-# Phase 0 — Scaffold & landing
+# Phase 0 — Scaffold & website
 
 ### FE-001: Web app scaffold
 - [x] If the repo-root workspace files don't exist yet, create them **exactly** as follows (identical to TASKS_BACKEND BE-001 — if they exist, verify and skip): root `package.json` `{ "name": "zenguy", "private": true, "engines": { "node": ">=22" }, "scripts": { "dev:api": "pnpm --filter @zenguy/api dev", "dev:frontend": "pnpm --filter @zenguy/frontend dev", "build": "pnpm -r build", "test": "pnpm -r test", "typecheck": "pnpm -r typecheck" } }`; `pnpm-workspace.yaml` (`packages: ["apps/*"]`); `tsconfig.base.json` (strict, ES2023, Bundler resolution, noUncheckedIndexedAccess, verbatimModuleSyntax); `.gitignore` (`node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env*`, `coverage/`, `*.log`, `.DS_Store`); `.editorconfig`.
@@ -110,15 +110,15 @@ export default defineConfig({
 - [x] Commit.
 
 ### FE-003: Deployment wiring note
-- [x] Add `apps/frontend/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/frontend/dist`; **always run `pnpm --filter @zenguy/frontend build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
-- [x] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/frontend build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
+- [x] Add `apps/frontend/README.md`: how the dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787); exact Pages projects, branches, root `apps/frontend`, build/output settings, and domains for staging and production; Worker Routes intercept only `/api/*`; there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
+- [x] Verify `pnpm --filter @zenguy/frontend build` outputs `dist`, then verify Pages serves the app shell and the matching same-origin `/api/health` request reaches `zenguy-api-staging` or `zenguy-api-production`. API deploys are independent from frontend builds.
 
-### FE-004: Astro landing (Coming soon)
-- [x] Create `apps/landing/package.json` (`@zenguy/landing`, scripts `dev`: `astro dev`, `build`: `astro build`, `deploy`: `astro build && wrangler deploy`) and install `pnpm --filter @zenguy/landing add astro` + `-D wrangler`.
-- [x] `apps/landing/astro.config.mjs`: `import { defineConfig } from "astro/config"; export default defineConfig({ output: "static" });`
-- [x] `apps/landing/src/pages/index.astro` — single centered page, no client JS: dark zinc-950 background; wordmark `zenguy` (Inter 700, white, tracking-tight, accent-indigo dot: `zenguy.`); tagline `Describe what your website should do. Zenguy checks it in a real browser — on a schedule, with alerts.`; sub-line `Coming soon.`; button `Open the app →` linking `https://app.zenguy.com` (white text on `#4f46e5`, rounded-lg, px-5 py-2.5); footer `© 2026 Zenguy`. Inline `<style>` (Inter via same Google Fonts link), responsive, centered flex column, max-w-xl.
-- [x] `apps/landing/wrangler.jsonc`: `{ "name": "zenguy-landing", "compatibility_date": "2026-08-01", "assets": { "directory": "./dist" } }` (custom domain `zenguy.com` attached at deploy time — note in a comment).
-- [x] Verify `pnpm --filter @zenguy/landing build` outputs `dist/index.html`. Commit. (This is the ONLY marketing surface in V1 — nothing else gets built, §29.)
+### FE-004: Astro public website
+- [x] The original `apps/landing` coming-soon implementation is historical and superseded by `apps/website`; the latter is the sole public marketing surface.
+- [x] Keep `apps/website` as a static Astro package named `@zenguy/website`, with `dev`, `build`, `preview`, `typecheck`, and Pages-oriented deploy scripts.
+- [x] Preserve the approved responsive public-site design and CTA links to `https://app.zenguy.com`; do not create a second marketing surface.
+- [x] Deploy through the Git-connected Cloudflare Pages project `zenguy`, tracking `main`, with root `apps/website`, build command `pnpm build`, output `dist`, and custom domains `zenguy.com` plus `www.zenguy.com`. It is not a landing Worker.
+- [x] Verify `pnpm --filter @zenguy/website build` outputs `dist/index.html`. Commit.
 
 # Phase 1 — UI kit (`src/components/ui/`)
 
@@ -412,7 +412,7 @@ export default defineConfig({
 - [x] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):
   1. Sign up → verify (dev email in wrangler logs) → sign in. 2. Create workspace → Paddle sandbox checkout → ACTIVE. 3. Create secret `DEMO_TOKEN`. 4. Create email channel + send test. 5. Create browser test with `Test it` → watch live panel → PASSED. 6. `Run now` from list. 7. Edit instructions to force failure → run → FAILED → incident appears + email + report downloads. 8. Fix instructions → run → PASSED → incident resolved + recovery email. 9. Create uptime monitor (test request → save) → UP within its frequency; break the URL (edit to a 404 path with expected 200) → DOWN + incident; fix → recovery. 10. Invite a second account as Member → verify read-only UI; promote to Admin as owner → verify. 11. Billing page shows usage incremented ONLY by browser runs (uptime free, retries free — check the numbers). 12. Overview reflects all of it. 13. Workspace settings: rename, audit log lists the session's actions. 14. Mobile pass (drawer, tables) + keyboard pass.
 - [x] Map results to `PROJECT.md` §31 acceptance criteria (UI-visible ones) — every unmet criterion becomes a fix before closing this task.
-- [x] `pnpm --filter @zenguy/frontend typecheck && pnpm --filter @zenguy/frontend test && pnpm --filter @zenguy/frontend build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
+- [x] `pnpm --filter @zenguy/frontend typecheck && pnpm --filter @zenguy/frontend test && pnpm --filter @zenguy/frontend build` all green; `pnpm --filter @zenguy/website build` green. Final commit `FE-044: release readiness`.
 
 #### Acceptance walkthrough — 2026-08-19
 

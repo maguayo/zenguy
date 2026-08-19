@@ -11,7 +11,6 @@ export function fakeBindings(): Bindings {
     RUN_QUEUE: {} as Queue,
     CHECK_QUEUE: {} as Queue,
     NOTIFY_QUEUE: {} as Queue,
-    ASSETS: {} as Fetcher,
     EMAIL: {
       send: async () => ({ messageId: "test-email" }),
     } as SendEmail,

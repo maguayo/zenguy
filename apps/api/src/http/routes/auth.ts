@@ -109,7 +109,7 @@ export function authRoutes(
   const logout = new Logout(dependencies);
   const forgotPassword = new ForgotPassword(dependencies);
   const resetPassword = new ResetPassword(dependencies);
-  const secureCookies = dependencies.config.environment === "production";
+  const secureCookies = dependencies.config.environment !== "development";
   const refreshMaxAge = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60;
 
   app.post("/register", zjson(registerSchema), async (context) => {

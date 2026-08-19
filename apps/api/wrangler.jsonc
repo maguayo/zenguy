@@ -6,12 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
-  "assets": {
-    "directory": "../frontend/dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
   "browser": { "binding": "BROWSER" },
   "send_email": [
     {
@@ -21,10 +15,19 @@
     }
   ],
   "d1_databases": [
-    { "binding": "DB", "database_name": "zenguy-db", "database_id": "f734402f-7c64-487f-8875-2a8d777d5665", "migrations_dir": "migrations" }
+    {
+      "binding": "DB",
+      "database_name": "zenguy-db",
+      "database_id": "82cdd9c1-591f-45c4-a115-17fcdc18950b",
+      "migrations_dir": "migrations"
+    }
   ],
-  "kv_namespaces": [{ "binding": "KV", "id": "747847da4d0741579c56ceb51737ab7a" }],
-  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }],
+  "kv_namespaces": [
+    { "binding": "KV", "id": "ac526acc3190422292f9f7d76ef93456" }
+  ],
+  "r2_buckets": [
+    { "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }
+  ],
   "queues": {
     "producers": [
       { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
@@ -32,9 +35,27 @@
       { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
     ],
     "consumers": [
-      { "queue": "zenguy-runs", "max_batch_size": 1, "max_concurrency": 4, "max_retries": 3, "dead_letter_queue": "zenguy-runs-dlq" },
-      { "queue": "zenguy-checks", "max_batch_size": 5, "max_concurrency": 10, "max_retries": 3, "dead_letter_queue": "zenguy-checks-dlq" },
-      { "queue": "zenguy-notify", "max_batch_size": 5, "max_concurrency": 5, "max_retries": 3, "dead_letter_queue": "zenguy-notify-dlq" },
+      {
+        "queue": "zenguy-runs",
+        "max_batch_size": 1,
+        "max_concurrency": 4,
+        "max_retries": 3,
+        "dead_letter_queue": "zenguy-runs-dlq"
+      },
+      {
+        "queue": "zenguy-checks",
+        "max_batch_size": 5,
+        "max_concurrency": 10,
+        "max_retries": 3,
+        "dead_letter_queue": "zenguy-checks-dlq"
+      },
+      {
+        "queue": "zenguy-notify",
+        "max_batch_size": 5,
+        "max_concurrency": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "zenguy-notify-dlq"
+      },
       { "queue": "zenguy-runs-dlq", "max_batch_size": 10, "max_retries": 0 },
       { "queue": "zenguy-checks-dlq", "max_batch_size": 10, "max_retries": 0 },
       { "queue": "zenguy-notify-dlq", "max_batch_size": 10, "max_retries": 0 }
@@ -50,7 +71,13 @@
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
   },
   "env": {
-    "production": {
+    "staging": {
+      "routes": [
+        {
+          "pattern": "staging-app.zenguy.com/api/*",
+          "zone_name": "zenguy.com"
+        }
+      ],
       "browser": { "binding": "BROWSER" },
       "send_email": [
         {
@@ -59,10 +86,107 @@
         }
       ],
       "d1_databases": [
-        { "binding": "DB", "database_name": "zenguy-db", "database_id": "f734402f-7c64-487f-8875-2a8d777d5665", "migrations_dir": "migrations" }
+        {
+          "binding": "DB",
+          "database_name": "zenguy-staging-db",
+          "database_id": "e8668681-c8ae-467b-b3ed-1fd234c96900",
+          "migrations_dir": "migrations"
+        }
       ],
-      "kv_namespaces": [{ "binding": "KV", "id": "747847da4d0741579c56ceb51737ab7a" }],
-      "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }],
+      "kv_namespaces": [
+        { "binding": "KV", "id": "70f95ccb29a041a489bc4326b242be01" }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ARTIFACTS",
+          "bucket_name": "zenguy-staging-artifacts"
+        }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "RUN_QUEUE", "queue": "zenguy-staging-runs" },
+          { "binding": "CHECK_QUEUE", "queue": "zenguy-staging-checks" },
+          { "binding": "NOTIFY_QUEUE", "queue": "zenguy-staging-notify" }
+        ],
+        "consumers": [
+          {
+            "queue": "zenguy-staging-runs",
+            "max_batch_size": 1,
+            "max_concurrency": 4,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-staging-runs-dlq"
+          },
+          {
+            "queue": "zenguy-staging-checks",
+            "max_batch_size": 5,
+            "max_concurrency": 10,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-staging-checks-dlq"
+          },
+          {
+            "queue": "zenguy-staging-notify",
+            "max_batch_size": 5,
+            "max_concurrency": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-staging-notify-dlq"
+          },
+          {
+            "queue": "zenguy-staging-runs-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          },
+          {
+            "queue": "zenguy-staging-checks-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          },
+          {
+            "queue": "zenguy-staging-notify-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          }
+        ]
+      },
+      "triggers": {
+        "crons": ["*/5 * * * *", "0 3 * * *", "30 * * * *"]
+      },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "APP_URL": "https://staging-app.zenguy.com",
+        "LLM_MODEL": "gpt-5-mini",
+        "LLM_USE_VISION": "true",
+        "PADDLE_ENVIRONMENT": "sandbox",
+        "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+      }
+    },
+    "production": {
+      "routes": [
+        {
+          "pattern": "app.zenguy.com/api/*",
+          "zone_name": "zenguy.com"
+        }
+      ],
+      "browser": { "binding": "BROWSER" },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["notifications@zenguy.com"]
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "zenguy-db",
+          "database_id": "82cdd9c1-591f-45c4-a115-17fcdc18950b",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "kv_namespaces": [
+        { "binding": "KV", "id": "ac526acc3190422292f9f7d76ef93456" }
+      ],
+      "r2_buckets": [
+        { "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }
+      ],
       "queues": {
         "producers": [
           { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
@@ -70,13 +194,46 @@
           { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
         ],
         "consumers": [
-          { "queue": "zenguy-runs", "max_batch_size": 1, "max_concurrency": 4, "max_retries": 3, "dead_letter_queue": "zenguy-runs-dlq" },
-          { "queue": "zenguy-checks", "max_batch_size": 5, "max_concurrency": 10, "max_retries": 3, "dead_letter_queue": "zenguy-checks-dlq" },
-          { "queue": "zenguy-notify", "max_batch_size": 5, "max_concurrency": 5, "max_retries": 3, "dead_letter_queue": "zenguy-notify-dlq" },
-          { "queue": "zenguy-runs-dlq", "max_batch_size": 10, "max_retries": 0 },
-          { "queue": "zenguy-checks-dlq", "max_batch_size": 10, "max_retries": 0 },
-          { "queue": "zenguy-notify-dlq", "max_batch_size": 10, "max_retries": 0 }
+          {
+            "queue": "zenguy-runs",
+            "max_batch_size": 1,
+            "max_concurrency": 4,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-runs-dlq"
+          },
+          {
+            "queue": "zenguy-checks",
+            "max_batch_size": 5,
+            "max_concurrency": 10,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-checks-dlq"
+          },
+          {
+            "queue": "zenguy-notify",
+            "max_batch_size": 5,
+            "max_concurrency": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "zenguy-notify-dlq"
+          },
+          {
+            "queue": "zenguy-runs-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          },
+          {
+            "queue": "zenguy-checks-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          },
+          {
+            "queue": "zenguy-notify-dlq",
+            "max_batch_size": 10,
+            "max_retries": 0
+          }
         ]
+      },
+      "triggers": {
+        "crons": ["*/5 * * * *", "0 3 * * *", "30 * * * *"]
       },
       "vars": {
         "ENVIRONMENT": "production",

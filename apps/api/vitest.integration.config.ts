@@ -16,9 +16,6 @@ export default defineConfig({
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: { TEST_MIGRATIONS: migrations },
-          serviceBindings: {
-            ASSETS: () => new Response("Not Found", { status: 404 }),
-          },
         },
       };
     }),
