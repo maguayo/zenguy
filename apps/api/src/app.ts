@@ -77,6 +77,7 @@ import { secretRoutes } from "./http/routes/secrets";
 import { channelRoutes } from "./http/routes/channels";
 import { browserTestRoutes } from "./http/routes/browser_tests";
 import { artifactRoutes } from "./http/routes/artifacts";
+import { runEventRoutes } from "./http/routes/run_events";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -188,6 +189,10 @@ export function buildApp(
   app.route(
     "/api",
     artifactRoutes({ artifacts, storage: artifactStorage, clock, config }),
+  );
+  app.route(
+    "/api/workspaces",
+    runEventRoutes({ runs, attempts, users, clock, config }),
   );
   app.route(
     "/api/auth",

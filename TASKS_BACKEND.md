@@ -902,10 +902,10 @@ interface RunSnapshot {
 - [x] Tests: signed URL round-trip + expired sig 404 + tampered sig 404; run detail includes attempts ordered by index; artifact streaming returns bytes + headers; cross-workspace access to another workspace's run → 404.
 
 ### BE-049: SSE live progress
-- [ ] Create `apps/api/src/http/sse.ts`: helper `sseResponse(generator: AsyncGenerator<{ event: string; data: string }>)` building a `text/event-stream` Response via `ReadableStream` (`retry: 3000` first, then `event:`/`data:` frames, flush per message).
-- [ ] Route `GET /api/workspaces/:workspaceId/runs/:runId/events?exp&sig` (no auth middleware; HMAC token from BE-048 `live.url` is the auth — EventSource cannot send headers): verify `hmacVerify(secret, "sse." + runId + "." + exp, sig)` + expiry → 404 on failure.
-- [ ] Stream loop (spec §20 live progress): every 2000 ms load run + attempts (+ latest step description & latest screenshot artifact id per attempt); emit event `update` with `data` = the same JSON as `GET run` detail (reuse presenter; include fresh signed screenshot URL). Emit only when the serialized payload changed. Every 15 s emit a `: ping` comment line. When run reaches terminal status → emit final `update`, then event `done`, then close. Hard cap: close after 15 minutes regardless.
-- [ ] Tests: unit-test the generator with fake repos + FixedClock (advance time, collect frames): emits initial update, dedupes unchanged, emits done on terminal.
+- [x] Create `apps/api/src/http/sse.ts`: helper `sseResponse(generator: AsyncGenerator<{ event: string; data: string }>)` building a `text/event-stream` Response via `ReadableStream` (`retry: 3000` first, then `event:`/`data:` frames, flush per message).
+- [x] Route `GET /api/workspaces/:workspaceId/runs/:runId/events?exp&sig` (no auth middleware; HMAC token from BE-048 `live.url` is the auth — EventSource cannot send headers): verify `hmacVerify(secret, "sse." + runId + "." + exp, sig)` + expiry → 404 on failure.
+- [x] Stream loop (spec §20 live progress): every 2000 ms load run + attempts (+ latest step description & latest screenshot artifact id per attempt); emit event `update` with `data` = the same JSON as `GET run` detail (reuse presenter; include fresh signed screenshot URL). Emit only when the serialized payload changed. Every 15 s emit a `: ping` comment line. When run reaches terminal status → emit final `update`, then event `done`, then close. Hard cap: close after 15 minutes regardless.
+- [x] Tests: unit-test the generator with fake repos + FixedClock (advance time, collect frames): emits initial update, dedupes unchanged, emits done on terminal.
 
 # Phase 8 — Execution engine (browser agent)
 

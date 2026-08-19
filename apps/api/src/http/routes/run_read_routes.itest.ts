@@ -26,6 +26,7 @@ import {
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
 import { ARTIFACT_SIG_TTL_SECONDS } from "../../shared/constants";
+import { hmacSign } from "../../shared/crypto";
 import { signArtifactUrl } from "../artifact_sign";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import type { AppEnv } from "../env";
@@ -264,6 +265,7 @@ describe("run read and artifact routes", () => {
   let app: Hono<AppEnv>;
   let authorization: string;
   let config: ReturnType<typeof loadConfig>;
+  let runs: D1RunRepo;
 
   beforeEach(async () => {
     await Promise.all([freshDb(), freshKv()]);
@@ -293,7 +295,7 @@ describe("run read and artifact routes", () => {
       joinedAt: NOW,
     });
     const tests = new D1BrowserTestRepo(bindings.DB);
-    const runs = new D1RunRepo(bindings.DB);
+    runs = new D1RunRepo(bindings.DB);
     const attempts = new D1AttemptRepo(bindings.DB);
     const steps = new D1StepRepo(bindings.DB);
     const artifacts = new D1ArtifactRepo(bindings.DB);
@@ -500,6 +502,64 @@ describe("run read and artifact routes", () => {
     );
     const expiredResponse = await app.request(expired);
     expect(expiredResponse.status).toBe(404);
+  });
+
+  it("authenticates SSE with its URL token and streams a terminal update", async () => {
+    const detail = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/runs/${ACTIVE_RUN.id}`,
+      { headers: { Authorization: authorization } },
+    );
+    const detailBody = (await detail.json()) as {
+      data: { live: { url: string } | null };
+    };
+    const liveUrl = detailBody.data.live?.url;
+    expect(liveUrl).toBeDefined();
+
+    const tampered = new URL(liveUrl ?? "", "https://app.zenguy.test");
+    tampered.searchParams.set("sig", "tampered");
+    const tamperedResponse = await app.request(
+      `${tampered.pathname}${tampered.search}`,
+    );
+    expect(tamperedResponse.status).toBe(404);
+
+    const crossWorkspace = new URL(liveUrl ?? "", "https://app.zenguy.test");
+    crossWorkspace.pathname = crossWorkspace.pathname.replace(
+      WORKSPACE.id,
+      OTHER_WORKSPACE.id,
+    );
+    const crossWorkspaceResponse = await app.request(
+      `${crossWorkspace.pathname}${crossWorkspace.search}`,
+    );
+    expect(crossWorkspaceResponse.status).toBe(404);
+
+    const expiredAt = Math.floor(NOW / 1_000) - 1;
+    const expiredSig = await hmacSign(
+      config.artifactUrlSecret,
+      `sse.${ACTIVE_RUN.id}.${expiredAt}`,
+    );
+    const expiredResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/runs/${ACTIVE_RUN.id}/events?exp=${expiredAt}&sig=${encodeURIComponent(expiredSig)}`,
+    );
+    expect(expiredResponse.status).toBe(404);
+
+    await runs.finalize(ACTIVE_RUN.id, {
+      status: "PASSED",
+      finishedAt: NOW,
+      durationMs: 2_000,
+      attemptCount: 2,
+      passedAfterRetry: true,
+      billable: true,
+    });
+    const stream = await app.request(liveUrl ?? "");
+    expect(stream.status).toBe(200);
+    expect(stream.headers.get("Content-Type")).toBe(
+      "text/event-stream; charset=utf-8",
+    );
+    const body = await stream.text();
+    expect(body).toContain("retry: 3000\n\n");
+    expect(body).toContain("event: update\n");
+    expect(body).toContain('"status":"PASSED"');
+    expect(body).toContain("event: done\ndata: {}\n\n");
   });
 
   it("downloads a report with fresh evidence URLs and expired markers", async () => {
