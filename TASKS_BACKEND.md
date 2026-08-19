@@ -1044,7 +1044,7 @@ type StepRecord = { sequence: number; timestamp: number; actionType: string; des
 # Phase 9 — Incidents, alerts, reports
 
 ### BE-058: Incidents migration & repositories
-- [ ] Create `apps/api/migrations/0007_incidents.sql`:
+- [x] Create `apps/api/migrations/0007_incidents.sql`:
 ```sql
 CREATE TABLE incidents (
   id TEXT PRIMARY KEY,
@@ -1077,8 +1077,8 @@ CREATE TABLE incident_events (
 );
 CREATE INDEX idx_incident_events_incident ON incident_events(incident_id, created_at);
 ```
-- [ ] `domain/incidents/types.ts` + `repo.ts`: `IncidentRepo` (`insertOpen` — catches the partial-unique violation and returns the existing open incident instead (idempotent open, §21.4), `findOpenForTest(testId)`, `findOpenForMonitor(monitorId)`, `findById(wsId, id)`, `resolve(id, at, { runId? checkId? })`, `touch(id, lastEventAt)`, `list(wsId, filters: { status?, resourceType?, fromMs?, toMs? }, cursor?, limit)`); `IncidentEventRepo` (`insert`, `listForIncident`).
-- [ ] D1 impls + fakes + `.itest.ts`: double open → one row; filters; partial unique allows re-open after resolve.
+- [x] `domain/incidents/types.ts` + `repo.ts`: `IncidentRepo` (`insertOpen` — catches the partial-unique violation and returns the existing open incident instead (idempotent open, §21.4), `findOpenForTest(testId)`, `findOpenForMonitor(monitorId)`, `findById(wsId, id)`, `resolve(id, at, { runId? checkId? })`, `touch(id, lastEventAt)`, `list(wsId, filters: { status?, resourceType?, fromMs?, toMs? }, cursor?, limit)`); `IncidentEventRepo` (`insert`, `listForIncident`).
+- [x] D1 impls + fakes + `.itest.ts`: double open → one row; filters; partial unique allows re-open after resolve.
 
 ### BE-059: Browser incident engine (RunFinalizedHandler)
 - [ ] Create `application/incidents/handle_run_finalized.ts` implementing `RunFinalizedHandler` (deps: incident repos, dispatch_notifications, channel repo, workspace repo, report generator port (BE-060), templates, clock, ids):
