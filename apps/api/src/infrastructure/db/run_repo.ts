@@ -1,0 +1,292 @@
+import type {
+  RunFinalize,
+  RunRepo,
+} from "../../domain/browser_tests/repo";
+import type {
+  RunSnapshot,
+  RunSource,
+  RunStatus,
+  RunSummaryRow,
+  TestRun,
+} from "../../domain/browser_tests/types";
+import type { Cursor } from "../../shared/pagination";
+import { all, one, run } from "./d1";
+
+interface RunRow {
+  id: string;
+  workspace_id: string;
+  browser_test_id: string | null;
+  source: RunSource;
+  status: RunStatus;
+  snapshot_json: string;
+  scheduled_for: number | null;
+  queued_at: number;
+  started_at: number | null;
+  finished_at: number | null;
+  duration_ms: number | null;
+  attempt_count: number;
+  infra_attempts: number;
+  passed_after_retry: number;
+  billable: number;
+  usage_event_id: string | null;
+  triggered_by_user_id: string | null;
+  incident_id: string | null;
+  created_at: number;
+}
+
+function toRun(row: RunRow): TestRun {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    browserTestId: row.browser_test_id,
+    source: row.source,
+    status: row.status,
+    snapshot: JSON.parse(row.snapshot_json) as RunSnapshot,
+    scheduledFor: row.scheduled_for,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    durationMs: row.duration_ms,
+    attemptCount: row.attempt_count,
+    infraAttempts: row.infra_attempts,
+    passedAfterRetry: row.passed_after_retry === 1,
+    billable: row.billable === 1,
+    usageEventId: row.usage_event_id,
+    triggeredByUserId: row.triggered_by_user_id,
+    incidentId: row.incident_id,
+    createdAt: row.created_at,
+  };
+}
+
+export class D1RunRepo implements RunRepo {
+  constructor(private readonly database: D1Database) {}
+
+  async insert(value: TestRun): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `INSERT INTO test_runs
+            (id, workspace_id, browser_test_id, source, status, snapshot_json,
+             scheduled_for, queued_at, started_at, finished_at, duration_ms,
+             attempt_count, infra_attempts, passed_after_retry, billable,
+             usage_event_id, triggered_by_user_id, incident_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          value.id,
+          value.workspaceId,
+          value.browserTestId,
+          value.source,
+          value.status,
+          JSON.stringify(value.snapshot),
+          value.scheduledFor,
+          value.queuedAt,
+          value.startedAt,
+          value.finishedAt,
+          value.durationMs,
+          value.attemptCount,
+          value.infraAttempts,
+          value.passedAfterRetry ? 1 : 0,
+          value.billable ? 1 : 0,
+          value.usageEventId,
+          value.triggeredByUserId,
+          value.incidentId,
+          value.createdAt,
+        ),
+    );
+  }
+
+  async findById(
+    workspaceId: string,
+    runId: string,
+  ): Promise<TestRun | null> {
+    const row = await one<RunRow>(
+      this.database
+        .prepare(
+          "SELECT * FROM test_runs WHERE workspace_id = ? AND id = ?",
+        )
+        .bind(workspaceId, runId),
+    );
+    return row === null ? null : toRun(row);
+  }
+
+  async listForTest(
+    testId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+    statusFilter?: RunStatus,
+  ): Promise<TestRun[]> {
+    const clauses = ["browser_test_id = ?"];
+    const values: (string | number)[] = [testId];
+    if (statusFilter !== undefined) {
+      clauses.push("status = ?");
+      values.push(statusFilter);
+    }
+    if (cursor !== null && cursor !== undefined) {
+      clauses.push("(created_at < ? OR (created_at = ? AND id < ?))");
+      values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+    }
+    values.push(limit);
+    const rows = await all<RunRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM test_runs WHERE ${clauses.join(" AND ")}
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+        )
+        .bind(...values),
+    );
+    return rows.map(toRun);
+  }
+
+  async updateStatus(
+    runId: string,
+    status: RunStatus,
+    startedAt?: number,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE test_runs
+           SET status = ?, started_at = COALESCE(started_at, ?)
+           WHERE id = ?`,
+        )
+        .bind(status, startedAt ?? null, runId),
+    );
+  }
+
+  async finalize(runId: string, changes: RunFinalize): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE test_runs
+           SET status = ?, finished_at = ?, duration_ms = ?, attempt_count = ?,
+               passed_after_retry = ?, billable = ?,
+               incident_id = CASE WHEN ? = 1 THEN ? ELSE incident_id END
+           WHERE id = ?`,
+        )
+        .bind(
+          changes.status,
+          changes.finishedAt,
+          changes.durationMs,
+          changes.attemptCount,
+          changes.passedAfterRetry ? 1 : 0,
+          changes.billable ? 1 : 0,
+          changes.incidentId === undefined ? 0 : 1,
+          changes.incidentId ?? null,
+          runId,
+        ),
+    );
+  }
+
+  async setUsageEventId(runId: string, usageEventId: string): Promise<void> {
+    await run(
+      this.database
+        .prepare("UPDATE test_runs SET usage_event_id = ? WHERE id = ?")
+        .bind(usageEventId, runId),
+    );
+  }
+
+  async setIncidentId(
+    runId: string,
+    incidentId: string | null,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare("UPDATE test_runs SET incident_id = ? WHERE id = ?")
+        .bind(incidentId, runId),
+    );
+  }
+
+  async incrementInfraAttempts(runId: string): Promise<number> {
+    const row = await one<{ infra_attempts: number }>(
+      this.database
+        .prepare(
+          `UPDATE test_runs SET infra_attempts = infra_attempts + 1
+           WHERE id = ? RETURNING infra_attempts`,
+        )
+        .bind(runId),
+    );
+    return row?.infra_attempts ?? 0;
+  }
+
+  async lastRunSummaryPerTest(
+    workspaceId: string,
+  ): Promise<Map<string, RunSummaryRow>> {
+    const rows = await all<
+      Pick<
+        RunRow,
+        | "browser_test_id"
+        | "id"
+        | "source"
+        | "status"
+        | "started_at"
+        | "finished_at"
+        | "duration_ms"
+        | "attempt_count"
+        | "passed_after_retry"
+        | "billable"
+        | "created_at"
+      >
+    >(
+      this.database
+        .prepare(
+          `SELECT browser_test_id, id, source, status, started_at, finished_at,
+                  duration_ms, attempt_count, passed_after_retry, billable,
+                  created_at
+           FROM (
+             SELECT *, ROW_NUMBER() OVER (
+               PARTITION BY browser_test_id ORDER BY created_at DESC, id DESC
+             ) AS row_number
+             FROM test_runs
+             WHERE workspace_id = ? AND browser_test_id IS NOT NULL
+               AND finished_at IS NOT NULL
+           ) WHERE row_number = 1`,
+        )
+        .bind(workspaceId),
+    );
+    const summaries = new Map<string, RunSummaryRow>();
+    for (const row of rows) {
+      if (row.browser_test_id === null) continue;
+      summaries.set(row.browser_test_id, {
+        browserTestId: row.browser_test_id,
+        id: row.id,
+        source: row.source,
+        status: row.status,
+        startedAt: row.started_at,
+        finishedAt: row.finished_at,
+        durationMs: row.duration_ms,
+        attemptCount: row.attempt_count,
+        passedAfterRetry: row.passed_after_retry === 1,
+        billable: row.billable === 1,
+        createdAt: row.created_at,
+      });
+    }
+    return summaries;
+  }
+
+  async activeRunExists(testId: string): Promise<boolean> {
+    return (
+      (await one<{ found: number }>(
+        this.database
+          .prepare(
+            `SELECT 1 AS found FROM test_runs
+             WHERE browser_test_id = ? AND status IN ('QUEUED', 'RUNNING')
+             LIMIT 1`,
+          )
+          .bind(testId),
+      )) !== null
+    );
+  }
+
+  async countRunning(workspaceId: string): Promise<number> {
+    const row = await one<{ count: number }>(
+      this.database
+        .prepare(
+          `SELECT COUNT(*) AS count FROM test_runs
+           WHERE workspace_id = ? AND status = 'RUNNING'`,
+        )
+        .bind(workspaceId),
+    );
+    return row?.count ?? 0;
+  }
+}

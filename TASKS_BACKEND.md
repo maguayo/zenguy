@@ -847,7 +847,7 @@ CREATE INDEX idx_artifacts_expiry ON run_artifacts(expires_at);
 - [x] Apply locally; extend `freshDb()`.
 
 ### BE-045: Browser-test domain & repositories
-- [ ] Create `apps/api/src/domain/browser_tests/types.ts`: `BrowserTest`, `TestRun`, `TestAttempt`, `RunStep`, `RunArtifact`, `type Device = "DESKTOP" | "MOBILE"`, `type RunSource = "VALIDATION" | "MANUAL" | "SCHEDULED"`, `type RunStatus`, `type AttemptStatus`, and `RunSnapshot`:
+- [x] Create `apps/api/src/domain/browser_tests/types.ts`: `BrowserTest`, `TestRun`, `TestAttempt`, `RunStep`, `RunArtifact`, `type Device = "DESKTOP" | "MOBILE"`, `type RunSource = "VALIDATION" | "MANUAL" | "SCHEDULED"`, `type RunStatus`, `type AttemptStatus`, and `RunSnapshot`:
 ```ts
 interface RunSnapshot {
   name: string; startUrl: string; instructions: string; device: Device;
@@ -856,18 +856,18 @@ interface RunSnapshot {
   modelName: string; runnerVersion: string;
 }
 ```
-- [ ] Create `domain/browser_tests/rules.ts`:
+- [x] Create `domain/browser_tests/rules.ts`:
   - `browserTestConfigSchema` (zod): `name` 1–120, `startUrl` (string then `assertSafeExternalUrl`), `instructions` 1–10000, `device`, `intervalHours` int 1–24, `maxRetries` int 0–3, `notifyOnRecovery` boolean, `channelIds` string[] max 10.
   - `buildSnapshot(config, cfgLlmModel): RunSnapshot` — viewport from `DEVICE_PROFILES[device]`, `runnerVersion: RUNNER_VERSION`.
   - `computeNextRunAt(now: number, intervalHours: number): number` = `now + intervalHours * 3_600_000`.
-- [ ] Create `domain/browser_tests/repo.ts`: `BrowserTestRepo` (`insert`, `findById(wsId, id)`, `list(wsId)`, `update`, `softDelete`, `setNextRunAt(id, at)`, `claimDue(now, limit): Promise<BrowserTest[]>` — **atomic claim**: `UPDATE browser_tests SET next_run_at = next_run_at + interval_hours*3600000 WHERE id IN (SELECT id FROM browser_tests WHERE deleted_at IS NULL AND next_run_at <= ? LIMIT ?) RETURNING *` — the RETURNING rows carry the OLD `next_run_at` semantics: return both `scheduledFor` (old value = returned `next_run_at` minus interval) — simpler: do it in two steps per row with optimistic `UPDATE ... SET next_run_at = ? WHERE id = ? AND next_run_at = ?` and only enqueue when `meta.changes === 1`; implement the two-step version, it's the one the tests cover);
+- [x] Create `domain/browser_tests/repo.ts`: `BrowserTestRepo` (`insert`, `findById(wsId, id)`, `list(wsId)`, `update`, `softDelete`, `setNextRunAt(id, at)`, `claimDue(now, limit): Promise<BrowserTest[]>` — **atomic claim**: `UPDATE browser_tests SET next_run_at = next_run_at + interval_hours*3600000 WHERE id IN (SELECT id FROM browser_tests WHERE deleted_at IS NULL AND next_run_at <= ? LIMIT ?) RETURNING *` — the RETURNING rows carry the OLD `next_run_at` semantics: return both `scheduledFor` (old value = returned `next_run_at` minus interval) — simpler: do it in two steps per row with optimistic `UPDATE ... SET next_run_at = ? WHERE id = ? AND next_run_at = ?` and only enqueue when `meta.changes === 1`; implement the two-step version, it's the one the tests cover);
   `setChannels(testId, channelIds)` (delete junction rows + insert), `getChannelIds(testId)`.
   `RunRepo` (`insert`, `findById(wsId, runId)`, `listForTest(testId, cursor?, limit, statusFilter?)`, `updateStatus`, `finalize(runId, { status, finishedAt, durationMs, attemptCount, passedAfterRetry, billable, incidentId? })`, `setUsageEventId`, `setIncidentId`, `incrementInfraAttempts(runId): Promise<number>` (returns new value), `lastRunSummaryPerTest(wsId): Promise<Map<testId, RunSummaryRow>>` (for lists: latest finished run per test via `MAX(created_at)` group), `activeRunExists(testId): Promise<boolean>`, `countRunning(wsId)`).
   `AttemptRepo` (`insert`, `findById`, `findByRunAndIndex`, `listForRun(runId)`, `update(id, fields)`, `resetForInfraRetry(id, queuedAt)` — sets status QUEUED, clears started/finished/duration/outputs/system_error_code, `listStale(before): Promise<TestAttempt[]>` — status STARTING/RUNNING with `started_at < before`).
   `StepRepo` (`insertMany(steps)`, `listForAttempt(attemptId)`, `deleteForAttempt`).
   `ArtifactRepo` (`insert`, `findById`, `listForAttempt`, `listForRun`, `findReportForRun(runId)`, `listExpired(before, limit)`, `deleteByIds`).
-- [ ] D1 implementations (`browser_test_repo.ts`, `run_repo.ts`, `attempt_repo.ts`, `step_repo.ts`, `artifact_repo.ts`) + fakes.
-- [ ] `.itest.ts`: active-run partial unique index rejects a second QUEUED run for same test but allows for different tests and allows NULL test (drafts); occurrence unique index rejects same `(test, scheduled_for)` twice; `resetForInfraRetry` clears fields; keyset pagination of `listForTest`.
+- [x] D1 implementations (`browser_test_repo.ts`, `run_repo.ts`, `attempt_repo.ts`, `step_repo.ts`, `artifact_repo.ts`) + fakes.
+- [x] `.itest.ts`: active-run partial unique index rejects a second QUEUED run for same test but allows for different tests and allows NULL test (drafts); occurrence unique index rejects same `(test, scheduled_for)` twice; `resetForInfraRetry` clears fields; keyset pagination of `listForTest`.
 
 ### BE-046: Browser-test CRUD use cases & routes
 - [ ] `application/browser_tests/create_browser_test.ts` (`tests.manage` + subscription): validate config (schema + every `channelIds` entry must exist in this workspace via `listByIds` else validation error) → insert with `next_run_at = computeNextRunAt(now, intervalHours)` → `setChannels` → audit `test.created`. (§10.5: saving schedules automatically; `Test it` is NOT required before save.)
