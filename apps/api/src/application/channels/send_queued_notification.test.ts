@@ -1,0 +1,305 @@
+import { processNotifyBatch } from "../../index";
+import type {
+  ChannelSender,
+  NotificationMessage,
+} from "../../domain/channels/notifier";
+import type { NotifyMessage } from "../../domain/queues";
+import type {
+  ChannelType,
+  NotificationChannel,
+  NotificationDelivery,
+} from "../../domain/channels/types";
+import { FixedClock } from "../../shared/clock";
+import { encryptSecret } from "../../shared/crypto";
+import {
+  FakeChannelRepo,
+  FakeDeliveryRepo,
+} from "../../test/fakes/repos";
+import type {
+  IncidentEventWriter,
+  IncidentNotificationEvent,
+} from "./incident_event_writer";
+import { SendQueuedNotification } from "./send_queued_notification";
+
+const ENCRYPTION_KEY = new Uint8Array(32).fill(9);
+const MESSAGE: NotificationMessage = {
+  eventType: "FAILURE",
+  title: "❌ Checkout failed",
+  lines: ["Checkout failed."],
+  link: "https://app.zenguy.test/w/ws_1/incidents/inc_1",
+  speakText: "Zenguy alert. Checkout failed.",
+  shortText: "Zenguy: FAILED Checkout.",
+  color: "red",
+};
+
+class RecordingIncidentEvents implements IncidentEventWriter {
+  readonly events: IncidentNotificationEvent[] = [];
+
+  async write(event: IncidentNotificationEvent): Promise<void> {
+    this.events.push({ ...event });
+  }
+}
+
+class SelectiveSender implements ChannelSender {
+  readonly calls: ChannelType[] = [];
+  readonly failures = new Set<ChannelType>();
+
+  async send(
+    channel: { type: ChannelType; config: unknown },
+  ): Promise<{ providerMessageId: string | null }> {
+    this.calls.push(channel.type);
+    if (this.failures.has(channel.type)) {
+      throw new Error("provider unavailable");
+    }
+    return { providerMessageId: `provider-${channel.type}` };
+  }
+}
+
+class RecordingMessage<T> implements Message<T> {
+  readonly id: string;
+  readonly timestamp = new Date(0);
+  readonly attempts: number;
+  readonly body: T;
+  readonly retryOptions: QueueRetryOptions[] = [];
+  ackCount = 0;
+
+  constructor(id: string, body: T, attempts = 1) {
+    this.id = id;
+    this.body = body;
+    this.attempts = attempts;
+  }
+
+  retry(options: QueueRetryOptions = {}): void {
+    this.retryOptions.push(options);
+  }
+
+  ack(): void {
+    this.ackCount += 1;
+  }
+}
+
+async function channel(
+  id: string,
+  type: ChannelType,
+  enabled = true,
+): Promise<NotificationChannel> {
+  const config =
+    type === "EMAIL"
+      ? { emails: ["ops@example.com"] }
+      : { phoneNumber: "+34600123456" };
+  return {
+    id,
+    workspaceId: "ws_1",
+    name: `${type} channel`,
+    type,
+    encryptedConfig: await encryptSecret(
+      JSON.stringify(config),
+      ENCRYPTION_KEY,
+    ),
+    enabled,
+    verifiedAt: null,
+    lastDeliveryStatus: null,
+    createdBy: "usr_1",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function delivery(id: string, channelId: string): NotificationDelivery {
+  return {
+    id,
+    workspaceId: "ws_1",
+    incidentId: "inc_1",
+    notificationChannelId: channelId,
+    eventType: "FAILURE",
+    status: "PENDING",
+    providerMessageId: null,
+    attemptCount: 0,
+    errorSanitized: null,
+    sentAt: null,
+    createdAt: 1,
+  };
+}
+
+function notify(deliveryId: string, channelId: string): NotifyMessage {
+  return {
+    kind: "notify",
+    deliveryId,
+    workspaceId: "ws_1",
+    channelId,
+    message: MESSAGE,
+  };
+}
+
+function consumerFixture() {
+  const channels = new FakeChannelRepo();
+  const deliveries = new FakeDeliveryRepo();
+  const sender = new SelectiveSender();
+  const incidents = new RecordingIncidentEvents();
+  const clock = new FixedClock(5_000);
+  const consumer = new SendQueuedNotification(
+    deliveries,
+    channels,
+    sender,
+    incidents,
+    ENCRYPTION_KEY,
+    clock,
+  );
+  return { channels, deliveries, sender, incidents, clock, consumer };
+}
+
+describe("SendQueuedNotification", () => {
+  it("retries with backoff twice, then records a sanitized terminal failure", async () => {
+    const fixture = consumerFixture();
+    await fixture.channels.insert(await channel("ch_email", "EMAIL"));
+    await fixture.deliveries.insert(delivery("del_email", "ch_email"));
+    fixture.sender.failures.add("EMAIL");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const first = new RecordingMessage("msg_1", notify("del_email", "ch_email"));
+    await fixture.consumer.execute(first.body, first);
+    expect(first.retryOptions).toEqual([{ delaySeconds: 30 }]);
+    expect(first.ackCount).toBe(0);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_email"),
+    ).resolves.toMatchObject({ status: "PENDING", attemptCount: 1 });
+
+    const second = new RecordingMessage("msg_1", first.body, 2);
+    await fixture.consumer.execute(second.body, second);
+    expect(second.retryOptions).toEqual([{ delaySeconds: 60 }]);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_email"),
+    ).resolves.toMatchObject({ status: "PENDING", attemptCount: 2 });
+
+    const third = new RecordingMessage("msg_1", first.body, 3);
+    await fixture.consumer.execute(third.body, third);
+    expect(third.retryOptions).toEqual([]);
+    expect(third.ackCount).toBe(1);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_email"),
+    ).resolves.toMatchObject({
+      status: "FAILED",
+      attemptCount: 3,
+      errorSanitized: "provider unavailable",
+    });
+    await expect(
+      fixture.channels.findById("ws_1", "ch_email"),
+    ).resolves.toMatchObject({ lastDeliveryStatus: "FAILED" });
+    expect(fixture.incidents.events).toEqual([
+      expect.objectContaining({
+        type: "NOTIFICATION_FAILED",
+        deliveryId: "del_email",
+        status: "FAILED",
+      }),
+    ]);
+    expect(log.mock.calls.join(" ")).toContain(
+      '"event":"notification_delivery_failed"',
+    );
+    log.mockRestore();
+  });
+
+  it("marks a removed or disabled channel failed and acknowledges it", async () => {
+    const fixture = consumerFixture();
+    await fixture.channels.insert(await channel("ch_disabled", "EMAIL", false));
+    await fixture.deliveries.insert(delivery("del_disabled", "ch_disabled"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const message = new RecordingMessage(
+      "msg_disabled",
+      notify("del_disabled", "ch_disabled"),
+    );
+
+    await fixture.consumer.execute(message.body, message);
+
+    expect(message.ackCount).toBe(1);
+    expect(fixture.sender.calls).toEqual([]);
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_disabled"),
+    ).resolves.toMatchObject({
+      status: "FAILED",
+      errorSanitized: "channel removed",
+    });
+    expect(fixture.incidents.events[0]).toMatchObject({
+      type: "NOTIFICATION_FAILED",
+      channelName: "EMAIL channel",
+    });
+    log.mockRestore();
+  });
+
+  it("isolates channel outcomes within the same queue batch", async () => {
+    const fixture = consumerFixture();
+    await fixture.channels.insert(await channel("ch_email", "EMAIL"));
+    await fixture.channels.insert(await channel("ch_sms", "SMS"));
+    await fixture.deliveries.insert(delivery("del_email", "ch_email"));
+    await fixture.deliveries.insert(delivery("del_sms", "ch_sms"));
+    fixture.sender.failures.add("EMAIL");
+    const emailMessage = new RecordingMessage(
+      "msg_email",
+      notify("del_email", "ch_email"),
+    );
+    const smsMessage = new RecordingMessage(
+      "msg_sms",
+      notify("del_sms", "ch_sms"),
+    );
+    const batch = {
+      queue: "zenguy-notify",
+      messages: [emailMessage, smsMessage],
+      metadata: { metrics: { backlogCount: 2, backlogBytes: 1 } },
+      retryAll: () => undefined,
+      ackAll: () => undefined,
+    } satisfies MessageBatch<unknown>;
+
+    await processNotifyBatch(batch, fixture.consumer);
+
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_email"),
+    ).resolves.toMatchObject({ status: "PENDING", attemptCount: 1 });
+    await expect(
+      fixture.deliveries.findById("ws_1", "del_sms"),
+    ).resolves.toMatchObject({
+      status: "SENT",
+      attemptCount: 1,
+      providerMessageId: "provider-SMS",
+      sentAt: 5_000,
+    });
+    expect(emailMessage.retryOptions).toEqual([{ delaySeconds: 30 }]);
+    expect(smsMessage.ackCount).toBe(1);
+    await expect(
+      fixture.channels.findById("ws_1", "ch_sms"),
+    ).resolves.toMatchObject({
+      lastDeliveryStatus: "SENT",
+      verifiedAt: 5_000,
+    });
+    expect(fixture.incidents.events).toEqual([
+      expect.objectContaining({
+        type: "NOTIFICATION_SENT",
+        channelId: "ch_sms",
+      }),
+    ]);
+  });
+
+  it("acknowledges poison messages and continues processing valid ones", async () => {
+    const poison = new RecordingMessage("msg_bad", { nope: true });
+    const valid = new RecordingMessage("msg_valid", notify("del_1", "ch_1"));
+    const execute = vi.fn(async (_input: NotifyMessage, control: Pick<Message, "ack">) => {
+      control.ack();
+    });
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const batch = {
+      queue: "zenguy-notify",
+      messages: [poison, valid],
+      metadata: { metrics: { backlogCount: 2, backlogBytes: 1 } },
+      retryAll: () => undefined,
+      ackAll: () => undefined,
+    } satisfies MessageBatch<unknown>;
+
+    await processNotifyBatch(batch, { execute });
+
+    expect(poison.ackCount).toBe(1);
+    expect(valid.ackCount).toBe(1);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(alert.mock.calls.join(" ")).toContain(
+      '"event":"bad_queue_message"',
+    );
+    alert.mockRestore();
+  });
+});

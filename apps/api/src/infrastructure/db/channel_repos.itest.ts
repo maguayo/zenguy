@@ -123,6 +123,13 @@ describe("D1 channel repositories", () => {
     for (const item of [oldest, middle, newest]) await deliveries.insert(item);
 
     await expect(
+      deliveries.findById("ws_primary", middle.id),
+    ).resolves.toEqual(middle);
+    await expect(
+      deliveries.findById("ws_other", middle.id),
+    ).resolves.toBeNull();
+
+    await expect(
       deliveries.listForChannel(channelId, null, 2),
     ).resolves.toEqual([newest, middle]);
     await expect(

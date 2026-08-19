@@ -38,6 +38,10 @@ export interface ChannelRepo {
 
 export interface DeliveryRepo {
   insert(delivery: NotificationDelivery): Promise<void>;
+  findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<NotificationDelivery | null>;
   update(id: string, changes: DeliveryUpdate): Promise<void>;
   listForChannel(
     channelId: string,

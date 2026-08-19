@@ -891,6 +891,16 @@ export class FakeDeliveryRepo implements DeliveryRepo {
     this.deliveries.set(delivery.id, clone(delivery));
   }
 
+  async findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<NotificationDelivery | null> {
+    const delivery = this.deliveries.get(id);
+    return delivery === undefined || delivery.workspaceId !== workspaceId
+      ? null
+      : clone(delivery);
+  }
+
   async update(id: string, changes: DeliveryUpdate): Promise<void> {
     const delivery = this.deliveries.get(id);
     if (delivery !== undefined) {

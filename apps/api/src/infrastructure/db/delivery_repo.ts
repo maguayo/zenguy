@@ -8,7 +8,7 @@ import type {
   NotificationDelivery,
 } from "../../domain/channels/types";
 import type { Cursor } from "../../shared/pagination";
-import { all, run } from "./d1";
+import { all, one, run } from "./d1";
 
 interface DeliveryRow {
   id: string;
@@ -67,6 +67,21 @@ export class D1DeliveryRepo implements DeliveryRepo {
           delivery.createdAt,
         ),
     );
+  }
+
+  async findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<NotificationDelivery | null> {
+    const row = await one<DeliveryRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM notification_deliveries
+           WHERE workspace_id = ? AND id = ?`,
+        )
+        .bind(workspaceId, id),
+    );
+    return row === null ? null : toDelivery(row);
   }
 
   async update(id: string, changes: DeliveryUpdate): Promise<void> {
