@@ -267,11 +267,11 @@ export default defineConfig({
 - [x] Submit → create: toast `Test created — first run scheduled` → detail page. Edit: toast `Changes saved` (+ if interval changed, backend already recomputed next run). 402 `BILLING_REQUIRED` → toast `Billing required — set up your subscription first.`
 
 ### FE-025: Test detail
-- [ ] `pages/tests/TestDetailPage.tsx` (§18.7), query test + runs (first page). Header: name + `StatusBadge` of last run; actions `Run now` (useRunNow), `Edit`, Dropdown `Delete` (ConfirmDialog danger `Delete "<name>"? Its history stays available for 30 days.`) — all permission-gated.
-- [ ] Open-incident banner when `openIncidentId` (danger Card: `This test has an open incident.` + `View incident →`).
-- [ ] Summary Cards row: **Last result** (StatusBadge + relative time + duration), **Next run** (`formatRelative(nextRunAt)`), **Schedule** (`formatInterval` + device), **Retries** (`<maxRetries> retries`).
-- [ ] **Configuration** Card: DescriptionList — Starting URL (truncated, CopyButton), Instructions (pre-wrap, collapsed to 6 lines with `Show more`), Device + viewport, Notification channels (names as Badges, `None`), Notify on recovery `Yes/No`.
-- [ ] **Runs** Card (§12.1): status filter Tabs (`All`, `Passed`, `Failed`, `Timeout`, `System error`) driving the `status` query param; Table columns: Date (`formatDateTime`), Source (Badge: VALIDATION `Validation` neutral / MANUAL `Manual` info / SCHEDULED `Scheduled` neutral), Status (`StatusBadge` + passedAfterRetry), Duration, Attempts (`2 of 4`), Triggered by (user name or `—`), Billable (`1 run` / `—`). Row → run detail. `LoadMore` with cursor (100/page). Empty: `No runs yet` / `Run it now or wait for the schedule.`
+- [x] `pages/tests/TestDetailPage.tsx` (§18.7), query test + runs (first page). Header: name + `StatusBadge` of last run; actions `Run now` (useRunNow), `Edit`, Dropdown `Delete` (ConfirmDialog danger `Delete "<name>"? Its history stays available for 30 days.`) — all permission-gated.
+- [x] Open-incident banner when `openIncidentId` (danger Card: `This test has an open incident.` + `View incident →`).
+- [x] Summary Cards row: **Last result** (StatusBadge + relative time + duration), **Next run** (`formatRelative(nextRunAt)`), **Schedule** (`formatInterval` + device), **Retries** (`<maxRetries> retries`).
+- [x] **Configuration** Card: DescriptionList — Starting URL (truncated, CopyButton), Instructions (pre-wrap, collapsed to 6 lines with `Show more`), Device + viewport, Notification channels (names as Badges, `None`), Notify on recovery `Yes/No`.
+- [x] **Runs** Card (§12.1): status filter Tabs (`All`, `Passed`, `Failed`, `Timeout`, `System error`) driving the `status` query param; Table columns: Date (`formatDateTime`), Source (Badge: VALIDATION `Validation` neutral / MANUAL `Manual` info / SCHEDULED `Scheduled` neutral), Status (`StatusBadge` + passedAfterRetry), Duration, Attempts (`2 of 4`), Triggered by (user name or `—`), Billable (`1 run` / `—`). Row → run detail. `LoadMore` with cursor (100/page). Empty: `No runs yet` / `Run it now or wait for the schedule.`
 
 ### FE-026: Run detail & live progress
 - [ ] `components/RunStatusPanel.tsx` — the live view used by run detail AND the form's Test it:

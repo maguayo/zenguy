@@ -47,7 +47,7 @@ const BillingSetup = lazy(() => import("./pages/onboarding/BillingSetup"));
 const OverviewPage = lazy(() => import("./pages/overview/OverviewPage"));
 const TestsListPage = lazy(() => import("./pages/tests/TestsListPage"));
 const NewTestPage = lazy(() => import("./pages/tests/TestFormPage"));
-const TestDetailPage = stub("Browser test");
+const TestDetailPage = lazy(() => import("./pages/tests/TestDetailPage"));
 const EditTestPage = lazy(() => import("./pages/tests/TestFormPage"));
 const RunDetailPage = stub("Run");
 const UptimeListPage = stub("Uptime");
