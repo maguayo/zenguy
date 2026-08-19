@@ -329,9 +329,9 @@ export default defineConfig({
 - [x] Empty (Open tab): ok-toned EmptyState `No open incidents` / `Everything is passing. Incidents appear here when a test or monitor fails after all retries.`
 
 ### FE-033: Incident detail
-- [ ] `pages/incidents/IncidentDetailPage.tsx`: header `Incident — <resourceName>` + status Badge; meta line `Opened <dateTime> · <duration>` (+ `Resolved <dateTime>` when closed); button `View <browser test|monitor> →` + (when `openedByRunId`) `View failing run →`.
-- [ ] `components/IncidentTimeline.tsx`: vertical timeline of `events` ascending — icon per type (OPENED `Siren` danger, FAILURE_RECORDED `XCircle` danger, NOTIFICATION_SENT `Send` info, NOTIFICATION_FAILED `AlertTriangle` warn, RESOLVED `CheckCircle2` ok, TEST_DELETED/MONITOR_DELETED `Trash2` neutral), message, `formatDateTime`, metadata chips when present (channel name, delivery status, run/check links from metadata ids).
-- [ ] **Notifications sent** Card: deliveries table — Channel, Event (`Failure`/`Recovery`), Status (`Sent` ok / `Failed` danger + Tooltip with `errorSanitized`), Attempts, Time. Empty → `No notifications were configured when this incident opened.`
+- [x] `pages/incidents/IncidentDetailPage.tsx`: header `Incident — <resourceName>` + status Badge; meta line `Opened <dateTime> · <duration>` (+ `Resolved <dateTime>` when closed); button `View <browser test|monitor> →` + (when `openedByRunId`) `View failing run →`.
+- [x] `components/IncidentTimeline.tsx`: vertical timeline of `events` ascending — icon per type (OPENED `Siren` danger, FAILURE_RECORDED `XCircle` danger, NOTIFICATION_SENT `Send` info, NOTIFICATION_FAILED `AlertTriangle` warn, RESOLVED `CheckCircle2` ok, TEST_DELETED/MONITOR_DELETED `Trash2` neutral), message, `formatDateTime`, metadata chips when present (channel name, delivery status, run/check links from metadata ids).
+- [x] **Notifications sent** Card: deliveries table — Channel, Event (`Failure`/`Recovery`), Status (`Sent` ok / `Failed` danger + Tooltip with `errorSanitized`), Attempts, Time. Empty → `No notifications were configured when this incident opened.`
 
 # Phase 9 — Notification channels
 
