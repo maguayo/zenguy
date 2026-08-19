@@ -133,5 +133,16 @@ describe("D1 billing repositories", () => {
       repo.insertIfAbsent({ ...report, id: "ovr_duplicate" }),
     ).resolves.toBe("duplicate");
     await expect(repo.existsFor("ws_overage", 1_000)).resolves.toBe(true);
+    await repo.setPaddleTransactionId("ovr_123", "txn_overage");
+    await expect(
+      testEnv()
+        .DB.prepare(
+          "SELECT paddle_transaction_id FROM overage_reports WHERE id = ?",
+        )
+        .bind("ovr_123")
+        .first(),
+    ).resolves.toEqual({ paddle_transaction_id: "txn_overage" });
+    await repo.deleteById("ovr_123");
+    await expect(repo.existsFor("ws_overage", 1_000)).resolves.toBe(false);
   });
 });

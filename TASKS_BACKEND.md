@@ -599,14 +599,14 @@ CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, perio
 - [x] Tests: MEMBER 403 on billing; ADMIN sees data but null management urls; OWNER sees urls; gate middleware blocks a probe route when status NONE/CANCELED and passes when ACTIVE/PAST_DUE.
 
 ### BE-035: Overage reporter
-- [ ] `application/billing/report_overage_for_period.ts`: `execute({ workspaceId, periodStart, periodEnd })`:
+- [x] `application/billing/report_overage_for_period.ts`: `execute({ workspaceId, periodStart, periodEnd })`:
   1. `existsFor(workspaceId, periodStart)` → return `{ status: "already_reported" }`.
   2. `billable = countBillable(workspaceId, periodStart, periodEnd)`; `overage = max(0, billable - INCLUDED_RUNS)`.
   3. If `overage === 0` → insert report row (amount 0, no transaction) → `{ status: "no_overage" }`.
   4. Else `createOneTimeCharge(providerSubscriptionId, overagePriceId, overage)` → insert report row with `paddle_transaction_id`, `amount_cents = overage * OVERAGE_CENTS_PER_RUN` → `{ status: "charged", overage }`. `logEvent("overage_reported", { workspaceId, overage })`.
   - Concurrency-safe by the unique `(workspace_id, period_start)` index: `insertIfAbsent` — if duplicate, treat as already reported (never double-charge).
-- [ ] `application/billing/sweep_overages.ts` (hourly cron, wired BE-069): `listPeriodEnded(now - 1h, 50)` → for each subscription whose stored period has ended and has no report row for `period_start`, call `report_overage_for_period` with the stored period. (The webhook rollover in BE-032 is the primary path; this sweep is the safety net when webhooks were missed.)
-- [ ] Tests: no-overage row written once; charge path calls Paddle with quantity = overage; duplicate call → single report; sweep picks only ended+unreported.
+- [x] `application/billing/sweep_overages.ts` (hourly cron, wired BE-069): `listPeriodEnded(now - 1h, 50)` → for each subscription whose stored period has ended and has no report row for `period_start`, call `report_overage_for_period` with the stored period. (The webhook rollover in BE-032 is the primary path; this sweep is the safety net when webhooks were missed.)
+- [x] Tests: no-overage row written once; charge path calls Paddle with quantity = overage; duplicate call → single report; sweep picks only ended+unreported.
 
 # Phase 5 — Secrets
 
@@ -1305,6 +1305,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 - BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
+- BE-035: The report's unique `(workspace_id, period_start)` row is claimed before calling Paddle, then updated with the returned transaction ID; charging first and inserting afterward cannot satisfy the stated never-double-charge guarantee under concurrent workers. A failed provider call releases the uncharged claim for a later retry.
 
 ---
 

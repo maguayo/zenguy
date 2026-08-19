@@ -53,4 +53,25 @@ export class D1OverageReportRepo implements OverageReportRepo {
     );
     return row !== null;
   }
+
+  async setPaddleTransactionId(
+    id: string,
+    transactionId: string | null,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          "UPDATE overage_reports SET paddle_transaction_id = ? WHERE id = ?",
+        )
+        .bind(transactionId, id),
+    );
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await run(
+      this.database
+        .prepare("DELETE FROM overage_reports WHERE id = ?")
+        .bind(id),
+    );
+  }
 }

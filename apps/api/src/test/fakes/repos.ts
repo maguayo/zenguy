@@ -669,4 +669,21 @@ export class FakeOverageReportRepo implements OverageReportRepo {
         report.periodStart === periodStart,
     );
   }
+
+  async setPaddleTransactionId(
+    id: string,
+    transactionId: string | null,
+  ): Promise<void> {
+    const report = this.reports.get(id);
+    if (report !== undefined) {
+      this.reports.set(id, {
+        ...report,
+        paddleTransactionId: transactionId,
+      });
+    }
+  }
+
+  async deleteById(id: string): Promise<void> {
+    this.reports.delete(id);
+  }
 }

@@ -3,6 +3,7 @@ import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
 import type {
+  OverageReportRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "./domain/billing/repo";
@@ -38,15 +39,16 @@ import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
+import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
   HttpPaddleClient,
   type PaddleClient,
 } from "./infrastructure/paddle/client";
 import { buildEmailSender } from "./infrastructure/email";
-import { NoopOverageReporter } from "./infrastructure/billing/noop_overage_reporter";
 import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
+import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
@@ -68,6 +70,7 @@ export interface AppOverrides {
   invitations?: InvitationRepo;
   subscriptions?: SubscriptionRepo;
   usageEvents?: UsageEventRepo;
+  overageReports?: OverageReportRepo;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -96,10 +99,21 @@ export function buildApp(
   const subscriptions =
     overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
+  const overageReports =
+    overrides.overageReports ?? new D1OverageReportRepo(env.DB);
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const overageReporter =
-    overrides.overageReporter ?? new NoopOverageReporter();
+    overrides.overageReporter ??
+    new ReportOverageForPeriod(
+      subscriptions,
+      usageEvents,
+      overageReports,
+      paddleClient,
+      config.paddle.overagePriceId,
+      clock,
+      overrides.ids ?? realIds,
+    );
   const billingCanceller =
     overrides.billingCanceller ??
     new PaddleBillingCanceller(subscriptions, paddleClient, clock);

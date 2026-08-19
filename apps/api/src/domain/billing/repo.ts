@@ -27,4 +27,9 @@ export interface UsageEventRepo {
 export interface OverageReportRepo {
   insertIfAbsent(report: OverageReport): Promise<InsertResult>;
   existsFor(workspaceId: string, periodStart: number): Promise<boolean>;
+  setPaddleTransactionId(
+    id: string,
+    transactionId: string | null,
+  ): Promise<void>;
+  deleteById(id: string): Promise<void>;
 }
