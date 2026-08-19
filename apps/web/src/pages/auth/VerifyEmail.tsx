@@ -22,6 +22,26 @@ export const verificationEmailSchema = z.object({
 type VerificationEmailValues = z.infer<typeof verificationEmailSchema>;
 type VerificationState = "loading" | "success" | "gone" | "error";
 
+export function createTokenVerifier(
+  verify: (token: string) => Promise<unknown>,
+): (token: string) => Promise<void> {
+  const requests = new Map<string, Promise<void>>();
+  return (token) => {
+    const existing = requests.get(token);
+    if (existing) return existing;
+    const request = verify(token)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        requests.delete(token);
+        throw error;
+      });
+    requests.set(token, request);
+    return request;
+  };
+}
+
+const verifyEmailOnce = createTokenVerifier(verifyEmailRequest);
+
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
@@ -43,7 +63,7 @@ export default function VerifyEmail() {
       };
     }
     setState("loading");
-    void verifyEmailRequest(token)
+    void verifyEmailOnce(token)
       .then(() => {
         if (active) setState("success");
       })

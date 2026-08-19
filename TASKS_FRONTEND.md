@@ -409,10 +409,38 @@ export default defineConfig({
 - [x] a11y details: every input labeled (`Field` enforces), icons in icon-only buttons have `aria-label`, StatusBadge always pairs color with text (never a bare dot), toasts `aria-live`, images have alt text, pulsing/`animate-*` wrapped in `motion-safe:` variants, text contrast ≥ 4.5:1 (zinc-500 is the lightest allowed on white).
 
 ### FE-044: Final QA & acceptance walkthrough
-- [ ] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):
+- [x] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):
   1. Sign up → verify (dev email in wrangler logs) → sign in. 2. Create workspace → Paddle sandbox checkout → ACTIVE. 3. Create secret `DEMO_TOKEN`. 4. Create email channel + send test. 5. Create browser test with `Test it` → watch live panel → PASSED. 6. `Run now` from list. 7. Edit instructions to force failure → run → FAILED → incident appears + email + report downloads. 8. Fix instructions → run → PASSED → incident resolved + recovery email. 9. Create uptime monitor (test request → save) → UP within its frequency; break the URL (edit to a 404 path with expected 200) → DOWN + incident; fix → recovery. 10. Invite a second account as Member → verify read-only UI; promote to Admin as owner → verify. 11. Billing page shows usage incremented ONLY by browser runs (uptime free, retries free — check the numbers). 12. Overview reflects all of it. 13. Workspace settings: rename, audit log lists the session's actions. 14. Mobile pass (drawer, tables) + keyboard pass.
-- [ ] Map results to `PROJECT.md` §31 acceptance criteria (UI-visible ones) — every unmet criterion becomes a fix before closing this task.
-- [ ] `pnpm --filter @zenguy/web typecheck && pnpm --filter @zenguy/web test && pnpm --filter @zenguy/web build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
+- [x] Map results to `PROJECT.md` §31 acceptance criteria (UI-visible ones) — every unmet criterion becomes a fix before closing this task.
+- [x] `pnpm --filter @zenguy/web typecheck && pnpm --filter @zenguy/web test && pnpm --filter @zenguy/web build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
+
+#### Acceptance walkthrough — 2026-08-19
+
+- [x] 1. Registered `qa-fe044-owner@example.invalid`, consumed the development verification email, verified the account, and signed in. StrictMode exposed a duplicate verification POST; verification is now single-flight and covered by regression tests.
+- [x] 2. Created `FE044 Acceptance Workspace`, completed the real Paddle sandbox checkout (€39), replayed the signed sandbox webhook idempotently on localhost, and confirmed subscription `sub_01m0cx3sek5vb3jj2tzc78p4n9` and workspace status `ACTIVE`.
+- [x] 3. Created `DEMO_TOKEN` with an allowed domain and confirmed its plaintext never reappears in the UI or API-backed list.
+- [x] 4. Created `FE044 Email`, sent a test delivery, and confirmed `TEST / SENT / 1 attempt` in the delivery drawer and development email log.
+- [x] 5. Created `FE044 Example journey`, ran `Test it` with the live progress panel, remote Browser Rendering, and `gpt-5-mini`; validation run `run_01m0cxf2my4s2gyts53ftr3wgx` passed with a screenshot.
+- [x] 6. Invoked `Run now` from the list action menu; manual run `run_01m0cxjn59gw91v75ybt5q37f4` passed in one attempt.
+- [x] 7. Required a nonexistent marker, ran the test, and got `FAILED` after two clean attempts in `run_01m0cxmav4srascjg3rjqsk1my`. One incident and one failure email were created. The downloaded 2.7 KB Markdown report contains instructions, expected/observed results, steps, artifacts, retries, and no credentials or invented root cause.
+- [x] 8. Restored the passing instructions; `run_01m0cxq384p37z9k8bvz4pf1tv` passed, resolved the same incident, and recorded one recovery email.
+- [x] 9. Tested and saved `FE044 Example uptime`. Scheduled checks produced `UP (200)`, then `DOWN` from two `404 / UNEXPECTED_STATUS` attempts with one incident/email, then `UP (200)` with the incident resolved and recovery email. Uptime remained non-billable.
+- [x] 10. Invited and registered `qa-fe044-member@example.invalid` as Member. Its live UI was read-only: no create/edit/run/delete/test-send/invite controls, no Billing nav, and read-only action menus. The Owner promoted it to Admin; Admin create/management controls and Billing appeared while Admin invitation, payment, transfer, and delete controls remained unavailable.
+- [x] 11. Billing showed `4 of 300` used, `296` remaining, and projected total `39,00 €`. The four billable usage events are the successful validation plus three manual browser runs; the infrastructure error, browser retry, uptime checks, and uptime retry added zero usage.
+- [x] 12. Overview reflected one browser test, one UP monitor, zero open incidents, four runs used, one failure in 24 hours, and the failure/recovery activity. The count label was corrected from the screen-reader text `1tests` to `1 test`.
+- [x] 13. Renamed the workspace to `FE044 Release Ready Workspace`. The live switcher updated and the audit log listed `workspace.updated` plus the session's member, test, monitor, channel, secret, and billing actions.
+- [x] 14. Repeated the pass at 390×844: drawer opens with trapped focus and closes with Escape, the test table keeps a 356 px viewport with 567 px of internal horizontal content and zero document scroll, and keyboard Enter opens a focused test row. The table scroller was fixed by establishing it as the containing block for screen-reader-only labels.
+
+#### `PROJECT.md` §31 UI-visible acceptance map
+
+- [x] 31.1 Workspace and permissions — registration, workspace creation, invite/accept, Member read-only mode, Owner promotion, Admin restrictions, workspace switcher, unavailable-workspace state, and tenant-safe UI/API error handling are covered by the walkthrough and FE-042 regression suite.
+- [x] 31.2 Browser Tests — natural-language authoring, Desktop/Mobile sizes, 1–24 hour schedules, 0–3 retries, save-after-validation, live runs, distinct statuses, evidence, retry presentation, pagination, and 30-day unavailable states are represented in the UI; real validation/manual pass, two-attempt failure, and recovery runs passed acceptance.
+- [x] 31.3 Reports — final failure exposed a working download whose Markdown includes instructions, expected, observed, steps, retries, visited URLs, screenshots, and redaction/root-cause disclaimers.
+- [x] 31.4 Uptime — GET request testing, status/body/JSON-path expectation controls, supported frequencies, free retries/checks, UP/DOWN/recovery incident lifecycle, recent checks, chart, and 24 h/7 d/30 d statistics are present and exercised where UI-visible.
+- [x] 31.5 Notifications — reusable channels, multi-channel pickers, email test, one post-retry failure alert, recovery alerts, and recorded delivery status/attempts are present; Slack, Discord, SMS, WhatsApp, and call forms remain covered by their component/API tests.
+- [x] 31.6 Secrets — key creation, allowed domains, staging warning, permanently hidden values, `{{KEY}}` guidance, and redacted reports are visible and passed; encryption/domain enforcement remains covered by backend tests.
+- [x] 31.7 Billing — one ACTIVE subscription per workspace, 300 included runs, €0.20 overage copy, Owner cost/actions, Member Billing exclusion, idempotent webhook activation, and browser-only usage accounting are reflected correctly.
+- [x] 31.8 Security — audit history and authorized artifact access are visible; permission errors, SSRF/redirect validation, rate limits, secret redaction, and per-attempt browser cleanup remain enforced by the backend test suite. No UI-visible §31 criterion remains unmet.
 
 ---
 

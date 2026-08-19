@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { ActivityItem } from "../../api/types";
-import { activityPath, activityPresentation } from "./OverviewPage";
+import {
+  activityKey,
+  activityPath,
+  activityPresentation,
+  browserTestNoun,
+} from "./OverviewPage";
 
 const item: ActivityItem = {
   id: "activity_1",
@@ -15,6 +20,12 @@ const item: ActivityItem = {
 };
 
 describe("overview activity", () => {
+  it("uses an accessible singular or plural browser-test label", () => {
+    expect(browserTestNoun(1)).toBe("test");
+    expect(browserTestNoun(0)).toBe("tests");
+    expect(browserTestNoun(2)).toBe("tests");
+  });
+
   it("maps every activity type to a presentation", () => {
     expect(Object.keys(activityPresentation).sort()).toEqual(
       [
@@ -43,5 +54,21 @@ describe("overview activity", () => {
     expect(activityPath("ws_1", { ...item, link: { channelId: "ch_1" } })).toBe(
       "/w/ws_1/notifications?channel=ch_1",
     );
+  });
+
+  it("keeps multiple events for the same incident uniquely keyed", () => {
+    const down = {
+      ...item,
+      id: "incident_1",
+      occurredAt: "2026-08-19T10:00:00.000Z",
+      type: "MONITOR_DOWN" as const,
+    };
+    const recovered = {
+      ...down,
+      occurredAt: "2026-08-19T10:05:00.000Z",
+      type: "MONITOR_RECOVERED" as const,
+    };
+
+    expect(activityKey(down)).not.toBe(activityKey(recovered));
   });
 });

@@ -7,6 +7,7 @@ import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { PageHeader } from "./PageHeader";
 import { TableSkeleton } from "./Skeleton";
+import { Table } from "./Table";
 
 describe("layout primitives", () => {
   it("uses bordered cards without a default shadow", () => {
@@ -50,6 +51,18 @@ describe("layout primitives", () => {
     const html = renderToStaticMarkup(<TableSkeleton columns={2} />);
 
     expect(html.match(/grid-template-columns/g)).toHaveLength(5);
+  });
+
+  it("contains screen-reader table labels inside the horizontal scroller", () => {
+    const html = renderToStaticMarkup(
+      <Table
+        columns={[{ header: "Name", key: "name", render: (row: { name: string }) => row.name }]}
+        rowKey={(row) => row.name}
+        rows={[{ name: "A wide row" }]}
+      />,
+    );
+
+    expect(html).toContain('class="relative overflow-x-auto"');
   });
 
   it("provides the standard retry error state", () => {

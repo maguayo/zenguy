@@ -48,6 +48,10 @@ export function activityPath(workspaceId: string, item: ActivityItem): string {
   return `/w/${workspaceId}/overview`;
 }
 
+export function activityKey(item: ActivityItem): string {
+  return `${item.id}:${item.type}:${item.occurredAt}`;
+}
+
 function StatRow({
   danger = false,
   label,
@@ -127,7 +131,9 @@ export default function OverviewPage() {
         <Card className="flex flex-col" title="Browser tests">
           <p className="text-3xl font-semibold tracking-tight text-zinc-950">
             {data.browserTests.total}
-            <span className="ml-2 text-sm font-normal text-zinc-500">tests</span>
+            <span className="ml-2 text-sm font-normal text-zinc-500">
+              {` ${browserTestNoun(data.browserTests.total)}`}
+            </span>
           </p>
           <div className="mt-5 flex-1 space-y-3">
             <StatRow label="Running now" value={data.browserTests.runningRuns} />
@@ -233,7 +239,7 @@ export default function OverviewPage() {
               const presentation = activityPresentation[item.type];
               const Icon = presentation.icon;
               return (
-                <li key={item.id}>
+                <li key={activityKey(item)}>
                   <Link
                     className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-50"
                     to={activityPath(current.id, item)}
@@ -266,4 +272,8 @@ export default function OverviewPage() {
       </Card>
     </div>
   );
+}
+
+export function browserTestNoun(count: number): "test" | "tests" {
+  return count === 1 ? "test" : "tests";
 }

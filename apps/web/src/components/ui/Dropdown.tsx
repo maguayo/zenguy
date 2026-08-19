@@ -44,6 +44,24 @@ export function nextMenuIndex(
   return -1;
 }
 
+export function dropdownMenuTop({
+  menuHeight,
+  triggerBottom,
+  triggerTop,
+  viewportHeight,
+}: {
+  menuHeight: number;
+  triggerBottom: number;
+  triggerTop: number;
+  viewportHeight: number;
+}): number {
+  const viewportPadding = 8;
+  const gap = 6;
+  const below = triggerBottom + gap;
+  if (below + menuHeight <= viewportHeight - viewportPadding) return below;
+  return Math.max(viewportPadding, triggerTop - menuHeight - gap);
+}
+
 export function Dropdown({
   align = "end",
   items,
@@ -72,12 +90,18 @@ export function Dropdown({
       Math.max(0, window.innerWidth - viewportPadding * 2),
     );
     const preferredLeft = align === "end" ? rect.right - width : rect.left;
+    const menuHeight = menuRef.current?.getBoundingClientRect().height ?? 0;
     setPosition({
       left: Math.min(
         Math.max(viewportPadding, preferredLeft),
         Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
       ),
-      top: rect.bottom + 6,
+      top: dropdownMenuTop({
+        menuHeight,
+        triggerBottom: rect.bottom,
+        triggerTop: rect.top,
+        viewportHeight: window.innerHeight,
+      }),
       width,
     });
   };

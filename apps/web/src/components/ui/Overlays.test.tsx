@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ConfirmDialog } from "./ConfirmDialog";
-import { nextMenuIndex } from "./Dropdown";
+import { dropdownMenuTop, nextMenuIndex } from "./Dropdown";
 import { Tooltip } from "./Tooltip";
 
 describe("overlay primitives", () => {
@@ -16,6 +16,25 @@ describe("overlay primitives", () => {
 
   it("returns no menu target when every item is disabled", () => {
     expect(nextMenuIndex(-1, 1, [{ disabled: true }])).toBe(-1);
+  });
+
+  it("places dropdowns above bottom-edge triggers", () => {
+    expect(
+      dropdownMenuTop({
+        menuHeight: 44,
+        triggerBottom: 710,
+        triggerTop: 670,
+        viewportHeight: 720,
+      }),
+    ).toBe(620);
+    expect(
+      dropdownMenuTop({
+        menuHeight: 80,
+        triggerBottom: 100,
+        triggerTop: 60,
+        viewportHeight: 720,
+      }),
+    ).toBe(106);
   });
 
   it("exposes tooltip content to assistive technology", () => {
