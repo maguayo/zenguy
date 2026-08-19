@@ -1277,13 +1277,13 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Cross-tenant test: workspace B's member fetching workspace A's run/attempt/artifact-sig/monitor/incident/secret ids → 404 everywhere (§31.1 "no data leaks between workspaces").
 
 ### BE-073: Seed data
-- [ ] Create `apps/api/scripts/seed.mjs` (Node ≥ 22, uses `node:crypto` `webcrypto` — same PBKDF2 + AES-GCM formats as BE-008):
+- [x] Create `apps/api/scripts/seed.mjs` (Node ≥ 22, uses `node:crypto` `webcrypto` — same PBKDF2 + AES-GCM formats as BE-008):
   - Reads `ENCRYPTION_KEY` from `apps/api/.dev.vars` (simple line parse; error with a clear message if missing).
   - Generates `apps/api/scripts/.seed.generated.sql` containing: user `demo@zenguy.dev` / password `Password123!` (email verified); workspace `Demo Workspace` (owner = demo, timezone `Europe/Madrid`); subscription `ACTIVE` with period `now … now + 30 d` (provider ids `seed-local`); secret `DEMO_TOKEN` = `demo-secret-value` allowed on `*.example.com`; EMAIL channel `Demo email` → `demo@zenguy.dev`; browser test `Example smoke` (`https://example.com`, instructions `Check that the page shows the heading 'Example Domain' and contains a link labeled 'More information'.`, DESKTOP, 24 h, 1 retry, recovery on, the email channel); uptime monitor `Example uptime` (GET `https://example.com`, expected 200, freq 300 s, timeout 10, 1 retry, same channel). All ids `seed_`-prefixed ULIDs; `next_run_at`/`next_check_at` = now + interval.
   - Then executes `npx wrangler d1 execute zenguy-db --local --file scripts/.seed.generated.sql` (spawn; `--remote` guard: refuse unless `--allow-remote` flag).
   - Idempotent: generated SQL starts by deleting prior `seed_%` rows (`DELETE FROM ... WHERE id LIKE 'seed_%'` per table + the demo user by email).
-- [ ] Add `.seed.generated.sql` to `.gitignore`. Document in `apps/api/README.md` (login credentials included).
-- [ ] Test: run with `--dry-run` (prints SQL, no exec) in a unit test; assert the SQL contains one INSERT per expected table and the password hash parses with `verifyPassword`.
+- [x] Add `.seed.generated.sql` to `.gitignore`. Document in `apps/api/README.md` (login credentials included).
+- [x] Test: run with `--dry-run` (prints SQL, no exec) in a unit test; assert the SQL contains one INSERT per expected table and the password hash parses with `verifyPassword`.
 
 ### BE-074: Deployment, docs & acceptance
 - [ ] Complete `apps/api/README.md`:

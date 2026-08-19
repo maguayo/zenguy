@@ -12,6 +12,22 @@ pnpm --filter @zenguy/api dev
 
 Run Browser Rendering-dependent flows with `pnpm --filter @zenguy/api dev:remote`.
 
+## Seed the local database
+
+Create `apps/api/.dev.vars` from `.dev.vars.example`, set a 32-byte base64
+`ENCRYPTION_KEY`, apply the local migrations, then run:
+
+```sh
+pnpm --filter @zenguy/api seed
+```
+
+This recreates the idempotent demo fixture in local D1. Preview the generated
+SQL without writing or executing it with `pnpm --filter @zenguy/api seed -- --dry-run`.
+Remote seeding is deliberately guarded and requires both `--remote` and
+`--allow-remote`.
+
+Demo login: `demo@zenguy.dev` / `Password123!`.
+
 ## Test
 
 ```sh
