@@ -1225,7 +1225,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Tests (fakes + FixedClock): due selection boundaries; claim race (two sweeps, one run created); downtime catch-up creates exactly one run and future `next_run_at` > now; unsubscribed workspace paused; open-cycle monitor skipped.
 
 ### BE-068: Retention purge (cron `0 3 * * *`)
-- [ ] `application/maintenance/purge_expired.ts` (RETENTION_DAYS = 30, loops of ≤ 200 rows until none remain, per-loop D1 batch):
+- [x] `application/maintenance/purge_expired.ts` (RETENTION_DAYS = 30, loops of ≤ 200 rows until none remain, per-loop D1 batch):
   1. Runs with `finished_at < now - 30d` (any status, incl. VALIDATION): collect their attempts → steps, artifact rows (collect `storage_key`s) → `ArtifactStorage.delete(keys)` → delete steps, attempts, artifacts, runs. **NEVER delete `usage_events`, `overage_reports`, `subscriptions`, `audit_logs`** (§23.4 billing/audit retention).
   2. Orphan-expired artifacts: `listExpired(now)` → delete objects + rows (covers report artifacts of purged runs and clock skew).
   3. `uptime_checks.checked_at < now - 30d` → delete (loop).
@@ -1233,8 +1233,8 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
   5. Expired auth debris: `email_tokens.expires_at < now - 7d`; `refresh_tokens` expired or revoked > 30 d ago; `workspace_invitations.expires_at < now - 30d`.
   5b. Workspaces soft-deleted > 30 d ago (§23.5): delete their `workspace_secrets`, `notification_channels` (+ junction rows), `browser_tests`, `uptime_monitors`, `workspace_members`, `workspace_invitations` rows (their runs/checks/artifacts age out via steps 1–4; `audit_logs`, `subscriptions`, `usage_events`, `overage_reports` are still kept).
   6. Return + log counts per table: `logEvent("cleanup", { runs, attempts, steps, artifacts, checks, deliveries, tokens })` (§23.3 cleanup metrics).
-- [ ] Also configure an R2 lifecycle rule note in README (belt & braces: delete objects > 35 days old; wrangler or dashboard command included as a comment).
-- [ ] Tests: fixture data straddling the 30-day line — only old side purged; billing tables untouched (assert rows remain); R2 delete called with exactly the old keys; loop terminates.
+- [x] Also configure an R2 lifecycle rule note in README (belt & braces: delete objects > 35 days old; wrangler or dashboard command included as a comment).
+- [x] Tests: fixture data straddling the 30-day line — only old side purged; billing tables untouched (assert rows remain); R2 delete called with exactly the old keys; loop terminates.
 
 ### BE-069: Hourly maintenance (cron `30 * * * *`)
 - [ ] `application/maintenance/hourly.ts`:

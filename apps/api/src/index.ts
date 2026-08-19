@@ -10,6 +10,7 @@ import {
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
+import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
 import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
 import { WriteIncidentNotificationEvent } from "./application/incidents/write_notification_event";
@@ -30,6 +31,7 @@ import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1CheckRepo } from "./infrastructure/db/check_repo";
+import { D1CleanupRepo } from "./infrastructure/db/cleanup_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
@@ -416,10 +418,20 @@ export function buildSchedulerJobs(
   };
 }
 
-function pendingMaintenanceJob(name: "retention" | "hourly"): ScheduledJob {
+export function buildRetentionJob(env: Bindings): PurgeExpired {
+  return new PurgeExpired(
+    new D1CleanupRepo(env.DB),
+    new D1ArtifactRepo(env.DB),
+    new D1CheckRepo(env.DB),
+    new ArtifactStorage(env.ARTIFACTS),
+    systemClock,
+  );
+}
+
+function pendingHourlyJob(): ScheduledJob {
   return {
     async execute(): Promise<never> {
-      throw new Error(`${name} maintenance is not wired`);
+      throw new Error("hourly maintenance is not wired");
     },
   };
 }
@@ -431,8 +443,8 @@ export async function scheduled(
 ): Promise<void> {
   await processScheduledCron(controller.cron, {
     ...buildSchedulerJobs(env),
-    retention: pendingMaintenanceJob("retention"),
-    hourly: pendingMaintenanceJob("hourly"),
+    retention: buildRetentionJob(env),
+    hourly: pendingHourlyJob(),
   });
 }
 

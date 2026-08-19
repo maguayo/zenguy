@@ -3,10 +3,12 @@ import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
 import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
 import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
+import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { fakeBindings } from "./test/fakes/bindings";
 import {
   buildAttemptConsumer,
   buildCheckConsumer,
+  buildRetentionJob,
   buildSchedulerJobs,
   processQueueBatch,
   processScheduledCron,
@@ -84,6 +86,7 @@ describe("queue routing", () => {
     const scheduler = buildSchedulerJobs(fakeBindings());
     expect(scheduler.tests).toBeInstanceOf(SweepDueTests);
     expect(scheduler.monitors).toBeInstanceOf(SweepDueMonitors);
+    expect(buildRetentionJob(fakeBindings())).toBeInstanceOf(PurgeExpired);
   });
 
   it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {
