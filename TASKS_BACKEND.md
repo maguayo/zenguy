@@ -1001,7 +1001,7 @@ interface RunSnapshot {
 - [x] Tests (fake fetch): request shape exact (assert tool_choice forced, image block present when given); tool_use parsing; token summing; retry-then-throw on 500s; malformed tool input → LlmProtocolError.
 
 ### BE-056: Agent loop & action executor
-- [ ] Create `apps/api/src/application/execution/run_agent.ts` — `runAgentAttempt(deps, input): Promise<AgentResult>` with `deps = { session: BrowserSession, llm: LlmClient, clock, redactor: Redactor, secrets: ResolvedSecrets, onStep?: (step) => Promise<void> }`, `input = { snapshot: RunSnapshot, deadlineAt: number }`, and:
+- [x] Create `apps/api/src/application/execution/run_agent.ts` — `runAgentAttempt(deps, input): Promise<AgentResult>` with `deps = { session: BrowserSession, llm: LlmClient, clock, redactor: Redactor, secrets: ResolvedSecrets, onStep?: (step) => Promise<void> }`, `input = { snapshot: RunSnapshot, deadlineAt: number }`, and:
 ```ts
 type AgentResult = {
   status: "PASSED" | "FAILED" | "TIMEOUT";
@@ -1010,7 +1010,7 @@ type AgentResult = {
 };
 type StepRecord = { sequence: number; timestamp: number; actionType: string; description: string; urlSanitized: string | null; result: "OK" | "ERROR"; screenshotJpeg: Uint8Array | null };
 ```
-- [ ] Loop (max `MAX_AGENT_STEPS = 40` iterations):
+- [x] Loop (max `MAX_AGENT_STEPS = 40` iterations):
   1. Deadline check: `clock.now() >= deadlineAt` → return TIMEOUT result (summary "Attempt exceeded the 5 minute limit", failureReason "Attempt timed out after 5 minutes", steps so far).
   2. `state = session.serialize()`; screenshot = `session.screenshotJpeg()` (also stored on the step) when `llmUseVision`.
   3. Build `userText`: mission block (start URL + verbatim instructions **with `{{KEY}}` placeholders intact — real values NEVER go to the LLM**, §22.4) + `Step k of 40. Elapsed <s>s of 300s.` + action log (one line per prior step: `k. <actionType> → OK/ERROR: <msg>`) + `formatPageState(state)`.
@@ -1023,8 +1023,8 @@ type StepRecord = { sequence: number; timestamp: number; actionType: string; des
      - `ActionError` → ERROR step with its message; other throw → rethrow (runner classifies SYSTEM_ERROR).
   7. Record step (`onStep` callback streams progress rows; sequence++, `urlSanitized = sanitizeUrl(currentUrl)`), take post-action screenshot (cap `MAX_SCREENSHOTS_PER_ATTEMPT = 45`, skip beyond).
   8. Step budget exhausted without finish → FAILED: failureReason `"The agent used all 40 steps without completing and verifying the goal"`, expected/actual from instructions/"not verified".
-- [ ] Every string persisted or returned passes through `redactor.redact` (belt: even though values never enter the LLM, typed substitutions could leak via page text digests — also redact `userText` construction inputs: run `redactor.redact` over `textDigest` before formatting).
-- [ ] Tests with scripted fakes (`FakeSession` with programmable states, `FakeLlm` returning queued actions): pass flow (navigate→click→finish PASSED, steps recorded with screenshots); secret typed on allowed domain substitutes (FakeSession records the real value; step description shows placeholder); disallowed domain → ERROR step, value never reaches session; deadline mid-loop → TIMEOUT; 40-step exhaustion → FAILED; invalid LLM action recovers; redaction of finish summary containing a secret value.
+- [x] Every string persisted or returned passes through `redactor.redact` (belt: even though values never enter the LLM, typed substitutions could leak via page text digests — also redact `userText` construction inputs: run `redactor.redact` over `textDigest` before formatting).
+- [x] Tests with scripted fakes (`FakeSession` with programmable states, `FakeLlm` returning queued actions): pass flow (navigate→click→finish PASSED, steps recorded with screenshots); secret typed on allowed domain substitutes (FakeSession records the real value; step description shows placeholder); disallowed domain → ERROR step, value never reaches session; deadline mid-loop → TIMEOUT; 40-step exhaustion → FAILED; invalid LLM action recovers; redaction of finish summary containing a secret value.
 
 ### BE-057: Attempt consumer wiring
 - [ ] Create `application/execution/execute_attempt.ts` — orchestrates one `AttemptMessage`:
