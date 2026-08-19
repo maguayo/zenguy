@@ -6,14 +6,14 @@ Zenguy is a multi-tenant SaaS for natural-language browser testing and HTTP upti
 zenguy/
 ├── apps/
 │   ├── api/      # Cloudflare Worker API, queues, crons, and storage adapters
-│   ├── web/      # React application
+│   ├── frontend/ # React application
 │   └── landing/  # Astro landing site
 ├── PROJECT.md
 ├── TASKS_BACKEND.md
 └── TASKS_FRONTEND.md
 ```
 
-See `apps/api/README.md` / `apps/web/README.md` for service-specific setup and
+See `apps/api/README.md` / `apps/frontend/README.md` for service-specific setup and
 production deployment details.
 
 ## Local development
@@ -41,7 +41,7 @@ Start each service in its own terminal:
 pnpm --filter @zenguy/api dev
 
 # React application — http://localhost:5173
-pnpm --filter @zenguy/web dev
+pnpm --filter @zenguy/frontend dev
 
 # Landing site — http://localhost:4321
 pnpm --filter @zenguy/landing dev
@@ -53,7 +53,7 @@ alternate API port while another Wrangler process is running:
 ```bash
 pnpm --filter @zenguy/api exec wrangler dev --port 8790
 ZENGUY_API_ORIGIN=http://127.0.0.1:8790 \
-  pnpm --filter @zenguy/web exec vite --host 127.0.0.1 --port 5174
+  pnpm --filter @zenguy/frontend exec vite --host 127.0.0.1 --port 5174
 ```
 
 Confirm the API before testing the UI:

@@ -51,13 +51,13 @@ Current Wrangler remote mode does not consume Queue messages. Use a deployed
 development Worker for the complete API-to-Queue-to-browser path, or use the
 hybrid local-worker/remote-Browser procedure recorded in the BE-057 deviation.
 
-The frontend has no runtime environment variables. Once apps/web exists, run
+The frontend has no runtime environment variables. Once apps/frontend exists, run
 it in a second terminal:
 
-    pnpm --filter @zenguy/web dev
+    pnpm --filter @zenguy/frontend dev
 
 Its Vite server listens on http://localhost:5173 and proxies /api to
-http://localhost:8787. See TASKS_FRONTEND.md and apps/web/README.md for the
+http://localhost:8787. See TASKS_FRONTEND.md and apps/frontend/README.md for the
 frontend-owned setup.
 
 ### Seed data
@@ -193,9 +193,9 @@ https://developers.cloudflare.com/workers/wrangler/commands/.
 
 ### 2. Build, migrate, and configure secrets
 
-The Worker serves apps/web/dist, so the web build must succeed first:
+The Worker serves apps/frontend/dist, so the frontend build must succeed first:
 
-    pnpm --filter @zenguy/web build
+    pnpm --filter @zenguy/frontend build
     pnpm --filter @zenguy/api db:migrate:remote
 
 Set every Appendix A secret in the production environment. Wrangler prompts

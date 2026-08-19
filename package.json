@@ -4,7 +4,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "dev:api": "pnpm --filter @zenguy/api dev",
-    "dev:web": "pnpm --filter @zenguy/web dev",
+    "dev:frontend": "pnpm --filter @zenguy/frontend dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

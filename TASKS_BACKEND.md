@@ -16,7 +16,7 @@
 
 **Spec:** `PROJECT.md` (repo root). Read §5 (concepts), §10 (browser tests), §15 (incidents), §24 (edge cases) before starting Phase 8.
 
-**Companion doc:** `TASKS_FRONTEND.md` (built by another agent). The API contract in its Appendix A is the same contract defined task-by-task here — do not change routes/shapes without updating both files. Backend owns `apps/api/**` and the repo root files. **Never modify `apps/web/**` or `apps/landing/**`.**
+**Companion doc:** `TASKS_FRONTEND.md` (built by another agent). The API contract in its Appendix A is the same contract defined task-by-task here — do not change routes/shapes without updating both files. Backend owns `apps/api/**` and the repo root files. **Never modify `apps/frontend/**` or `apps/landing/**`.**
 
 ---
 
@@ -85,7 +85,7 @@ zenguy/
     │       ├── infrastructure/ (db/, email/, paddle/, twilio/, llm/, browser/, storage/, container.ts)
     │       ├── http/       (middleware/, routes/, presenters/, cookies.ts, sse.ts)
     │       └── test/       (fakes/, fixtures/, helpers)
-    ├── web/                  ← frontend agent's territory (do not touch)
+    ├── frontend/             ← frontend agent's territory (do not touch)
     └── landing/              ← frontend agent's territory (do not touch)
 ```
 
@@ -103,7 +103,7 @@ zenguy/
   "engines": { "node": ">=22" },
   "scripts": {
     "dev:api": "pnpm --filter @zenguy/api dev",
-    "dev:web": "pnpm --filter @zenguy/web dev",
+    "dev:frontend": "pnpm --filter @zenguy/frontend dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
@@ -135,7 +135,7 @@ packages:
 ```
 - [x] Create `.gitignore` with: `node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env`, `.env.*`, `coverage/`, `*.log`, `.DS_Store`.
 - [x] Create `.editorconfig` (2-space indent, LF, UTF-8, final newline).
-- [x] Create root `README.md`: one paragraph about Zenguy, the repo layout tree above, and "see `apps/api/README.md` / `apps/web/README.md` to run each app".
+- [x] Create root `README.md`: one paragraph about Zenguy, the repo layout tree above, and "see `apps/api/README.md` / `apps/frontend/README.md` to run each app".
 - [x] Run `pnpm install` (creates the lockfile). Commit.
 
 ### BE-002: API app scaffold (Hono skeleton)
@@ -166,7 +166,7 @@ export default defineConfig({
   - `wrangler r2 bucket create zenguy-artifacts`
   - `wrangler queues create zenguy-runs` / `zenguy-runs-dlq` / `zenguy-checks` / `zenguy-checks-dlq` / `zenguy-notify` / `zenguy-notify-dlq`
   - (If a command needs an authenticated account and you cannot authenticate, still write the full config with placeholder IDs `"TODO-FILL-ID"` and note it in the Deviations log; local dev with `wrangler dev` works with placeholder IDs for D1/KV/R2/queues simulation.)
-- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, `EMAIL`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../web/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
+- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, `EMAIL`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../frontend/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
 - [x] Create `apps/api/.dev.vars.example` listing every variable from **Appendix A** with safe example values; copy to `.dev.vars` locally with real dev values (never commit `.dev.vars`).
 - [x] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
 
@@ -1289,7 +1289,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
   - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Cloudflare Email Service (onboard sending domain + `send_email` binding); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
-  - **Deploy:** `pnpm --filter @zenguy/web build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
+  - **Deploy:** `pnpm --filter @zenguy/frontend build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
   - **Post-deploy smoke:** curl `/api/health`; register → verify (real email) → login; create workspace; Paddle sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min.
 - [x] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
 - [x] Run the entire suite one final time: root `pnpm typecheck && pnpm test` + `pnpm --filter @zenguy/api test:integration`. Fix anything red. Final commit `BE-074: release readiness`.
@@ -1301,7 +1301,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 > Append entries here as `- BE-0XX: <what differed and why>`. Keep it empty if nothing deviated.
 
 - BE-002: Current `@cloudflare/workers-types` no longer publishes the dated `2023-07-01` subpath, so `tsconfig.json` uses the supported package root type entry instead.
-- BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/web/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
+- BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/frontend/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 - BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
@@ -1315,7 +1315,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 
 # Appendix A — Environment variables & bindings
 
-**Bindings (wrangler.jsonc):** `DB` (D1 `zenguy-db`), `KV` (KV namespace), `ARTIFACTS` (R2 `zenguy-artifacts`), `BROWSER` (Browser Rendering), `EMAIL` (Cloudflare Email Service; remote in local development), `RUN_QUEUE`→`zenguy-runs`, `CHECK_QUEUE`→`zenguy-checks`, `NOTIFY_QUEUE`→`zenguy-notify`, `ASSETS` (static assets `../web/dist`).
+**Bindings (wrangler.jsonc):** `DB` (D1 `zenguy-db`), `KV` (KV namespace), `ARTIFACTS` (R2 `zenguy-artifacts`), `BROWSER` (Browser Rendering), `EMAIL` (Cloudflare Email Service; remote in local development), `RUN_QUEUE`→`zenguy-runs`, `CHECK_QUEUE`→`zenguy-checks`, `NOTIFY_QUEUE`→`zenguy-notify`, `ASSETS` (static assets `../frontend/dist`).
 
 **Vars (non-secret, in wrangler.jsonc):**
 
@@ -1538,7 +1538,7 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
   "assets": {
-    "directory": "../web/dist",
+    "directory": "../frontend/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]

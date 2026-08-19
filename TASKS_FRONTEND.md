@@ -6,17 +6,17 @@
 
 **Stack (fixed, per PROJECT.md §0):** React 19 + Vite + TypeScript (strict) + **Tailwind CSS v4** (`@tailwindcss/vite`). Routing: `react-router-dom`. Server state: `@tanstack/react-query`. Forms: `react-hook-form` + `zod` (`@hookform/resolvers`). Charts: `recharts`. Icons: `lucide-react`. Class joining: `clsx`. Landing: **Astro** (static). No other UI/state libraries — no Redux, no component kits, no CSS-in-JS.
 
-**How it runs:** In production the backend Worker serves `apps/web/dist` as static assets and the API under `/api/*` on the **same origin** (`app.zenguy.com`) — so the app always calls the API with relative URLs (`/api/...`), no CORS anywhere. In development Vite (port 5173) proxies `/api` to `wrangler dev` (port 8787). The refresh token lives in an HttpOnly cookie set by the API; the frontend never touches it. The access token (30-min JWT) lives **in memory only** and auto-refreshes.
+**How it runs:** In production the backend Worker serves `apps/frontend/dist` as static assets and the API under `/api/*` on the **same origin** (`app.zenguy.com`) — so the app always calls the API with relative URLs (`/api/...`), no CORS anywhere. In development Vite (port 5173) proxies `/api` to `wrangler dev` (port 8787). The refresh token lives in an HttpOnly cookie set by the API; the frontend never touches it. The access token (30-min JWT) lives **in memory only** and auto-refreshes.
 
-**Boundaries:** Frontend owns `apps/web/**` and `apps/landing/**`. **Never modify `apps/api/**`.** Repo-root workspace files are created by the backend agent (`TASKS_BACKEND.md` BE-001) — if they don't exist yet, create them with exactly the contents replicated in FE-001 below.
+**Boundaries:** Frontend owns `apps/frontend/**` and `apps/landing/**`. **Never modify `apps/api/**`.** Repo-root workspace files are created by the backend agent (`TASKS_BACKEND.md` BE-001) — if they don't exist yet, create them with exactly the contents replicated in FE-001 below.
 
 ---
 
 ## How to work through this file
 
 1. Do tasks in order (`FE-001` …). Mark checkboxes `[x]` as you complete them; commit per task with message `FE-0XX: <title>`.
-2. **Definition of Done (every task):** `pnpm --filter @zenguy/web typecheck` passes; `pnpm --filter @zenguy/web build` succeeds; `pnpm --filter @zenguy/web test` passes (where tests exist); every new screen handles loading / error / empty states (skeleton or spinner, error card with retry, empty state with CTA); no console errors in the browser.
-3. Backend may be developed in parallel. To run against it: in one terminal `pnpm --filter @zenguy/api dev` (after its migrations/seed — see `apps/api/README.md`), in another `pnpm --filter @zenguy/web dev`. Until an endpoint exists you can still build the screen — the contract in Appendix A is frozen.
+2. **Definition of Done (every task):** `pnpm --filter @zenguy/frontend typecheck` passes; `pnpm --filter @zenguy/frontend build` succeeds; `pnpm --filter @zenguy/frontend test` passes (where tests exist); every new screen handles loading / error / empty states (skeleton or spinner, error card with retry, empty state with CTA); no console errors in the browser.
+3. Backend may be developed in parallel. To run against it: in one terminal `pnpm --filter @zenguy/api dev` (after its migrations/seed — see `apps/api/README.md`), in another `pnpm --filter @zenguy/frontend dev`. Until an endpoint exists you can still build the screen — the contract in Appendix A is frozen.
 4. All UI copy is **English**. Required exact strings are in **Appendix D** — use them verbatim.
 5. Permissions: the UI hides or disables what the role can't do (Appendix C), but never relies on that for security (backend enforces).
 6. Dates: render in the **workspace timezone** via `Intl.DateTimeFormat` (helpers in FE-009). Durations like `3m 12s`. Money in EUR from integer cents.
@@ -40,7 +40,7 @@
 ## App structure (final)
 
 ```
-apps/web/
+apps/frontend/
 ├── index.html
 ├── package.json
 ├── tsconfig.json
@@ -67,12 +67,12 @@ Query-key convention (used everywhere): `["me"]`, `["workspaces"]`, `["ws", wsId
 # Phase 0 — Scaffold & landing
 
 ### FE-001: Web app scaffold
-- [x] If the repo-root workspace files don't exist yet, create them **exactly** as follows (identical to TASKS_BACKEND BE-001 — if they exist, verify and skip): root `package.json` `{ "name": "zenguy", "private": true, "engines": { "node": ">=22" }, "scripts": { "dev:api": "pnpm --filter @zenguy/api dev", "dev:web": "pnpm --filter @zenguy/web dev", "build": "pnpm -r build", "test": "pnpm -r test", "typecheck": "pnpm -r typecheck" } }`; `pnpm-workspace.yaml` (`packages: ["apps/*"]`); `tsconfig.base.json` (strict, ES2023, Bundler resolution, noUncheckedIndexedAccess, verbatimModuleSyntax); `.gitignore` (`node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env*`, `coverage/`, `*.log`, `.DS_Store`); `.editorconfig`.
-- [x] Create `apps/web/package.json`: name `@zenguy/web`, `"type": "module"`, scripts `dev` (`vite`), `build` (`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `test` (`vitest run`).
-- [x] Install: `pnpm --filter @zenguy/web add react react-dom react-router-dom @tanstack/react-query react-hook-form @hookform/resolvers zod recharts lucide-react clsx` and dev deps `pnpm --filter @zenguy/web add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom tailwindcss @tailwindcss/vite vitest`.
-- [x] `apps/web/tsconfig.json` extends `../../tsconfig.base.json`, adds `"jsx": "react-jsx"`, `"lib": ["ES2023", "DOM", "DOM.Iterable"]`, `"types": ["vite/client"]`, include `src`, `vite.config.ts`.
-- [x] `apps/web/index.html`: `<html lang="en">`, `<title>Zenguy</title>`, viewport meta, Google Fonts preconnect + Inter stylesheet (`https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap`), `<div id="root">`, module script `/src/main.tsx`.
-- [x] `apps/web/vite.config.ts`:
+- [x] If the repo-root workspace files don't exist yet, create them **exactly** as follows (identical to TASKS_BACKEND BE-001 — if they exist, verify and skip): root `package.json` `{ "name": "zenguy", "private": true, "engines": { "node": ">=22" }, "scripts": { "dev:api": "pnpm --filter @zenguy/api dev", "dev:frontend": "pnpm --filter @zenguy/frontend dev", "build": "pnpm -r build", "test": "pnpm -r test", "typecheck": "pnpm -r typecheck" } }`; `pnpm-workspace.yaml` (`packages: ["apps/*"]`); `tsconfig.base.json` (strict, ES2023, Bundler resolution, noUncheckedIndexedAccess, verbatimModuleSyntax); `.gitignore` (`node_modules/`, `dist/`, `.wrangler/`, `.dev.vars`, `.env*`, `coverage/`, `*.log`, `.DS_Store`); `.editorconfig`.
+- [x] Create `apps/frontend/package.json`: name `@zenguy/frontend`, `"type": "module"`, scripts `dev` (`vite`), `build` (`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `test` (`vitest run`).
+- [x] Install: `pnpm --filter @zenguy/frontend add react react-dom react-router-dom @tanstack/react-query react-hook-form @hookform/resolvers zod recharts lucide-react clsx` and dev deps `pnpm --filter @zenguy/frontend add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom tailwindcss @tailwindcss/vite vitest`.
+- [x] `apps/frontend/tsconfig.json` extends `../../tsconfig.base.json`, adds `"jsx": "react-jsx"`, `"lib": ["ES2023", "DOM", "DOM.Iterable"]`, `"types": ["vite/client"]`, include `src`, `vite.config.ts`.
+- [x] `apps/frontend/index.html`: `<html lang="en">`, `<title>Zenguy</title>`, viewport meta, Google Fonts preconnect + Inter stylesheet (`https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap`), `<div id="root">`, module script `/src/main.tsx`.
+- [x] `apps/frontend/vite.config.ts`:
 ```ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -84,7 +84,7 @@ export default defineConfig({
 });
 ```
 - [x] `src/main.tsx` rendering `<App />` inside `<React.StrictMode>`; minimal `App.tsx` showing "Zenguy" centered; `src/styles/index.css` with `@import "tailwindcss";` imported from `main.tsx`.
-- [x] Verify `pnpm --filter @zenguy/web dev` renders and `build` outputs `dist/`. Commit.
+- [x] Verify `pnpm --filter @zenguy/frontend dev` renders and `build` outputs `dist/`. Commit.
 
 ### FE-002: Design tokens & base styles
 - [x] Replace `src/styles/index.css` with Tailwind v4 theme tokens (`@theme`) — this is the whole visual identity; use these everywhere, never ad-hoc hex values:
@@ -110,8 +110,8 @@ export default defineConfig({
 - [x] Commit.
 
 ### FE-003: Deployment wiring note
-- [x] Add `apps/web/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/web/dist`; **always run `pnpm --filter @zenguy/web build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
-- [x] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/web build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
+- [x] Add `apps/frontend/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/frontend/dist`; **always run `pnpm --filter @zenguy/frontend build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
+- [x] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/frontend build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
 
 ### FE-004: Astro landing (Coming soon)
 - [x] Create `apps/landing/package.json` (`@zenguy/landing`, scripts `dev`: `astro dev`, `build`: `astro build`, `deploy`: `astro build && wrangler deploy`) and install `pnpm --filter @zenguy/landing add astro` + `-D wrangler`.
@@ -412,7 +412,7 @@ export default defineConfig({
 - [x] Full journey against the local backend (`apps/api` README: migrate + seed + `dev`, or `dev:remote` for real browser runs) — record each step's result as a checklist in this file section (append below):
   1. Sign up → verify (dev email in wrangler logs) → sign in. 2. Create workspace → Paddle sandbox checkout → ACTIVE. 3. Create secret `DEMO_TOKEN`. 4. Create email channel + send test. 5. Create browser test with `Test it` → watch live panel → PASSED. 6. `Run now` from list. 7. Edit instructions to force failure → run → FAILED → incident appears + email + report downloads. 8. Fix instructions → run → PASSED → incident resolved + recovery email. 9. Create uptime monitor (test request → save) → UP within its frequency; break the URL (edit to a 404 path with expected 200) → DOWN + incident; fix → recovery. 10. Invite a second account as Member → verify read-only UI; promote to Admin as owner → verify. 11. Billing page shows usage incremented ONLY by browser runs (uptime free, retries free — check the numbers). 12. Overview reflects all of it. 13. Workspace settings: rename, audit log lists the session's actions. 14. Mobile pass (drawer, tables) + keyboard pass.
 - [x] Map results to `PROJECT.md` §31 acceptance criteria (UI-visible ones) — every unmet criterion becomes a fix before closing this task.
-- [x] `pnpm --filter @zenguy/web typecheck && pnpm --filter @zenguy/web test && pnpm --filter @zenguy/web build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
+- [x] `pnpm --filter @zenguy/frontend typecheck && pnpm --filter @zenguy/frontend test && pnpm --filter @zenguy/frontend build` all green; `pnpm --filter @zenguy/landing build` green. Final commit `FE-044: release readiness`.
 
 #### Acceptance walkthrough — 2026-08-19
 
