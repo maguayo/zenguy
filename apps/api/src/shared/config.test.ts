@@ -21,8 +21,8 @@ function completeBindings(): Bindings {
     ARTIFACT_URL_SECRET: "a".repeat(32),
     RESEND_API_KEY: "",
     EMAIL_FROM: "Zenguy <notifications@example.com>",
-    ANTHROPIC_API_KEY: "anthropic-test",
-    LLM_MODEL: "claude-test",
+    OPENAI_API_KEY: "openai-test",
+    LLM_MODEL: "gpt-5-mini",
     LLM_USE_VISION: "true",
     TWILIO_ACCOUNT_SID: "twilio-sid",
     TWILIO_AUTH_TOKEN: "twilio-token",
@@ -59,7 +59,7 @@ describe("loadConfig", () => {
       "ARTIFACT_URL_SECRET",
       "RESEND_API_KEY",
       "EMAIL_FROM",
-      "ANTHROPIC_API_KEY",
+      "OPENAI_API_KEY",
       "LLM_MODEL",
       "LLM_USE_VISION",
       "TWILIO_ACCOUNT_SID",
@@ -84,6 +84,8 @@ describe("loadConfig", () => {
     expect(config.environment).toBe("development");
     expect(config.encryptionKey).toEqual(new Uint8Array(32).fill(1));
     expect(config.llmUseVision).toBe(true);
+    expect(config.openaiApiKey).toBe("openai-test");
+    expect(config.llmModel).toBe("gpt-5-mini");
     expect(config.paddle).toMatchObject({
       environment: "sandbox",
       apiBase: "https://sandbox-api.paddle.com",

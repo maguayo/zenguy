@@ -73,7 +73,7 @@ const RUN: TestRun = {
     notifyOnRecovery: TEST.notifyOnRecovery,
     channelIds: [],
     viewport: { width: 1440, height: 900 },
-    modelName: "claude-test",
+    modelName: "gpt-5-mini",
     runnerVersion: "zenguy-runner/1.0.0",
   },
   scheduledFor: null,

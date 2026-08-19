@@ -4,13 +4,13 @@
 
 **Goal:** Build the complete Zenguy V1 backend: a multi-tenant SaaS API for natural-language browser tests (LLM agent driving a real browser) and simple HTTP uptime monitors, with workspaces, RBAC, Paddle billing (39 €/month, 300 runs included, 0.20 €/extra run), incidents, notifications (Email/SMS/WhatsApp/Call/Slack/Discord), encrypted secrets, evidence artifacts, and Markdown failure reports.
 
-**Architecture (fixed):** One Cloudflare Worker (`apps/api`) built with **Hono + TypeScript** exposes the REST API under `/api/*`, serves the built React SPA as static assets for all other paths, consumes **Cloudflare Queues** (browser attempts, uptime checks, notification sends), and runs **Cron Triggers** (scheduler, retention purge, hourly maintenance). Data in **D1** (SQLite), cache/rate-limits in **KV**, screenshots/reports in **R2**, browsers via **Browser Rendering** (`@cloudflare/puppeteer`), LLM via the **Anthropic API**. Payments via **Paddle Billing** (the spec mentions Stripe; Paddle is the final decision per `PROJECT.md` §0). The spec's "Python browser-use worker" (§21) is replaced by a TypeScript agent loop on Browser Rendering — same contract, same semantics.
+**Architecture (fixed):** One Cloudflare Worker (`apps/api`) built with **Hono + TypeScript** exposes the REST API under `/api/*`, serves the built React SPA as static assets for all other paths, consumes **Cloudflare Queues** (browser attempts, uptime checks, notification sends), and runs **Cron Triggers** (scheduler, retention purge, hourly maintenance). Data in **D1** (SQLite), cache/rate-limits in **KV**, screenshots/reports in **R2**, browsers via **Browser Rendering** (`@cloudflare/puppeteer`), LLM via the **OpenAI Responses API**. Payments via **Paddle Billing** (the spec mentions Stripe; Paddle is the final decision per `PROJECT.md` §0). The spec's "Python browser-use worker" (§21) is replaced by a TypeScript agent loop on Browser Rendering — same contract, same semantics.
 
 **Clean architecture (mandatory):** use-case design. One file per use case under `src/application/<module>/<use_case>.ts` (e.g. `application/browser_tests/create_browser_test.ts`). Never a giant `service.ts`. Layers:
 
 - `src/domain/` — types, pure business rules, repository **interfaces**. No I/O, no Hono, no Cloudflare imports.
 - `src/application/` — use cases. Each exports a class or function with an `execute(input)` method, receiving dependencies (repos, clock, ids, senders) via constructor/factory. No Hono imports.
-- `src/infrastructure/` — D1 repositories, KV, R2, Paddle/Twilio/Resend/Anthropic clients, browser runner, crypto. Implements domain interfaces.
+- `src/infrastructure/` — D1 repositories, KV, R2, Paddle/Twilio/Resend/OpenAI clients, browser runner, crypto. Implements domain interfaces.
 - `src/http/` — Hono routes, middleware, presenters (domain → JSON). Thin: parse/validate → call use case → present.
 - `src/shared/` — errors, ids, clock, config, crypto, redaction, rate limit, SSRF guard, pagination.
 
@@ -173,7 +173,7 @@ export default defineConfig({
 ### BE-004: Typed env & config
 - [x] Create `apps/api/src/shared/config.ts`:
   - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: Fetcher`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var).
-  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `resendApiKey`, `emailFrom`, `anthropicApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
+  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `resendApiKey`, `emailFrom`, `openaiApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
   - Export `loadConfig(env: Bindings): AppConfig` validating with zod; throw `Error("Missing env: X")` listing all missing vars at once.
 - [x] Create `apps/api/src/shared/constants.ts` with every constant from **Appendix D**, exported by the exact names given there. All later tasks import from here — never re-declare literals.
 - [x] Write unit tests: `loadConfig` throws naming missing vars; parses a complete fake env; decodes base64 `ENCRYPTION_KEY` to 32 bytes and rejects wrong length.
@@ -909,7 +909,7 @@ interface RunSnapshot {
 
 # Phase 8 — Execution engine (browser agent)
 
-> This phase implements the spec's "browser-use worker" as a TypeScript agent: Browser Rendering (`@cloudflare/puppeteer`) + an LLM loop calling the Anthropic API with one forced tool (`browser_action`). Semantics (§10, §24, §26) are law. Every attempt: fresh browser, hard 5-minute cap, structured output, full evidence, everything redacted.
+> This phase implements the spec's "browser-use worker" as a TypeScript agent: Browser Rendering (`@cloudflare/puppeteer`) + an LLM loop calling the OpenAI Responses API with one forced function (`browser_action`). Semantics (§10, §24, §26) are law. Every attempt: fresh browser, hard 5-minute cap, structured output, full evidence, everything redacted.
 
 ### BE-050: Queue plumbing
 - [x] In `apps/api/src/domain/queues.ts` add `AttemptMessage = { kind: "attempt"; runId: string; attemptId: string; attemptIndex: number }` (zod schema; `CheckMessage` comes in Phase 10).
@@ -980,8 +980,8 @@ interface RunSnapshot {
 - [x] `BrowserSession.serialize()` (BE-053) runs `SERIALIZE_SCRIPT` and returns the parsed `PageState`.
 - [x] Tests: `formatPageState` snapshot from a fixture `PageState`; script string contains no backtick-breaking syntax (evaluate it with `new Function` on a jsdom-free fake `document`? — instead: assert it compiles via `new Function("return (" + SERIALIZE_SCRIPT + ")")`).
 
-### BE-055: LLM client (Anthropic)
-- [x] Create `apps/api/src/infrastructure/llm/anthropic.ts`.
+### BE-055: LLM client (OpenAI)
+- [x] Create `apps/api/src/infrastructure/llm/openai.ts`.
 - [x] `interface LlmClient { decideAction(input: { system: string; userText: string; screenshotJpegBase64: string | null }): Promise<{ action: AgentAction; tokensUsed: number }> }`.
 - [x] `AgentAction` zod schema in `apps/api/src/domain/browser_tests/agent_types.ts`:
 ```ts
@@ -995,10 +995,10 @@ interface RunSnapshot {
 }
 ```
   plus `validateAgentAction(a)`: per-action required params (`finish` requires outcome+summary+expected_result+actual_result, and failure_reason when FAILED) → invalid returns error string (fed back to the model, BE-056).
-- [x] `AnthropicLlmClient(cfg, fetchFn)`: `POST https://api.anthropic.com/v1/messages`, headers `x-api-key: <ANTHROPIC_API_KEY>`, `anthropic-version: 2023-06-01`, `content-type: application/json`; body `{ model: cfg.llmModel, max_tokens: 2048, system, messages: [{ role: "user", content: [ ...(screenshot ? [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }] : []), { type: "text", text: userText } ] }], tools: [{ name: "browser_action", description: "Perform one browser action or finish the test", input_schema: <JSON schema mirroring AgentAction> }], tool_choice: { type: "tool", name: "browser_action" } }`.
-  - Parse response: find content block `type === "tool_use"` → validate its `input` with the zod schema (invalid → throw `LlmProtocolError`); `tokensUsed = usage.input_tokens + usage.output_tokens`.
+- [x] `OpenAiLlmClient(cfg, fetchFn)`: `POST https://api.openai.com/v1/responses`, headers `authorization: Bearer <OPENAI_API_KEY>`, `content-type: application/json`; body `{ model: cfg.llmModel, max_output_tokens: 2048, store: false, instructions: system, input: [{ role: "user", content: [{ type: "input_text", text: userText }, ...(screenshot ? [{ type: "input_image", image_url: "data:image/jpeg;base64,...", detail: "low" }] : [])] }], tools: [{ type: "function", name: "browser_action", description: "Perform one browser action or finish the test", parameters: <JSON schema mirroring AgentAction>, strict: false }], tool_choice: { type: "function", name: "browser_action" }, parallel_tool_calls: false }`.
+  - Parse response: find output item `type === "function_call" && name === "browser_action"` → JSON-parse and validate its `arguments` with the zod schema (invalid → throw `LlmProtocolError`); `tokensUsed = usage.input_tokens + usage.output_tokens`.
   - Per-call timeout 60 s (AbortController); on 429/5xx/network error retry twice (1 s, 4 s backoff); still failing → throw `LlmUnavailableError` (→ SYSTEM_ERROR `LLM_UNAVAILABLE`, §24.7).
-- [x] Tests (fake fetch): request shape exact (assert tool_choice forced, image block present when given); tool_use parsing; token summing; retry-then-throw on 500s; malformed tool input → LlmProtocolError.
+- [x] Tests (fake fetch): request shape exact (assert tool_choice forced, image block present when given); function-call parsing; token summing; retry-then-throw on 500s; malformed function input → LlmProtocolError.
 
 ### BE-056: Agent loop & action executor
 - [x] Create `apps/api/src/application/execution/run_agent.ts` — `runAgentAttempt(deps, input): Promise<AgentResult>` with `deps = { session: BrowserSession, llm: LlmClient, clock, redactor: Redactor, secrets: ResolvedSecrets, onStep?: (step) => Promise<void> }`, `input = { snapshot: RunSnapshot, deadlineAt: number }`, and:
@@ -1027,7 +1027,7 @@ type StepRecord = { sequence: number; timestamp: number; actionType: string; des
 - [x] Tests with scripted fakes (`FakeSession` with programmable states, `FakeLlm` returning queued actions): pass flow (navigate→click→finish PASSED, steps recorded with screenshots); secret typed on allowed domain substitutes (FakeSession records the real value; step description shows placeholder); disallowed domain → ERROR step, value never reaches session; deadline mid-loop → TIMEOUT; 40-step exhaustion → FAILED; invalid LLM action recovers; redaction of finish summary containing a secret value.
 
 ### BE-057: Attempt consumer wiring
-- [ ] Create `application/execution/execute_attempt.ts` — orchestrates one `AttemptMessage`:
+- [x] Create `application/execution/execute_attempt.ts` — orchestrates one `AttemptMessage`:
   1. `lifecycle.claim(msg)` → skip or execute.
   2. Load run snapshot; `resolve_secrets(workspaceId, extractPlaceholders(instructions + " " + startUrl))`; build `Redactor`.
   3. `launchSession(env.BROWSER, snapshot.device)` — launch failure → outcome SYSTEM_ERROR code `BROWSER_LAUNCH_FAILED` (§24.6), skip to step 6.
@@ -1036,10 +1036,10 @@ type StepRecord = { sequence: number; timestamp: number; actionType: string; des
   6. `finally: session.dispose()`.
   7. Persist evidence: for each StepRecord with screenshot → R2 put + artifact row (type SCREENSHOT, expires_at = now + 30 d) + step row (artifact_id linked); attempt outcome fields (summary/expected/actual/failureReason redacted; visited/console/network JSON redacted via `redactor.redactDeep` then capped); `token_usage`, `model_name = snapshot.modelName`, `runner_version = RUNNER_VERSION`.
   8. `lifecycle.onAttemptFinished(...)` (drives retry / infra-retry / finalize + RunFinalizedHandler).
-- [ ] `interface RunFinalizedHandler { handle(run: TestRun, snapshot: RunSnapshot): Promise<void> }` in `domain/browser_tests/ports.ts`; register a no-op logging impl in the container for now (BE-059 replaces).
-- [ ] Wire into `queue()` for `zenguy-runs`. Also honor the token note: `logEvent("attempt_tokens", { attemptId, tokens })`; nominal limit `TOKEN_LIMIT_PER_ATTEMPT = 200000` exported but NOT enforced (§6.5).
-- [ ] Integration-style test with all fakes (fake session/llm/R2 recorder): full happy path persists run PASSED + attempt + steps + artifact rows; SYSTEM_ERROR launch path reverses usage and runs infra retry chain.
-- [ ] **Manual smoke (document results in the task commit message):** run `pnpm --filter @zenguy/api dev:remote`; seed a workspace (BE-073 not yet available — insert rows via `wrangler d1 execute` snippets kept in `apps/api/scripts/smoke.sql`: user+workspace+ACTIVE subscription); `POST /api/workspaces/:id/browser-tests/validate` with `{ startUrl: "https://example.com", instructions: "Check that the page shows the heading 'Example Domain' and that the 'More information' link is present.", device: "DESKTOP", intervalHours: 24, maxRetries: 0, notifyOnRecovery: true, channelIds: [], name: "smoke" }` → poll run → expect PASSED, ≥2 steps, ≥1 screenshot artifact in R2, token_usage > 0.
+- [x] `interface RunFinalizedHandler { handle(run: TestRun, snapshot: RunSnapshot): Promise<void> }` in `domain/browser_tests/ports.ts`; register a no-op logging impl in the container for now (BE-059 replaces).
+- [x] Wire into `queue()` for `zenguy-runs`. Also honor the token note: `logEvent("attempt_tokens", { attemptId, tokens })`; nominal limit `TOKEN_LIMIT_PER_ATTEMPT = 200000` exported but NOT enforced (§6.5).
+- [x] Integration-style test with all fakes (fake session/llm/R2 recorder): full happy path persists run PASSED + attempt + steps + artifact rows; SYSTEM_ERROR launch path reverses usage and runs infra retry chain.
+- [x] **Manual smoke (document results in the task commit message):** run `pnpm --filter @zenguy/api dev:remote`; seed a workspace (BE-073 not yet available — insert rows via `wrangler d1 execute` snippets kept in `apps/api/scripts/smoke.sql`: user+workspace+ACTIVE subscription); `POST /api/workspaces/:id/browser-tests/validate` with `{ startUrl: "https://example.com", instructions: "Check that the page shows the heading 'Example Domain' and that the 'More information' link is present.", device: "DESKTOP", intervalHours: 24, maxRetries: 0, notifyOnRecovery: true, channelIds: [], name: "smoke" }` → poll run → expect PASSED, ≥2 steps, ≥1 screenshot artifact in R2, token_usage > 0.
 
 # Phase 9 — Incidents, alerts, reports
 
@@ -1288,7 +1288,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 ### BE-074: Deployment, docs & acceptance
 - [ ] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
-  - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Resend (domain + `RESEND_API_KEY`); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); Anthropic key. Note: Browser Rendering + Queues require the Workers Paid plan.
+  - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Resend (domain + `RESEND_API_KEY`); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
   - **Deploy:** `pnpm --filter @zenguy/web build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
   - **Post-deploy smoke:** curl `/api/health`; register → verify (real email) → login; create workspace; Paddle sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min.
 - [ ] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
@@ -1306,6 +1306,9 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
 - BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
 - BE-035: The report's unique `(workspace_id, period_start)` row is claimed before calling Paddle, then updated with the returned transaction ID; charging first and inserting afterward cannot satisfy the stated never-double-charge guarantee under concurrent workers. A failed provider call releases the uncharged claim for a later retry.
+- BE-057: Current Wrangler remote mode does not support Queue consumers, so the manual smoke runs the Worker and queue locally while using remote D1, R2, and Browser Rendering bindings. This preserves the complete API → queue → browser → evidence path with live Cloudflare resources.
+- BE-057: Per the user's explicit provider override, the execution engine uses OpenAI Responses with the low-cost `gpt-5-mini` model instead of Anthropic; the agent action and error contracts are unchanged.
+- BE-057: The live `example.com` page now labels its informational link `Learn more` rather than `More information`; the manual smoke therefore verifies the same heading-and-informational-link behavior using the current label instead of forcing an incorrect PASS for stale external content.
 
 ---
 
@@ -1319,12 +1322,12 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 |---|---|---|
 | `ENVIRONMENT` | `development` | `production` |
 | `APP_URL` | `http://localhost:5173` | `https://app.zenguy.com` |
-| `LLM_MODEL` | `claude-sonnet-5` | `claude-sonnet-5` |
+| `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` |
 | `LLM_USE_VISION` | `true` | `true` |
 | `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | same |
 
-**Secrets (`.dev.vars` locally, `wrangler secret put` in prod):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `RESEND_API_KEY` (empty in dev → DevEmailSender), `ANTHROPIC_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`.
+**Secrets (`.dev.vars` locally, `wrangler secret put` in prod):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `RESEND_API_KEY` (empty in dev → DevEmailSender), `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`.
 
 # Appendix B — Response envelope & error codes
 
@@ -1564,7 +1567,7 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
   "vars": {
     "ENVIRONMENT": "development",
     "APP_URL": "http://localhost:5173",
-    "LLM_MODEL": "claude-sonnet-5",
+    "LLM_MODEL": "gpt-5-mini",
     "LLM_USE_VISION": "true",
     "PADDLE_ENVIRONMENT": "sandbox",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"

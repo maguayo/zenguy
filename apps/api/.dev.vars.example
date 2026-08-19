@@ -1,6 +1,6 @@
 ENVIRONMENT=development
 APP_URL=http://localhost:5173
-LLM_MODEL=claude-sonnet-5
+LLM_MODEL=gpt-5-mini
 LLM_USE_VISION=true
 PADDLE_ENVIRONMENT=sandbox
 EMAIL_FROM="Zenguy <notifications@zenguy.com>"
@@ -8,7 +8,7 @@ JWT_SECRET=replace-with-at-least-32-random-characters
 ENCRYPTION_KEY=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
 ARTIFACT_URL_SECRET=replace-with-at-least-32-random-characters
 RESEND_API_KEY=
-ANTHROPIC_API_KEY=replace-with-anthropic-api-key
+OPENAI_API_KEY=replace-with-openai-api-key
 TWILIO_ACCOUNT_SID=replace-with-twilio-account-sid
 TWILIO_AUTH_TOKEN=replace-with-twilio-auth-token
 TWILIO_FROM_SMS=+34600000001

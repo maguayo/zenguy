@@ -16,7 +16,7 @@ export interface Bindings {
   ARTIFACT_URL_SECRET: string;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
-  ANTHROPIC_API_KEY: string;
+  OPENAI_API_KEY: string;
   LLM_MODEL: string;
   LLM_USE_VISION: string;
   TWILIO_ACCOUNT_SID: string;
@@ -40,7 +40,7 @@ export interface AppConfig {
   artifactUrlSecret: string;
   resendApiKey: string;
   emailFrom: string;
-  anthropicApiKey: string;
+  openaiApiKey: string;
   llmModel: string;
   llmUseVision: boolean;
   twilio: {
@@ -69,7 +69,7 @@ const requiredEnvKeys = [
   "ARTIFACT_URL_SECRET",
   "RESEND_API_KEY",
   "EMAIL_FROM",
-  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
   "LLM_MODEL",
   "LLM_USE_VISION",
   "TWILIO_ACCOUNT_SID",
@@ -93,7 +93,7 @@ const envSchema = z.object({
   ARTIFACT_URL_SECRET: z.string().min(32),
   RESEND_API_KEY: z.string(),
   EMAIL_FROM: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().min(1),
+  OPENAI_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
   LLM_USE_VISION: z.enum(["true", "false"]),
   TWILIO_ACCOUNT_SID: z.string().min(1),
@@ -150,7 +150,7 @@ export function loadConfig(env: Bindings): AppConfig {
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
     resendApiKey: parsed.RESEND_API_KEY,
     emailFrom: parsed.EMAIL_FROM,
-    anthropicApiKey: parsed.ANTHROPIC_API_KEY,
+    openaiApiKey: parsed.OPENAI_API_KEY,
     llmModel: parsed.LLM_MODEL,
     llmUseVision: parsed.LLM_USE_VISION === "true",
     twilio: {

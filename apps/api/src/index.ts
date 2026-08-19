@@ -1,4 +1,6 @@
 import { buildApp } from "./app";
+import { RecordRunUsage } from "./application/billing/record_run_usage";
+import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
 import {
   NoopIncidentEventWriter,
 } from "./application/channels/incident_event_writer";
@@ -6,17 +8,33 @@ import {
   SendQueuedNotification,
   type NotificationQueueControl,
 } from "./application/channels/send_queued_notification";
+import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
+import { ExecuteAttempt } from "./application/execution/execute_attempt";
+import { LoggingRunFinalizedHandler } from "./application/execution/logging_run_finalized";
+import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import {
   attemptMessageSchema,
   notifyMessageSchema,
   type AttemptMessage,
 } from "./domain/queues";
+import { launchSession } from "./infrastructure/browser/session";
+import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
+import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
+import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
+import { D1RunRepo } from "./infrastructure/db/run_repo";
+import { D1SecretRepo } from "./infrastructure/db/secret_repo";
+import { D1StepRepo } from "./infrastructure/db/step_repo";
+import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
+import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { buildEmailSender } from "./infrastructure/email";
+import { OpenAiLlmClient } from "./infrastructure/llm/openai";
 import { buildChannelSender } from "./infrastructure/notify";
+import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
+import { realIds } from "./shared/ids";
 import { platformAlert } from "./shared/log";
 
 type NotifyConsumer = Pick<SendQueuedNotification, "execute">;
@@ -181,12 +199,49 @@ function notifyConsumer(env: Bindings): SendQueuedNotification {
   );
 }
 
-const pendingAttemptConsumer: AttemptQueueConsumer = {
-  async execute() {
-    // Replaced by the concrete browser attempt consumer in BE-057.
-    throw new Error("attempt consumer not available");
-  },
-};
+export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
+  const config = loadConfig(env);
+  const runs = new D1RunRepo(env.DB);
+  const attempts = new D1AttemptRepo(env.DB);
+  const steps = new D1StepRepo(env.DB);
+  const artifacts = new D1ArtifactRepo(env.DB);
+  const browserTests = new D1BrowserTestRepo(env.DB);
+  const workspaces = new D1WorkspaceRepo(env.DB);
+  const usageEvents = new D1UsageEventRepo(env.DB);
+  const storage = new ArtifactStorage(env.ARTIFACTS);
+  const lifecycle = new AttemptLifecycle({
+    runs,
+    attempts,
+    steps,
+    artifacts,
+    tests: browserTests,
+    workspaces,
+    storage,
+    recordUsage: new RecordRunUsage(usageEvents, systemClock, realIds),
+    reverseUsage: new ReverseRunUsage(usageEvents, systemClock),
+    queue: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+    clock: systemClock,
+    ids: realIds,
+    runFinalizedHandler: new LoggingRunFinalizedHandler(),
+  });
+  return new ExecuteAttempt({
+    lifecycle,
+    runs,
+    attempts,
+    steps,
+    artifacts,
+    storage,
+    resolveSecrets: new ResolveSecrets(
+      new D1SecretRepo(env.DB),
+      config.encryptionKey,
+    ),
+    launchSession: (device) => launchSession(env.BROWSER, device),
+    llm: new OpenAiLlmClient(config),
+    llmUseVision: config.llmUseVision,
+    clock: systemClock,
+    ids: realIds,
+  });
+}
 
 const pendingCheckConsumer: CheckQueueConsumer = {
   async execute() {
@@ -206,7 +261,7 @@ export async function queue(
   }
   switch (batch.queue) {
     case "zenguy-runs":
-      await processAttemptBatch(batch, pendingAttemptConsumer, context);
+      await processAttemptBatch(batch, buildAttemptConsumer(env), context);
       return;
     case "zenguy-checks":
       await processCheckBatch(batch, pendingCheckConsumer, context);

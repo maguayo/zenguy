@@ -7,7 +7,9 @@ import {
 
 export type { LlmClient } from "../../domain/browser_tests/agent_types";
 
-const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+// DEVIATION: The user explicitly selected OpenAI instead of the originally
+// specified Anthropic provider; the domain-level LLM contract is unchanged.
+const RESPONSES_URL = "https://api.openai.com/v1/responses";
 const REQUEST_TIMEOUT_MS = 60_000;
 const RETRY_DELAYS_MS = [1_000, 4_000] as const;
 
@@ -62,10 +64,10 @@ export class LlmUnavailableError extends Error {
 
 class RetryableLlmError extends Error {}
 
-type LlmConfig = Pick<AppConfig, "anthropicApiKey" | "llmModel">;
+type LlmConfig = Pick<AppConfig, "openaiApiKey" | "llmModel">;
 type Sleep = (milliseconds: number) => Promise<void>;
 
-export interface AnthropicClientOptions {
+export interface OpenAiClientOptions {
   sleep?: Sleep;
   timeoutMs?: number;
 }
@@ -82,18 +84,27 @@ function parseResponse(value: unknown): {
   action: AgentAction;
   tokensUsed: number;
 } {
-  if (!isRecord(value) || !Array.isArray(value.content) || !isRecord(value.usage)) {
+  if (!isRecord(value) || !Array.isArray(value.output) || !isRecord(value.usage)) {
     throw new LlmProtocolError();
   }
-  const toolUse = value.content.find(
-    (block) =>
-      isRecord(block) &&
-      block.type === "tool_use" &&
-      block.name === "browser_action",
+  const functionCall = value.output.find(
+    (item) =>
+      isRecord(item) &&
+      item.type === "function_call" &&
+      item.name === "browser_action",
   );
-  if (!isRecord(toolUse)) throw new LlmProtocolError("LLM omitted browser_action");
+  if (!isRecord(functionCall) || typeof functionCall.arguments !== "string") {
+    throw new LlmProtocolError("LLM omitted browser_action");
+  }
 
-  const parsedAction = agentActionSchema.safeParse(toolUse.input);
+  let actionInput: unknown;
+  try {
+    actionInput = JSON.parse(functionCall.arguments);
+  } catch {
+    throw new LlmProtocolError("LLM returned malformed browser_action JSON");
+  }
+
+  const parsedAction = agentActionSchema.safeParse(actionInput);
   const inputTokens = value.usage.input_tokens;
   const outputTokens = value.usage.output_tokens;
   if (
@@ -118,14 +129,14 @@ function retryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
-export class AnthropicLlmClient implements LlmClient {
+export class OpenAiLlmClient implements LlmClient {
   private readonly sleep: Sleep;
   private readonly timeoutMs: number;
 
   constructor(
     private readonly config: LlmConfig,
     private readonly fetchFn: typeof fetch = globalThis.fetch,
-    options: AnthropicClientOptions = {},
+    options: OpenAiClientOptions = {},
   ) {
     this.sleep = options.sleep ?? sleep;
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
@@ -161,45 +172,48 @@ export class AnthropicLlmClient implements LlmClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetchFn(MESSAGES_URL, {
+      // Call Web API functions without binding them to this client instance.
+      // Workerd brand-checks some platform APIs and rejects a foreign receiver.
+      const fetchFn = this.fetchFn;
+      const response = await fetchFn(RESPONSES_URL, {
         method: "POST",
         headers: {
-          "x-api-key": this.config.anthropicApiKey,
-          "anthropic-version": "2023-06-01",
+          authorization: `Bearer ${this.config.openaiApiKey}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({
           model: this.config.llmModel,
-          max_tokens: 2048,
-          system: input.system,
-          messages: [
+          instructions: input.system,
+          max_output_tokens: 2_048,
+          store: false,
+          input: [
             {
               role: "user",
               content: [
+                { type: "input_text", text: input.userText },
                 ...(input.screenshotJpegBase64 === null
                   ? []
                   : [
                       {
-                        type: "image",
-                        source: {
-                          type: "base64",
-                          media_type: "image/jpeg",
-                          data: input.screenshotJpegBase64,
-                        },
+                        type: "input_image",
+                        image_url: `data:image/jpeg;base64,${input.screenshotJpegBase64}`,
+                        detail: "low",
                       },
                     ]),
-                { type: "text", text: input.userText },
               ],
             },
           ],
           tools: [
             {
+              type: "function",
               name: "browser_action",
               description: "Perform one browser action or finish the test",
-              input_schema: AGENT_ACTION_INPUT_SCHEMA,
+              parameters: AGENT_ACTION_INPUT_SCHEMA,
+              strict: false,
             },
           ],
-          tool_choice: { type: "tool", name: "browser_action" },
+          tool_choice: { type: "function", name: "browser_action" },
+          parallel_tool_calls: false,
         }),
         signal: controller.signal,
       });

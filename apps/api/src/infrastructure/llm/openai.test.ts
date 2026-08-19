@@ -1,14 +1,14 @@
 import type { AgentAction } from "../../domain/browser_tests/agent_types";
 import {
   AGENT_ACTION_INPUT_SCHEMA,
-  AnthropicLlmClient,
   LlmProtocolError,
   LlmUnavailableError,
-} from "./anthropic";
+  OpenAiLlmClient,
+} from "./openai";
 
 const config = {
-  anthropicApiKey: "anthropic-secret",
-  llmModel: "claude-test-model",
+  openaiApiKey: "openai-secret",
+  llmModel: "gpt-5-mini",
 };
 
 const finishAction: AgentAction = {
@@ -20,20 +20,21 @@ const finishAction: AgentAction = {
   actual_result: "The cart contains one item.",
 };
 
-function anthropicResponse(
+function openAiResponse(
   action: unknown = finishAction,
   inputTokens = 120,
   outputTokens = 30,
 ): Response {
   return Response.json({
-    id: "msg_test",
-    content: [
-      { type: "text", text: "ignored" },
+    id: "resp_test",
+    output: [
+      { type: "reasoning", id: "reasoning_test", summary: [] },
       {
-        type: "tool_use",
-        id: "tool_test",
+        type: "function_call",
+        id: "function_test",
+        call_id: "call_test",
         name: "browser_action",
-        input: action,
+        arguments: JSON.stringify(action),
       },
     ],
     usage: { input_tokens: inputTokens, output_tokens: outputTokens },
@@ -44,14 +45,14 @@ const noWait = {
   sleep: vi.fn<(milliseconds: number) => Promise<void>>().mockResolvedValue(undefined),
 };
 
-describe("AnthropicLlmClient", () => {
+describe("OpenAiLlmClient", () => {
   beforeEach(() => {
     noWait.sleep.mockClear();
   });
 
-  it("sends the exact forced-tool request with a JPEG image and parses usage", async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(anthropicResponse());
-    const client = new AnthropicLlmClient(config, fetchFn, noWait);
+  it("sends the exact forced-function request with a low-detail JPEG and parses usage", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(openAiResponse());
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
 
     await expect(
       client.decideAction({
@@ -63,48 +64,48 @@ describe("AnthropicLlmClient", () => {
 
     expect(fetchFn).toHaveBeenCalledOnce();
     const [url, init] = fetchFn.mock.calls[0] ?? [];
-    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect(url).toBe("https://api.openai.com/v1/responses");
     expect(init?.method).toBe("POST");
     expect(init?.headers).toEqual({
-      "x-api-key": "anthropic-secret",
-      "anthropic-version": "2023-06-01",
+      authorization: "Bearer openai-secret",
       "content-type": "application/json",
     });
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(String(init?.body))).toEqual({
-      model: "claude-test-model",
-      max_tokens: 2048,
-      system: "System instructions",
-      messages: [
+      model: "gpt-5-mini",
+      instructions: "System instructions",
+      max_output_tokens: 2_048,
+      store: false,
+      input: [
         {
           role: "user",
           content: [
+            { type: "input_text", text: "Current browser state" },
             {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: "jpeg-base64",
-              },
+              type: "input_image",
+              image_url: "data:image/jpeg;base64,jpeg-base64",
+              detail: "low",
             },
-            { type: "text", text: "Current browser state" },
           ],
         },
       ],
       tools: [
         {
+          type: "function",
           name: "browser_action",
           description: "Perform one browser action or finish the test",
-          input_schema: AGENT_ACTION_INPUT_SCHEMA,
+          parameters: AGENT_ACTION_INPUT_SCHEMA,
+          strict: false,
         },
       ],
-      tool_choice: { type: "tool", name: "browser_action" },
+      tool_choice: { type: "function", name: "browser_action" },
+      parallel_tool_calls: false,
     });
   });
 
   it("omits the image block when vision input is absent", async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(anthropicResponse());
-    const client = new AnthropicLlmClient(config, fetchFn, noWait);
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(openAiResponse());
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
 
     await client.decideAction({
       system: "system",
@@ -114,18 +115,37 @@ describe("AnthropicLlmClient", () => {
 
     const [, init] = fetchFn.mock.calls[0] ?? [];
     const body = JSON.parse(String(init?.body)) as {
-      messages: Array<{ content: unknown[] }>;
+      input: Array<{ content: unknown[] }>;
     };
-    expect(body.messages[0]?.content).toEqual([
-      { type: "text", text: "text only" },
+    expect(body.input[0]?.content).toEqual([
+      { type: "input_text", text: "text only" },
     ]);
+  });
+
+  it("invokes the Web API fetch function without a foreign receiver", async () => {
+    const fetchFn = vi.fn(function (this: unknown) {
+      if (this !== undefined) {
+        return Promise.reject(new TypeError("Illegal invocation"));
+      }
+      return Promise.resolve(openAiResponse());
+    }) as unknown as typeof fetch;
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
+
+    await expect(
+      client.decideAction({
+        system: "system",
+        userText: "state",
+        screenshotJpegBase64: null,
+      }),
+    ).resolves.toEqual({ action: finishAction, tokensUsed: 150 });
+    expect(fetchFn).toHaveBeenCalledOnce();
   });
 
   it("retries retryable statuses with 1s and 4s backoff, then throws unavailable", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 500 }));
-    const client = new AnthropicLlmClient(config, fetchFn, noWait);
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
 
     await expect(
       client.decideAction({
@@ -144,8 +164,8 @@ describe("AnthropicLlmClient", () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 429 }))
       .mockRejectedValueOnce(new Error("connection reset"))
-      .mockResolvedValueOnce(anthropicResponse());
-    const client = new AnthropicLlmClient(config, fetchFn, noWait);
+      .mockResolvedValueOnce(openAiResponse());
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
 
     await expect(
       client.decideAction({
@@ -157,11 +177,11 @@ describe("AnthropicLlmClient", () => {
     expect(noWait.sleep.mock.calls).toEqual([[1_000], [4_000]]);
   });
 
-  it("maps malformed tool input to a protocol error without retrying", async () => {
+  it("maps malformed function input to a protocol error without retrying", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(anthropicResponse({ thought: "Click.", action: "click", index: "zero" }));
-    const client = new AnthropicLlmClient(config, fetchFn, noWait);
+      .mockResolvedValue(openAiResponse({ thought: "Click.", action: "click", index: "zero" }));
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
 
     await expect(
       client.decideAction({
@@ -174,17 +194,23 @@ describe("AnthropicLlmClient", () => {
     expect(noWait.sleep).not.toHaveBeenCalled();
   });
 
-  it("rejects missing tools, malformed usage, invalid JSON, and non-retryable HTTP errors", async () => {
+  it("rejects missing functions, malformed arguments and usage, invalid JSON, and non-retryable HTTP errors", async () => {
+    const malformedArguments = openAiResponse();
+    const malformedPayload = (await malformedArguments.json()) as {
+      output: Array<Record<string, unknown>>;
+    };
+    malformedPayload.output[1]!.arguments = "{";
     const cases = [
-      Response.json({ content: [], usage: { input_tokens: 1, output_tokens: 1 } }),
-      anthropicResponse(finishAction, -1, 2),
+      Response.json({ output: [], usage: { input_tokens: 1, output_tokens: 1 } }),
+      Response.json(malformedPayload),
+      openAiResponse(finishAction, -1, 2),
       new Response("not JSON"),
       new Response(null, { status: 400 }),
     ];
 
     for (const response of cases) {
       const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(response);
-      const client = new AnthropicLlmClient(config, fetchFn, noWait);
+      const client = new OpenAiLlmClient(config, fetchFn, noWait);
       await expect(
         client.decideAction({
           system: "system",
@@ -202,7 +228,7 @@ describe("AnthropicLlmClient", () => {
         init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
       });
     });
-    const client = new AnthropicLlmClient(config, fetchFn, {
+    const client = new OpenAiLlmClient(config, fetchFn, {
       ...noWait,
       timeoutMs: 1,
     });

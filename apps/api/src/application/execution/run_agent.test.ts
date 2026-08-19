@@ -30,7 +30,7 @@ const snapshot: RunSnapshot = {
   notifyOnRecovery: true,
   channelIds: [],
   viewport: { width: 1440, height: 900 },
-  modelName: "claude-test",
+  modelName: "gpt-5-mini",
   runnerVersion: "test-runner",
 };
 
@@ -270,6 +270,7 @@ describe("runAgentAttempt", () => {
     }))).toEqual([
       { sequence: 1, actionType: "navigate", result: "OK" },
       { sequence: 2, actionType: "click", result: "OK" },
+      { sequence: 3, actionType: "finish", result: "OK" },
     ]);
     expect(result.steps.every((step) => step.screenshotJpeg !== null)).toBe(true);
     expect(streamed).toEqual(result.steps);
@@ -538,6 +539,10 @@ describe("runAgentAttempt", () => {
         result: "ERROR",
         description: "invalid action: click requires index",
       },
+      {
+        actionType: "finish",
+        result: "OK",
+      },
     ]);
     expect(test.session.clicks).toEqual([]);
     expect(test.llm.inputs[1]?.userText).toContain(
@@ -673,7 +678,12 @@ describe("runAgentAttempt", () => {
     expect(test.session.scrolls).toEqual(["down"]);
     expect(test.session.goBackCalls).toBe(1);
     expect(waits).toEqual([3_000]);
-    expect(result.steps).toHaveLength(5);
+    expect(result.steps).toHaveLength(6);
+    expect(result.steps.at(-1)).toMatchObject({
+      actionType: "finish",
+      result: "OK",
+      screenshotJpeg: expect.any(Uint8Array),
+    });
     expect(result.status).toBe("PASSED");
   });
 

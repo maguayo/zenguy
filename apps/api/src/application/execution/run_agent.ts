@@ -60,6 +60,7 @@ export interface RunAgentDependencies {
 export interface RunAgentInput {
   snapshot: RunSnapshot;
   deadlineAt: number;
+  initialSteps?: StepRecord[];
 }
 
 interface ExecutionResult {
@@ -180,6 +181,30 @@ function actionDescription(
   return oneLine(redactor.redact(`${action.thought} → ${detail}`));
 }
 
+export type NavigationResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function navigateWithSecrets(
+  session: BrowserSession,
+  url: string,
+  secrets: ResolvedSecrets,
+): Promise<NavigationResult> {
+  const substitution = substitutePlaceholders(url, secrets, hostOf(url));
+  if (!substitution.ok) return { ok: false, error: substitution.reason };
+  let destination: URL;
+  try {
+    destination = assertSafeExternalUrl(substitution.text);
+  } catch (error) {
+    if (isAppError(error) && error.code === "VALIDATION_ERROR") {
+      return { ok: false, error: "Navigation blocked: URL not allowed" };
+    }
+    throw error;
+  }
+  await session.navigate(destination.href);
+  return { ok: true };
+}
+
 async function executeAction(
   action: AgentAction,
   dependencies: RunAgentDependencies,
@@ -187,27 +212,14 @@ async function executeAction(
   const { session, secrets } = dependencies;
   switch (action.action) {
     case "navigate": {
-      const originalUrl = action.url as string;
-      const substitution = substitutePlaceholders(
-        originalUrl,
+      const navigation = await navigateWithSecrets(
+        session,
+        action.url as string,
         secrets,
-        hostOf(originalUrl),
       );
-      if (!substitution.ok) return { result: "ERROR", detail: substitution.reason };
-      let destination: URL;
-      try {
-        destination = assertSafeExternalUrl(substitution.text);
-      } catch (error) {
-        if (isAppError(error) && error.code === "VALIDATION_ERROR") {
-          return {
-            result: "ERROR",
-            detail: "Navigation blocked: URL not allowed",
-          };
-        }
-        throw error;
-      }
-      await session.navigate(destination.href);
-      return { result: "OK", detail: null };
+      return navigation.ok
+        ? { result: "OK", detail: null }
+        : { result: "ERROR", detail: navigation.error };
     }
     case "click":
       await session.click(action.index as number);
@@ -284,7 +296,7 @@ async function recordStep(
   await dependencies.onStep?.(step);
 }
 
-function timeoutResult(
+export function agentTimeoutResult(
   snapshot: RunSnapshot,
   steps: StepRecord[],
   tokensUsed: number,
@@ -308,15 +320,23 @@ export async function runAgentAttempt(
   dependencies: RunAgentDependencies,
   input: RunAgentInput,
 ): Promise<AgentResult> {
-  const steps: StepRecord[] = [];
+  const steps: StepRecord[] = (input.initialSteps ?? []).map((step) => ({
+    ...step,
+    screenshotJpeg:
+      step.screenshotJpeg === null
+        ? null
+        : new Uint8Array(step.screenshotJpeg),
+  }));
   let tokensUsed = 0;
-  let screenshotsStored = 0;
+  let screenshotsStored = steps.filter(
+    (step) => step.screenshotJpeg !== null,
+  ).length;
   const startedAt = input.deadlineAt - ATTEMPT_TIMEOUT_MS;
 
   for (let index = 0; index < MAX_AGENT_STEPS; index += 1) {
     const now = dependencies.clock.now();
     if (now >= input.deadlineAt) {
-      return timeoutResult(
+      return agentTimeoutResult(
         input.snapshot,
         steps,
         tokensUsed,
@@ -362,6 +382,24 @@ export async function runAgentAttempt(
     }
 
     if (decision.action.action === "finish") {
+      let screenshot: Uint8Array | null = null;
+      if (screenshotsStored < MAX_SCREENSHOTS_PER_ATTEMPT) {
+        // The image supplied to the model is already the terminal page state.
+        // Reuse it when available; text-only runs still capture final evidence.
+        screenshot =
+          llmScreenshot ?? (await dependencies.session.screenshotJpeg());
+        screenshotsStored += 1;
+      }
+      await recordStep(dependencies, steps, {
+        actionType: decision.action.action,
+        description: actionDescription(
+          decision.action,
+          state,
+          dependencies.redactor,
+        ),
+        result: "OK",
+        screenshotJpeg: screenshot,
+      });
       return {
         status: decision.action.outcome as "PASSED" | "FAILED",
         summary: safeResultText(

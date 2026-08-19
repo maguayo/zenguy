@@ -84,7 +84,7 @@ const SNAPSHOT: RunSnapshot = {
   notifyOnRecovery: true,
   channelIds: [],
   viewport: { width: 1440, height: 900 },
-  modelName: "claude-test",
+  modelName: "gpt-5-mini",
   runnerVersion: "zenguy-runner/1.0.0",
 };
 const ACTIVE_RUN: TestRun = {
@@ -156,7 +156,7 @@ const ATTEMPT_ZERO: TestAttempt = {
     },
   ]),
   tokenUsage: 120,
-  modelName: "claude-test",
+  modelName: "gpt-5-mini",
   runnerVersion: "zenguy-runner/1.0.0",
   systemErrorCode: null,
   createdAt: NOW - 2_000,

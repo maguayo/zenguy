@@ -34,6 +34,8 @@ export interface AttemptOutcome {
   failureReason?: string;
   systemErrorCode?: string;
   tokenUsage?: number;
+  modelName?: string;
+  runnerVersion?: string;
   visitedUrls: string[];
   consoleErrors: unknown[];
   networkErrors: unknown[];
@@ -226,6 +228,8 @@ export class AttemptLifecycle {
       consoleErrorsJson: JSON.stringify(outcome.consoleErrors),
       networkErrorsJson: JSON.stringify(outcome.networkErrors),
       tokenUsage: outcome.tokenUsage ?? null,
+      modelName: outcome.modelName ?? null,
+      runnerVersion: outcome.runnerVersion ?? null,
       systemErrorCode: outcome.systemErrorCode ?? null,
     });
     const [currentRun, allAttempts] = await Promise.all([

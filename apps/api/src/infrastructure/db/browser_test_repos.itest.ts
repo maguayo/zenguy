@@ -24,7 +24,7 @@ const SNAPSHOT: RunSnapshot = {
   notifyOnRecovery: true,
   channelIds: ["ch_1"],
   viewport: { width: 1440, height: 900 },
-  modelName: "claude-test",
+  modelName: "gpt-5-mini",
   runnerVersion: "zenguy-runner/1.0.0",
 };
 
@@ -104,7 +104,7 @@ function attempt(id = "att_1"): TestAttempt {
     consoleErrorsJson: '["console"]',
     networkErrorsJson: '["network"]',
     tokenUsage: 123,
-    modelName: "claude-test",
+    modelName: "gpt-5-mini",
     runnerVersion: "runner-test",
     systemErrorCode: "WORKER_LOST",
     createdAt: 100,

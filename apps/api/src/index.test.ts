@@ -1,5 +1,8 @@
 import type { NotifyMessage } from "./domain/queues";
+import { ExecuteAttempt } from "./application/execution/execute_attempt";
+import { fakeBindings } from "./test/fakes/bindings";
 import {
+  buildAttemptConsumer,
   processQueueBatch,
   type QueueConsumers,
 } from "./index";
@@ -68,6 +71,10 @@ function consumers(overrides: Partial<QueueConsumers> = {}): QueueConsumers {
 }
 
 describe("queue routing", () => {
+  it("builds the concrete browser attempt consumer for the runs queue", () => {
+    expect(buildAttemptConsumer(fakeBindings())).toBeInstanceOf(ExecuteAttempt);
+  });
+
   it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {
     const poison = new RecordingMessage("msg_bad", { kind: "attempt" });
     const failed = new RecordingMessage("msg_failed", {

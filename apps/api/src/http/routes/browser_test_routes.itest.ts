@@ -272,7 +272,7 @@ describe("browser test routes", () => {
       ...CONFIG,
       channelIds: ["ch_tests"],
       viewport: { width: 1440, height: 900 },
-      modelName: "claude-test",
+      modelName: "gpt-5-mini",
       runnerVersion: "zenguy-runner/1.0.0",
     };
     const historical: TestRun = {

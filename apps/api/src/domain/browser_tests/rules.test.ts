@@ -47,15 +47,15 @@ describe("browser test scheduling rules", () => {
   it("builds an immutable execution snapshot with the device viewport", () => {
     const config = browserTestConfigSchema.parse(VALID);
 
-    expect(buildSnapshot(config, "claude-test")).toEqual({
+    expect(buildSnapshot(config, "gpt-5-mini")).toEqual({
       ...VALID,
       channelIds: ["ch_email", "ch_sms"],
       viewport: { width: 1440, height: 900 },
-      modelName: "claude-test",
+      modelName: "gpt-5-mini",
       runnerVersion: RUNNER_VERSION,
     });
     expect(
-      buildSnapshot({ ...config, device: "MOBILE" }, "claude-test").viewport,
+      buildSnapshot({ ...config, device: "MOBILE" }, "gpt-5-mini").viewport,
     ).toEqual({ width: 390, height: 844 });
   });
 
