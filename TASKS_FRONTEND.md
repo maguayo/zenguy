@@ -171,10 +171,10 @@ export default defineConfig({
 - [x] Vitest with mocked `fetch`: envelope unwrap; ApiError fields; 401 → refresh → retry once (assert order and single retry); concurrent 401s trigger ONE refresh call; refresh failure signs out; `/api/auth/login` 401 does NOT trigger refresh.
 
 ### FE-012: API types & auth context
-- [ ] `src/api/types.ts`: transcribe **Appendix A** into TypeScript interfaces/unions verbatim (this file is the single source of truth for the whole app — every fetcher and component imports from it; never inline-type an API payload).
-- [ ] `src/api/auth.ts`: `register`, `login`, `logout`, `refresh`, `me`, `verifyEmail`, `resendVerification`, `forgotPassword`, `resetPassword` — thin wrappers over `lib/api`.
-- [ ] `contexts/AuthContext.tsx`: state `{ status: "loading" | "signedOut" | "signedIn", user: User | null }`. On mount: try `refresh()` → signedIn (sets token) / 401 → signedOut (silent). Exposes `signIn(email, password)`, `signOut()` (calls API logout, clears token, → `/signin`), `refreshUser()`, and subscribes to `authEvents.onSignedOut`. While `loading` render a full-screen centered Spinner (app never flashes).
-- [ ] Route guards in `App.tsx` helpers: `RequireAuth` (signedOut → `<Navigate to="/signin" state={{ next }} />`; signedIn but `!user.emailVerified` → `/verify-pending` except on that page), `PublicOnly` (signedIn → `/`).
+- [x] `src/api/types.ts`: transcribe **Appendix A** into TypeScript interfaces/unions verbatim (this file is the single source of truth for the whole app — every fetcher and component imports from it; never inline-type an API payload).
+- [x] `src/api/auth.ts`: `register`, `login`, `logout`, `refresh`, `me`, `verifyEmail`, `resendVerification`, `forgotPassword`, `resetPassword` — thin wrappers over `lib/api`.
+- [x] `contexts/AuthContext.tsx`: state `{ status: "loading" | "signedOut" | "signedIn", user: User | null }`. On mount: try `refresh()` → signedIn (sets token) / 401 → signedOut (silent). Exposes `signIn(email, password)`, `signOut()` (calls API logout, clears token, → `/signin`), `refreshUser()`, and subscribes to `authEvents.onSignedOut`. While `loading` render a full-screen centered Spinner (app never flashes).
+- [x] Route guards in `App.tsx` helpers: `RequireAuth` (signedOut → `<Navigate to="/signin" state={{ next }} />`; signedIn but `!user.emailVerified` → `/verify-pending` except on that page), `PublicOnly` (signedIn → `/`).
 
 ### FE-013: Router skeleton
 - [ ] `App.tsx` with `BrowserRouter` + full route tree (all elements `React.lazy` page stubs rendering `PageHeader` for now):
