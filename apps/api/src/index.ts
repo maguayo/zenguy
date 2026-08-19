@@ -1,4 +1,5 @@
 import { buildApp } from "./app";
+import { CreateRun } from "./application/browser_tests/create_run";
 import { RecordRunUsage } from "./application/billing/record_run_usage";
 import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
 import { DispatchNotifications } from "./application/channels/dispatch_notifications";
@@ -9,6 +10,8 @@ import {
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
+import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
+import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
 import { WriteIncidentNotificationEvent } from "./application/incidents/write_notification_event";
 import { GenerateReport } from "./application/reports/generate_report";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
@@ -34,6 +37,7 @@ import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
+import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { buildEmailSender } from "./infrastructure/email";
@@ -58,6 +62,17 @@ export interface QueueConsumers {
   attempts: AttemptQueueConsumer;
   checks: CheckQueueConsumer;
   notifications: NotifyConsumer;
+}
+
+export interface ScheduledJob {
+  execute(): Promise<unknown>;
+}
+
+export interface ScheduledJobs {
+  tests: ScheduledJob;
+  monitors: ScheduledJob;
+  retention: ScheduledJob;
+  hourly: ScheduledJob;
 }
 
 function queueRetryDelay(attempts: number): number {
@@ -194,6 +209,29 @@ export async function processQueueBatch(
     default:
       platformAlert("unsupported_queue", { queue: batch.queue });
       for (const message of batch.messages) message.retry();
+  }
+}
+
+export async function processScheduledCron(
+  cron: string,
+  jobs: ScheduledJobs,
+): Promise<void> {
+  try {
+    switch (cron) {
+      case "*/5 * * * *":
+        await Promise.all([jobs.tests.execute(), jobs.monitors.execute()]);
+        return;
+      case "0 3 * * *":
+        await jobs.retention.execute();
+        return;
+      case "30 * * * *":
+        await jobs.hourly.execute();
+        return;
+      default:
+        platformAlert("unsupported_cron", { cron });
+    }
+  } catch {
+    platformAlert("scheduled_job_failed", { cron });
   }
 }
 
@@ -340,6 +378,64 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
   });
 }
 
+export function buildSchedulerJobs(
+  env: Bindings,
+): Pick<ScheduledJobs, "tests" | "monitors"> {
+  const config = loadConfig(env);
+  const browserTests = new D1BrowserTestRepo(env.DB);
+  const runs = new D1RunRepo(env.DB);
+  const workspaces = new D1WorkspaceRepo(env.DB);
+  const subscriptions = new D1SubscriptionRepo(env.DB);
+  const monitors = new D1MonitorRepo(env.DB);
+  return {
+    tests: new SweepDueTests(
+      browserTests,
+      runs,
+      workspaces,
+      subscriptions,
+      new CreateRun(
+        browserTests,
+        runs,
+        workspaces,
+        subscriptions,
+        env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+        config,
+        systemClock,
+        realIds,
+      ),
+      systemClock,
+    ),
+    monitors: new SweepDueMonitors(
+      monitors,
+      workspaces,
+      subscriptions,
+      env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
+      systemClock,
+      realIds,
+    ),
+  };
+}
+
+function pendingMaintenanceJob(name: "retention" | "hourly"): ScheduledJob {
+  return {
+    async execute(): Promise<never> {
+      throw new Error(`${name} maintenance is not wired`);
+    },
+  };
+}
+
+export async function scheduled(
+  controller: ScheduledController,
+  env: Bindings,
+  _context: ExecutionContext,
+): Promise<void> {
+  await processScheduledCron(controller.cron, {
+    ...buildSchedulerJobs(env),
+    retention: pendingMaintenanceJob("retention"),
+    hourly: pendingMaintenanceJob("hourly"),
+  });
+}
+
 export async function queue(
   batch: MessageBatch<unknown>,
   env: Bindings,
@@ -370,4 +466,5 @@ export default {
     return buildApp(env).fetch(request, env, context);
   },
   queue,
+  scheduled,
 } satisfies ExportedHandler<Bindings>;

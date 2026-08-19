@@ -365,6 +365,22 @@ export class D1RunRepo implements RunRepo {
     );
   }
 
+  async scheduledOccurrenceExists(
+    testId: string,
+    scheduledFor: number,
+  ): Promise<boolean> {
+    return (
+      (await one<{ found: number }>(
+        this.database
+          .prepare(
+            `SELECT 1 AS found FROM test_runs
+             WHERE browser_test_id = ? AND scheduled_for = ? LIMIT 1`,
+          )
+          .bind(testId, scheduledFor),
+      )) !== null
+    );
+  }
+
   async countRunning(workspaceId: string): Promise<number> {
     const row = await one<{ count: number }>(
       this.database

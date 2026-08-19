@@ -1,11 +1,16 @@
 import type { CheckMessage, NotifyMessage } from "./domain/queues";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
+import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
+import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
 import { fakeBindings } from "./test/fakes/bindings";
 import {
   buildAttemptConsumer,
   buildCheckConsumer,
+  buildSchedulerJobs,
   processQueueBatch,
+  processScheduledCron,
+  type ScheduledJobs,
   type QueueConsumers,
 } from "./index";
 
@@ -76,6 +81,9 @@ describe("queue routing", () => {
   it("builds the concrete browser attempt consumer for the runs queue", () => {
     expect(buildAttemptConsumer(fakeBindings())).toBeInstanceOf(ExecuteAttempt);
     expect(buildCheckConsumer(fakeBindings())).toBeInstanceOf(HandleCheckMessage);
+    const scheduler = buildSchedulerJobs(fakeBindings());
+    expect(scheduler.tests).toBeInstanceOf(SweepDueTests);
+    expect(scheduler.monitors).toBeInstanceOf(SweepDueMonitors);
   });
 
   it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {
@@ -177,6 +185,66 @@ describe("queue routing", () => {
       body: string;
     };
     expect(parsed.body.length).toBe(200);
+    alert.mockRestore();
+  });
+});
+
+function scheduledJobs(): {
+  jobs: ScheduledJobs;
+  calls: Record<keyof ScheduledJobs, ReturnType<typeof vi.fn>>;
+} {
+  const calls = {
+    tests: vi.fn(async () => undefined),
+    monitors: vi.fn(async () => undefined),
+    retention: vi.fn(async () => undefined),
+    hourly: vi.fn(async () => undefined),
+  };
+  return {
+    calls,
+    jobs: {
+      tests: { execute: calls.tests },
+      monitors: { execute: calls.monitors },
+      retention: { execute: calls.retention },
+      hourly: { execute: calls.hourly },
+    },
+  };
+}
+
+describe("scheduled routing", () => {
+  it("dispatches every configured cron to only its intended jobs", async () => {
+    const scheduler = scheduledJobs();
+    await processScheduledCron("*/5 * * * *", scheduler.jobs);
+    expect(scheduler.calls.tests).toHaveBeenCalledOnce();
+    expect(scheduler.calls.monitors).toHaveBeenCalledOnce();
+    expect(scheduler.calls.retention).not.toHaveBeenCalled();
+    expect(scheduler.calls.hourly).not.toHaveBeenCalled();
+
+    const retention = scheduledJobs();
+    await processScheduledCron("0 3 * * *", retention.jobs);
+    expect(retention.calls.retention).toHaveBeenCalledOnce();
+    expect(retention.calls.tests).not.toHaveBeenCalled();
+
+    const hourly = scheduledJobs();
+    await processScheduledCron("30 * * * *", hourly.jobs);
+    expect(hourly.calls.hourly).toHaveBeenCalledOnce();
+    expect(hourly.calls.monitors).not.toHaveBeenCalled();
+  });
+
+  it("turns cron failures and unknown schedules into platform alerts", async () => {
+    const configured = scheduledJobs();
+    configured.jobs.tests.execute = vi.fn(async () => {
+      throw new Error("scheduler failed");
+    });
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      processScheduledCron("*/5 * * * *", configured.jobs),
+    ).resolves.toBeUndefined();
+    await processScheduledCron("1 2 3 4 5", configured.jobs);
+
+    const logged = alert.mock.calls.join(" ");
+    expect(logged).toContain('"event":"scheduled_job_failed"');
+    expect(logged).toContain('"event":"unsupported_cron"');
     alert.mockRestore();
   });
 });

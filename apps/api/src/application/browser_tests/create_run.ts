@@ -133,6 +133,19 @@ export class CreateRun {
     try {
       await this.runs.insertWithAttempt(run, attempt);
     } catch (error) {
+      if (
+        testId !== null &&
+        input.scheduledFor !== undefined &&
+        (await this.runs.scheduledOccurrenceExists(
+          testId,
+          input.scheduledFor,
+        ))
+      ) {
+        throw new AppError(
+          "CONFLICT",
+          "Scheduled occurrence already exists",
+        );
+      }
       if (testId !== null && (await this.runs.activeRunExists(testId))) {
         throw new AppError(
           "ACTIVE_RUN_EXISTS",

@@ -178,6 +178,12 @@ describe("D1 browser test repositories", () => {
     });
     await runs.insert(active);
     await expect(
+      runs.scheduledOccurrenceExists("bt_1", 100),
+    ).resolves.toBe(true);
+    await expect(
+      runs.scheduledOccurrenceExists("bt_1", 999),
+    ).resolves.toBe(false);
+    await expect(
       runs.insert(
         testRun({
           id: "run_second_active",

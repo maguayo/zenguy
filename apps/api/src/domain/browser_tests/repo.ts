@@ -72,6 +72,10 @@ export interface RunRepo {
   lastRunSummaryPerTest(
     workspaceId: string,
   ): Promise<Map<string, RunSummaryRow>>;
+  scheduledOccurrenceExists(
+    testId: string,
+    scheduledFor: number,
+  ): Promise<boolean>;
   activeRunExists(testId: string): Promise<boolean>;
   countRunning(workspaceId: string): Promise<number>;
 }

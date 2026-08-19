@@ -1213,16 +1213,16 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 # Phase 11 — Scheduler & maintenance crons
 
 ### BE-067: Scheduler sweeps (cron `*/5 * * * *`)
-- [ ] Implement `scheduled(controller, env, ctx)` in `src/index.ts`: switch on `controller.cron` → `*/5 * * * *` → scheduler sweeps; `0 3 * * *` → retention purge (BE-068); `30 * * * *` → hourly maintenance (BE-069). Wrap each in try/catch + `platformAlert` on failure.
-- [ ] `application/maintenance/sweep_due_tests.ts`:
+- [x] Implement `scheduled(controller, env, ctx)` in `src/index.ts`: switch on `controller.cron` → `*/5 * * * *` → scheduler sweeps; `0 3 * * *` → retention purge (BE-068); `30 * * * *` → hourly maintenance (BE-069). Wrap each in try/catch + `platformAlert` on failure.
+- [x] `application/maintenance/sweep_due_tests.ts`:
   1. Select due tests (`deleted_at IS NULL AND next_run_at <= now`, limit 200, ordered by `next_run_at`).
   2. Per test — **claim first** (idempotency §10.8/§24.12): `UPDATE browser_tests SET next_run_at = <now + interval_hours*3600000> WHERE id = ? AND next_run_at = <the value we read>`; `changes === 0` → another invocation claimed it → skip. This also implements catch-up policy: after downtime, at most ONE recovery occurrence runs (`next_run_at` jumps from the past directly to `now + interval` — no backlog).
   3. Workspace deleted or subscription not ACTIVE/PAST_DUE → skip (claim already advanced the clock — schedule effectively paused per §24.14).
   4. Active run exists → skip (one active run per test, §21.5).
   5. `create_run({ source: "SCHEDULED", testId, scheduledFor: <the OLD next_run_at> })` — `ACTIVE_RUN_EXISTS` or occurrence-unique violation → swallow (idempotent).
   6. `logEvent("scheduler_tests", { due, created, skipped })`.
-- [ ] `application/maintenance/sweep_due_monitors.ts`: same claim pattern on `next_check_at` (+ skip when `current_cycle_id IS NOT NULL`); on claim: `cycleId = newId("cyc")` → `openCycle` (0 changes → skip) → `CHECK_QUEUE.send({ kind: "check", monitorId, workspaceId, cycleId, attemptIndex: 0 })`.
-- [ ] Tests (fakes + FixedClock): due selection boundaries; claim race (two sweeps, one run created); downtime catch-up creates exactly one run and future `next_run_at` > now; unsubscribed workspace paused; open-cycle monitor skipped.
+- [x] `application/maintenance/sweep_due_monitors.ts`: same claim pattern on `next_check_at` (+ skip when `current_cycle_id IS NOT NULL`); on claim: `cycleId = newId("cyc")` → `openCycle` (0 changes → skip) → `CHECK_QUEUE.send({ kind: "check", monitorId, workspaceId, cycleId, attemptIndex: 0 })`.
+- [x] Tests (fakes + FixedClock): due selection boundaries; claim race (two sweeps, one run created); downtime catch-up creates exactly one run and future `next_run_at` > now; unsubscribed workspace paused; open-cycle monitor skipped.
 
 ### BE-068: Retention purge (cron `0 3 * * *`)
 - [ ] `application/maintenance/purge_expired.ts` (RETENTION_DAYS = 30, loops of ≤ 200 rows until none remain, per-loop D1 batch):

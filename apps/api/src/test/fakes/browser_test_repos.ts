@@ -304,6 +304,16 @@ export class FakeRunRepo implements RunRepo {
     );
   }
 
+  async scheduledOccurrenceExists(
+    testId: string,
+    scheduledFor: number,
+  ): Promise<boolean> {
+    return [...this.runs.values()].some(
+      (run) =>
+        run.browserTestId === testId && run.scheduledFor === scheduledFor,
+    );
+  }
+
   async countRunning(workspaceId: string): Promise<number> {
     return [...this.runs.values()].filter(
       (run) => run.workspaceId === workspaceId && run.status === "RUNNING",
