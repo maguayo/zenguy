@@ -298,9 +298,9 @@ export default defineConfig({
 # Phase 7 — Uptime
 
 ### FE-029: Uptime list
-- [ ] `src/api/uptime.ts`: `listMonitors`, `getMonitor`, `createMonitor`, `updateMonitor`, `deleteMonitor`, `testRequest`, `listChecks`, `getStats`.
-- [ ] `pages/uptime/UptimeListPage.tsx` (§18.9): `PageHeader` `Uptime` + `New monitor` (gated `uptime.manage`). Table: **Status** (StatusBadge UP/DOWN/UNKNOWN; small pulsing `Checking` info Badge appended when `checking`), **Name** (+ host sub-line: `new URL(url).host`), **Frequency** (`formatFrequency`), **Last check** (relative), **Response** (`<ms> ms` / `—`), **Incident** (`Open` link / `—`), **Actions** (Open / Edit / Delete gated). 30-s `refetchInterval`.
-- [ ] Empty: `No uptime monitors yet` / `Ping an endpoint on a schedule and get alerted when it goes down. Uptime checks never consume runs.` + CTA.
+- [x] `src/api/uptime.ts`: `listMonitors`, `getMonitor`, `createMonitor`, `updateMonitor`, `deleteMonitor`, `testRequest`, `listChecks`, `getStats`.
+- [x] `pages/uptime/UptimeListPage.tsx` (§18.9): `PageHeader` `Uptime` + `New monitor` (gated `uptime.manage`). Table: **Status** (StatusBadge UP/DOWN/UNKNOWN; small pulsing `Checking` info Badge appended when `checking`), **Name** (+ host sub-line: `new URL(url).host`), **Frequency** (`formatFrequency`), **Last check** (relative), **Response** (`<ms> ms` / `—`), **Incident** (`Open` link / `—`), **Actions** (Open / Edit / Delete gated). 30-s `refetchInterval`.
+- [x] Empty: `No uptime monitors yet` / `Ping an endpoint on a schedule and get alerted when it goes down. Uptime checks never consume runs.` + CTA.
 
 ### FE-030: Monitor form with request builder
 - [ ] `pages/uptime/MonitorFormPage.tsx` (`/uptime/new`, `/uptime/:monitorId/edit`). Zod mirror of the API config (name, url, method enum, headers[], body, expectedStatus 100–599, bodyCondition enum + conditional fields, frequencySeconds enum, timeoutSeconds 1–30, maxRetries 0–3, notifyOnRecovery, channelIds). Cross-field zod rules: body forbidden for GET/HEAD; `bodyExpectedValue` required when condition set; `bodyConditionPath` required when `JSON_PATH_EQUALS`.

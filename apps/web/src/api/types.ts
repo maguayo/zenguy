@@ -300,10 +300,12 @@ export interface MonitorInput {
   url: string;
 }
 
-export interface Monitor extends MonitorInput {
+export interface Monitor extends Omit<MonitorInput, "body" | "headers"> {
+  body: string | null;
   checking: boolean;
   createdAt: string;
   createdBy: UserRef;
+  headers: { key: string; value: string }[] | null;
   headersMasked: boolean;
   id: string;
   lastCheckAt: string | null;
