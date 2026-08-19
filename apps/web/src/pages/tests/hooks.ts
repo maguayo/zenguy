@@ -7,6 +7,7 @@ import type { BrowserTest } from "../../api/types";
 import type { ConfirmDialogProps } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 
@@ -26,6 +27,7 @@ export function useRunNow(test: BrowserTest): UseRunNowResult {
   const { current } = useWorkspace();
   const navigate = useNavigate();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const mutation = useMutation({
@@ -41,7 +43,7 @@ export function useRunNow(test: BrowserTest): UseRunNowResult {
     } catch (error) {
       if (error instanceof ApiError && error.code === "ACTIVE_RUN_EXISTS") {
         toast.error("A run is already in progress for this test.");
-      } else {
+      } else if (!handleMutationError(error)) {
         toast.error(apiErrorMessage(error));
       }
     }

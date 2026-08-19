@@ -28,6 +28,7 @@ import { Modal } from "../../components/ui/Modal";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
 
 const channelTypes: Array<{ icon: LucideIcon; label: string; type: ChannelType }> = [
@@ -174,6 +175,7 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
   const { current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [selectedType, setSelectedType] = useState<ChannelType | null>(channel?.type ?? null);
   const form = useForm<ChannelFormValues>({
     defaultValues: channelFormDefaults(channel),
@@ -206,6 +208,7 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
       toast.success(channel ? "Changes saved" : "Channel created");
       onClose();
     } catch (error) {
+      if (handleMutationError(error)) return;
       const message = apiErrorMessage(error);
       form.setError("root", { message });
       toast.error(message);

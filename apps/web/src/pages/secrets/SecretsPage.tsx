@@ -31,6 +31,7 @@ import { Table, type TableColumn } from "../../components/ui/Table";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatRelative } from "../../lib/format";
@@ -126,6 +127,7 @@ function SecretFormModal({ mode, onClose, open, secret }: SecretFormModalProps) 
   const { current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const form = useForm<SecretFormValues>({
     defaultValues: secretFormDefaults(secret),
     mode: "onChange",
@@ -175,6 +177,7 @@ function SecretFormModal({ mode, onClose, open, secret }: SecretFormModalProps) 
         form.setError("key", { message: "A secret with this key already exists." });
         return;
       }
+      if (handleMutationError(error)) return;
       const message = apiErrorMessage(error);
       form.setError("root", { message });
       toast.error(message);
@@ -392,6 +395,7 @@ export default function SecretsPage() {
   const { can, current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [createOpen, setCreateOpen] = useState(false);
   const [replaceTarget, setReplaceTarget] = useState<Secret>();
   const [editTarget, setEditTarget] = useState<Secret>();
@@ -411,7 +415,7 @@ export default function SecretsPage() {
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "secrets"] });
       toast.success("Secret deleted");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

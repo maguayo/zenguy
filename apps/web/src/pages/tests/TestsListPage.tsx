@@ -17,6 +17,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatInterval, formatRelative } from "../../lib/format";
 import { isActiveRun, useRunNow } from "./hooks";
@@ -25,6 +26,7 @@ function TestActions({ test }: { test: BrowserTest }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const { can, current } = useWorkspace();
   const run = useRunNow(test);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -36,7 +38,7 @@ function TestActions({ test }: { test: BrowserTest }) {
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
       toast.success("Test deleted");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

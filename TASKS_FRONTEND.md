@@ -400,8 +400,8 @@ export default defineConfig({
 - [x] Global: mutations always disable their submit button while pending (`loading` prop); destructive dialogs always show consequences; every `useQuery` error path renders (no silent blanks). Navigating to a workspace you lost access to → the FE-018 `Workspace not found` state.
 
 ### FE-042: Permissions sweep
-- [ ] Walk **Appendix C** against the UI as each role (seed users via `apps/api` seed + invite flows): Member sees NO create/edit/run/delete/test-send/invite buttons anywhere, no Usage & Billing nav, no Danger zone, no audit card, masked monitor headers, secret keys visible but action-less; Admin sees everything except: invite/promote Admin, billing management buttons, transfer, delete workspace; Owner sees all. Fix any control that isn't gated by `can()`.
-- [ ] Defense-in-depth: a 403 `FORBIDDEN` from the API anywhere → toast `You don't have permission to do that.` (add to the shared mutation error helper); a 402 `BILLING_REQUIRED` → toast + navigate to `setup/billing`.
+- [x] Walk **Appendix C** against the UI as each role (seed users via `apps/api` seed + invite flows): Member sees NO create/edit/run/delete/test-send/invite buttons anywhere, no Usage & Billing nav, no Danger zone, no audit card, masked monitor headers, secret keys visible but action-less; Admin sees everything except: invite/promote Admin, billing management buttons, transfer, delete workspace; Owner sees all. Fix any control that isn't gated by `can()`.
+- [x] Defense-in-depth: a 403 `FORBIDDEN` from the API anywhere → toast `You don't have permission to do that.` (add to the shared mutation error helper); a 402 `BILLING_REQUIRED` → toast + navigate to `setup/billing`.
 
 ### FE-043: Responsive & accessibility pass
 - [ ] ≤ 767 px: drawer nav works on every page; all Tables scroll horizontally without breaking the page; form Cards stack single-column; modals become near-full-screen (`max-h-[90dvh] overflow-y-auto`, side drawer full width); PageHeader actions wrap; ScreenshotViewer fits viewport.

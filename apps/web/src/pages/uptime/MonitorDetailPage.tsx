@@ -22,7 +22,7 @@ import {
 import { listChannels } from "../../api/channels";
 import { listIncidents } from "../../api/incidents";
 import { deleteMonitor, getMonitor, getStats, listChecks } from "../../api/uptime";
-import type { Check, Incident, MonitorStats } from "../../api/types";
+import type { Check, Incident, Monitor, MonitorStats } from "../../api/types";
 import type { ApiPage } from "../../lib/api";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
@@ -39,6 +39,7 @@ import { Spinner } from "../../components/ui/Spinner";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 import {
   formatDateTime,
@@ -72,6 +73,14 @@ export function expectationSummary(input: {
     parts.push(`JSON path ${input.bodyConditionPath ?? "—"} equals "${expected}"`);
   }
   return parts.join(" · ");
+}
+
+export function monitorHeaderLines(
+  monitor: Pick<Monitor, "headers" | "headersMasked">,
+): string[] {
+  if (monitor.headersMasked) return ["Masked for your role"];
+  if (!monitor.headers || monitor.headers.length === 0) return ["None"];
+  return monitor.headers.map((header) => `${header.key}: ${header.value}`);
 }
 
 const toneClasses: Record<StatTone, string> = {
@@ -184,6 +193,7 @@ export default function MonitorDetailPage() {
   const { can, current, timezone } = useWorkspace();
   const navigate = useNavigate();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const monitor = useQuery({
@@ -222,7 +232,7 @@ export default function MonitorDetailPage() {
       toast.success("Monitor deleted");
       navigate(`/w/${current.id}/uptime`, { replace: true });
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -243,6 +253,7 @@ export default function MonitorDetailPage() {
   const channelNames = new Map(channels.data.map((channel) => [channel.id, channel.name]));
   const checkRows = checks.data?.pages.flatMap((page) => page.items) ?? [];
   const monitorIncidents = (incidents.data?.items ?? []).filter((incident) => incident.resourceId === data.id);
+  const headerLines = monitorHeaderLines(data);
 
   return (
     <div className="space-y-6">
@@ -364,6 +375,16 @@ export default function MonitorDetailPage() {
         <DescriptionList
           items={[
             { label: "Request", value: <span className="break-all font-mono text-xs">{data.method} {data.url}</span> },
+            {
+              label: "Headers",
+              value: (
+                <span className="block space-y-1 font-mono text-xs">
+                  {headerLines.map((line, index) => (
+                    <span className="block break-all" key={`${line}-${index}`}>{line}</span>
+                  ))}
+                </span>
+              ),
+            },
             { label: "Expectations", value: expectationSummary(data) },
             { label: "Frequency", value: formatFrequency(data.frequencySeconds) },
             { label: "Timeout", value: `${data.timeoutSeconds} seconds` },

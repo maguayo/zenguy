@@ -25,6 +25,7 @@ import { Table, type TableColumn } from "../../components/ui/Table";
 import { Tabs } from "../../components/ui/Tabs";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import type { ApiPage } from "../../lib/api";
 import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 import {
@@ -103,6 +104,7 @@ export default function TestDetailPage() {
   const { testId = "" } = useParams();
   const { can, current, timezone } = useWorkspace();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -154,7 +156,7 @@ export default function TestDetailPage() {
       toast.success("Test deleted");
       navigate(`/w/${current.id}/tests`, { replace: true });
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

@@ -38,6 +38,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatRelative } from "../../lib/format";
 import { ChannelFormModal } from "./ChannelFormModal";
@@ -168,6 +169,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [testOpen, setTestOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const test = useMutation({ mutationFn: () => testChannel(current.id, channel.id) });
@@ -193,7 +195,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
       else toast.error(result.message);
       await refresh();
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -203,7 +205,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
       toast.success(channel.enabled ? "Channel disabled" : "Channel enabled");
       await refresh();
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -213,7 +215,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
       toast.success("Channel deleted");
       await refresh();
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { Check } from "../../api/types";
-import { checkColumns, expectationSummary, uptimeTone } from "./MonitorDetailPage";
+import {
+  checkColumns,
+  expectationSummary,
+  monitorHeaderLines,
+  uptimeTone,
+} from "./MonitorDetailPage";
 
 const check: Check = {
   attemptIndex: 0,
@@ -58,5 +63,18 @@ describe("uptime monitor detail", () => {
     expect(html).toContain("503");
     expect(html).toContain("184 ms");
     expect(html).toContain("Expected 200, got 503");
+  });
+
+  it("never leaks monitor headers to a member", () => {
+    expect(monitorHeaderLines({ headers: null, headersMasked: true })).toEqual([
+      "Masked for your role",
+    ]);
+    expect(
+      monitorHeaderLines({
+        headers: [{ key: "Authorization", value: "Bearer {{API_TOKEN}}" }],
+        headersMasked: false,
+      }),
+    ).toEqual(["Authorization: Bearer {{API_TOKEN}}"]);
+    expect(monitorHeaderLines({ headers: [], headersMasked: false })).toEqual(["None"]);
   });
 });

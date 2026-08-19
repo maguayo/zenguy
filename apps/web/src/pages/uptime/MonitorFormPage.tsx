@@ -29,6 +29,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage, itemQueryErrorMessage } from "../../lib/errors";
 
@@ -204,6 +205,7 @@ export default function MonitorFormPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const handleMutationError = useMutationError();
   const allowed = can("uptime.manage");
   const monitor = useQuery({
     enabled: editing && allowed,
@@ -234,11 +236,7 @@ export default function MonitorFormPage() {
     try {
       await requestTest.mutateAsync(toMonitorInput(form.getValues()));
     } catch (error) {
-      if (error instanceof ApiError && error.code === "BILLING_REQUIRED") {
-        toast.error("Billing required — set up your subscription first.");
-      } else {
-        toast.error(apiErrorMessage(error));
-      }
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -253,10 +251,7 @@ export default function MonitorFormPage() {
       toast.success(editing ? "Changes saved" : "Monitor created");
       navigate(`/w/${current.id}/uptime/${saved.id}`);
     } catch (error) {
-      if (error instanceof ApiError && error.code === "BILLING_REQUIRED") {
-        toast.error("Billing required — set up your subscription first.");
-        return;
-      }
+      if (handleMutationError(error)) return;
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
         for (const detail of error.details) {

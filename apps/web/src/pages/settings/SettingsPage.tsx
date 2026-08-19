@@ -38,6 +38,7 @@ import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError, type ApiPage } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatDateTime } from "../../lib/format";
@@ -132,6 +133,7 @@ function GeneralCard({ workspace }: { workspace: Workspace }) {
   const { can } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [timezoneFilter, setTimezoneFilter] = useState("");
   const availableTimezones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
   const form = useForm<WorkspaceSettingsValues>({
@@ -165,6 +167,7 @@ function GeneralCard({ workspace }: { workspace: Workspace }) {
       ]);
       toast.success("Workspace settings saved");
     } catch (error) {
+      if (handleMutationError(error)) return;
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
         for (const detail of error.details) {
@@ -309,6 +312,7 @@ function DangerZone() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [transferOpen, setTransferOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [transferCandidate, setTransferCandidate] = useState<Member>();
@@ -347,7 +351,7 @@ function DangerZone() {
       setTransferCandidate(undefined);
       setSelectedUserId("");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -362,7 +366,7 @@ function DangerZone() {
       toast.success("Workspace deleted");
       navigate("/", { replace: true });
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

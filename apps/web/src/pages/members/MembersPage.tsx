@@ -33,6 +33,7 @@ import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatDateTime, formatRelative } from "../../lib/format";
@@ -77,6 +78,7 @@ function MemberActions({ member }: { member: Member }) {
   const { current, role } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const [removeOpen, setRemoveOpen] = useState(false);
   const policy = memberActionPolicy(role, user?.id ?? "", member);
   const updateRole = useMutation({
@@ -96,7 +98,7 @@ function MemberActions({ member }: { member: Member }) {
       await refresh();
       toast.success(`${member.name} is now ${nextRole === "ADMIN" ? "an Admin" : "a Member"}`);
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -106,7 +108,7 @@ function MemberActions({ member }: { member: Member }) {
       await refresh();
       toast.success("Member removed");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
@@ -215,6 +217,7 @@ function InviteMemberModal({ onClose, open }: { onClose: () => void; open: boole
   const { can, current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const form = useForm<InviteValues>({
     defaultValues: { email: "", role: "MEMBER" },
     mode: "onChange",
@@ -252,6 +255,7 @@ function InviteMemberModal({ onClose, open }: { onClose: () => void; open: boole
         form.setError("email", { message: "Already a member." });
         return;
       }
+      if (handleMutationError(error)) return;
       const message = apiErrorMessage(error);
       form.setError("root", { message });
       toast.error(message);
@@ -309,6 +313,7 @@ function PendingInvitations({ invitations }: { invitations: Invitation[] }) {
   const { current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const revoke = useMutation({
     mutationFn: (invitationId: string) => revokeInvitation(current.id, invitationId),
   });
@@ -319,7 +324,7 @@ function PendingInvitations({ invitations }: { invitations: Invitation[] }) {
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "invitations"] });
       toast.success("Invitation revoked");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 

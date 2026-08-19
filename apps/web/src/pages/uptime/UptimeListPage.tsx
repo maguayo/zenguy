@@ -17,6 +17,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
+import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatFrequency, formatRelative } from "../../lib/format";
 
@@ -32,6 +33,7 @@ function MonitorActions({ monitor }: { monitor: Monitor }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const handleMutationError = useMutationError();
   const { can, current } = useWorkspace();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const remove = useMutation({ mutationFn: () => deleteMonitor(current.id, monitor.id) });
@@ -42,7 +44,7 @@ function MonitorActions({ monitor }: { monitor: Monitor }) {
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "monitors"] });
       toast.success("Monitor deleted");
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
   };
 
