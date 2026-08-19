@@ -110,8 +110,8 @@ export default defineConfig({
 - [x] Commit.
 
 ### FE-003: Deployment wiring note
-- [ ] Add `apps/web/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/web/dist`; **always run `pnpm --filter @zenguy/web build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
-- [ ] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/web build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
+- [x] Add `apps/web/README.md`: how dev proxy works (needs `pnpm --filter @zenguy/api dev` on :8787), how prod works (API worker serves `apps/web/dist`; **always run `pnpm --filter @zenguy/web build` before `wrangler deploy` of the API**), env note: there are NO frontend env vars — all runtime config (Paddle token, environment) comes from `GET /api/billing/config`.
+- [x] Verify the built app is servable by the API worker: `pnpm --filter @zenguy/web build && pnpm --filter @zenguy/api dev` → open `http://localhost:8787` → the React app loads (API worker serves dist; if the api app isn't scaffolded yet, note it and move on).
 
 ### FE-004: Astro landing (Coming soon)
 - [ ] Create `apps/landing/package.json` (`@zenguy/landing`, scripts `dev`: `astro dev`, `build`: `astro build`, `deploy`: `astro build && wrangler deploy`) and install `pnpm --filter @zenguy/landing add astro` + `-D wrangler`.
