@@ -33,8 +33,8 @@ const stub = (title: string) =>
   });
 
 const SignIn = lazy(() => import("./pages/auth/SignIn"));
-const SignUp = stub("Sign up");
-const CheckEmail = stub("Check your inbox");
+const SignUp = lazy(() => import("./pages/auth/SignUp"));
+const CheckEmail = lazy(() => import("./pages/auth/CheckEmail"));
 const VerifyEmail = stub("Verify email");
 const ForgotPassword = stub("Forgot password");
 const ResetPassword = stub("Reset password");

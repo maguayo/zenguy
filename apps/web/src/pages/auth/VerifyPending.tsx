@@ -1,28 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { resendVerification } from "../../api/auth";
 import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
 import { useAuth } from "../../contexts/AuthContext";
-import { useToast } from "../../contexts/ToastContext";
-import { apiErrorMessage } from "../../lib/errors";
+import { useResendVerification } from "./useResendVerification";
 
 export default function VerifyPending() {
   const { refreshUser, signOut, user } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast();
-  const [countdown, setCountdown] = useState(0);
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    if (countdown <= 0) return undefined;
-    const timer = window.setInterval(
-      () => setCountdown((current) => Math.max(0, current - 1)),
-      1_000,
-    );
-    return () => window.clearInterval(timer);
-  }, [countdown]);
+  const { countdown, resend, sending } = useResendVerification(user?.email ?? "");
 
   useEffect(() => {
     let polling = false;
@@ -42,19 +29,6 @@ export default function VerifyPending() {
   }, [navigate, refreshUser]);
 
   if (!user) return null;
-
-  const resend = async () => {
-    setSending(true);
-    try {
-      await resendVerification(user.email);
-      setCountdown(60);
-      toast.success("Verification email sent");
-    } catch (error) {
-      toast.error(apiErrorMessage(error));
-    } finally {
-      setSending(false);
-    }
-  };
 
   return (
     <AuthShell

@@ -194,8 +194,8 @@ export default defineConfig({
 - [x] `pages/auth/VerifyPending.tsx`: shown when signed in but unverified — `Verify your email` heading, `We sent a verification link to <email>.`, `Resend email` button (calls resend, then 60-s countdown disable), `Sign out` link. Auto-poll `me()` every 10 s → verified → navigate `/`.
 
 ### FE-015: Sign up
-- [ ] `pages/auth/SignUp.tsx`: Name, Email, Password, Confirm password (zod: min 8, confirm matches), required checkbox `I accept the Terms of Service and Privacy Policy` (plain links to `https://zenguy.com/terms` / `/privacy`). Submit → `register` → navigate `/check-email` passing the email via router state. `CONFLICT` → inline `An account with this email already exists.` + link to sign in.
-- [ ] `pages/auth/CheckEmail.tsx`: `Check your inbox` — `We sent a verification link to <email>.`, Resend button with the same 60-s cooldown, link `Back to sign in`.
+- [x] `pages/auth/SignUp.tsx`: Name, Email, Password, Confirm password (zod: min 8, confirm matches), required checkbox `I accept the Terms of Service and Privacy Policy` (plain links to `https://zenguy.com/terms` / `/privacy`). Submit → `register` → navigate `/check-email` passing the email via router state. `CONFLICT` → inline `An account with this email already exists.` + link to sign in.
+- [x] `pages/auth/CheckEmail.tsx`: `Check your inbox` — `We sent a verification link to <email>.`, Resend button with the same 60-s cooldown, link `Back to sign in`.
 
 ### FE-016: Verify email, forgot & reset password
 - [ ] `pages/auth/VerifyEmail.tsx` (`?token=`): on mount POST verify → success state `Email verified` + `Sign in` button; `GONE` → `This verification link is invalid or has expired.` + resend form (email input).
