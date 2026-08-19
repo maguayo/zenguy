@@ -59,7 +59,7 @@ const IncidentDetailPage = lazy(() => import("./pages/incidents/IncidentDetailPa
 const ChannelsPage = lazy(() => import("./pages/notifications/ChannelsPage"));
 const SecretsPage = lazy(() => import("./pages/secrets/SecretsPage"));
 const MembersPage = lazy(() => import("./pages/members/MembersPage"));
-const BillingPage = stub("Usage & Billing");
+const BillingPage = lazy(() => import("./pages/billing/BillingPage"));
 const SettingsPage = stub("Workspace Settings");
 const NotFound = lazy(() => import("./pages/NotFound"));
 

@@ -24,6 +24,12 @@ describe("toast context", () => {
     expect(items.map((item) => item.id)).toEqual([2, 3, 4, 5]);
   });
 
+  it("accepts informational toasts", () => {
+    expect(appendToast([], { id: 1, message: "Continue in Paddle", tone: "info" })).toEqual([
+      { id: 1, message: "Continue in Paddle", tone: "info" },
+    ]);
+  });
+
   it("renders an aria-live toast region", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>

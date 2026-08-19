@@ -375,12 +375,12 @@ export default defineConfig({
 # Phase 12 — Usage & Billing
 
 ### FE-039: Billing page
-- [ ] `src/api/billing.ts` (`getBillingConfig`, `getBilling`, `getInvoiceUrl`).
-- [ ] `pages/billing/BillingPage.tsx` (§18.16). Route-level guard: `can("billing.view")` false → `AccessDenied` card (`Only owners and admins can view billing.`) — the nav item is already hidden for Members (FE-019).
-- [ ] **Plan** Card: `Zenguy — 39 €/month` + status Badge (`Active` ok / `Past due` warn / `Canceled` danger / `Not set up` neutral); bullets `300 runs included · 0,20 € per extra run · Unlimited members`; when CANCELED/NONE → primary `Set up subscription` → `/w/:wsId/setup/billing`; when `cancelAtPeriodEnd` → warn banner `Your subscription ends on <formatDateTime(periodEnd)>.`
-- [ ] **Usage** Card: reuse `UsageMeter` (FE-022) + line `Current period: <periodStart> – <periodEnd>` (workspace tz).
-- [ ] **Invoices** Card: table Date (`billedAt`), Invoice # (`invoiceNumber` / `—`), Total (`formatEuros(totalCents)`), Status (Badge), action `View PDF` → `getInvoiceUrl(txId)` → `window.open(url, "_blank")` (loading spinner on the row button). Empty `No invoices yet.`
-- [ ] **Payment** Card — owner only (`can("billing.manage")`; admins instead see the info line `Only the owner can manage the subscription.`): `Update payment method` secondary button → opens `updatePaymentMethodUrl` in a new tab (disabled + Tooltip `Available after the first payment` when null); `Cancel subscription…` ghost-danger button → ConfirmDialog danger (`Cancel the subscription? Scheduled runs and checks stop when the current period ends. Your data stays readable for 30 days.`) → opens `cancelUrl` in a new tab (Paddle-hosted flow) → info toast `Finish cancelling in the Paddle page we just opened.`
+- [x] `src/api/billing.ts` (`getBillingConfig`, `getBilling`, `getInvoiceUrl`).
+- [x] `pages/billing/BillingPage.tsx` (§18.16). Route-level guard: `can("billing.view")` false → `AccessDenied` card (`Only owners and admins can view billing.`) — the nav item is already hidden for Members (FE-019).
+- [x] **Plan** Card: `Zenguy — 39 €/month` + status Badge (`Active` ok / `Past due` warn / `Canceled` danger / `Not set up` neutral); bullets `300 runs included · 0,20 € per extra run · Unlimited members`; when CANCELED/NONE → primary `Set up subscription` → `/w/:wsId/setup/billing`; when `cancelAtPeriodEnd` → warn banner `Your subscription ends on <formatDateTime(periodEnd)>.`
+- [x] **Usage** Card: reuse `UsageMeter` (FE-022) + line `Current period: <periodStart> – <periodEnd>` (workspace tz).
+- [x] **Invoices** Card: table Date (`billedAt`), Invoice # (`invoiceNumber` / `—`), Total (`formatEuros(totalCents)`), Status (Badge), action `View PDF` → `getInvoiceUrl(txId)` → `window.open(url, "_blank")` (loading spinner on the row button). Empty `No invoices yet.`
+- [x] **Payment** Card — owner only (`can("billing.manage")`; admins instead see the info line `Only the owner can manage the subscription.`): `Update payment method` secondary button → opens `updatePaymentMethodUrl` in a new tab (disabled + Tooltip `Available after the first payment` when null); `Cancel subscription…` ghost-danger button → ConfirmDialog danger (`Cancel the subscription? Scheduled runs and checks stop when the current period ends. Your data stays readable for 30 days.`) → opens `cancelUrl` in a new tab (Paddle-hosted flow) → info toast `Finish cancelling in the Paddle page we just opened.`
 
 # Phase 13 — Workspace settings
 

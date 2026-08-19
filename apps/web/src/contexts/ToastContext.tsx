@@ -8,12 +8,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CircleAlert, CircleCheck, X } from "lucide-react";
+import { CircleAlert, CircleCheck, Info, X } from "lucide-react";
 import clsx from "clsx";
 
 import { IconButton } from "../components/ui/IconButton";
 
-type ToastTone = "success" | "error";
+type ToastTone = "success" | "error" | "info";
 
 export interface ToastItem {
   id: number;
@@ -23,6 +23,7 @@ export interface ToastItem {
 
 export interface ToastApi {
   error: (message: string) => void;
+  info: (message: string) => void;
   success: (message: string) => void;
 }
 
@@ -65,6 +66,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ToastApi>(
     () => ({
       error: (message) => add(message, "error"),
+      info: (message) => add(message, "info"),
       success: (message) => add(message, "success"),
     }),
     [add],
@@ -83,12 +85,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={item.id}
             className={clsx(
               "pointer-events-auto flex items-start gap-3 rounded-lg border bg-white p-3 shadow-lg",
-              item.tone === "success" ? "border-ok-600/20" : "border-danger-600/20",
+              item.tone === "success"
+                ? "border-ok-600/20"
+                : item.tone === "info"
+                  ? "border-info-600/20"
+                  : "border-danger-600/20",
             )}
             role="status"
           >
             {item.tone === "success" ? (
               <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-ok-600" />
+            ) : item.tone === "info" ? (
+              <Info aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-info-600" />
             ) : (
               <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-danger-600" />
             )}
