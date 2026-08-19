@@ -35,9 +35,9 @@ const stub = (title: string) =>
 const SignIn = lazy(() => import("./pages/auth/SignIn"));
 const SignUp = lazy(() => import("./pages/auth/SignUp"));
 const CheckEmail = lazy(() => import("./pages/auth/CheckEmail"));
-const VerifyEmail = stub("Verify email");
-const ForgotPassword = stub("Forgot password");
-const ResetPassword = stub("Reset password");
+const VerifyEmail = lazy(() => import("./pages/auth/VerifyEmail"));
+const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 const AcceptInvitation = stub("Invitation");
 const VerifyPending = lazy(() => import("./pages/auth/VerifyPending"));
 const CreateWorkspace = stub("Create your workspace");

@@ -198,9 +198,9 @@ export default defineConfig({
 - [x] `pages/auth/CheckEmail.tsx`: `Check your inbox` — `We sent a verification link to <email>.`, Resend button with the same 60-s cooldown, link `Back to sign in`.
 
 ### FE-016: Verify email, forgot & reset password
-- [ ] `pages/auth/VerifyEmail.tsx` (`?token=`): on mount POST verify → success state `Email verified` + `Sign in` button; `GONE` → `This verification link is invalid or has expired.` + resend form (email input).
-- [ ] `pages/auth/ForgotPassword.tsx`: email field → always success state `If an account exists for <email>, we've sent a reset link.`
-- [ ] `pages/auth/ResetPassword.tsx` (`?token=`): New password + confirm → success → `Password updated. Sign in with your new password.` + button; `GONE` → invalid-link state with link to forgot.
+- [x] `pages/auth/VerifyEmail.tsx` (`?token=`): on mount POST verify → success state `Email verified` + `Sign in` button; `GONE` → `This verification link is invalid or has expired.` + resend form (email input).
+- [x] `pages/auth/ForgotPassword.tsx`: email field → always success state `If an account exists for <email>, we've sent a reset link.`
+- [x] `pages/auth/ResetPassword.tsx` (`?token=`): New password + confirm → success → `Password updated. Sign in with your new password.` + button; `GONE` → invalid-link state with link to forgot.
 
 ### FE-017: Accept invitation
 - [ ] `pages/auth/AcceptInvitation.tsx` (`/invitations/:token`): fetch `GET /api/invitations/:token` (public). Shows card: `<inviterName> invited you to join "<workspaceName>" as <role>.`
