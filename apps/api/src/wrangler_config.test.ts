@@ -14,7 +14,7 @@ interface QueueConfig {
 }
 
 interface EnvironmentConfig {
-  routes: { pattern: string; zone_name: string }[];
+  routes: { pattern: string; zone_name?: string; custom_domain?: boolean }[];
   browser: { binding: string };
   send_email: {
     name: string;
@@ -162,12 +162,14 @@ describe("wrangler environments", () => {
     const production = config.env.production;
 
     expect(staging.routes).toEqual([
+      { pattern: "api-staging.zenguy.com", custom_domain: true },
       {
         pattern: "staging-app.zenguy.com/api/*",
         zone_name: "zenguy.com",
       },
     ]);
     expect(production.routes).toEqual([
+      { pattern: "api.zenguy.com", custom_domain: true },
       { pattern: "app.zenguy.com/api/*", zone_name: "zenguy.com" },
     ]);
 

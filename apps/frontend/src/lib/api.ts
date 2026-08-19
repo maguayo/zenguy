@@ -1,5 +1,17 @@
 import { clearToken, getToken, onExpiringSoon, setToken } from "./auth-token";
 
+// Deployed environments serve the API from its own origin (for example
+// https://api.zenguy.com); an empty origin keeps same-origin relative URLs,
+// which local development uses through the Vite proxy.
+const API_ORIGIN = ((import.meta.env.VITE_API_ORIGIN as string | undefined) ?? "").replace(
+  /\/+$/,
+  "",
+);
+
+function apiUrl(path: string): string {
+  return `${API_ORIGIN}${path}`;
+}
+
 export interface ApiErrorDetail {
   field: string;
   message: string;
@@ -93,8 +105,8 @@ export async function ensureFreshToken(): Promise<RefreshPayload> {
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
-    const response = await fetch("/api/auth/refresh", {
-      credentials: "same-origin",
+    const response = await fetch(apiUrl("/api/auth/refresh"), {
+      credentials: "include",
       headers: requestHeaders(true),
       method: "POST",
     });
@@ -136,9 +148,9 @@ async function request<T>(
   retried = false,
 ): Promise<T> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "same-origin",
+    credentials: "include",
     headers: requestHeaders(true),
     method,
   });
@@ -204,8 +216,8 @@ function filenameFromDisposition(value: string | null): string {
 
 async function requestBlob(path: string, retried = false): Promise<{ blob: Blob; filename: string }> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
-  const response = await fetch(path, {
-    credentials: "same-origin",
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
     headers: requestHeaders(false),
     method: "GET",
   });

@@ -74,6 +74,10 @@
     "staging": {
       "routes": [
         {
+          "pattern": "api-staging.zenguy.com",
+          "custom_domain": true
+        },
+        {
           "pattern": "staging-app.zenguy.com/api/*",
           "zone_name": "zenguy.com"
         }
@@ -161,6 +165,10 @@
     },
     "production": {
       "routes": [
+        {
+          "pattern": "api.zenguy.com",
+          "custom_domain": true
+        },
         {
           "pattern": "app.zenguy.com/api/*",
           "zone_name": "zenguy.com"

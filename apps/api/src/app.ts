@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
@@ -236,6 +237,19 @@ export function buildApp(
 
   app.use("*", requestId);
   app.use("*", securityHeaders);
+  // The SPA calls the API cross-origin (api.zenguy.com from app.zenguy.com);
+  // only the configured application origin may send credentialed requests.
+  app.use(
+    "*",
+    cors({
+      origin: (origin) => (origin === config.appUrl ? origin : null),
+      credentials: true,
+      allowHeaders: ["Authorization", "Content-Type"],
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      exposeHeaders: ["Content-Disposition"],
+      maxAge: 86_400,
+    }),
+  );
   app.onError(errorHandler);
 
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));

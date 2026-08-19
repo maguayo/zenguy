@@ -27,15 +27,32 @@ describe("API client", () => {
     vi.unstubAllGlobals();
   });
 
-  it("unwraps success envelopes and sends same-origin credentials", async () => {
+  it("unwraps success envelopes and sends credentials", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { ok: true } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(apiGet<{ ok: boolean }>("/api/health")).resolves.toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/health",
-      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+      expect.objectContaining({ credentials: "include", method: "GET" }),
     );
+  });
+
+  it("prefixes requests with VITE_API_ORIGIN when configured", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_API_ORIGIN", "https://api-staging.zenguy.com/");
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { ok: true } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const fresh = await import("./api");
+    await expect(fresh.apiGet<{ ok: boolean }>("/api/health")).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api-staging.zenguy.com/api/health",
+      expect.objectContaining({ credentials: "include", method: "GET" }),
+    );
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
   it("preserves paginated cursors", async () => {
