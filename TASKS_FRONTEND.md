@@ -385,8 +385,8 @@ export default defineConfig({
 # Phase 13 — Workspace settings
 
 ### FE-040: Settings & audit log
-- [ ] `src/api/workspaces.ts` additions: `updateWorkspace`, `deleteWorkspace(wsId, confirmName)`, `transferOwnership`, `listAuditLogs`.
-- [ ] `pages/settings/SettingsPage.tsx` (§18.17):
+- [x] `src/api/workspaces.ts` additions: `updateWorkspace`, `deleteWorkspace(wsId, confirmName)`, `transferOwnership`, `listAuditLogs`.
+- [x] `pages/settings/SettingsPage.tsx` (§18.17):
   - **General** Card (gated `workspace.settings`; read-only DescriptionList for Members — though Members normally won't navigate here, the route stays accessible): Name Input + Timezone Select (same filterable select as onboarding) + `Save changes` → PATCH → toast; workspace name in the sidebar updates via invalidation.
   - **Audit log** Card (rendered only when `can("audit.view")`): table Time (`formatDateTime`), Actor (name / `System`), Action (mono, e.g. `secret.created`), Resource (`<type> · <id>` truncated + CopyButton), Details (`<details>` disclosure with pretty-printed metadata JSON). `LoadMore` 25/page. Empty `No audit entries yet.`
   - **Danger zone** Card (danger-tinted border; owner only — hidden otherwise):

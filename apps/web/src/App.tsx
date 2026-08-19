@@ -60,7 +60,7 @@ const ChannelsPage = lazy(() => import("./pages/notifications/ChannelsPage"));
 const SecretsPage = lazy(() => import("./pages/secrets/SecretsPage"));
 const MembersPage = lazy(() => import("./pages/members/MembersPage"));
 const BillingPage = lazy(() => import("./pages/billing/BillingPage"));
-const SettingsPage = stub("Workspace Settings");
+const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 export function shouldRetryQuery(count: number, error: unknown): boolean {
