@@ -19,7 +19,9 @@ pnpm --filter @zenguy/web dev
 
 Vite proxies `/api` requests to `http://localhost:8787`. See the API README for
 the local migrations and seed steps required before exercising authenticated
-flows.
+flows. If that port is unavailable, set the development-only
+`ZENGUY_API_ORIGIN` value in an ignored `apps/web/.env.local` file to the
+Worker origin you are using.
 
 ## Production
 
@@ -31,6 +33,6 @@ pnpm --filter @zenguy/web build
 pnpm --filter @zenguy/api exec wrangler deploy --env production
 ```
 
-There are no frontend environment variables. Runtime settings such as the
-Paddle client token, environment, and price ID come from
+There are no frontend runtime environment variables. Runtime settings such as
+the Paddle client token, environment, and price ID come from
 `GET /api/billing/config`.

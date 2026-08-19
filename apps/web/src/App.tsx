@@ -20,6 +20,7 @@ import {
 } from "@tanstack/react-query";
 
 import type { Workspace } from "./api/types";
+import { AppLayout } from "./components/AppLayout";
 import { ErrorState } from "./components/ui/ErrorState";
 import { Spinner } from "./components/ui/Spinner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -105,7 +106,7 @@ function RouteLoading() {
 function WorkspaceShell() {
   return (
     <WorkspaceProvider>
-      <Outlet />
+      <AppLayout />
     </WorkspaceProvider>
   );
 }

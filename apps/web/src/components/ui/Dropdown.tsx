@@ -11,10 +11,13 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 export interface DropdownItem {
+  description?: string;
   disabled?: boolean;
   icon?: ReactNode;
   label: string;
   onSelect: () => void;
+  separatorBefore?: boolean;
+  suffix?: ReactNode;
   tone?: "danger";
 }
 
@@ -22,6 +25,7 @@ export interface DropdownProps {
   align?: "start" | "end";
   items: DropdownItem[];
   trigger: ReactElement<Record<string, unknown>>;
+  triggerWrapperClassName?: string;
 }
 
 export function nextMenuIndex(
@@ -38,7 +42,12 @@ export function nextMenuIndex(
   return -1;
 }
 
-export function Dropdown({ align = "end", items, trigger }: DropdownProps) {
+export function Dropdown({
+  align = "end",
+  items,
+  trigger,
+  triggerWrapperClassName,
+}: DropdownProps) {
   const menuId = useId();
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -104,7 +113,7 @@ export function Dropdown({ align = "end", items, trigger }: DropdownProps) {
     <>
       <span
         ref={wrapperRef}
-        className="inline-flex"
+        className={clsx("inline-flex", triggerWrapperClassName)}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -146,25 +155,37 @@ export function Dropdown({ align = "end", items, trigger }: DropdownProps) {
               }}
             >
               {items.map((item, index) => (
-                <button
+                <div
                   key={`${item.label}-${index}`}
-                  className={clsx(
-                    "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-50 focus:bg-zinc-50 disabled:pointer-events-none disabled:opacity-50",
-                    item.tone === "danger" ? "text-danger-700" : "text-zinc-700",
-                  )}
-                  disabled={item.disabled}
-                  role="menuitem"
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    item.onSelect();
-                    setOpen(false);
-                    triggerElement()?.focus();
-                  }}
+                  className={item.separatorBefore ? "mt-1 border-t border-zinc-200 pt-1" : undefined}
                 >
-                  {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
-                  <span>{item.label}</span>
-                </button>
+                  <button
+                    className={clsx(
+                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-50 focus:bg-zinc-50 disabled:pointer-events-none disabled:opacity-50",
+                      item.tone === "danger" ? "text-danger-700" : "text-zinc-700",
+                    )}
+                    disabled={item.disabled}
+                    role="menuitem"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      item.onSelect();
+                      setOpen(false);
+                      triggerElement()?.focus();
+                    }}
+                  >
+                    {item.icon ? <span aria-hidden="true" className="shrink-0">{item.icon}</span> : null}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{item.label}</span>
+                      {item.description ? (
+                        <span className="block truncate text-xs text-zinc-500">
+                          {item.description}
+                        </span>
+                      ) : null}
+                    </span>
+                    {item.suffix ? <span className="shrink-0">{item.suffix}</span> : null}
+                  </button>
+                </div>
               ))}
             </div>,
             document.body,
