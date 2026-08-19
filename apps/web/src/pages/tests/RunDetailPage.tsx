@@ -50,11 +50,13 @@ function AttemptCard({
   attempt,
   expanded,
   onToggle,
+  timezone,
   wsId,
 }: {
   attempt: AttemptSummary;
   expanded: boolean;
   onToggle: () => void;
+  timezone: string;
   wsId: string;
 }) {
   return (
@@ -78,7 +80,7 @@ function AttemptCard({
       </button>
       {expanded ? (
         <div className="border-t border-zinc-200 p-4">
-          <AttemptDetail attemptId={attempt.id} wsId={wsId} />
+          <AttemptDetail attemptId={attempt.id} timezone={timezone} wsId={wsId} />
         </div>
       ) : null}
     </Card>
@@ -240,6 +242,7 @@ export default function RunDetailPage() {
             key={attempt.id}
             attempt={attempt}
             expanded={expandedAttemptId === attempt.id}
+            timezone={timezone}
             wsId={current.id}
             onToggle={() =>
               setExpandedAttemptId((currentId) =>

@@ -23,7 +23,9 @@ const focusableSelector = [
 export interface ModalProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   children: ReactNode;
+  contentClassName?: string;
   footer?: ReactNode;
+  headerClassName?: string;
   onClose: () => void;
   open: boolean;
   panelClassName?: string;
@@ -33,7 +35,9 @@ export interface ModalProps
 export function Modal({
   children,
   className,
+  contentClassName,
   footer,
+  headerClassName,
   onClose,
   open,
   panelClassName,
@@ -117,7 +121,12 @@ export function Modal({
         role="dialog"
         tabIndex={-1}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
+        <div
+          className={clsx(
+            "flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3",
+            headerClassName,
+          )}
+        >
           <h2 className="text-base font-semibold text-zinc-900" id={titleId}>
             {title}
           </h2>
@@ -125,7 +134,7 @@ export function Modal({
             <X aria-hidden="true" className="size-4" />
           </IconButton>
         </div>
-        <div className="p-4">{children}</div>
+        <div className={clsx("p-4", contentClassName)}>{children}</div>
         {footer ? (
           <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 px-4 py-3">
             {footer}

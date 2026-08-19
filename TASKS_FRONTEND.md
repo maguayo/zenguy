@@ -283,13 +283,13 @@ export default defineConfig({
 - [x] Tests: none (manual QA) — but keep the SSE module pure enough to unit-test `subscribeRun` reconnect/fallback with a fake EventSource; write that test.
 
 ### FE-027: Attempt detail viewer
-- [ ] `components/AttemptDetail.tsx`: props `{ wsId, attemptId, timezone }`; query `["ws", wsId, "attempts", attemptId]` (lazy — only when expanded).
-- [ ] Layout (§12.4):
+- [x] `components/AttemptDetail.tsx`: props `{ wsId, attemptId, timezone }`; query `["ws", wsId, "attempts", attemptId]` (lazy — only when expanded).
+- [x] Layout (§12.4):
   - Result strip: summary text; when failed: `failureReason` highlighted; expected vs actual side-by-side bordered blocks (`Expected` / `Observed`); token usage + model as small meta line; `systemErrorCode` shown for SYSTEM_ERROR.
   - **Steps timeline**: vertical list — sequence number bubble, `actionType` mono Badge, description, `formatTime(timestamp)`, sanitized URL (truncated, Tooltip full), result dot (ok/danger); step screenshot as 96-px thumbnail (lazy `loading="lazy"`, `alt="Step <n> screenshot"`) → opens `ScreenshotViewer` at that index.
   - `components/ScreenshotViewer.tsx`: full-screen Modal lightbox over all attempt screenshots: large image, `<n> of <m>`, prev/next buttons + ArrowLeft/ArrowRight keys, caption (step description), close on Escape. Expired artifact URLs (img error) → placeholder `Screenshot expired`.
   - **Console errors** Card (collapsed count header, e.g. `Console errors (3)`): mono list `level · message · url`. **Network errors** Card: table Method / Host / Path / Status / Error. **Visited URLs** Card: ordered mono list. Each `_None captured_` empty text when empty.
-- [ ] All text content renders as text (never `dangerouslySetInnerHTML`).
+- [x] All text content renders as text (never `dangerouslySetInnerHTML`).
 
 ### FE-028: Drafts note & runs from incidents
 - [ ] Ensure `/w/:wsId/runs/:runId` works for validation runs (null `testId`): breadcrumb shows `Draft validation`, no test links, banner `This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.`
