@@ -146,13 +146,13 @@ export default defineConfig({
 - [x] `Tooltip.tsx`: simple hover/focus title-style tooltip (positioned span, no library).
 
 ### FE-009: Data display & formatters
-- [ ] `Table.tsx` — generic: `columns: { key, header, className?, render: (row) => ReactNode }[]`, `rows: T[]`, `rowKey(row)`, `onRowClick?`, `loading` (renders TableSkeleton), `empty` (ReactNode). Semantics: real `<table>` with `<th scope="col">`; wrapper `overflow-x-auto`; row hover `bg-zinc-50` + `cursor-pointer` when clickable.
-- [ ] `LoadMore.tsx`: `({ nextCursor, loading, onMore })` — centered secondary button `Load more`, hidden when cursor null.
-- [ ] `Tabs.tsx` (`items: { key, label, count? }[]`, controlled value; underline style, accent for active) and `Badge.tsx` (`tone: "ok" | "danger" | "warn" | "info" | "neutral" | "accent"`, subtle `-50` bg + `-700` text, rounded-full px-2 py-0.5 text-xs font-medium).
-- [ ] `StatusBadge.tsx`: `({ status: string, passedAfterRetry?: boolean })` — maps **every** status via the table in **Appendix B** (run/attempt, monitor, incident, delivery); dot + label; when `passedAfterRetry` also renders the amber `Passed after retry` badge next to it (tooltip: retry copy from Appendix D).
-- [ ] `lib/format.ts`: `formatDateTime(iso, timeZone)` (`14 Aug 2026, 09:32`), `formatTime(iso, tz)`, `formatRelative(iso)` (`3m ago`, `in 2h`, days beyond 7 → date), `formatDuration(ms | null)` (`45s`, `3m 12s`, `1h 04m`, `—` for null), `formatEuros(cents)` (`39,00 €` — es-ES style comma, non-breaking space), `formatPct(n | null)` (`99.98%` / `—`), `formatInterval(hours)` (`Every 6 hours` / `Every hour`), `formatFrequency(seconds)` (`Every 5 min`, `Every hour`, `Every 24 hours`).
-- [ ] `CopyButton.tsx` (clipboard + toast `Copied`).
-- [ ] Unit tests (vitest) for every formatter (edge cases: null, 0, 59s→`59s`, 60s→`1m 00s`, cents rounding).
+- [x] `Table.tsx` — generic: `columns: { key, header, className?, render: (row) => ReactNode }[]`, `rows: T[]`, `rowKey(row)`, `onRowClick?`, `loading` (renders TableSkeleton), `empty` (ReactNode). Semantics: real `<table>` with `<th scope="col">`; wrapper `overflow-x-auto`; row hover `bg-zinc-50` + `cursor-pointer` when clickable.
+- [x] `LoadMore.tsx`: `({ nextCursor, loading, onMore })` — centered secondary button `Load more`, hidden when cursor null.
+- [x] `Tabs.tsx` (`items: { key, label, count? }[]`, controlled value; underline style, accent for active) and `Badge.tsx` (`tone: "ok" | "danger" | "warn" | "info" | "neutral" | "accent"`, subtle `-50` bg + `-700` text, rounded-full px-2 py-0.5 text-xs font-medium).
+- [x] `StatusBadge.tsx`: `({ status: string, passedAfterRetry?: boolean })` — maps **every** status via the table in **Appendix B** (run/attempt, monitor, incident, delivery); dot + label; when `passedAfterRetry` also renders the amber `Passed after retry` badge next to it (tooltip: retry copy from Appendix D).
+- [x] `lib/format.ts`: `formatDateTime(iso, timeZone)` (`14 Aug 2026, 09:32`), `formatTime(iso, tz)`, `formatRelative(iso)` (`3m ago`, `in 2h`, days beyond 7 → date), `formatDuration(ms | null)` (`45s`, `3m 12s`, `1h 04m`, `—` for null), `formatEuros(cents)` (`39,00 €` — es-ES style comma, non-breaking space), `formatPct(n | null)` (`99.98%` / `—`), `formatInterval(hours)` (`Every 6 hours` / `Every hour`), `formatFrequency(seconds)` (`Every 5 min`, `Every hour`, `Every 24 hours`).
+- [x] `CopyButton.tsx` (clipboard + toast `Copied`).
+- [x] Unit tests (vitest) for every formatter (edge cases: null, 0, 59s→`59s`, 60s→`1m 00s`, cents rounding).
 
 ### FE-010: Toasts
 - [ ] `contexts/ToastContext.tsx` + `useToast()`: `toast.success(msg)`, `toast.error(msg)`; stacked top-right, auto-dismiss 4 s (errors 6 s), manual close, `role="status"` / `aria-live="polite"`; max 4 visible.
