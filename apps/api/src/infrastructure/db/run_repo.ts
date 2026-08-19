@@ -182,6 +182,13 @@ export class D1RunRepo implements RunRepo {
     return row === null ? null : toRun(row);
   }
 
+  async findByIdForExecution(runId: string): Promise<TestRun | null> {
+    const row = await one<RunRow>(
+      this.database.prepare("SELECT * FROM test_runs WHERE id = ?").bind(runId),
+    );
+    return row === null ? null : toRun(row);
+  }
+
   async listForTest(
     testId: string,
     cursor: Cursor | null | undefined,
@@ -247,6 +254,14 @@ export class D1RunRepo implements RunRepo {
           changes.incidentId ?? null,
           runId,
         ),
+    );
+  }
+
+  async setAttemptCount(runId: string, attemptCount: number): Promise<void> {
+    await run(
+      this.database
+        .prepare("UPDATE test_runs SET attempt_count = ? WHERE id = ?")
+        .bind(attemptCount, runId),
     );
   }
 

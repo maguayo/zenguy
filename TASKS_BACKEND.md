@@ -928,20 +928,20 @@ interface RunSnapshot {
 - [x] Exhaustive table-driven tests — encode spec §26 examples verbatim: 26.1 (pass first, no retry), 26.2 (fail, fail, pass on retry 2 → PASSED + passedAfterRetry, delays [0, 60]), 26.3 (4 failures → FAILED final), 26.4 (TIMEOUT then pass → PASSED after retry), maxRetries 0 (fail → finalize immediately), SYSTEM_ERROR before any start → reverseUsage true, SYSTEM_ERROR after attempt-0 FAILED with infra exhausted → finalize FAILED, TIMEOUT never reclassified as FAILED.
 
 ### BE-052: Attempt lifecycle service
-- [ ] Create `application/execution/attempt_lifecycle.ts` with class `AttemptLifecycle` (deps: run/attempt/step/artifact repos, usage use cases, queue producer, clock, ids, `RunFinalizedHandler`).
-- [ ] `claim(msg: AttemptMessage): Promise<"execute" | "skip">`:
+- [x] Create `application/execution/attempt_lifecycle.ts` with class `AttemptLifecycle` (deps: run/attempt/step/artifact repos, usage use cases, queue producer, clock, ids, `RunFinalizedHandler`).
+- [x] `claim(msg: AttemptMessage): Promise<"execute" | "skip">`:
   - Load run + attempt; missing → skip (+alert). Run already terminal → skip (redelivery after completion).
   - Run's test (when `browser_test_id` set): if test soft-deleted or workspace deleted → mark attempt SYSTEM_ERROR? **No** — §24.11: quietly finalize run as-is: set attempt status FAILED? — DECISION: cancel silently: set attempt `SYSTEM_ERROR` with `system_error_code: "CANCELLED"`, finalize run `SYSTEM_ERROR`, `billable = 0` + reverse usage, **do not** open incidents or alert (deleted tests don't notify). Return skip.
   - Attempt status must be QUEUED → set STARTING (`update` with `WHERE status='QUEUED'` optimistic; 0 rows changed → skip, another delivery won).
   - If attempt is stale STARTING/RUNNING (redelivery after crash — `started_at < now - ATTEMPT_TIMEOUT_MS - 120000`): treat as SYSTEM_ERROR with code `WORKER_LOST`, go to `onAttemptFinished` below, return skip.
-- [ ] `markRunning(runId, attemptId, attemptIndex)`: attempt → RUNNING + `started_at`; run → RUNNING + `started_at` (first time); **if `run.usage_event_id` is null**: `record_run_usage` + `setUsageEventId` (billing moment per §6.3 — the attempt has actually started executing; single D1 batch).
-- [ ] `onAttemptFinished(run, attempt, outcome: AttemptOutcome)` where `AttemptOutcome = { status: "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR"; summary?; expectedResult?; actualResult?; failureReason?; systemErrorCode?; tokenUsage?; visitedUrls; consoleErrors; networkErrors }`:
+- [x] `markRunning(runId, attemptId, attemptIndex)`: attempt → RUNNING + `started_at`; run → RUNNING + `started_at` (first time); **if `run.usage_event_id` is null**: `record_run_usage` + `setUsageEventId` (billing moment per §6.3 — the attempt has actually started executing; single D1 batch).
+- [x] `onAttemptFinished(run, attempt, outcome: AttemptOutcome)` where `AttemptOutcome = { status: "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR"; summary?; expectedResult?; actualResult?; failureReason?; systemErrorCode?; tokenUsage?; visitedUrls; consoleErrors; networkErrors }`:
   1. Update attempt row (status, finished_at, duration_ms, all output fields).
   2. `decideAfterAttempt(...)` with fresh run state.
   3. `retry` → insert next attempt row (QUEUED, `retry_delay_seconds`) + `RUN_QUEUE.send(next, { delaySeconds })`; update run `attempt_count`.
   4. `infra_retry` → `incrementInfraAttempts`; `resetForInfraRetry(attemptId)`; delete the aborted try's steps + screenshot artifact rows/objects; re-send SAME message with `delaySeconds: 30`.
   5. `finalize` → run `finalize(...)` (status, finished_at, duration_ms = finishedAt − queuedAt, attempt_count = attempts inserted, passed_after_retry, billable: `reverseUsage ? 0 : 1`); if `reverseUsage` → `reverse_run_usage`; then `await runFinalizedHandler.handle(run, snapshot)` (incidents/report/notifications — no-op impl until BE-059).
-- [ ] Tests (fakes, FixedClock): full 26.2 flow through the service (assert queue delays 0 then 60); infra retry resets same attempt and preserves `attempt_index`; usage recorded exactly once across retries; reversal on never-started SYSTEM_ERROR; stale-claim path; second delivery of same message skips.
+- [x] Tests (fakes, FixedClock): full 26.2 flow through the service (assert queue delays 0 then 60); infra retry resets same attempt and preserves `attempt_index`; usage recorded exactly once across retries; reversal on never-started SYSTEM_ERROR; stale-claim path; second delivery of same message skips.
 
 ### BE-053: Browser session provider
 - [ ] Create `apps/api/src/infrastructure/browser/session.ts`. `DEVICE_PROFILES` in `constants.ts`:

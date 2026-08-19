@@ -51,6 +51,7 @@ export interface RunFinalize {
 export interface RunRepo {
   insert(run: TestRun): Promise<void>;
   insertWithAttempt(run: TestRun, attempt: TestAttempt): Promise<void>;
+  findByIdForExecution(runId: string): Promise<TestRun | null>;
   findById(workspaceId: string, runId: string): Promise<TestRun | null>;
   listForTest(
     testId: string,
@@ -64,6 +65,7 @@ export interface RunRepo {
     startedAt?: number,
   ): Promise<void>;
   finalize(runId: string, changes: RunFinalize): Promise<void>;
+  setAttemptCount(runId: string, attemptCount: number): Promise<void>;
   setUsageEventId(runId: string, usageEventId: string): Promise<void>;
   setIncidentId(runId: string, incidentId: string | null): Promise<void>;
   incrementInfraAttempts(runId: string): Promise<number>;
@@ -97,6 +99,14 @@ export interface AttemptUpdate {
 export interface AttemptRepo {
   insert(attempt: TestAttempt): Promise<void>;
   findById(id: string): Promise<TestAttempt | null>;
+  claimQueued(id: string, claimedAt: number): Promise<boolean>;
+  markRunning(
+    id: string,
+    runId: string,
+    attemptIndex: number,
+    startedAt: number,
+    usageEventId: string,
+  ): Promise<boolean>;
   findByRunAndIndex(
     runId: string,
     attemptIndex: number,

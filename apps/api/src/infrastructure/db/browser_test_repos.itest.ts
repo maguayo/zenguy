@@ -453,4 +453,70 @@ describe("D1 browser test repositories", () => {
     await steps.deleteForAttempt(running.id);
     await expect(steps.listForAttempt(running.id)).resolves.toEqual([]);
   });
+
+  it("claims queued attempts optimistically and starts run state atomically", async () => {
+    const runs = new D1RunRepo(testEnv().DB);
+    const attempts = new D1AttemptRepo(testEnv().DB);
+    const queuedRun = testRun({
+      id: "run_claim",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 100,
+    });
+    const queuedAttempt: TestAttempt = {
+      ...attempt("att_claim"),
+      testRunId: queuedRun.id,
+      status: "QUEUED",
+      retryDelaySeconds: 0,
+      queuedAt: 100,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+    };
+    await runs.insert(queuedRun);
+    await attempts.insert(queuedAttempt);
+
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toEqual(
+      queuedRun,
+    );
+    await expect(attempts.claimQueued(queuedAttempt.id, 500)).resolves.toBe(
+      true,
+    );
+    await expect(attempts.claimQueued(queuedAttempt.id, 501)).resolves.toBe(
+      false,
+    );
+    await expect(
+      attempts.markRunning(
+        queuedAttempt.id,
+        queuedRun.id,
+        0,
+        600,
+        "ue_claim",
+      ),
+    ).resolves.toBe(true);
+    await runs.setAttemptCount(queuedRun.id, 1);
+    await expect(attempts.findById(queuedAttempt.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      startedAt: 600,
+    });
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
+      status: "RUNNING",
+      startedAt: 600,
+      usageEventId: "ue_claim",
+      attemptCount: 1,
+    });
+    await expect(
+      attempts.markRunning(
+        queuedAttempt.id,
+        queuedRun.id,
+        0,
+        700,
+        "ue_other",
+      ),
+    ).resolves.toBe(false);
+    await expect(runs.findByIdForExecution(queuedRun.id)).resolves.toMatchObject({
+      startedAt: 600,
+      usageEventId: "ue_claim",
+    });
+  });
 });

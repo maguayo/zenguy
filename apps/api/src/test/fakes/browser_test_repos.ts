@@ -172,6 +172,11 @@ export class FakeRunRepo implements RunRepo {
       : copy(run);
   }
 
+  async findByIdForExecution(runId: string): Promise<TestRun | null> {
+    const run = this.runs.get(runId);
+    return run === undefined ? null : copy(run);
+  }
+
   async listForTest(
     testId: string,
     cursor: Cursor | null | undefined,
@@ -227,6 +232,11 @@ export class FakeRunRepo implements RunRepo {
           : { incidentId: changes.incidentId }),
       });
     }
+  }
+
+  async setAttemptCount(runId: string, attemptCount: number): Promise<void> {
+    const run = this.runs.get(runId);
+    if (run !== undefined) this.runs.set(runId, { ...run, attemptCount });
   }
 
   async setUsageEventId(runId: string, usageEventId: string): Promise<void> {
@@ -308,6 +318,8 @@ export class FakeAttemptRepo implements AttemptRepo {
     Pick<AttemptWithLatest, "latestStep" | "latestScreenshot">
   >();
 
+  constructor(private readonly runs?: FakeRunRepo) {}
+
   async insert(attempt: TestAttempt): Promise<void> {
     if (
       this.attempts.has(attempt.id) ||
@@ -325,6 +337,46 @@ export class FakeAttemptRepo implements AttemptRepo {
   async findById(id: string): Promise<TestAttempt | null> {
     const attempt = this.attempts.get(id);
     return attempt === undefined ? null : copy(attempt);
+  }
+
+  async claimQueued(id: string, claimedAt: number): Promise<boolean> {
+    const attempt = this.attempts.get(id);
+    if (attempt === undefined || attempt.status !== "QUEUED") return false;
+    this.attempts.set(id, {
+      ...attempt,
+      status: "STARTING",
+      startedAt: claimedAt,
+    });
+    return true;
+  }
+
+  async markRunning(
+    id: string,
+    runId: string,
+    attemptIndex: number,
+    startedAt: number,
+    usageEventId: string,
+  ): Promise<boolean> {
+    const attempt = this.attempts.get(id);
+    if (
+      attempt === undefined ||
+      attempt.status !== "STARTING" ||
+      attempt.testRunId !== runId ||
+      attempt.attemptIndex !== attemptIndex
+    ) {
+      return false;
+    }
+    this.attempts.set(id, { ...attempt, status: "RUNNING", startedAt });
+    const run = this.runs?.runs.get(runId);
+    if (run !== undefined) {
+      this.runs?.runs.set(runId, {
+        ...run,
+        status: "RUNNING",
+        startedAt: run.startedAt ?? startedAt,
+        usageEventId: run.usageEventId ?? usageEventId,
+      });
+    }
+    return true;
   }
 
   async findByRunAndIndex(

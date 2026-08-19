@@ -7,7 +7,7 @@ import type {
   AttemptWithLatest,
   TestAttempt,
 } from "../../domain/browser_tests/types";
-import { all, one, run } from "./d1";
+import { all, batch, one, run } from "./d1";
 
 interface AttemptRow {
   id: string;
@@ -105,6 +105,47 @@ export class D1AttemptRepo implements AttemptRepo {
       this.database.prepare("SELECT * FROM test_attempts WHERE id = ?").bind(id),
     );
     return row === null ? null : toAttempt(row);
+  }
+
+  async claimQueued(id: string, claimedAt: number): Promise<boolean> {
+    const result = await run(
+      this.database
+        .prepare(
+          `UPDATE test_attempts
+           SET status = 'STARTING', started_at = ?
+           WHERE id = ? AND status = 'QUEUED'`,
+        )
+        .bind(claimedAt, id),
+    );
+    return result.meta.changes === 1;
+  }
+
+  async markRunning(
+    id: string,
+    runId: string,
+    attemptIndex: number,
+    startedAt: number,
+    usageEventId: string,
+  ): Promise<boolean> {
+    const [attemptResult] = await batch(this.database, [
+      this.database
+        .prepare(
+          `UPDATE test_attempts
+           SET status = 'RUNNING', started_at = ?
+           WHERE id = ? AND test_run_id = ? AND attempt_index = ?
+             AND status = 'STARTING'`,
+        )
+        .bind(startedAt, id, runId, attemptIndex),
+      this.database
+        .prepare(
+          `UPDATE test_runs
+           SET status = 'RUNNING', started_at = COALESCE(started_at, ?),
+               usage_event_id = COALESCE(usage_event_id, ?)
+           WHERE id = ? AND status IN ('QUEUED', 'RUNNING')`,
+        )
+        .bind(startedAt, usageEventId, runId),
+    ]);
+    return attemptResult?.meta.changes === 1;
   }
 
   async findByRunAndIndex(
