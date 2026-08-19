@@ -159,7 +159,8 @@ export function buildApp(
     overrides.emailTokens ?? new D1EmailTokenRepo(env.DB);
   const refreshTokens =
     overrides.refreshTokens ?? new D1RefreshTokenRepo(env.DB);
-  const emailSender = overrides.emailSender ?? buildEmailSender(config);
+  const emailSender =
+    overrides.emailSender ?? buildEmailSender(config, env.EMAIL);
   const rateLimiter =
     overrides.rateLimiter ?? new KvRateLimiter(env.KV, clock);
   const workspaces = overrides.workspaces ?? new D1WorkspaceRepo(env.DB);

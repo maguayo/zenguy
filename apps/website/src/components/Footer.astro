@@ -1,0 +1,56 @@
+---
+import Logo from "./Logo.astro";
+
+// Product links point at the page's real sections; Resources/Company pages
+// don't exist yet (kept as designed — wire them up when those pages ship).
+const groups = [
+  {
+    label: "Product",
+    links: [
+      { label: "Browser tests", href: "#how" },
+      { label: "Uptime monitors", href: "#uptime" },
+      { label: "Alerts", href: "#alerts" },
+      { label: "Pricing", href: "#pricing" },
+    ],
+  },
+  {
+    label: "Resources",
+    links: [
+      { label: "Documentation", href: "#" },
+      { label: "Changelog", href: "#" },
+      { label: "Status", href: "#" },
+    ],
+  },
+  {
+    label: "Company",
+    links: [
+      { label: "Privacy", href: "#" },
+      { label: "Terms", href: "#" },
+      { label: "Contact", href: "#" },
+    ],
+  },
+];
+---
+
+<footer class="border-t border-line bg-surface px-10 py-12 max-md:px-5">
+  <div class="container-site flex items-start gap-16 max-md:flex-col max-md:gap-10">
+    <div class="flex flex-col gap-3">
+      <a href="/" class="btn inline-flex" aria-label="Zenguy home"><Logo iconSize={18} /></a>
+      <span class="text-[12.5px] text-muted">Browser tests in plain English.</span>
+    </div>
+    <div class="flex-1 max-md:hidden"></div>
+    {groups.map((g) => (
+      <div class="flex min-w-[132px] flex-col gap-2.5">
+        <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-muted">{g.label}</span>
+        {g.links.map((l) => (
+          <a href={l.href} class="link-quiet text-[13px]">{l.label}</a>
+        ))}
+      </div>
+    ))}
+  </div>
+  <div class="container-site mt-9 flex items-center gap-4 border-t border-line pt-5">
+    <span class="text-xs text-muted">© 2026 Zenguy</span>
+    <div class="flex-1"></div>
+    <span class="text-xs text-muted">Times shown in Europe/Madrid</span>
+  </div>
+</footer>

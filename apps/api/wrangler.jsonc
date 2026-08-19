@@ -13,6 +13,13 @@
     "run_worker_first": ["/api/*"]
   },
   "browser": { "binding": "BROWSER" },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "remote": true,
+      "allowed_sender_addresses": ["notifications@zenguy.com"]
+    }
+  ],
   "d1_databases": [
     { "binding": "DB", "database_name": "zenguy-db", "database_id": "f734402f-7c64-487f-8875-2a8d777d5665", "migrations_dir": "migrations" }
   ],
@@ -45,6 +52,12 @@
   "env": {
     "production": {
       "browser": { "binding": "BROWSER" },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["notifications@zenguy.com"]
+        }
+      ],
       "d1_databases": [
         { "binding": "DB", "database_name": "zenguy-db", "database_id": "f734402f-7c64-487f-8875-2a8d777d5665", "migrations_dir": "migrations" }
       ],

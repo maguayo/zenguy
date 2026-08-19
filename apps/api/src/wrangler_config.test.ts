@@ -10,6 +10,11 @@ interface QueueConsumerConfig {
 
 interface WranglerConfig {
   browser: { binding: string };
+  send_email: {
+    name: string;
+    remote?: boolean;
+    allowed_sender_addresses: string[];
+  }[];
   d1_databases: { binding: string; database_id: string }[];
   kv_namespaces: { binding: string; id: string }[];
   r2_buckets: { binding: string; bucket_name: string }[];
@@ -20,6 +25,11 @@ interface WranglerConfig {
   env: {
     production: {
       browser: { binding: string };
+      send_email: {
+        name: string;
+        remote?: boolean;
+        allowed_sender_addresses: string[];
+      }[];
       d1_databases: { binding: string; database_id: string }[];
       kv_namespaces: { binding: string; id: string }[];
       r2_buckets: { binding: string; bucket_name: string }[];
@@ -87,6 +97,19 @@ describe("wrangler queue consumers", () => {
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
     });
     expect(production.browser).toEqual(config.browser);
+    expect(config.send_email).toEqual([
+      {
+        name: "EMAIL",
+        remote: true,
+        allowed_sender_addresses: ["notifications@zenguy.com"],
+      },
+    ]);
+    expect(production.send_email).toEqual([
+      {
+        name: "EMAIL",
+        allowed_sender_addresses: ["notifications@zenguy.com"],
+      },
+    ]);
     expect(production.d1_databases).toEqual(config.d1_databases);
     expect(production.kv_namespaces).toEqual(config.kv_namespaces);
     expect(production.r2_buckets).toEqual(config.r2_buckets);

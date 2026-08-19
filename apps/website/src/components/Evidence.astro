@@ -1,0 +1,93 @@
+---
+import Icon from "./Icon.astro";
+
+const features = [
+  {
+    icon: "camera" as const,
+    title: "A screenshot at every step",
+    body: "See the page as the agent saw it, including the moment the check failed.",
+  },
+  {
+    icon: "circleslash" as const,
+    title: "Expected against observed",
+    body: "Stated plainly. The cart said 149,00 €, the checkout said 0,00 €.",
+  },
+  {
+    icon: "network" as const,
+    title: "Console and network around the failure",
+    body: "The 500 that broke the page, with query strings sanitised and bodies never stored.",
+  },
+  {
+    icon: "file" as const,
+    title: "A Markdown report",
+    body: "Facts only, no guessed root cause. Hand it to a developer or paste it into a coding agent.",
+  },
+];
+
+const steps = [
+  { n: 1, t: "00:02", action: "Opened acme-shop.com", note: "Landing page rendered, 200", failed: false },
+  { n: 2, t: "00:09", action: 'Clicked "Wireless headphones"', note: "Product page rendered", failed: false },
+  { n: 3, t: "00:14", action: 'Clicked "Add to cart"', note: "Cart drawer opened, 1 item", failed: false },
+  { n: 4, t: "00:21", action: "Read cart total", note: "Cart shows 149,00 €", failed: false },
+  { n: 5, t: "00:27", action: 'Clicked "Go to checkout"', note: "Navigated to checkout.acme-shop.com", failed: false },
+  { n: 6, t: "00:44", action: "Read order summary", note: "Order total shows 0,00 €", failed: false },
+  { n: 7, t: "01:19", action: "Reloaded and re-read total", note: "Order total still 0,00 €", failed: true },
+];
+---
+
+<section id="evidence" class="px-10 py-24 max-md:px-5 max-md:py-16">
+  <div
+    class="container-site grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] items-center gap-16 max-lg:grid-cols-1 max-lg:gap-12"
+  >
+    <div class="flex flex-col gap-5">
+      <span class="eyebrow">Evidence</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] [text-wrap:balance] max-md:text-[32px]">
+        When it fails, you get the whole story.
+      </h2>
+      <p class="m-0 text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+        Not a red cross and a stack trace. Every attempt is recorded: what the agent clicked, what
+        it saw at each step, what it expected instead, and the console and network activity around
+        the failure.
+      </p>
+      <div class="flex flex-col gap-4 pt-1.5">
+        {features.map((f) => (
+          <div class="flex items-start gap-[13px]">
+            <Icon name={f.icon} size={17} class="mt-0.5" />
+            <div class="flex flex-col gap-[3px]">
+              <span class="text-[14.5px] font-semibold">{f.title}</span>
+              <span class="text-[13.5px] leading-[1.55] text-body">{f.body}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="card-shadow overflow-hidden rounded-[14px] border border-line bg-surface">
+      <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-[13px]">
+        <span class="text-[13.5px] font-semibold">Steps</span>
+        <span class="text-xs text-muted">7 actions · 2 domains · 4 screenshots</span>
+      </div>
+      {steps.map((s) => (
+        <div class="flex items-center gap-3 border-b border-cream px-[18px] py-[11px]">
+          <span class="flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-md bg-cream font-mono text-[11px] font-medium">
+            {s.n}
+          </span>
+          <span class="w-[38px] shrink-0 font-mono text-[11.5px] text-muted">{s.t}</span>
+          <span class="whitespace-nowrap text-[13px] font-medium max-md:whitespace-normal">{s.action}</span>
+          <span class="truncate text-xs text-muted max-md:hidden">{s.note}</span>
+          {s.failed ? (
+            <span class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red/12 px-2 py-[3px] text-[11px] font-medium">
+              <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>check failed
+            </span>
+          ) : (
+            <Icon name="camera" size={14} class="ml-auto opacity-45" />
+          )}
+        </div>
+      ))}
+      <div class="flex items-center gap-[11px] bg-cream px-[18px] py-3.5">
+        <Icon name="shield" size={15} />
+        <span class="text-xs leading-normal text-body">Secret values are redacted in every screenshot, report and log.</span>
+      </div>
+    </div>
+  </div>
+</section>

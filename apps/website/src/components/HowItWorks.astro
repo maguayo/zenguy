@@ -1,0 +1,53 @@
+---
+import Icon from "./Icon.astro";
+
+const steps = [
+  {
+    n: "01",
+    title: "Write it like you would tell a colleague",
+    body: "One or two sentences describing the flow and what has to be true at the end. Reference stored credentials by name.",
+    points: ["No selectors, no scripts, no framework", "Desktop or mobile viewport", "Run it once before you save it"],
+  },
+  {
+    n: "02",
+    title: "It runs on a schedule, in a real browser",
+    body: "Pick any whole number of hours from 1 to 24. Every attempt gets a clean browser and a clean session.",
+    points: ["Up to 3 retries, free of charge", "Five minute limit per attempt", "Irreversible actions avoided by default"],
+  },
+  {
+    n: "03",
+    title: "You hear about it when it breaks",
+    body: "Once every retry has failed, Zenguy opens an incident and tells the channels you chose. Then it tells them when it passes again.",
+    points: ["Email, Slack, Discord, SMS, WhatsApp, phone", "One alert per incident, not per failure", "Delivery log for every message sent"],
+  },
+];
+---
+
+<section id="how" class="border-y border-line bg-surface px-10 py-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-[60px] flex max-w-[640px] flex-col gap-3.5">
+      <span class="eyebrow">How it works</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] max-md:text-[32px]">
+        Three things to set up, then you stop thinking about it.
+      </h2>
+    </div>
+
+    <div class="grid grid-cols-3 gap-8 max-lg:grid-cols-1">
+      {steps.map((s) => (
+        <div class="flex flex-col gap-3.5 border-t border-line pt-[22px]">
+          <span class="font-mono text-xs font-medium text-violet">{s.n}</span>
+          <h3 class="m-0 text-[21px] font-semibold leading-[1.28] tracking-[-0.015em]">{s.title}</h3>
+          <p class="m-0 text-[14.5px] leading-[1.62] text-body [text-wrap:pretty]">{s.body}</p>
+          <div class="flex flex-col gap-[7px] pt-0.5">
+            {s.points.map((p) => (
+              <div class="flex items-start gap-[9px]">
+                <Icon name="check" size={14} color="#625ED7" class="mt-[3px]" />
+                <span class="text-[13px] leading-normal text-body">{p}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -12,6 +12,7 @@ export default defineConfig({
         path.join(import.meta.dirname, "migrations"),
       );
       return {
+        remoteBindings: false,
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: { TEST_MIGRATIONS: migrations },

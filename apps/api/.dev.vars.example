@@ -7,7 +7,6 @@ EMAIL_FROM="Zenguy <notifications@zenguy.com>"
 JWT_SECRET=replace-with-at-least-32-random-characters
 ENCRYPTION_KEY=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
 ARTIFACT_URL_SECRET=replace-with-at-least-32-random-characters
-RESEND_API_KEY=
 OPENAI_API_KEY=replace-with-openai-api-key
 TWILIO_ACCOUNT_SID=replace-with-twilio-account-sid
 TWILIO_AUTH_TOKEN=replace-with-twilio-auth-token

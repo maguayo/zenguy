@@ -14,7 +14,7 @@ export interface Bindings {
   JWT_SECRET: string;
   ENCRYPTION_KEY: string;
   ARTIFACT_URL_SECRET: string;
-  RESEND_API_KEY: string;
+  EMAIL: SendEmail;
   EMAIL_FROM: string;
   OPENAI_API_KEY: string;
   LLM_MODEL: string;
@@ -38,7 +38,6 @@ export interface AppConfig {
   jwtSecret: string;
   encryptionKey: Uint8Array;
   artifactUrlSecret: string;
-  resendApiKey: string;
   emailFrom: string;
   openaiApiKey: string;
   llmModel: string;
@@ -67,7 +66,6 @@ const requiredEnvKeys = [
   "JWT_SECRET",
   "ENCRYPTION_KEY",
   "ARTIFACT_URL_SECRET",
-  "RESEND_API_KEY",
   "EMAIL_FROM",
   "OPENAI_API_KEY",
   "LLM_MODEL",
@@ -91,7 +89,6 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(1),
   ARTIFACT_URL_SECRET: z.string().min(32),
-  RESEND_API_KEY: z.string(),
   EMAIL_FROM: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
@@ -130,7 +127,7 @@ export function loadConfig(env: Bindings): AppConfig {
     if (typeof value !== "string") {
       return true;
     }
-    return key !== "RESEND_API_KEY" && value.trim().length === 0;
+    return value.trim().length === 0;
   });
   if (missing.length > 0) {
     throw new Error(`Missing env: ${missing.join(", ")}`);
@@ -148,7 +145,6 @@ export function loadConfig(env: Bindings): AppConfig {
     jwtSecret: parsed.JWT_SECRET,
     encryptionKey: decodeEncryptionKey(parsed.ENCRYPTION_KEY),
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
-    resendApiKey: parsed.RESEND_API_KEY,
     emailFrom: parsed.EMAIL_FROM,
     openaiApiKey: parsed.OPENAI_API_KEY,
     llmModel: parsed.LLM_MODEL,

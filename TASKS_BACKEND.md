@@ -10,7 +10,7 @@
 
 - `src/domain/` — types, pure business rules, repository **interfaces**. No I/O, no Hono, no Cloudflare imports.
 - `src/application/` — use cases. Each exports a class or function with an `execute(input)` method, receiving dependencies (repos, clock, ids, senders) via constructor/factory. No Hono imports.
-- `src/infrastructure/` — D1 repositories, KV, R2, Paddle/Twilio/Resend/OpenAI clients, browser runner, crypto. Implements domain interfaces.
+- `src/infrastructure/` — D1 repositories, KV, R2, Paddle/Twilio/Cloudflare Email/OpenAI clients, browser runner, crypto. Implements domain interfaces.
 - `src/http/` — Hono routes, middleware, presenters (domain → JSON). Thin: parse/validate → call use case → present.
 - `src/shared/` — errors, ids, clock, config, crypto, redaction, rate limit, SSRF guard, pagination.
 
@@ -166,14 +166,14 @@ export default defineConfig({
   - `wrangler r2 bucket create zenguy-artifacts`
   - `wrangler queues create zenguy-runs` / `zenguy-runs-dlq` / `zenguy-checks` / `zenguy-checks-dlq` / `zenguy-notify` / `zenguy-notify-dlq`
   - (If a command needs an authenticated account and you cannot authenticate, still write the full config with placeholder IDs `"TODO-FILL-ID"` and note it in the Deviations log; local dev with `wrangler dev` works with placeholder IDs for D1/KV/R2/queues simulation.)
-- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../web/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
+- [x] Create `apps/api/wrangler.jsonc` with **exactly** the content in **Appendix H** (bindings `DB`, `KV`, `ARTIFACTS`, `BROWSER`, `EMAIL`, queue producers/consumers, crons `*/5 * * * *`, `0 3 * * *`, `30 * * * *`, assets serving `../web/dist` with `run_worker_first: ["/api/*"]`, `nodejs_compat`, observability on, `cpu_ms` limit 300000).
 - [x] Create `apps/api/.dev.vars.example` listing every variable from **Appendix A** with safe example values; copy to `.dev.vars` locally with real dev values (never commit `.dev.vars`).
 - [x] Confirm `wrangler dev` boots and `curl http://localhost:8787/` returns `zenguy api`. Commit.
 
 ### BE-004: Typed env & config
 - [x] Create `apps/api/src/shared/config.ts`:
-  - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: Fetcher`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var).
-  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `resendApiKey`, `emailFrom`, `openaiApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
+  - Export `interface Bindings` typing every binding and env var from Appendix A (`DB: D1Database`, `KV: KVNamespace`, `ARTIFACTS: R2Bucket`, `BROWSER: BrowserRun`, `EMAIL: SendEmail`, `RUN_QUEUE: Queue`, `CHECK_QUEUE: Queue`, `NOTIFY_QUEUE: Queue`, plus every string secret/var).
+  - Export `interface AppConfig` (parsed, typed: `appUrl: string`, `environment: "development" | "production"`, `jwtSecret`, `encryptionKey: Uint8Array` (decoded from base64), `artifactUrlSecret`, `emailFrom`, `openaiApiKey`, `llmModel`, `llmUseVision: boolean`, `twilio: { accountSid; authToken; fromSms; fromWhatsapp; fromCall }`, `paddle: { apiKey; webhookSecret; clientToken; environment: "sandbox" | "production"; priceId; overagePriceId; apiBase }` where `apiBase` is `https://sandbox-api.paddle.com` or `https://api.paddle.com`).
   - Export `loadConfig(env: Bindings): AppConfig` validating with zod; throw `Error("Missing env: X")` listing all missing vars at once.
 - [x] Create `apps/api/src/shared/constants.ts` with every constant from **Appendix D**, exported by the exact names given there. All later tasks import from here — never re-declare literals.
 - [x] Write unit tests: `loadConfig` throws naming missing vars; parses a complete fake env; decodes base64 `ENCRYPTION_KEY` to 32 bytes and rejects wrong length.
@@ -340,15 +340,15 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 - [x] Create in-memory fakes `apps/api/src/test/fakes/repos.ts` (start with these three; extend this file in later phases — fakes implement the same interfaces over Maps).
 - [x] Write `.itest.ts` for each D1 repo: insert/read round-trip, email case-insensitive uniqueness (duplicate insert throws), findValidByHash respects `used_at`/`expires_at`.
 
-### BE-016: Email sender port + Resend adapter
+### BE-016: Email sender port + Cloudflare Email Service adapter
 - [x] Create `apps/api/src/domain/email/sender.ts`: `interface EmailSender { send(msg: { to: string[]; subject: string; html: string; text: string }): Promise<{ providerMessageId: string | null }> }` (throws `Error` with sanitized message on failure).
-- [x] Create `apps/api/src/infrastructure/email/resend.ts`: `ResendEmailSender(apiKey, from)` — `POST https://api.resend.com/emails` with `Authorization: Bearer`, body `{ from, to, subject, html, text }`; non-2xx → throw `Error("email provider error: <status>")` (never include recipient list or body in the error).
-- [x] Create `apps/api/src/infrastructure/email/dev.ts`: `DevEmailSender` that `logEvent("dev_email", { to, subject, textFirst200 })` — selected automatically when `RESEND_API_KEY` is empty (dev).
+- [x] Create `apps/api/src/infrastructure/email/cloudflare.ts`: `CloudflareEmailSender(binding, from)` sends `{ from, to, subject, html, text }` through the native `SendEmail` binding and returns its message ID; provider failures use a sanitized error that never includes recipients or body content.
+- [x] Configure `send_email` as `EMAIL`, restrict it to `notifications@zenguy.com`, use `remote: true` for local real delivery, and omit `remote` in production. No provider API key is required.
 - [x] Create `apps/api/src/infrastructure/email/templates.ts` with `renderBasicEmail({ title, bodyLines, ctaLabel?, ctaUrl? })` → `{ html, text }`. HTML: single centered 560px table, system font stack, `#111` text, indigo `#4F46E5` button, footer "Zenguy". Text: title + lines + URL.
 - [x] Auth email copies (exact):
   - Verify: subject `Verify your email — Zenguy`; body lines `Welcome to Zenguy, <name>.`, `Confirm your email address to start using your account.`; CTA `Verify email` → `${APP_URL}/verify-email?token=<token>`; final line `This link expires in 24 hours. If you didn't create an account, ignore this email.`
   - Reset: subject `Reset your password — Zenguy`; CTA `Reset password` → `${APP_URL}/reset-password?token=<token>`; `This link expires in 1 hour. If you didn't request this, ignore this email.`
-- [x] Write tests: template renders CTA when given; Resend adapter (mock `fetch` via injected `fetchFn` parameter defaulting to `globalThis.fetch`) sends correct payload/headers and throws sanitized error on 500.
+- [x] Write tests: template renders CTA when given; Cloudflare adapter sends the exact structured binding payload, maps the provider message ID, accepts named/bare senders, and sanitizes provider failures.
 
 ### BE-017: JWT & cookies
 - [x] Create `apps/api/src/infrastructure/auth/jwt.ts` using `hono/jwt` (`sign`, `verify`), HS256:
@@ -395,7 +395,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
   - `POST /forgot-password` (rate: 3/h/email) → `{ data: { sent: true } }`.
   - `POST /reset-password` `{ token, password }` → `{ data: { reset: true } }`.
   - `GET /me` (requireAuth only) → `{ data: { user } }`.
-- [x] Write integration tests (`auth_routes.itest.ts`) driving the real app + D1: full journey register → (fetch token hash from DB, mark verified via verify use case with the plain token captured from DevEmailSender by injecting a recording fake) → login sets cookie → `/me` with bearer → refresh rotates → logout clears; plus 401 wrong password, 400 validation shape, 429 after limit exceeded (use the KV fake or real miniflare KV), EMAIL_NOT_VERIFIED gate on a protected probe route.
+- [x] Write integration tests (`auth_routes.itest.ts`) driving the real app + D1: full journey register → (fetch token hash from DB, mark verified via verify use case with the plain token captured from an injected recording sender) → login sets cookie → `/me` with bearer → refresh rotates → logout clears; plus 401 wrong password, 400 validation shape, 429 after limit exceeded (use the KV fake or real miniflare KV), EMAIL_NOT_VERIFIED gate on a protected probe route.
 
 # Phase 3 — Workspaces, members, invitations, audit
 
@@ -1288,7 +1288,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 ### BE-074: Deployment, docs & acceptance
 - [x] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
-  - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Resend (domain + `RESEND_API_KEY`); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
+  - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Cloudflare Email Service (onboard sending domain + `send_email` binding); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
   - **Deploy:** `pnpm --filter @zenguy/web build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
   - **Post-deploy smoke:** curl `/api/health`; register → verify (real email) → login; create workspace; Paddle sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min.
 - [x] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
@@ -1308,13 +1308,14 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-035: The report's unique `(workspace_id, period_start)` row is claimed before calling Paddle, then updated with the returned transaction ID; charging first and inserting afterward cannot satisfy the stated never-double-charge guarantee under concurrent workers. A failed provider call releases the uncharged claim for a later retry.
 - BE-057: Current Wrangler remote mode does not support Queue consumers, so the manual smoke runs the Worker and queue locally while using remote D1, R2, and Browser Rendering bindings. This preserves the complete API → queue → browser → evidence path with live Cloudflare resources.
 - BE-057: Per the user's explicit provider override, the execution engine uses OpenAI Responses with the low-cost `gpt-5-mini` model instead of Anthropic; the agent action and error contracts are unchanged.
+- BE-016: Per the user's explicit provider override, transactional email uses the native Cloudflare Email Service Worker binding instead of Resend. The sender is restricted to `notifications@zenguy.com` and Cloudflare authentication is isolated in the personal `zenguy-personal` Wrangler profile.
 - BE-057: The live `example.com` page now labels its informational link `Learn more` rather than `More information`; the manual smoke therefore verifies the same heading-and-informational-link behavior using the current label instead of forcing an incorrect PASS for stale external content.
 
 ---
 
 # Appendix A — Environment variables & bindings
 
-**Bindings (wrangler.jsonc):** `DB` (D1 `zenguy-db`), `KV` (KV namespace), `ARTIFACTS` (R2 `zenguy-artifacts`), `BROWSER` (Browser Rendering), `RUN_QUEUE`→`zenguy-runs`, `CHECK_QUEUE`→`zenguy-checks`, `NOTIFY_QUEUE`→`zenguy-notify`, `ASSETS` (static assets `../web/dist`).
+**Bindings (wrangler.jsonc):** `DB` (D1 `zenguy-db`), `KV` (KV namespace), `ARTIFACTS` (R2 `zenguy-artifacts`), `BROWSER` (Browser Rendering), `EMAIL` (Cloudflare Email Service; remote in local development), `RUN_QUEUE`→`zenguy-runs`, `CHECK_QUEUE`→`zenguy-checks`, `NOTIFY_QUEUE`→`zenguy-notify`, `ASSETS` (static assets `../web/dist`).
 
 **Vars (non-secret, in wrangler.jsonc):**
 
@@ -1327,7 +1328,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 | `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | same |
 
-**Secrets (`.dev.vars` locally, `wrangler secret put` in prod):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `RESEND_API_KEY` (empty in dev → DevEmailSender), `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`.
+**Secrets (`.dev.vars` locally, `wrangler secret put` in prod):** `JWT_SECRET` (≥ 32 random chars), `ENCRYPTION_KEY` (base64 of 32 random bytes — generate: `openssl rand -base64 32`), `ARTIFACT_URL_SECRET` (≥ 32 chars), `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_SMS` (E.164), `TWILIO_FROM_WHATSAPP` (E.164), `TWILIO_FROM_CALL` (E.164), `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_OVERAGE_PRICE_ID`. Cloudflare Email Service uses the `EMAIL` binding and needs no API-key secret.
 
 # Appendix B — Response envelope & error codes
 
@@ -1543,6 +1544,13 @@ Nobody can remove or demote the OWNER. Nobody can read a saved secret value.
     "run_worker_first": ["/api/*"]
   },
   "browser": { "binding": "BROWSER" },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "remote": true,
+      "allowed_sender_addresses": ["notifications@zenguy.com"]
+    }
+  ],
   "d1_databases": [
     { "binding": "DB", "database_name": "zenguy-db", "database_id": "TODO-FILL-ID", "migrations_dir": "migrations" }
   ],

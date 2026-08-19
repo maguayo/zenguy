@@ -244,7 +244,7 @@ export async function processScheduledCron(
 
 function notifyConsumer(env: Bindings): SendQueuedNotification {
   const config = loadConfig(env);
-  const emailSender = buildEmailSender(config);
+  const emailSender = buildEmailSender(config, env.EMAIL);
   const incidents = new D1IncidentRepo(env.DB);
   const incidentEvents = new D1IncidentEventRepo(env.DB);
   return new SendQueuedNotification(

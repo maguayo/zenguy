@@ -39,7 +39,6 @@ export function testEnv(): Bindings {
     JWT_SECRET: "test-secret".padEnd(32, "-"),
     ENCRYPTION_KEY: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
     ARTIFACT_URL_SECRET: "artifact-test-secret".padEnd(32, "-"),
-    RESEND_API_KEY: "",
     EMAIL_FROM: "Zenguy <test@example.com>",
     OPENAI_API_KEY: "test-openai-key",
     LLM_MODEL: "gpt-5-mini",

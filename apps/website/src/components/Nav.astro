@@ -1,0 +1,26 @@
+---
+import Logo from "./Logo.astro";
+
+const links = [
+  { href: "#how", label: "How it works" },
+  { href: "#evidence", label: "Evidence" },
+  { href: "#uptime", label: "Uptime" },
+  { href: "#pricing", label: "Pricing" },
+];
+---
+
+<header class="sticky top-0 z-20 bg-surface border-b border-line">
+  <div class="container-site flex h-[66px] items-center gap-9 px-10 max-md:px-5 max-md:gap-5">
+    <a href="/" class="btn flex items-center" aria-label="Zenguy home">
+      <Logo iconSize={19} />
+    </a>
+    <nav class="flex items-center gap-[26px] max-md:hidden" aria-label="Main">
+      {links.map((l) => (
+        <a href={l.href} class="link-quiet text-sm">{l.label}</a>
+      ))}
+    </nav>
+    <div class="flex-1"></div>
+    <a href="https://app.zenguy.com" class="link-quiet text-sm max-md:hidden">Sign in</a>
+    <a href="https://app.zenguy.com" class="btn btn-violet rounded-lg px-4 py-[9px] text-sm font-medium">Start free</a>
+  </div>
+</header>

@@ -1,0 +1,19 @@
+{
+  "name": "@zenguy/website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 4400",
+    "build": "astro build",
+    "preview": "astro preview --port 4400",
+    "typecheck": "astro build",
+    "test": "echo \"no tests\"",
+    "deploy": "astro build && wrangler deploy"
+  },
+  "dependencies": { "astro": "^7.2.2" },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "wrangler": "^4.123.0"
+  }
+}

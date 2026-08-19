@@ -1,0 +1,72 @@
+---
+import Icon from "./Icon.astro";
+
+const otherChannels = ["Email", "Slack", "Discord", "SMS and WhatsApp"];
+---
+
+<section id="alerts" class="bg-ink px-10 py-[88px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-[52px] flex items-end gap-12 max-lg:flex-col max-lg:items-start max-lg:gap-8">
+      <div class="flex max-w-[600px] flex-col gap-4">
+        <span class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-dusk">Alerts</span>
+        <h2
+          class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] text-surface [text-wrap:balance] max-md:text-[32px]"
+        >
+          One alert per incident, on the channel you'll actually see.
+        </h2>
+        <p class="m-0 text-[16px] leading-[1.62] text-parch [text-wrap:pretty]">
+          Nothing goes out until every retry has failed, so a slow page doesn't wake anyone. While
+          an incident stays open, later failures join its timeline instead of starting a new thread.
+        </p>
+      </div>
+      <div class="flex-1 max-lg:hidden"></div>
+      <div class="flex flex-col gap-2 pb-1.5">
+        <span class="text-[30px] font-semibold leading-none text-surface">6</span>
+        <span class="max-w-[150px] text-[13px] leading-[1.45] text-dusk">channel types, all included</span>
+      </div>
+    </div>
+
+    <div
+      class="grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)] gap-5 max-lg:grid-cols-1"
+    >
+      <div class="flex flex-col gap-3 rounded-[13px] border border-white/8 bg-inkcard p-5">
+        <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-dusk">Slack</span>
+        <div class="flex items-center gap-[9px]">
+          <span class="h-[7px] w-[7px] shrink-0 rounded-full bg-red" aria-hidden="true"></span>
+          <span class="text-[14.5px] font-semibold text-surface">Checkout — production failed</span>
+        </div>
+        <span class="text-[13px] leading-[1.65] text-parch">
+          Acme Commerce · Desktop · 21 Aug 09:14<br />
+          Failed after 3 retries in 6 min 41 s.<br />
+          Order total showed 0,00 € instead of 149,00 €.
+        </span>
+        <span class="text-[13px] text-violet">Open run in Zenguy →</span>
+      </div>
+
+      <div class="flex flex-col gap-3 rounded-[13px] border border-white/8 bg-inkcard p-5">
+        <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-dusk">Phone call</span>
+        <Icon name="phone" size={26} color="#FAF8F4" />
+        <span class="text-[13px] leading-[1.65] text-parch">
+          Reads the alert type, the resource name, and that the retries are used up. Never a URL,
+          never a secret.
+        </span>
+        <div class="flex-1"></div>
+        <span class="font-mono text-xs text-dusk">+34 6•• ••• •12 · answered</span>
+      </div>
+
+      <div class="flex flex-col gap-3 rounded-[13px] border border-white/8 bg-inkcard p-5">
+        <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-dusk">Everything else</span>
+        <div class="flex flex-col gap-[9px]">
+          {otherChannels.map((ch) => (
+            <div class="flex items-center gap-2.5">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-green" aria-hidden="true"></span>
+              <span class="text-[13.5px] text-surface">{ch}</span>
+            </div>
+          ))}
+        </div>
+        <div class="flex-1"></div>
+        <span class="text-xs leading-normal text-dusk">Recovery notices too, when it passes again.</span>
+      </div>
+    </div>
+  </div>
+</section>

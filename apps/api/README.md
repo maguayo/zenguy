@@ -103,14 +103,39 @@ https://developer.paddle.com/build/products/create-products-prices/.
    credentials in the live Paddle account before production; price IDs are
    environment-specific.
 
-### Resend
+### Cloudflare Email Service
 
-1. Add and verify a sending domain, including its SPF and DKIM records:
-   https://resend.com/docs/dashboard/domains/introduction.
-2. Create a restricted API key and set RESEND_API_KEY.
-3. Set EMAIL_FROM to an address on the verified domain. An empty local
-   RESEND_API_KEY intentionally selects DevEmailSender and does not deliver to
-   a real inbox.
+Zenguy sends transactional email through the Worker's native `EMAIL` binding;
+there is no email-provider API key. The sending domain is `zenguy.com` in the
+personal Cloudflare account.
+
+1. Create and activate the directory-scoped personal profile if it is not
+   already present:
+
+       pnpm --filter @zenguy/api exec wrangler auth create zenguy-personal
+       pnpm --filter @zenguy/api exec wrangler auth activate zenguy-personal
+       pnpm --filter @zenguy/api exec wrangler whoami
+
+   `whoami` must report the active profile `zenguy-personal` and
+   `marcosaguayomora@gmail.com` before any Cloudflare mutation or deployment.
+
+2. Confirm the domain is enabled:
+
+       pnpm --filter @zenguy/api exec wrangler email sending settings zenguy.com --profile zenguy-personal
+
+3. If it is not enabled, onboard it once:
+
+       pnpm --filter @zenguy/api exec wrangler email sending enable zenguy.com --profile zenguy-personal
+
+4. Keep `EMAIL_FROM="Zenguy <notifications@zenguy.com>"`. The
+   `send_email` binding restricts the Worker to this sender.
+5. The development binding has `remote: true`, so `wrangler dev` sends real
+   email. Use only recipient inboxes you control. The production binding omits
+   `remote` because it already runs on Cloudflare.
+
+Cloudflare manages the sending domain's SPF, DKIM, return-path, and bounce
+records. Check Email Service analytics and suppressions when a provider accepts
+a message but it does not reach the inbox.
 
 ### Twilio
 
@@ -179,7 +204,6 @@ for each value without echoing it:
     pnpm --filter @zenguy/api exec wrangler secret put JWT_SECRET --env production
     pnpm --filter @zenguy/api exec wrangler secret put ENCRYPTION_KEY --env production
     pnpm --filter @zenguy/api exec wrangler secret put ARTIFACT_URL_SECRET --env production
-    pnpm --filter @zenguy/api exec wrangler secret put RESEND_API_KEY --env production
     pnpm --filter @zenguy/api exec wrangler secret put OPENAI_API_KEY --env production
     pnpm --filter @zenguy/api exec wrangler secret put TWILIO_ACCOUNT_SID --env production
     pnpm --filter @zenguy/api exec wrangler secret put TWILIO_AUTH_TOKEN --env production
@@ -229,7 +253,7 @@ Run these checks in order and stop the release on the first failure:
        curl --fail --show-error https://app.zenguy.com/api/health
 
    Expect HTTP 200 and a JSON data envelope with ok=true.
-2. Register a new address, receive the real Resend verification email, verify
+2. Register a new address, receive the real Cloudflare Email Service verification email, verify
    it, and log in. Confirm refresh and secure cookies work on app.zenguy.com.
 3. Create a workspace and complete a Paddle sandbox checkout. Poll
    GET /api/workspaces/{workspaceId}/billing until status is ACTIVE, then
@@ -261,15 +285,15 @@ OpenAI gpt-5-mini execution path. No production customer data was used.
 | 7 | Get result, attempts, and screenshots | PASS — validation run PASSED with one attempt and two R2 screenshots |
 | 8 | Force failure | PASS — run_01m0cfgnyhnc8gpye7kwtrafhw finished FAILED after two attempts |
 | 9 | Get Markdown report | PASS — final report stored and downloaded, 2,928 bytes |
-| 10 | Receive alert | PASS — browser incident inc_01m0cfhavvwbe7q7xdeny7pvrq; delivery del_01m0cfhavx8f7f7187zqrk2b86 reached SENT through DevEmailSender |
+| 10 | Receive alert | PASS — browser incident inc_01m0cfhavvwbe7q7xdeny7pvrq; delivery del_01m0cfhavx8f7f7187zqrk2b86 reached SENT through the injected acceptance-test sender |
 | 11 | Create Uptime Monitor | PASS — mon_01m0cfnfbvwt8nr2wagwgk94wt |
 | 12 | Cause incident | PASS — uptime incident inc_01m0cfnjb602c77e5n4nbvdytr; failure delivery del_01m0cfnjb95bw5cs3p62c8fhed |
 | 13 | Receive recovery | PASS — the same incident resolved; recovery delivery del_01m0cfnny9gb13k4r10qpvge1w reached SENT |
 | 14 | Retry consumes only one Browser Test run | PASS — usage was 2 total: one validation run plus exactly one unit for the two-attempt failed run |
 
-DevEmailSender proves the dispatch, persistence, retry, and delivery state
-pipeline but intentionally does not prove external inbox receipt. The
-post-deploy Resend smoke above is the production inbox check.
+The injected acceptance-test sender proves dispatch, persistence, retry, and
+delivery-state behavior without contacting a real inbox. The Cloudflare Email
+Service smoke above is the external delivery check.
 
 ## V1 acceptance sign-off
 
@@ -404,5 +428,5 @@ Run the complete release gate from the repository root:
 Final BE-074 release result on 2026-08-19:
 
 - Root typecheck: PASS.
-- Unit suite: PASS — 81 files, 527 tests.
+- Unit suite: PASS — 81 files, 528 tests.
 - Integration suite: PASS — 36 files, 182 tests.

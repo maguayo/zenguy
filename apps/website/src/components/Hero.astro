@@ -1,0 +1,124 @@
+---
+import Icon from "./Icon.astro";
+
+const thumbs = [
+  { label: "step 3", bg: "#2A2722" },
+  { label: "step 5", bg: "#3D3933" },
+  { label: "step 6", bg: "#13110D" },
+  { label: "final", bg: "#2A2722" },
+];
+---
+
+<section class="px-10 pt-[104px] pb-24 max-md:px-5 max-md:pt-16 max-md:pb-16">
+  <div
+    class="container-site grid grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] items-center gap-[72px] max-lg:grid-cols-1 max-lg:gap-16"
+  >
+    <div class="flex flex-col items-start gap-[26px]">
+      <span
+        class="inline-flex items-center gap-[9px] rounded-full border border-line bg-surface px-3 py-1.5 text-[12.5px] text-body"
+      >
+        <span class="zg-pulse h-[7px] w-[7px] rounded-full bg-violet" aria-hidden="true"></span>
+        Now testing every hour, on real browsers
+      </span>
+
+      <h1
+        class="m-0 font-semibold text-[62px] leading-[1.06] tracking-[-0.03em] [text-wrap:balance] max-md:text-[42px]"
+      >
+        You describe the flow. Zenguy keeps checking it works.
+      </h1>
+
+      <p class="m-0 max-w-[520px] text-[17px] leading-[1.62] text-body [text-wrap:pretty]">
+        Browser tests written in plain English, run on a schedule from a real browser. When
+        something breaks you get the screenshots, the steps, and the reason, before your customers
+        tell you.
+      </p>
+
+      <div class="flex items-center gap-3">
+        <a href="https://app.zenguy.com" class="btn btn-violet rounded-[10px] px-[22px] py-[13px] text-[15px] font-medium">
+          Start free
+        </a>
+        <a href="#how" class="btn btn-outline rounded-[10px] px-5 py-[13px] text-[15px] font-medium">
+          See how it works
+        </a>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 text-[13.5px] text-muted">
+        <span>39 € a month.</span>
+        <span class="h-1 w-1 rounded-full bg-sand" aria-hidden="true"></span>
+        <span>300 runs included.</span>
+        <span class="h-1 w-1 rounded-full bg-sand" aria-hidden="true"></span>
+        <span>No per-seat pricing.</span>
+      </div>
+    </div>
+
+    <div class="relative pb-[34px]">
+      <!-- Test card -->
+      <div class="card-shadow overflow-hidden rounded-[14px] border border-line bg-surface">
+        <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-3.5">
+          <Icon name="monitor" size={16} />
+          <span class="text-[13.5px] font-semibold">Checkout — production</span>
+          <span class="rounded-full bg-cream px-[9px] py-[3px] font-mono text-[11.5px] text-body">Every 1 hour</span>
+          <div class="flex-1"></div>
+          <span class="text-[11.5px] text-muted">Desktop · 1440 × 900</span>
+        </div>
+        <div class="p-[18px]">
+          <div class="rounded-[10px] border border-line bg-surface px-[17px] py-4 text-[14.5px] leading-[1.68]">
+            Go to the store, add "Wireless headphones" to the cart and check the cart shows one item
+            with a total of 149,00&nbsp;€. Then press the checkout button, sign in with
+            <span class="rounded-[5px] bg-violet-bg px-1.5 py-px font-mono text-[13px] text-violet-ink">&#123;&#123;SHOP_EMAIL&#125;&#125;</span>
+            and
+            <span class="rounded-[5px] bg-violet-bg px-1.5 py-px font-mono text-[13px] text-violet-ink">&#123;&#123;SHOP_PASSWORD&#125;&#125;</span>,
+            and check the order summary total still matches. Don't complete the payment.
+          </div>
+          <div class="flex items-center gap-2.5 pt-3.5">
+            <span class="text-xs text-muted">No selectors. No code. No framework to learn.</span>
+            <div class="flex-1"></div>
+            <span class="rounded-lg bg-ink px-[13px] py-[7px] text-[12.5px] font-medium text-surface">Test it</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Failed run card -->
+      <div class="card-shadow -mt-3 ml-11 overflow-hidden rounded-[14px] border border-line bg-surface max-md:ml-4">
+        <div class="flex items-center gap-2.5 border-b border-line px-[17px] py-[13px]">
+          <span class="inline-flex items-center gap-[7px] rounded-full bg-red/12 px-[9px] py-[3px] text-[11.5px] font-medium">
+            <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>Failed
+          </span>
+          <span class="font-mono text-xs text-muted">run 8f2c1a · 4 attempts · 6 min 41 s</span>
+        </div>
+        <div class="flex flex-col gap-3 px-[17px] py-4">
+          <div class="grid grid-cols-2 gap-2.5 max-md:grid-cols-1">
+            <div class="flex flex-col gap-1 rounded-[9px] border border-line px-[13px] py-[11px]">
+              <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Expected</span>
+              <span class="text-[12.5px] leading-normal">Order total matches the cart, 149,00 €</span>
+            </div>
+            <div class="flex flex-col gap-1 rounded-[9px] border border-red bg-red/5 px-[13px] py-[11px]">
+              <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Observed</span>
+              <span class="text-[12.5px] leading-normal">Order total showed 0,00 € twice</span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            {thumbs.map((t) => (
+              <div
+                class="flex aspect-[16/10] flex-1 items-end rounded-[7px] border border-sand p-1.5"
+                style={`background:${t.bg}`}
+              >
+                <span class="font-mono text-[9px] text-dusk">{t.label}</span>
+              </div>
+            ))}
+          </div>
+          <div class="flex items-center gap-2.5">
+            <Icon name="file" size={15} />
+            <span class="truncate font-mono text-xs text-body">checkout-production_8f2c1a_failure-report.md</span>
+            <span class="ml-auto shrink-0 text-xs font-medium text-violet">Download</span>
+          </div>
+        </div>
+      </div>
+
+      <span
+        class="font-hand absolute -top-[30px] right-1.5 -rotate-4 text-[27px] leading-none font-bold text-violet"
+        aria-hidden="true">that's the whole test</span
+      >
+    </div>
+  </div>
+</section>
