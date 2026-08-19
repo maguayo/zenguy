@@ -203,7 +203,7 @@ export default defineConfig({
 - [x] `pages/auth/ResetPassword.tsx` (`?token=`): New password + confirm → success → `Password updated. Sign in with your new password.` + button; `GONE` → invalid-link state with link to forgot.
 
 ### FE-017: Accept invitation
-- [ ] `pages/auth/AcceptInvitation.tsx` (`/invitations/:token`): fetch `GET /api/invitations/:token` (public). Shows card: `<inviterName> invited you to join "<workspaceName>" as <role>.`
+- [x] `pages/auth/AcceptInvitation.tsx` (`/invitations/:token`): fetch `GET /api/invitations/:token` (public). Shows card: `<inviterName> invited you to join "<workspaceName>" as <role>.`
   - Signed out → buttons `Sign in to accept` / `Create an account` (navigate with `state.next = /invitations/<token>`).
   - Signed in with matching email → `Accept invitation` → POST accept → toast `Welcome to <workspaceName>` → navigate `/w/<workspaceId>/overview` (and invalidate `["workspaces"]`).
   - Signed in with different email → warning `This invitation was sent to <invitation email>. You're signed in as <user email>.` + Sign out button. `GONE` → `This invitation is no longer valid.`
