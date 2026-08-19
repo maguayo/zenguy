@@ -6,7 +6,7 @@ import type {
   ChannelType,
   NotificationChannel,
 } from "../../domain/channels/types";
-import { all, one, run } from "./d1";
+import { all, batch, one, run } from "./d1";
 
 interface ChannelRow {
   id: string;
@@ -162,10 +162,36 @@ export class D1ChannelRepo implements ChannelRepo {
   }
 
   async delete(id: string): Promise<void> {
-    await run(
+    const linkedTables = [
+      "browser_test_channels",
+      "uptime_monitor_channels",
+    ] as const;
+    const existingTables = (
+      await Promise.all(
+        linkedTables.map(async (table) => ({
+          table,
+          exists:
+            (await one<{ name: string }>(
+              this.database
+                .prepare(
+                  "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+                )
+                .bind(table),
+            )) !== null,
+        })),
+      )
+    ).filter(({ exists }) => exists);
+    await batch(this.database, [
+      ...existingTables.map(({ table }) =>
+        this.database
+          .prepare(
+            `DELETE FROM ${table} WHERE notification_channel_id = ?`,
+          )
+          .bind(id),
+      ),
       this.database
         .prepare("DELETE FROM notification_channels WHERE id = ?")
         .bind(id),
-    );
+    ]);
   }
 }

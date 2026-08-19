@@ -2,6 +2,11 @@ import { Hono } from "hono";
 import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
+import type { ChannelSender } from "./domain/channels/notifier";
+import type {
+  ChannelRepo,
+  DeliveryRepo,
+} from "./domain/channels/repo";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
@@ -42,6 +47,8 @@ import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
+import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
+import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
   HttpPaddleClient,
@@ -51,6 +58,8 @@ import { buildEmailSender } from "./infrastructure/email";
 import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
 import { secretRoutes } from "./http/routes/secrets";
+import { channelRoutes } from "./http/routes/channels";
+import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
@@ -75,6 +84,9 @@ export interface AppOverrides {
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
   secrets?: SecretRepo;
+  channels?: ChannelRepo;
+  deliveries?: DeliveryRepo;
+  channelSender?: ChannelSender;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -106,6 +118,10 @@ export function buildApp(
   const overageReports =
     overrides.overageReports ?? new D1OverageReportRepo(env.DB);
   const secrets = overrides.secrets ?? new D1SecretRepo(env.DB);
+  const channels = overrides.channels ?? new D1ChannelRepo(env.DB);
+  const deliveries = overrides.deliveries ?? new D1DeliveryRepo(env.DB);
+  const channelSender =
+    overrides.channelSender ?? buildChannelSender(config, emailSender);
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const overageReporter =
@@ -206,6 +222,23 @@ export function buildApp(
       members,
       subscriptions,
       secrets,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    channelRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      channels,
+      deliveries,
+      sender: channelSender,
+      rateLimiter,
       audit,
       clock,
       ids: overrides.ids ?? realIds,
