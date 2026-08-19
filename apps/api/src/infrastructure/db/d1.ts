@@ -23,3 +23,10 @@ export async function batch<T = unknown>(
 ): Promise<D1Result<T>[]> {
   return database.batch<T>(statements);
 }
+
+export function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /(?:UNIQUE constraint failed|SQLITE_CONSTRAINT)/u.test(error.message)
+  );
+}

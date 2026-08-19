@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
+import type { SubscriptionRepo } from "./domain/billing/repo";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -31,7 +32,12 @@ import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
-import { NoopBillingCanceller } from "./infrastructure/billing/noop";
+import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
+import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
+import {
+  HttpPaddleClient,
+  type PaddleClient,
+} from "./infrastructure/paddle/client";
 import { buildEmailSender } from "./infrastructure/email";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
@@ -52,6 +58,8 @@ export interface AppOverrides {
   members?: MemberRepo;
   audits?: AuditRepo;
   invitations?: InvitationRepo;
+  subscriptions?: SubscriptionRepo;
+  paddleClient?: PaddleClient;
   billingCanceller?: BillingCanceller;
 }
 
@@ -75,8 +83,13 @@ export function buildApp(
   const audits = overrides.audits ?? new D1AuditRepo(env.DB);
   const invitations =
     overrides.invitations ?? new D1InvitationRepo(env.DB);
+  const subscriptions =
+    overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
+  const paddleClient =
+    overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const billingCanceller =
-    overrides.billingCanceller ?? new NoopBillingCanceller();
+    overrides.billingCanceller ??
+    new PaddleBillingCanceller(subscriptions, paddleClient, clock);
   const audit = new WriteAudit({
     audits,
     clock,

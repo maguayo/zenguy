@@ -24,6 +24,16 @@ import type {
 import type { AuditRepo } from "../../domain/audit/repo";
 import type { AuditEntry } from "../../domain/audit/types";
 import type { Cursor } from "../../shared/pagination";
+import type {
+  OverageReportRepo,
+  SubscriptionRepo,
+  UsageEventRepo,
+} from "../../domain/billing/repo";
+import type {
+  OverageReport,
+  Subscription,
+  UsageEvent,
+} from "../../domain/billing/types";
 
 function clone<T extends object>(value: T): T {
   return { ...value };
@@ -522,5 +532,134 @@ export class FakeAuditRepo implements AuditRepo {
       )
       .slice(0, limit)
       .map(clone);
+  }
+}
+
+export class FakeSubscriptionRepo implements SubscriptionRepo {
+  readonly subscriptions = new Map<string, Subscription>();
+
+  async upsertByWorkspace(subscription: Subscription): Promise<void> {
+    const existing = this.subscriptions.get(subscription.workspaceId);
+    this.subscriptions.set(subscription.workspaceId, {
+      ...clone(subscription),
+      id: existing?.id ?? subscription.id,
+      createdAt: existing?.createdAt ?? subscription.createdAt,
+    });
+  }
+
+  async findByWorkspace(workspaceId: string): Promise<Subscription | null> {
+    const subscription = this.subscriptions.get(workspaceId);
+    return subscription === undefined ? null : clone(subscription);
+  }
+
+  async findByProviderSubscriptionId(
+    id: string,
+  ): Promise<Subscription | null> {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.providerSubscriptionId === id) {
+        return clone(subscription);
+      }
+    }
+    return null;
+  }
+
+  async listPeriodEnded(
+    before: number,
+    limit: number,
+  ): Promise<Subscription[]> {
+    return [...this.subscriptions.values()]
+      .filter(
+        (subscription) =>
+          subscription.periodEnd !== null &&
+          subscription.periodEnd <= before,
+      )
+      .sort(
+        (left, right) =>
+          (left.periodEnd ?? 0) - (right.periodEnd ?? 0) ||
+          left.id.localeCompare(right.id),
+      )
+      .slice(0, limit)
+      .map(clone);
+  }
+}
+
+export class FakeUsageEventRepo implements UsageEventRepo {
+  readonly events = new Map<string, UsageEvent>();
+
+  async insertIfAbsent(
+    event: UsageEvent,
+  ): Promise<"inserted" | "duplicate"> {
+    if (
+      this.events.has(event.id) ||
+      [...this.events.values()].some(
+        (candidate) =>
+          candidate.idempotencyKey === event.idempotencyKey ||
+          candidate.testRunId === event.testRunId,
+      )
+    ) {
+      return "duplicate";
+    }
+    this.events.set(event.id, clone(event));
+    return "inserted";
+  }
+
+  async reverseByRunId(runId: string, at: number): Promise<void> {
+    for (const [id, event] of this.events) {
+      if (event.testRunId === runId && event.reversedAt === null) {
+        this.events.set(id, { ...event, reversedAt: at });
+      }
+    }
+  }
+
+  async countBillable(
+    workspaceId: string,
+    fromMs: number,
+    toMs: number,
+  ): Promise<number> {
+    let total = 0;
+    for (const event of this.events.values()) {
+      if (
+        event.workspaceId === workspaceId &&
+        event.billable &&
+        event.reversedAt === null &&
+        event.occurredAt >= fromMs &&
+        event.occurredAt < toMs
+      ) {
+        total += event.quantity;
+      }
+    }
+    return total;
+  }
+}
+
+export class FakeOverageReportRepo implements OverageReportRepo {
+  readonly reports = new Map<string, OverageReport>();
+
+  async insertIfAbsent(
+    report: OverageReport,
+  ): Promise<"inserted" | "duplicate"> {
+    if (
+      this.reports.has(report.id) ||
+      [...this.reports.values()].some(
+        (candidate) =>
+          candidate.workspaceId === report.workspaceId &&
+          candidate.periodStart === report.periodStart,
+      )
+    ) {
+      return "duplicate";
+    }
+    this.reports.set(report.id, clone(report));
+    return "inserted";
+  }
+
+  async existsFor(
+    workspaceId: string,
+    periodStart: number,
+  ): Promise<boolean> {
+    return [...this.reports.values()].some(
+      (report) =>
+        report.workspaceId === workspaceId &&
+        report.periodStart === periodStart,
+    );
   }
 }

@@ -561,17 +561,17 @@ CREATE UNIQUE INDEX idx_overage_ws_period ON overage_reports(workspace_id, perio
 - [x] Apply locally; extend `freshDb()` (but note in a comment: production purge jobs must NEVER touch these three tables).
 
 ### BE-031: Paddle client
-- [ ] Create `apps/api/src/domain/billing/types.ts`: `Subscription`, `UsageEvent`, `OverageReport`, `type SubscriptionStatus = "NONE" | "ACTIVE" | "PAST_DUE" | "CANCELED"`.
-- [ ] Create `apps/api/src/domain/billing/repo.ts`: `SubscriptionRepo` (`upsertByWorkspace(sub)`, `findByWorkspace(wsId)`, `findByProviderSubscriptionId(id)`, `listPeriodEnded(before, limit)` — subscriptions with `period_end <= before`), `UsageEventRepo` (`insertIfAbsent(event): Promise<"inserted" | "duplicate">` using the idempotency unique index (catch constraint error → duplicate), `reverseByRunId(runId, at)`, `countBillable(workspaceId, fromMs, toMs): Promise<number>` — `SUM(quantity) WHERE billable=1 AND reversed_at IS NULL AND occurred_at >= from AND occurred_at < to`), `OverageReportRepo` (`insertIfAbsent`, `existsFor(workspaceId, periodStart)`).
-- [ ] Create `apps/api/src/infrastructure/paddle/client.ts`: `interface PaddleClient` + `HttpPaddleClient(cfg, fetchFn)`:
+- [x] Create `apps/api/src/domain/billing/types.ts`: `Subscription`, `UsageEvent`, `OverageReport`, `type SubscriptionStatus = "NONE" | "ACTIVE" | "PAST_DUE" | "CANCELED"`.
+- [x] Create `apps/api/src/domain/billing/repo.ts`: `SubscriptionRepo` (`upsertByWorkspace(sub)`, `findByWorkspace(wsId)`, `findByProviderSubscriptionId(id)`, `listPeriodEnded(before, limit)` — subscriptions with `period_end <= before`), `UsageEventRepo` (`insertIfAbsent(event): Promise<"inserted" | "duplicate">` using the idempotency unique index (catch constraint error → duplicate), `reverseByRunId(runId, at)`, `countBillable(workspaceId, fromMs, toMs): Promise<number>` — `SUM(quantity) WHERE billable=1 AND reversed_at IS NULL AND occurred_at >= from AND occurred_at < to`), `OverageReportRepo` (`insertIfAbsent`, `existsFor(workspaceId, periodStart)`).
+- [x] Create `apps/api/src/infrastructure/paddle/client.ts`: `interface PaddleClient` + `HttpPaddleClient(cfg, fetchFn)`:
   - `createOneTimeCharge(subscriptionId: string, priceId: string, quantity: number): Promise<{ transactionId: string | null }>` → `POST {apiBase}/subscriptions/{id}/charge` body `{ "effective_from": "immediately", "items": [{ "price_id": priceId, "quantity": quantity }] }`, header `Authorization: Bearer <PADDLE_API_KEY>`.
   - `cancelSubscription(subscriptionId): Promise<void>` → `POST {apiBase}/subscriptions/{id}/cancel` body `{ "effective_from": "immediately" }`.
   - `listBilledTransactions(subscriptionId, limit = 12): Promise<{ id; billedAt: string | null; status: string; totalCents: number; currency: string; invoiceNumber: string | null }[]>` → `GET {apiBase}/transactions?subscription_id=<id>&status=billed,paid,completed&order_by=billed_at[DESC]&per_page=<limit>`; map `details.totals.grand_total` (string, minor units) → int.
   - `getInvoicePdfUrl(transactionId): Promise<string>` → `GET {apiBase}/transactions/{id}/invoice` → `data.url`.
   - Before coding, confirm exact request/response field names against the current Paddle Billing API docs (`developer.paddle.com`); if a field differs, keep the method signatures and adapt mapping (note in Deviations log).
   - Non-2xx → throw `Error("paddle error <status>")` after `logEvent("paddle_error", { status, endpoint })` (never log the body — may contain PII).
-- [ ] Implement `BillingCanceller` (from BE-029) here: looks up subscription by workspace, calls `cancelSubscription` when `provider_subscription_id` exists, sets local status `CANCELED`.
-- [ ] Write tests with a recording fake `fetchFn`: correct URL/headers/bodies per method; totals mapping `"3900"` → 3900; error path sanitized.
+- [x] Implement `BillingCanceller` (from BE-029) here: looks up subscription by workspace, calls `cancelSubscription` when `provider_subscription_id` exists, sets local status `CANCELED`.
+- [x] Write tests with a recording fake `fetchFn`: correct URL/headers/bodies per method; totals mapping `"3900"` → 3900; error path sanitized.
 
 ### BE-032: Paddle webhook
 - [ ] Create `apps/api/src/application/billing/handle_paddle_webhook.ts`. Input: `{ rawBody: string, signatureHeader: string | null, ip? }`.
@@ -1304,6 +1304,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - BE-003: The local smoke used port 8790 and a temporary empty assets directory because port 8787 was already occupied by an unrelated local service and the frontend-owned `apps/web/dist` did not yet exist; Wrangler returned `zenguy api` with status 200.
 - BE-004: Current Wrangler generates the Browser Rendering binding as `BrowserRun`, so `Bindings.BROWSER` uses that current type instead of the older `Fetcher` spelling; it remains structurally compatible with `@cloudflare/puppeteer`.
 - BE-013: `@cloudflare/vitest-pool-workers` 0.21 removed `defineWorkersConfig` and the `/config` export; the integration config uses the current `cloudflareTest` plugin, root `readD1Migrations` export, `maxWorkers: 1`, and global `Cloudflare.Env` augmentation with equivalent behavior.
+- BE-031: Current Paddle Billing returns the updated subscription from the create-one-time-charge endpoint rather than a transaction ID, so `createOneTimeCharge` preserves the required nullable signature and returns `transactionId: null`; callers discover the asynchronously-created charge through the transactions list endpoint.
 
 ---
 
