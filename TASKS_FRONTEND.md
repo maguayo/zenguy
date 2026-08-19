@@ -155,8 +155,8 @@ export default defineConfig({
 - [x] Unit tests (vitest) for every formatter (edge cases: null, 0, 59s→`59s`, 60s→`1m 00s`, cents rounding).
 
 ### FE-010: Toasts
-- [ ] `contexts/ToastContext.tsx` + `useToast()`: `toast.success(msg)`, `toast.error(msg)`; stacked top-right, auto-dismiss 4 s (errors 6 s), manual close, `role="status"` / `aria-live="polite"`; max 4 visible.
-- [ ] Convention (use everywhere): mutation success → short toast (`Test created`); mutation failure → `toast.error(apiErrorMessage(e))` where `apiErrorMessage` extracts the envelope message with fallback `Something went wrong`.
+- [x] `contexts/ToastContext.tsx` + `useToast()`: `toast.success(msg)`, `toast.error(msg)`; stacked top-right, auto-dismiss 4 s (errors 6 s), manual close, `role="status"` / `aria-live="polite"`; max 4 visible.
+- [x] Convention (use everywhere): mutation success → short toast (`Test created`); mutation failure → `toast.error(apiErrorMessage(e))` where `apiErrorMessage` extracts the envelope message with fallback `Something went wrong`.
 
 # Phase 2 — API client & auth core
 
