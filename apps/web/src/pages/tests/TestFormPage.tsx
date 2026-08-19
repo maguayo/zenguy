@@ -9,11 +9,11 @@ import { z } from "zod";
 import { listChannels } from "../../api/channels";
 import { createTest, getTest, updateTest, validateDraft } from "../../api/tests";
 import type { BrowserTestInput } from "../../api/types";
+import { ChannelPicker } from "../../components/ChannelPicker";
+import { RecoveryToggle } from "../../components/RecoveryToggle";
 import { RunStatusPanel } from "../../components/RunStatusPanel";
-import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { Checkbox } from "../../components/ui/Checkbox";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
@@ -21,7 +21,6 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { Spinner } from "../../components/ui/Spinner";
 import { Textarea } from "../../components/ui/Textarea";
-import { Toggle } from "../../components/ui/Toggle";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
@@ -314,70 +313,35 @@ export default function TestFormPage() {
         </Card>
       </div>
 
-      <Card
-        actions={
-          <Link
-            className="text-xs font-medium text-accent-700 hover:underline"
-            to={`/w/${current.id}/notifications`}
-          >
-            Manage channels
-          </Link>
-        }
-        title="Notifications"
-      >
-        {channels.isPending ? (
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <Spinner label="Loading notification channels" /> Loading channels…
-          </div>
-        ) : channels.isError ? (
-          <ErrorState onRetry={() => void channels.refetch()} />
-        ) : channels.data.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            No channels yet — create one under Notifications.
-          </p>
-        ) : (
-          <fieldset>
-            <legend className="sr-only">Notification channels</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {channels.data.map((channel) => (
-                <label
-                  key={channel.id}
-                  className="flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-sm text-zinc-700"
-                >
-                  <Checkbox value={channel.id} {...form.register("channelIds")} />
-                  <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-                  <Badge>{channel.type}</Badge>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+      <Controller
+        control={form.control}
+        name="channelIds"
+        render={({ field }) => (
+          <ChannelPicker
+            channels={channels.data ?? []}
+            error={channels.isError}
+            loading={channels.isPending}
+            manageHref={`/w/${current.id}/notifications`}
+            value={field.value}
+            onChange={field.onChange}
+            onRetry={() => void channels.refetch()}
+          />
         )}
-      </Card>
+      />
 
-      <Card title="Recovery">
-        <Controller
-          control={form.control}
-          name="notifyOnRecovery"
-          render={({ field }) => (
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <label className="font-medium text-zinc-900" htmlFor="test-recovery">
-                  Notify when this test recovers
-                </label>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Send a recovery notification after an open incident passes.
-                </p>
-              </div>
-              <Toggle
-                checked={field.value}
-                id="test-recovery"
-                onBlur={field.onBlur}
-                onCheckedChange={field.onChange}
-              />
-            </div>
-          )}
-        />
-      </Card>
+      <Controller
+        control={form.control}
+        name="notifyOnRecovery"
+        render={({ field }) => (
+          <RecoveryToggle
+            checked={field.value}
+            id="test-recovery"
+            resource="test"
+            onBlur={field.onBlur}
+            onCheckedChange={field.onChange}
+          />
+        )}
+      />
 
       <Card title="Test it">
         <div className="flex flex-wrap items-center justify-between gap-3">

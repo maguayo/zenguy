@@ -303,15 +303,15 @@ export default defineConfig({
 - [x] Empty: `No uptime monitors yet` / `Ping an endpoint on a schedule and get alerted when it goes down. Uptime checks never consume runs.` + CTA.
 
 ### FE-030: Monitor form with request builder
-- [ ] `pages/uptime/MonitorFormPage.tsx` (`/uptime/new`, `/uptime/:monitorId/edit`). Zod mirror of the API config (name, url, method enum, headers[], body, expectedStatus 100–599, bodyCondition enum + conditional fields, frequencySeconds enum, timeoutSeconds 1–30, maxRetries 0–3, notifyOnRecovery, channelIds). Cross-field zod rules: body forbidden for GET/HEAD; `bodyExpectedValue` required when condition set; `bodyConditionPath` required when `JSON_PATH_EQUALS`.
-- [ ] Cards (§18.10):
+- [x] `pages/uptime/MonitorFormPage.tsx` (`/uptime/new`, `/uptime/:monitorId/edit`). Zod mirror of the API config (name, url, method enum, headers[], body, expectedStatus 100–599, bodyCondition enum + conditional fields, frequencySeconds enum, timeoutSeconds 1–30, maxRetries 0–3, notifyOnRecovery, channelIds). Cross-field zod rules: body forbidden for GET/HEAD; `bodyExpectedValue` required when condition set; `bodyConditionPath` required when `JSON_PATH_EQUALS`.
+- [x] Cards (§18.10):
   1. **Request** — Method Select (GET/POST/PUT/PATCH/DELETE/HEAD) inline with URL input (flex row); **Headers**: `components/KeyValueEditor.tsx` (rows of key/value Inputs + remove IconButton + `Add header`; build it generic: `{ value: {key,value}[], onChange, keyPlaceholder, valuePlaceholder }`); hint `Values support secrets: Authorization: Bearer {{API_TOKEN}}`; **Body**: Textarea shown unless GET/HEAD, mono font, hint `Raw text or JSON. Set a Content-Type header if needed.`
   2. **Expectations** — Expected status (number Input, default 200); Body condition Select: `None` / `Body contains` / `Body does not contain` / `Body equals` / `JSON path equals`; conditional Value Input; conditional JSON path Input (placeholder `$.status.healthy`, mono).
   3. **Schedule** — Frequency Select (exactly: Every 5/10/15/30 min, 1/3/6/12/24 h); Timeout number 1–30 `seconds`; Retries Select 0–3 (same descriptions as tests); hint `Uptime checks and retries never consume browser test runs.`
   4. **Notifications** + **Recovery** — same components as the test form (extract `ChannelPicker` + recovery Toggle into shared components in this task and refactor FE-024 to use them).
   5. **Test request** — secondary button `Send test request` (note: `Runs the request once from Zenguy. Nothing is saved and no runs are consumed.`): POST test-request with current form values → result panel: PASSED → ok Card `✓ <httpStatus> in <responseTimeMs> ms`; FAILED → danger Card with `failureReason`; below, per-condition checklist rows (`✓/✗ <type> — <detail>`); response excerpt in a collapsed mono block when present.
   6. Sticky footer `Cancel` / `Save monitor`.
-- [ ] Edit mode for MEMBER-masked payloads never happens (route gated), but headers may come back decrypted for OWNER/ADMIN — prefill normally. Toasts as usual.
+- [x] Edit mode for MEMBER-masked payloads never happens (route gated), but headers may come back decrypted for OWNER/ADMIN — prefill normally. Toasts as usual.
 
 ### FE-031: Monitor detail
 - [ ] `pages/uptime/MonitorDetailPage.tsx` (§18.11): header name + StatusBadge (+ `Checking` chip) + host; actions Edit / Delete (gated, confirm). Open-incident banner as in tests.
