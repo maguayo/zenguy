@@ -126,7 +126,7 @@ export type AuditMetadataValue =
   | string[];
 
 const SENSITIVE_METADATA_NAME =
-  /pass|token|secret|authorization|cookie|credential|private|config|header|body|content/iu;
+  /pass|token|secret|authorization|cookie|credential|private|config|header|body|content|(?:api|encryption|signing)[_-]?key/iu;
 
 export function sanitizeAuditMetadata(
   metadata: Record<string, AuditMetadataValue>,

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { EmailSender } from "./domain/email/sender";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
+import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
   SubscriptionRepo,
@@ -40,6 +41,7 @@ import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
+import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
   HttpPaddleClient,
@@ -48,6 +50,7 @@ import {
 import { buildEmailSender } from "./infrastructure/email";
 import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
+import { secretRoutes } from "./http/routes/secrets";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
@@ -71,6 +74,7 @@ export interface AppOverrides {
   subscriptions?: SubscriptionRepo;
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
+  secrets?: SecretRepo;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -101,6 +105,7 @@ export function buildApp(
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
   const overageReports =
     overrides.overageReports ?? new D1OverageReportRepo(env.DB);
+  const secrets = overrides.secrets ?? new D1SecretRepo(env.DB);
   const paddleClient =
     overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
   const overageReporter =
@@ -190,6 +195,20 @@ export function buildApp(
       usageEvents,
       paddle: paddleClient,
       clock,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    secretRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      secrets,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
       config,
     }),
   );

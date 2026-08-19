@@ -1,5 +1,6 @@
 import {
   Redactor,
+  sanitizeAuditMetadata,
   sanitizeHeaders,
   sanitizeUrl,
   truncate,
@@ -101,6 +102,22 @@ describe("sanitizeHeaders", () => {
       "X-Api-Key": "***",
       "Proxy-Authorization": "***",
       Accept: "application/json",
+    });
+  });
+});
+
+describe("sanitizeAuditMetadata", () => {
+  it("keeps public resource keys but masks credential-bearing key fields", () => {
+    expect(
+      sanitizeAuditMetadata({
+        key: "SHOP_PASSWORD",
+        apiKey: "provider-secret",
+        password: "account-secret",
+      }),
+    ).toEqual({
+      key: "SHOP_PASSWORD",
+      apiKey: "***",
+      password: "***",
     });
   });
 });
