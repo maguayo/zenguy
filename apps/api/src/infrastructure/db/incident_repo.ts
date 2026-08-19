@@ -5,6 +5,7 @@ import type {
   IncidentResolutionSource,
   IncidentResourceType,
   IncidentStatus,
+  IncidentWithResourceName,
 } from "../../domain/incidents/types";
 import type { Cursor } from "../../shared/pagination";
 import { all, isUniqueConstraintError, one, run } from "./d1";
@@ -26,6 +27,10 @@ interface IncidentRow {
   created_at: number;
 }
 
+interface IncidentReadRow extends IncidentRow {
+  resource_name: string;
+}
+
 function toIncident(row: IncidentRow): Incident {
   return {
     id: row.id,
@@ -45,6 +50,10 @@ function toIncident(row: IncidentRow): Incident {
   };
 }
 
+function toIncidentRead(row: IncidentReadRow): IncidentWithResourceName {
+  return { ...toIncident(row), resourceName: row.resource_name };
+}
+
 function validateOpenIncident(incident: Incident): void {
   if (incident.status !== "OPEN" || incident.resolvedAt !== null) {
     throw new Error("insertOpen requires an open incident");
@@ -61,7 +70,44 @@ function validateOpenIncident(incident: Incident): void {
 }
 
 export class D1IncidentRepo implements IncidentRepo {
+  private uptimeTableExists: Promise<boolean> | undefined;
+
   constructor(private readonly database: D1Database) {}
+
+  private hasUptimeMonitorsTable(): Promise<boolean> {
+    this.uptimeTableExists ??= one<{ name: string }>(
+      this.database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'uptime_monitors'",
+        ),
+    ).then((row) => row !== null);
+    return this.uptimeTableExists;
+  }
+
+  private async resourceReadSql(): Promise<{
+    select: string;
+    joins: string;
+  }> {
+    const hasUptimeMonitors = await this.hasUptimeMonitorsTable();
+    return hasUptimeMonitors
+      ? {
+          select:
+            "COALESCE(bt.name, um.name, CASE i.resource_type WHEN 'BROWSER_TEST' THEN 'Deleted browser test' ELSE 'Deleted uptime monitor' END) AS resource_name",
+          joins: `LEFT JOIN browser_tests bt
+                    ON bt.id = i.browser_test_id
+                   AND bt.workspace_id = i.workspace_id
+                  LEFT JOIN uptime_monitors um
+                    ON um.id = i.uptime_monitor_id
+                   AND um.workspace_id = i.workspace_id`,
+        }
+      : {
+          select:
+            "COALESCE(bt.name, CASE i.resource_type WHEN 'BROWSER_TEST' THEN 'Deleted browser test' ELSE 'Deleted uptime monitor' END) AS resource_name",
+          joins: `LEFT JOIN browser_tests bt
+                    ON bt.id = i.browser_test_id
+                   AND bt.workspace_id = i.workspace_id`,
+        };
+  }
 
   async insertOpen(incident: Incident): Promise<Incident> {
     validateOpenIncident(incident);
@@ -132,13 +178,19 @@ export class D1IncidentRepo implements IncidentRepo {
   async findById(
     workspaceId: string,
     id: string,
-  ): Promise<Incident | null> {
-    const row = await one<IncidentRow>(
+  ): Promise<IncidentWithResourceName | null> {
+    const resource = await this.resourceReadSql();
+    const row = await one<IncidentReadRow>(
       this.database
-        .prepare("SELECT * FROM incidents WHERE workspace_id = ? AND id = ?")
+        .prepare(
+          `SELECT i.*, ${resource.select}
+           FROM incidents i
+           ${resource.joins}
+           WHERE i.workspace_id = ? AND i.id = ?`,
+        )
         .bind(workspaceId, id),
     );
-    return row === null ? null : toIncident(row);
+    return row === null ? null : toIncidentRead(row);
   }
 
   async resolve(
@@ -175,40 +227,45 @@ export class D1IncidentRepo implements IncidentRepo {
     filters: IncidentFilters,
     cursor: Cursor | null | undefined,
     limit: number,
-  ): Promise<Incident[]> {
-    const conditions = ["workspace_id = ?"];
+  ): Promise<IncidentWithResourceName[]> {
+    const conditions = ["i.workspace_id = ?"];
     const values: unknown[] = [workspaceId];
     if (filters.status !== undefined) {
-      conditions.push("status = ?");
+      conditions.push("i.status = ?");
       values.push(filters.status);
     }
     if (filters.resourceType !== undefined) {
-      conditions.push("resource_type = ?");
+      conditions.push("i.resource_type = ?");
       values.push(filters.resourceType);
     }
     if (filters.fromMs !== undefined) {
-      conditions.push("opened_at >= ?");
+      conditions.push("i.opened_at >= ?");
       values.push(filters.fromMs);
     }
     if (filters.toMs !== undefined) {
-      conditions.push("opened_at <= ?");
+      conditions.push("i.opened_at <= ?");
       values.push(filters.toMs);
     }
     if (cursor !== null && cursor !== undefined) {
-      conditions.push("(opened_at < ? OR (opened_at = ? AND id < ?))");
+      conditions.push(
+        "(i.opened_at < ? OR (i.opened_at = ? AND i.id < ?))",
+      );
       values.push(cursor.createdAt, cursor.createdAt, cursor.id);
     }
     values.push(limit);
-    const rows = await all<IncidentRow>(
+    const resource = await this.resourceReadSql();
+    const rows = await all<IncidentReadRow>(
       this.database
         .prepare(
-          `SELECT * FROM incidents
+          `SELECT i.*, ${resource.select}
+           FROM incidents i
+           ${resource.joins}
            WHERE ${conditions.join(" AND ")}
-           ORDER BY opened_at DESC, id DESC
+           ORDER BY i.opened_at DESC, i.id DESC
            LIMIT ?`,
         )
         .bind(...values),
     );
-    return rows.map(toIncident);
+    return rows.map(toIncidentRead);
   }
 }

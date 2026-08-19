@@ -1100,10 +1100,10 @@ CREATE INDEX idx_incident_events_incident ON incident_events(incident_id, create
 - [x] Tests: snapshot test with a rich fixture run (2 attempts, secrets referenced) — assert section order, placeholder lines, secret value absent, footer verbatim; PASSED run → generator refuses (returns null, no artifact); download endpoint now returns the report end-to-end (`.itest.ts`).
 
 ### BE-061: Incidents read API
-- [ ] `application/incidents/list_incidents.ts` (any member): filters `status` (`open|resolved`), `type` (`browser|uptime`), `from`/`to` (ISO dates on `opened_at`), keyset. Join resource names (browser_tests.name / uptime_monitors.name — monitors exist after BE-062; write the join with LEFT JOIN so it works now). Row: `{ id, resourceType, resourceId, resourceName, status, openedAt, resolvedAt, durationMs (resolved−opened, or now−opened when open), lastEventAt }`.
-- [ ] `application/incidents/get_incident.ts`: incident + `openedByRunId` / `openedByCheckId` + ordered events (`{ id, type, message, metadata, createdAt }`) + deliveries (`listForIncident` joined with channel name + type → `{ id, channelName, channelType, eventType, status, attemptCount, errorSanitized, sentAt, createdAt }`).
-- [ ] Routes: `GET /api/workspaces/:workspaceId/incidents?status&type&from&to&cursor&limit`; `GET /api/workspaces/:workspaceId/incidents/:incidentId`.
-- [ ] Tests: filter combinations; cross-workspace 404; timeline ordering.
+- [x] `application/incidents/list_incidents.ts` (any member): filters `status` (`open|resolved`), `type` (`browser|uptime`), `from`/`to` (ISO dates on `opened_at`), keyset. Join resource names (browser_tests.name / uptime_monitors.name — monitors exist after BE-062; write the join with LEFT JOIN so it works now). Row: `{ id, resourceType, resourceId, resourceName, status, openedAt, resolvedAt, durationMs (resolved−opened, or now−opened when open), lastEventAt }`.
+- [x] `application/incidents/get_incident.ts`: incident + `openedByRunId` / `openedByCheckId` + ordered events (`{ id, type, message, metadata, createdAt }`) + deliveries (`listForIncident` joined with channel name + type → `{ id, channelName, channelType, eventType, status, attemptCount, errorSanitized, sentAt, createdAt }`).
+- [x] Routes: `GET /api/workspaces/:workspaceId/incidents?status&type&from&to&cursor&limit`; `GET /api/workspaces/:workspaceId/incidents/:incidentId`.
+- [x] Tests: filter combinations; cross-workspace 404; timeline ordering.
 
 # Phase 10 — Uptime monitoring
 

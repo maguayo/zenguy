@@ -26,6 +26,10 @@ export interface Incident {
   createdAt: number;
 }
 
+export interface IncidentWithResourceName extends Incident {
+  resourceName: string;
+}
+
 export interface IncidentEvent {
   id: string;
   incidentId: string;

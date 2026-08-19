@@ -1,6 +1,7 @@
 import type { Cursor } from "../../shared/pagination";
 import type {
   DeliveryStatus,
+  IncidentNotificationDelivery,
   NotificationChannel,
   NotificationDelivery,
 } from "./types";
@@ -49,4 +50,7 @@ export interface DeliveryRepo {
     limit: number,
   ): Promise<NotificationDelivery[]>;
   listForIncident(incidentId: string): Promise<NotificationDelivery[]>;
+  listForIncidentWithChannel(
+    incidentId: string,
+  ): Promise<IncidentNotificationDelivery[]>;
 }

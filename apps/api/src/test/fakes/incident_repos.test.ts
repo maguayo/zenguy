@@ -24,6 +24,7 @@ const INCIDENT: Incident = {
 describe("incident repository fakes", () => {
   it("mirrors idempotent opens, resolution, re-opening, and keyset lists", async () => {
     const repo = new FakeIncidentRepo();
+    repo.setResourceName("bt_fake", "Fake browser test");
     await expect(repo.insertOpen(INCIDENT)).resolves.toEqual(INCIDENT);
     await expect(
       repo.insertOpen({ ...INCIDENT, id: "inc_duplicate" }),
@@ -34,7 +35,7 @@ describe("incident repository fakes", () => {
     await expect(repo.insertOpen(reopened)).resolves.toEqual(reopened);
     await expect(repo.findOpenForTest("bt_fake")).resolves.toEqual(reopened);
     await expect(repo.list("ws_fake", {}, null, 1)).resolves.toEqual([
-      reopened,
+      { ...reopened, resourceName: "Fake browser test" },
     ]);
     await expect(
       repo.list(

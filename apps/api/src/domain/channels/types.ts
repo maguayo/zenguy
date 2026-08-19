@@ -39,6 +39,11 @@ export interface NotificationDelivery {
   createdAt: number;
 }
 
+export interface IncidentNotificationDelivery extends NotificationDelivery {
+  channelName: string;
+  channelType: ChannelType | null;
+}
+
 export const emailChannelConfigSchema = z
   .object({ emails: z.array(z.email()).min(1).max(10) })
   .strict();

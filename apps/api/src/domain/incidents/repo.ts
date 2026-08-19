@@ -4,13 +4,17 @@ import type {
   IncidentEvent,
   IncidentFilters,
   IncidentResolutionSource,
+  IncidentWithResourceName,
 } from "./types";
 
 export interface IncidentRepo {
   insertOpen(incident: Incident): Promise<Incident>;
   findOpenForTest(testId: string): Promise<Incident | null>;
   findOpenForMonitor(monitorId: string): Promise<Incident | null>;
-  findById(workspaceId: string, id: string): Promise<Incident | null>;
+  findById(
+    workspaceId: string,
+    id: string,
+  ): Promise<IncidentWithResourceName | null>;
   resolve(
     id: string,
     at: number,
@@ -22,7 +26,7 @@ export interface IncidentRepo {
     filters: IncidentFilters,
     cursor: Cursor | null | undefined,
     limit: number,
-  ): Promise<Incident[]>;
+  ): Promise<IncidentWithResourceName[]>;
 }
 
 export interface IncidentEventRepo {

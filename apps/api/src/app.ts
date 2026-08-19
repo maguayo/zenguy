@@ -81,6 +81,7 @@ import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
 import { secretRoutes } from "./http/routes/secrets";
 import { channelRoutes } from "./http/routes/channels";
+import { incidentRoutes } from "./http/routes/incidents";
 import { browserTestRoutes } from "./http/routes/browser_tests";
 import { artifactRoutes } from "./http/routes/artifacts";
 import { runEventRoutes } from "./http/routes/run_events";
@@ -303,6 +304,19 @@ export function buildApp(
       audit,
       clock,
       ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    incidentRoutes({
+      users,
+      workspaces,
+      members,
+      incidents,
+      incidentEvents,
+      deliveries,
+      clock,
       config,
     }),
   );

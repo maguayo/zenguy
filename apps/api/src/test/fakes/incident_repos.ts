@@ -7,6 +7,7 @@ import type {
   IncidentEvent,
   IncidentFilters,
   IncidentResolutionSource,
+  IncidentWithResourceName,
 } from "../../domain/incidents/types";
 import type { Cursor } from "../../shared/pagination";
 
@@ -27,6 +28,24 @@ function openResourceMatches(left: Incident, right: Incident): boolean {
 
 export class FakeIncidentRepo implements IncidentRepo {
   readonly incidents = new Map<string, Incident>();
+  readonly resourceNames = new Map<string, string>();
+
+  setResourceName(resourceId: string, name: string): void {
+    this.resourceNames.set(resourceId, name);
+  }
+
+  private withResourceName(incident: Incident): IncidentWithResourceName {
+    const resourceId =
+      incident.browserTestId ?? incident.uptimeMonitorId ?? "unknown";
+    return {
+      ...copy(incident),
+      resourceName:
+        this.resourceNames.get(resourceId) ??
+        (incident.resourceType === "BROWSER_TEST"
+          ? "Deleted browser test"
+          : "Deleted uptime monitor"),
+    };
+  }
 
   async insertOpen(incident: Incident): Promise<Incident> {
     const existing = [...this.incidents.values()].find((candidate) =>
@@ -60,11 +79,11 @@ export class FakeIncidentRepo implements IncidentRepo {
   async findById(
     workspaceId: string,
     id: string,
-  ): Promise<Incident | null> {
+  ): Promise<IncidentWithResourceName | null> {
     const incident = this.incidents.get(id);
     return incident === undefined || incident.workspaceId !== workspaceId
       ? null
-      : copy(incident);
+      : this.withResourceName(incident);
   }
 
   async resolve(
@@ -99,7 +118,7 @@ export class FakeIncidentRepo implements IncidentRepo {
     filters: IncidentFilters,
     cursor: Cursor | null | undefined,
     limit: number,
-  ): Promise<Incident[]> {
+  ): Promise<IncidentWithResourceName[]> {
     return [...this.incidents.values()]
       .filter(
         (incident) =>
@@ -122,7 +141,7 @@ export class FakeIncidentRepo implements IncidentRepo {
           right.openedAt - left.openedAt || right.id.localeCompare(left.id),
       )
       .slice(0, limit)
-      .map(copy);
+      .map((incident) => this.withResourceName(incident));
   }
 }
 

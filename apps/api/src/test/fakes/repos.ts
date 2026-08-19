@@ -31,6 +31,8 @@ import type {
   DeliveryUpdate,
 } from "../../domain/channels/repo";
 import type {
+  ChannelType,
+  IncidentNotificationDelivery,
   NotificationChannel,
   NotificationDelivery,
 } from "../../domain/channels/types";
@@ -883,6 +885,17 @@ export class FakeChannelRepo implements ChannelRepo {
 
 export class FakeDeliveryRepo implements DeliveryRepo {
   readonly deliveries = new Map<string, NotificationDelivery>();
+  readonly incidentChannelDetails = new Map<
+    string,
+    { name: string; type: ChannelType }
+  >();
+
+  setIncidentChannelDetails(
+    channelId: string,
+    details: { name: string; type: ChannelType },
+  ): void {
+    this.incidentChannelDetails.set(channelId, clone(details));
+  }
 
   async insert(delivery: NotificationDelivery): Promise<void> {
     if (this.deliveries.has(delivery.id)) {
@@ -939,5 +952,20 @@ export class FakeDeliveryRepo implements DeliveryRepo {
           left.createdAt - right.createdAt || left.id.localeCompare(right.id),
       )
       .map(clone);
+  }
+
+  async listForIncidentWithChannel(
+    incidentId: string,
+  ): Promise<IncidentNotificationDelivery[]> {
+    return (await this.listForIncident(incidentId)).map((delivery) => {
+      const channel = this.incidentChannelDetails.get(
+        delivery.notificationChannelId,
+      );
+      return {
+        ...delivery,
+        channelName: channel?.name ?? "Deleted channel",
+        channelType: channel?.type ?? null,
+      };
+    });
   }
 }

@@ -5,6 +5,7 @@ import type {
 import type {
   DeliveryEventType,
   DeliveryStatus,
+  IncidentNotificationDelivery,
   NotificationDelivery,
 } from "../../domain/channels/types";
 import type { Cursor } from "../../shared/pagination";
@@ -24,6 +25,11 @@ interface DeliveryRow {
   created_at: number;
 }
 
+interface IncidentDeliveryRow extends DeliveryRow {
+  channel_name: string | null;
+  channel_type: IncidentNotificationDelivery["channelType"];
+}
+
 function toDelivery(row: DeliveryRow): NotificationDelivery {
   return {
     id: row.id,
@@ -37,6 +43,16 @@ function toDelivery(row: DeliveryRow): NotificationDelivery {
     errorSanitized: row.error_sanitized,
     sentAt: row.sent_at,
     createdAt: row.created_at,
+  };
+}
+
+function toIncidentDelivery(
+  row: IncidentDeliveryRow,
+): IncidentNotificationDelivery {
+  return {
+    ...toDelivery(row),
+    channelName: row.channel_name ?? "Deleted channel",
+    channelType: row.channel_type,
   };
 }
 
@@ -152,5 +168,24 @@ export class D1DeliveryRepo implements DeliveryRepo {
         .bind(incidentId),
     );
     return rows.map(toDelivery);
+  }
+
+  async listForIncidentWithChannel(
+    incidentId: string,
+  ): Promise<IncidentNotificationDelivery[]> {
+    const rows = await all<IncidentDeliveryRow>(
+      this.database
+        .prepare(
+          `SELECT d.*, c.name AS channel_name, c.type AS channel_type
+           FROM notification_deliveries d
+           LEFT JOIN notification_channels c
+             ON c.id = d.notification_channel_id
+            AND c.workspace_id = d.workspace_id
+           WHERE d.incident_id = ?
+           ORDER BY d.created_at ASC, d.id ASC`,
+        )
+        .bind(incidentId),
+    );
+    return rows.map(toIncidentDelivery);
   }
 }
