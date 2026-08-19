@@ -8,11 +8,38 @@ interface QueueConsumerConfig {
   dead_letter_queue?: string;
 }
 
+interface WranglerConfig {
+  browser: { binding: string };
+  d1_databases: { binding: string; database_id: string }[];
+  kv_namespaces: { binding: string; id: string }[];
+  r2_buckets: { binding: string; bucket_name: string }[];
+  queues: {
+    producers: { binding: string; queue: string }[];
+    consumers: QueueConsumerConfig[];
+  };
+  env: {
+    production: {
+      browser: { binding: string };
+      d1_databases: { binding: string; database_id: string }[];
+      kv_namespaces: { binding: string; id: string }[];
+      r2_buckets: { binding: string; bucket_name: string }[];
+      queues: {
+        producers: { binding: string; queue: string }[];
+        consumers: QueueConsumerConfig[];
+      };
+      vars: Record<string, string>;
+    };
+  };
+}
+
+const readConfig = (): WranglerConfig =>
+  JSON.parse(
+    readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+  ) as WranglerConfig;
+
 describe("wrangler queue consumers", () => {
   it("keeps the required batch, concurrency, retry, and DLQ topology", () => {
-    const config = JSON.parse(
-      readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
-    ) as { queues: { consumers: QueueConsumerConfig[] } };
+    const config = readConfig();
     const byName = new Map(
       config.queues.consumers.map((consumer) => [consumer.queue, consumer]),
     );
@@ -45,5 +72,26 @@ describe("wrangler queue consumers", () => {
         max_retries: 0,
       });
     }
+  });
+
+  it("defines a complete production environment with low-cost OpenAI settings", () => {
+    const config = readConfig();
+    const production = config.env.production;
+
+    expect(production.vars).toEqual({
+      ENVIRONMENT: "production",
+      APP_URL: "https://app.zenguy.com",
+      LLM_MODEL: "gpt-5-mini",
+      LLM_USE_VISION: "true",
+      PADDLE_ENVIRONMENT: "production",
+      EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
+    });
+    expect(production.browser).toEqual(config.browser);
+    expect(production.d1_databases).toEqual(config.d1_databases);
+    expect(production.kv_namespaces).toEqual(config.kv_namespaces);
+    expect(production.r2_buckets).toEqual(config.r2_buckets);
+    expect(production.d1_databases[0]?.database_id).not.toContain("TODO");
+    expect(production.kv_namespaces[0]?.id).not.toContain("TODO");
+    expect(production.queues).toEqual(config.queues);
   });
 });

@@ -1286,13 +1286,13 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Test: run with `--dry-run` (prints SQL, no exec) in a unit test; assert the SQL contains one INSERT per expected table and the password hash parses with `verifyPassword`.
 
 ### BE-074: Deployment, docs & acceptance
-- [ ] Complete `apps/api/README.md`:
+- [x] Complete `apps/api/README.md`:
   - **Local dev:** install, `.dev.vars`, migrate, seed, `pnpm dev` (API on :8787), `pnpm dev:remote` for browser runs, running the web app against it (see TASKS_FRONTEND).
   - **Provider setup:** Paddle sandbox (create product `Zenguy` + recurring monthly price 39 € EUR → `PADDLE_PRICE_ID`; one-time price `Zenguy extra runs` 0,20 € → `PADDLE_OVERAGE_PRICE_ID`; notification destination `https://<domain>/api/webhooks/paddle` with all `subscription.*` + `transaction.*` events → secret); Resend (domain + `RESEND_API_KEY`); Twilio (SID/token, SMS-capable number, WhatsApp sender, voice number); OpenAI key. Note: Browser Rendering + Queues require the Workers Paid plan.
   - **Deploy:** `pnpm --filter @zenguy/web build` first (assets dir must exist) → create remote resources (BE-003 commands) → `pnpm db:migrate:remote` → `wrangler secret put` for every secret in Appendix A → `wrangler deploy` → attach custom domain `app.zenguy.com` to the worker (landing worker owns `zenguy.com`) → verify crons registered.
   - **Post-deploy smoke:** curl `/api/health`; register → verify (real email) → login; create workspace; Paddle sandbox checkout completes and `GET billing` flips ACTIVE; `validate` run passes on example.com; monitor turns UP within 5 min.
-- [ ] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
-- [ ] Run the entire suite one final time: root `pnpm typecheck && pnpm test` + `pnpm --filter @zenguy/api test:integration`. Fix anything red. Final commit `BE-074: release readiness`.
+- [x] Acceptance sign-off table in the README mapping every §31 criterion to "how verified" (test file or manual step) — every row must have an answer; anything unverifiable becomes a bug to fix now. Walk the §33 first-demo flow (steps 1–14) end-to-end on a deployed or `dev:remote` instance and record the run/incident ids in the table.
+- [x] Run the entire suite one final time: root `pnpm typecheck && pnpm test` + `pnpm --filter @zenguy/api test:integration`. Fix anything red. Final commit `BE-074: release readiness`.
 
 ---
 
