@@ -17,6 +17,7 @@ export const OVERAGE_SETTLEMENT_DELAY_MS = 60 * 60 * 1_000;
 export type OverageReportResult =
   | { status: "already_reported" }
   | { status: "no_overage" }
+  | { status: "skipped" }
   | { status: "settling" }
   | { status: "reconciling" }
   | { status: "reconciled"; transactionId: string }
@@ -43,8 +44,21 @@ export class ReportOverageForPeriod {
     workspaceId: string;
     periodStart: number;
     periodEnd: number;
-    providerSubscriptionId: string;
+    providerSubscriptionId: string | null;
   }): Promise<OverageReportResult> {
+    const requestedProviderSubscriptionId = input.providerSubscriptionId;
+    if (
+      requestedProviderSubscriptionId === null ||
+      requestedProviderSubscriptionId === ""
+    ) {
+      return { status: "skipped" };
+    }
+    const settledInput = {
+      workspaceId: input.workspaceId,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      providerSubscriptionId: requestedProviderSubscriptionId,
+    };
     let report = await this.reports.findFor(
       input.workspaceId,
       input.periodStart,
@@ -55,7 +69,7 @@ export class ReportOverageForPeriod {
       return { status: "settling" };
     }
     if (report === null) {
-      const created = await this.createReport(input);
+      const created = await this.createReport(settledInput);
       const inserted = await this.reports.insertIfAbsent(created);
       if (inserted === "inserted") {
         if (created.state === "COMPLETED") {

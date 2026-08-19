@@ -272,6 +272,7 @@ export class HandlePaddleWebhook {
       id: stored?.id ?? this.dependencies.ids.newId("sub"),
       workspaceId,
       provider: "paddle",
+      source: "paddle",
       providerCustomerId: data.customer_id,
       providerSubscriptionId: data.id,
       status: mapStatus(eventType, data.status),

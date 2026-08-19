@@ -16,6 +16,7 @@ const billing: Billing = {
     cancelUrl: "https://sandbox-vendors.paddle.com/cancel",
     periodEnd: "2026-09-01T00:00:00.000Z",
     periodStart: "2026-08-01T00:00:00.000Z",
+    source: "paddle",
     status: "ACTIVE",
     updatePaymentMethodUrl: "https://sandbox-vendors.paddle.com/payment",
   },
@@ -44,7 +45,12 @@ describe("billing API", () => {
     const fetchMock = vi.fn(async (request: RequestInfo | URL) => {
       const path = String(request);
       if (path.endsWith("/billing/config")) {
-        return response({ clientToken: "test_token", environment: "sandbox", priceId: "pri_1" });
+        return response({
+          canIssueComplimentaryGrants: false,
+          clientToken: "test_token",
+          environment: "sandbox",
+          priceId: "pri_1",
+        });
       }
       if (path.includes("/invoices/")) return response({ url: "https://paddle.test/invoice.pdf" });
       return response(billing);

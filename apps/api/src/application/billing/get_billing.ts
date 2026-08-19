@@ -1,5 +1,8 @@
 import type { SubscriptionRepo } from "../../domain/billing/repo";
-import type { SubscriptionStatus } from "../../domain/billing/types";
+import type {
+  SubscriptionSource,
+  SubscriptionStatus,
+} from "../../domain/billing/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type {
@@ -25,6 +28,7 @@ export interface BillingDetails {
   };
   subscription: {
     status: SubscriptionStatus;
+    source: SubscriptionSource;
     periodStart: number | null;
     periodEnd: number | null;
     cancelAtPeriodEnd: boolean;
@@ -96,6 +100,7 @@ export class GetBilling {
       },
       subscription: {
         status: subscription?.status ?? "NONE",
+        source: subscription?.source === "grant" ? "grant" : "paddle",
         periodStart: subscription?.periodStart ?? null,
         periodEnd: subscription?.periodEnd ?? null,
         cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,

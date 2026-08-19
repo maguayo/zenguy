@@ -26,6 +26,8 @@ const ACTION_USE_CASES = {
   monitorUpdated: "../uptime/update_monitor.ts",
   monitorDeleted: "../uptime/delete_monitor.ts",
   billingSubscriptionUpdated: "../billing/handle_paddle_webhook.ts",
+  billingGrantIssued: "../billing/issue_subscription_grant.ts",
+  billingGrantRedeemed: "../billing/redeem_subscription_grant.ts",
   authPasswordReset: "../auth/reset_password.ts",
   apiKeyCreated: "../api_keys/create_api_key.ts",
   apiKeyRevoked: "../api_keys/revoke_api_key.ts",

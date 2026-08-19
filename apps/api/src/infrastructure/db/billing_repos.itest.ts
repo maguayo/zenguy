@@ -19,6 +19,7 @@ function subscription(
     id,
     workspaceId,
     provider: "paddle",
+    source: "paddle",
     providerCustomerId: `ctm_${id}`,
     providerSubscriptionId: `provider_${id}`,
     status: "ACTIVE",

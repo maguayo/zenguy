@@ -119,6 +119,8 @@ describe("WriteAudit", () => {
         "monitor.updated",
         "monitor.deleted",
         "billing.subscription_updated",
+        "billing.grant_issued",
+        "billing.grant_redeemed",
         "auth.password_reset",
         "api_key.created",
         "api_key.revoked",

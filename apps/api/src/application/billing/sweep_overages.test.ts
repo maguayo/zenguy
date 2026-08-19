@@ -2,14 +2,21 @@ import type {
   OverageReport,
   PendingOveragePeriod,
   Subscription,
+  UsageEvent,
 } from "../../domain/billing/types";
 import { FixedClock } from "../../shared/clock";
+import { RecordingPaddleClient } from "../../test/fakes/billing";
+import { FakeIds } from "../../test/fakes/ids";
 import {
   FakeOverageReportRepo,
   FakePendingOveragePeriodRepo,
   FakeSubscriptionRepo,
+  FakeUsageEventRepo,
 } from "../../test/fakes/repos";
-import { OVERAGE_SETTLEMENT_DELAY_MS } from "./report_overage_for_period";
+import {
+  OVERAGE_SETTLEMENT_DELAY_MS,
+  ReportOverageForPeriod,
+} from "./report_overage_for_period";
 import { SweepOverages } from "./sweep_overages";
 
 const NOW = Date.parse("2026-09-01T12:00:00Z");
@@ -122,6 +129,99 @@ describe("SweepOverages", () => {
       },
     ]);
     await expect(pendingPeriods.list(10)).resolves.toEqual([]);
+  });
+
+  it("skips complimentary periods and never reports them to Paddle", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...subscription(
+        "sub_grant",
+        "ws_grant",
+        NOW - 2 * OVERAGE_SETTLEMENT_DELAY_MS,
+      ),
+      source: "grant",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+    });
+    const pendingPeriods = new FakePendingOveragePeriodRepo();
+    await pendingPeriods.insertIfAbsent(
+      pending("ws_grant_pending", { providerSubscriptionId: null }),
+    );
+    const calls: unknown[] = [];
+    const sweep = new SweepOverages(
+      subscriptions,
+      new FakeOverageReportRepo(),
+      pendingPeriods,
+      {
+        execute: async (input) => {
+          calls.push(input);
+          return { status: "charged", overage: 1 };
+        },
+      },
+      new FixedClock(NOW),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await sweep.execute();
+
+    expect(calls).toEqual([]);
+    await expect(pendingPeriods.list(10)).resolves.toEqual([]);
+  });
+
+  it("does not call Paddle for ended grant periods above the included allotment", async () => {
+    const periodEnd = NOW - 2 * OVERAGE_SETTLEMENT_DELAY_MS;
+    const periodStart = periodEnd - 30 * 24 * 60 * 60 * 1_000;
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      id: "sub_grant_over",
+      workspaceId: "ws_grant_over",
+      provider: "paddle",
+      source: "grant",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      status: "ACTIVE",
+      periodStart,
+      periodEnd,
+      cancelAtPeriodEnd: false,
+      updatePaymentUrl: null,
+      cancelUrl: null,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const usageEvents = new FakeUsageEventRepo();
+    const usage: UsageEvent = {
+      id: "ue_grant_over",
+      workspaceId: "ws_grant_over",
+      testRunId: "run_grant_over",
+      type: "BROWSER_RUN",
+      quantity: 350,
+      billable: true,
+      idempotencyKey: "run:run_grant_over",
+      occurredAt: periodStart,
+      reversedAt: null,
+      createdAt: periodStart,
+    };
+    await usageEvents.insertIfAbsent(usage);
+    const paddle = new RecordingPaddleClient();
+    const reporter = new ReportOverageForPeriod(
+      usageEvents,
+      new FakeOverageReportRepo(),
+      paddle,
+      "pri_overage",
+      new FixedClock(NOW),
+      new FakeIds(),
+    );
+    const sweep = new SweepOverages(
+      subscriptions,
+      new FakeOverageReportRepo(),
+      new FakePendingOveragePeriodRepo(),
+      reporter,
+      new FixedClock(NOW),
+    );
+
+    await sweep.execute();
+
+    expect(paddle.charges).toEqual([]);
   });
 
   it("uses a persisted old subscription after the workspace advances", async () => {

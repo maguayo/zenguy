@@ -32,6 +32,7 @@ import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
   PendingOveragePeriodRepo,
+  SubscriptionGrantRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "./domain/billing/repo";
@@ -66,6 +67,7 @@ import { D1MemberRepo } from "./infrastructure/db/member_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
+import { D1SubscriptionGrantRepo } from "./infrastructure/db/subscription_grant_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
 import {
@@ -94,6 +96,7 @@ import {
 import { buildEmailSender } from "./infrastructure/email";
 import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
+import { subscriptionGrantRoutes } from "./http/routes/subscription_grants";
 import { secretRoutes } from "./http/routes/secrets";
 import { channelRoutes } from "./http/routes/channels";
 import { incidentRoutes } from "./http/routes/incidents";
@@ -130,6 +133,7 @@ export interface AppOverrides {
   audits?: AuditRepo;
   invitations?: InvitationRepo;
   subscriptions?: SubscriptionRepo;
+  subscriptionGrants?: SubscriptionGrantRepo;
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
   pendingOveragePeriods?: PendingOveragePeriodRepo;
@@ -183,6 +187,8 @@ export function buildApp(
     overrides.invitations ?? new D1InvitationRepo(env.DB);
   const subscriptions =
     overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
+  const subscriptionGrants =
+    overrides.subscriptionGrants ?? new D1SubscriptionGrantRepo(env.DB);
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
   const overageReports =
     overrides.overageReports ?? new D1OverageReportRepo(env.DB);
@@ -370,6 +376,21 @@ export function buildApp(
       usageEvents,
       paddle: paddleClient,
       clock,
+      config,
+    }),
+  );
+  app.route(
+    "/api/subscription-grants",
+    subscriptionGrantRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      grants: subscriptionGrants,
+      audit,
+      rateLimiter,
+      clock,
+      ids: overrides.ids ?? realIds,
       config,
     }),
   );

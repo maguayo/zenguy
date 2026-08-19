@@ -2,6 +2,7 @@ import type {
   SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
+import { isComplimentarySubscription } from "../../domain/billing/types";
 import type { Clock } from "../../shared/clock";
 import {
   INCLUDED_RUNS,
@@ -57,7 +58,10 @@ export class GetCycleUsage {
       period.periodEnd,
     );
     const remainingRuns = Math.max(0, INCLUDED_RUNS - billableRuns);
-    const overageRuns = Math.max(0, billableRuns - INCLUDED_RUNS);
+    const complimentary = isComplimentarySubscription(subscription);
+    const overageRuns = complimentary
+      ? 0
+      : Math.max(0, billableRuns - INCLUDED_RUNS);
     const overageAmountCents = overageRuns * OVERAGE_CENTS_PER_RUN;
     return {
       ...period,
@@ -66,7 +70,9 @@ export class GetCycleUsage {
       remainingRuns,
       overageRuns,
       overageAmountCents,
-      projectedTotalCents: PLAN_PRICE_CENTS + overageAmountCents,
+      projectedTotalCents: complimentary
+        ? 0
+        : PLAN_PRICE_CENTS + overageAmountCents,
     };
   }
 }

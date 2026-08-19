@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { shouldRetryQuery } from "./App";
 import { ApiError } from "./lib/api";
+import RedeemGrant from "./pages/billing/RedeemGrant";
+import IssueGrants from "./pages/billing/IssueGrants";
 
 describe("application query policy", () => {
   it("does not retry client-side API errors", () => {
@@ -22,5 +24,10 @@ describe("application query policy", () => {
     ).toBe(true);
     expect(shouldRetryQuery(1, new Error("Network"))).toBe(true);
     expect(shouldRetryQuery(2, new Error("Network"))).toBe(false);
+  });
+
+  it("ships redeem and issue pages for complimentary links", () => {
+    expect(RedeemGrant).toEqual(expect.any(Function));
+    expect(IssueGrants).toEqual(expect.any(Function));
   });
 });

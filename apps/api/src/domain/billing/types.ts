@@ -4,10 +4,13 @@ export type SubscriptionStatus =
   | "PAST_DUE"
   | "CANCELED";
 
+export type SubscriptionSource = "paddle" | "grant";
+
 export interface Subscription {
   id: string;
   workspaceId: string;
   provider: "paddle";
+  source?: SubscriptionSource;
   providerCustomerId: string | null;
   providerSubscriptionId: string | null;
   status: SubscriptionStatus;
@@ -61,4 +64,25 @@ export interface PendingOveragePeriod {
   providerSubscriptionId: string | null;
   nextAttemptAt: number;
   attemptCount: number;
+}
+
+export interface SubscriptionGrant {
+  id: string;
+  tokenHash: string;
+  issuedByUserId: string;
+  note: string | null;
+  expiresAt: number;
+  redeemedAt: number | null;
+  redeemedWorkspaceId: string | null;
+  createdAt: number;
+}
+
+export function isComplimentarySubscription(
+  subscription: Pick<Subscription, "source" | "providerSubscriptionId"> | null,
+): boolean {
+  if (subscription === null) return false;
+  return (
+    subscription.source === "grant" ||
+    subscription.providerSubscriptionId === null
+  );
 }

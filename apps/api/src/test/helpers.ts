@@ -22,6 +22,7 @@ const DELETE_STATEMENTS = [
   "DELETE FROM notification_channels",
   "DELETE FROM workspace_secrets",
   "DELETE FROM workspace_api_keys",
+  "DELETE FROM subscription_grants",
   "DELETE FROM pending_overage_periods",
   "DELETE FROM overage_reports",
   "DELETE FROM usage_events",

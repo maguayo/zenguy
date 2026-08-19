@@ -29,6 +29,7 @@ export interface Bindings {
   PADDLE_ENVIRONMENT: string;
   PADDLE_PRICE_ID: string;
   PADDLE_OVERAGE_PRICE_ID: string;
+  COMPLIMENTARY_ISSUER_EMAILS?: string;
 }
 
 export interface AppConfig {
@@ -57,6 +58,7 @@ export interface AppConfig {
     overagePriceId: string;
     apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
   };
+  complimentaryIssuerEmails: string[];
 }
 
 const requiredEnvKeys = [
@@ -104,6 +106,23 @@ const envSchema = z.object({
   PADDLE_PRICE_ID: z.string().min(1),
   PADDLE_OVERAGE_PRICE_ID: z.string().min(1),
 });
+
+export function parseComplimentaryIssuerEmails(value: unknown): string[] {
+  if (typeof value !== "string" || value.trim() === "") return [];
+  const emails = new Set<string>();
+  for (const part of value.split(",")) {
+    const email = part.trim().toLowerCase();
+    if (email.includes("@")) emails.add(email);
+  }
+  return [...emails];
+}
+
+export function isComplimentaryIssuer(
+  emails: readonly string[],
+  email: string,
+): boolean {
+  return emails.includes(email.trim().toLowerCase());
+}
 
 function decodeEncryptionKey(encoded: string): Uint8Array {
   let decoded: string;
@@ -164,5 +183,8 @@ export function loadConfig(env: Bindings): AppConfig {
       overagePriceId: parsed.PADDLE_OVERAGE_PRICE_ID,
       apiBase: paddleApiBase,
     },
+    complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
+      env.COMPLIMENTARY_ISSUER_EMAILS,
+    ),
   };
 }

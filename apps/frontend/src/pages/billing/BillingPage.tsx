@@ -115,18 +115,26 @@ function BillingSkeleton() {
 
 function PlanCard({ billing }: { billing: Billing }) {
   const { current, timezone } = useWorkspace();
-  const status = subscriptionPresentation(billing.subscription.status);
+  const complimentary = billing.subscription.source === "grant";
+  const status = complimentary
+    ? { label: "Complimentary", tone: "ok" as const }
+    : subscriptionPresentation(billing.subscription.status);
   const needsSetup =
-    billing.subscription.status === "NONE" || billing.subscription.status === "CANCELED";
+    !complimentary &&
+    (billing.subscription.status === "NONE" || billing.subscription.status === "CANCELED");
 
   return (
     <Card title="Plan">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-lg font-semibold text-zinc-900">Zenguy — 39 €/month</p>
+        <p className="text-lg font-semibold text-zinc-900">
+          {complimentary ? "Zenguy — complimentary" : "Zenguy — 39 €/month"}
+        </p>
         <Badge tone={status.tone}>{status.label}</Badge>
       </div>
       <p className="mt-3 text-sm text-zinc-600">
-        300 runs included · 0,20 € per extra run · Unlimited members
+        {complimentary
+          ? "300 runs included · extra runs are not billed · Unlimited members"
+          : "300 runs included · 0,20 € per extra run · Unlimited members"}
       </p>
       {billing.subscription.cancelAtPeriodEnd && billing.subscription.periodEnd ? (
         <p className="mt-4 rounded-md border border-warn-600/25 bg-warn-50 p-3 text-sm text-warn-600">

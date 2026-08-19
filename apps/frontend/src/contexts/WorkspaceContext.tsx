@@ -34,6 +34,10 @@ export function resolveWorkspace(
   return workspaces.find((workspace) => workspace.id === workspaceId);
 }
 
+export function requiresBillingSetup(status: SubscriptionStatus): boolean {
+  return status === "NONE" || status === "CANCELED";
+}
+
 function WorkspaceNotFound({ workspaces }: { workspaces: Workspace[] }) {
   return (
     <main className="grid min-h-screen place-items-center p-4">
@@ -106,10 +110,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   if (!current || !value) return <WorkspaceNotFound workspaces={query.data} />;
 
   const billingRoute = location.pathname === `/w/${current.id}/billing`;
-  if (
-    (current.subscriptionStatus === "NONE" || current.subscriptionStatus === "CANCELED") &&
-    !billingRoute
-  ) {
+  if (requiresBillingSetup(current.subscriptionStatus) && !billingRoute) {
     return <Navigate replace to={`/w/${current.id}/setup/billing`} />;
   }
 

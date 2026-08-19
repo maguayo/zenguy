@@ -79,6 +79,45 @@ describe("GetCycleUsage", () => {
     },
   );
 
+  it("does not project a paid total for a grant-activated workspace", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      source: "grant",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+    });
+    const usageEvents = new FakeUsageEventRepo();
+    await usageEvents.insertIfAbsent({
+      id: "ue_total",
+      workspaceId: "ws_primary",
+      testRunId: "run_total",
+      type: "BROWSER_RUN",
+      quantity: 350,
+      billable: true,
+      idempotencyKey: "run:run_total",
+      occurredAt: PERIOD_START,
+      reversedAt: null,
+      createdAt: PERIOD_START,
+    });
+    const getUsage = new GetCycleUsage(
+      subscriptions,
+      usageEvents,
+      new FixedClock(Date.parse("2026-08-20T12:00:00Z")),
+    );
+
+    await expect(getUsage.execute({ workspaceId: "ws_primary" })).resolves.toEqual({
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END,
+      billableRuns: 350,
+      includedRuns: 300,
+      remainingRuns: 0,
+      overageRuns: 0,
+      overageAmountCents: 0,
+      projectedTotalCents: 0,
+    });
+  });
+
   it("falls back to the current UTC calendar month without usable periods", async () => {
     const subscriptions = new FakeSubscriptionRepo();
     await subscriptions.upsertByWorkspace({

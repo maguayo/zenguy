@@ -90,6 +90,17 @@ describe("loadConfig", () => {
       priceId: "pri_monthly",
       overagePriceId: "pri_overage",
     });
+    expect(config.complimentaryIssuerEmails).toEqual([]);
+  });
+
+  it("parses complimentary issuer emails without requiring the binding", () => {
+    const env = completeBindings();
+    env.COMPLIMENTARY_ISSUER_EMAILS = " Marcos@aguayo.es, friend@example.com ,";
+
+    expect(loadConfig(env).complimentaryIssuerEmails).toEqual([
+      "marcos@aguayo.es",
+      "friend@example.com",
+    ]);
   });
 
   it("accepts staging as an application environment", () => {

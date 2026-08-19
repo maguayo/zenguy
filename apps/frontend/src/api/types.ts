@@ -45,7 +45,10 @@ export interface PublicInvitation {
   workspaceName: string;
 }
 
+export type SubscriptionSource = "paddle" | "grant";
+
 export interface BillingConfig {
+  canIssueComplimentaryGrants?: boolean;
   clientToken: string;
   environment: "sandbox" | "production";
   priceId: string;
@@ -84,6 +87,7 @@ export interface Billing {
     cancelUrl: string | null;
     periodEnd: string | null;
     periodStart: string | null;
+    source?: SubscriptionSource;
     status: SubscriptionStatus;
     updatePaymentMethodUrl: string | null;
   };

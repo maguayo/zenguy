@@ -12,8 +12,10 @@ import {
   Users,
 } from "lucide-react";
 import clsx from "clsx";
-import { NavLink, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
+import { getBillingConfig } from "../api/billing";
 import { useAuth } from "../contexts/AuthContext";
 import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Action } from "../lib/permissions";
@@ -52,8 +54,13 @@ export function visibleNavigationItems(
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { can, current } = useWorkspace();
+  const billingConfig = useQuery({
+    queryFn: getBillingConfig,
+    queryKey: ["billing-config"],
+  });
   const base = `/w/${current.id}`;
 
   return (
@@ -103,6 +110,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <Dropdown
           align="start"
           items={[
+            ...(billingConfig.data?.canIssueComplimentaryGrants
+              ? [
+                  {
+                    label: "Complimentary links",
+                    onSelect: () => {
+                      navigate("/complimentary");
+                    },
+                  },
+                ]
+              : []),
             {
               icon: <LogOut className="size-4" />,
               label: "Sign out",

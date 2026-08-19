@@ -180,6 +180,7 @@ describe("wrangler environments", () => {
       LLM_USE_VISION: "true",
       PADDLE_ENVIRONMENT: "sandbox",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
+      COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
     });
     expect(production.vars).toEqual({
       ENVIRONMENT: "production",
@@ -188,6 +189,7 @@ describe("wrangler environments", () => {
       LLM_USE_VISION: "true",
       PADDLE_ENVIRONMENT: "production",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
+      COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
     });
 
     expect(staging.d1_databases).toEqual([

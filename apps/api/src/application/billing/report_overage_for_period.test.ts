@@ -106,6 +106,16 @@ describe("ReportOverageForPeriod", () => {
     ]);
   });
 
+  it("never charges Paddle for a grant-activated workspace", async () => {
+    const { reporter, reports, paddle } = await setup(350);
+
+    await expect(
+      reporter.execute({ ...INPUT, providerSubscriptionId: null }),
+    ).resolves.toEqual({ status: "skipped" });
+    expect(paddle.charges).toEqual([]);
+    expect(reports.reports.size).toBe(0);
+  });
+
   it("records a no-overage period exactly once", async () => {
     const { reporter, reports, paddle } = await setup(300);
 

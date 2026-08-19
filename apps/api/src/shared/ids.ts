@@ -9,6 +9,7 @@ export const ID_PREFIXES = {
   invitation: "inv",
   auditLog: "aud",
   subscription: "sub",
+  subscriptionGrant: "sgr",
   usageEvent: "ue",
   overageReport: "ovr",
   secret: "sec",

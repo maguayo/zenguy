@@ -9,6 +9,8 @@ export const PBKDF2_ITERATIONS = 100_000;
 export const PLAN_PRICE_CENTS = 3900;
 export const INCLUDED_RUNS = 300;
 export const OVERAGE_CENTS_PER_RUN = 20;
+export const SUBSCRIPTION_GRANT_TTL_DAYS = 30;
+export const COMPLIMENTARY_PERIOD_MS = 10 * 365 * 24 * 60 * 60 * 1_000;
 
 export const ATTEMPT_TIMEOUT_MS = 300_000;
 export const MAX_FUNCTIONAL_RETRIES = 3;
@@ -77,4 +79,5 @@ export const RATE_LIMITS = {
   test_import: { limit: 10, windowSeconds: 3600 },
   report_download: { limit: 60, windowSeconds: 3600 },
   public_api: { limit: 120, windowSeconds: 60 },
+  subscription_grants: { limit: 20, windowSeconds: 3600 },
 } as const;

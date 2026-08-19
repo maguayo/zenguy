@@ -21,6 +21,13 @@ describe("billing page", () => {
     expect(subscriptionPresentation("NONE")).toEqual({ label: "Not set up", tone: "neutral" });
   });
 
+  it("keeps ACTIVE presentation distinct from complimentary plan copy", () => {
+    expect(subscriptionPresentation("ACTIVE")).not.toEqual({
+      label: "Complimentary",
+      tone: "ok",
+    });
+  });
+
   it("maps common invoice states and renders invoice columns", () => {
     expect(invoiceStatus("paid")).toEqual({ label: "Paid", tone: "ok" });
     expect(invoiceStatus("past_due")).toEqual({ label: "Past due", tone: "warn" });

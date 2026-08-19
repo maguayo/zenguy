@@ -68,7 +68,8 @@
     "LLM_MODEL": "gpt-5-mini",
     "LLM_USE_VISION": "true",
     "PADDLE_ENVIRONMENT": "sandbox",
-    "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+    "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
+    "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
   },
   "env": {
     "staging": {
@@ -160,7 +161,8 @@
         "LLM_MODEL": "gpt-5-mini",
         "LLM_USE_VISION": "true",
         "PADDLE_ENVIRONMENT": "sandbox",
-        "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+        "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
+        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
       }
     },
     "production": {
@@ -249,7 +251,8 @@
         "LLM_MODEL": "gpt-5-mini",
         "LLM_USE_VISION": "true",
         "PADDLE_ENVIRONMENT": "production",
-        "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+        "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
+        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
       }
     }
   }

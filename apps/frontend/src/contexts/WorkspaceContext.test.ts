@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Workspace } from "../api/types";
-import { resolveWorkspace } from "./WorkspaceContext";
+import { requiresBillingSetup, resolveWorkspace } from "./WorkspaceContext";
 
 const workspace: Workspace = {
   createdAt: "2026-08-19T10:00:00.000Z",
@@ -18,5 +18,12 @@ describe("workspace resolution", () => {
     expect(resolveWorkspace([workspace], "ws_1")).toEqual(workspace);
     expect(resolveWorkspace([workspace], "ws_other")).toBeUndefined();
     expect(resolveWorkspace([workspace], undefined)).toBeUndefined();
+  });
+
+  it("does not send grant-activated ACTIVE workspaces through paid checkout", () => {
+    expect(requiresBillingSetup("ACTIVE")).toBe(false);
+    expect(requiresBillingSetup("PAST_DUE")).toBe(false);
+    expect(requiresBillingSetup("NONE")).toBe(true);
+    expect(requiresBillingSetup("CANCELED")).toBe(true);
   });
 });

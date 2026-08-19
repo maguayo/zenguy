@@ -85,6 +85,7 @@ describe("GetBilling", () => {
       },
       subscription: {
         status: "ACTIVE",
+        source: "paddle",
         periodStart: PERIOD_START,
         periodEnd: PERIOD_END,
         cancelAtPeriodEnd: true,

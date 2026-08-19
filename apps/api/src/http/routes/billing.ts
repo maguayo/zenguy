@@ -27,7 +27,7 @@ export interface BillingRoutesDependencies {
   usageEvents: UsageEventRepo;
   paddle: PaddleClient;
   clock: Clock;
-  config: Pick<AppConfig, "jwtSecret" | "paddle">;
+  config: Pick<AppConfig, "jwtSecret" | "paddle" | "complimentaryIssuerEmails">;
 }
 
 export function billingRoutes(
@@ -57,6 +57,10 @@ export function billingRoutes(
         environment: dependencies.config.paddle.environment,
         clientToken: dependencies.config.paddle.clientToken,
         priceId: dependencies.config.paddle.priceId,
+        canIssueComplimentaryGrants:
+          dependencies.config.complimentaryIssuerEmails.includes(
+            context.get("user").email.trim().toLowerCase(),
+          ),
       },
     }),
   );

@@ -6,6 +6,7 @@ interface SubscriptionRow {
   id: string;
   workspace_id: string;
   provider: string;
+  source: string | null;
   provider_customer_id: string | null;
   provider_subscription_id: string | null;
   status: Subscription["status"];
@@ -27,6 +28,7 @@ function toSubscription(row: SubscriptionRow): Subscription {
     id: row.id,
     workspaceId: row.workspace_id,
     provider: "paddle",
+    source: row.source === "grant" ? "grant" : "paddle",
     providerCustomerId: row.provider_customer_id,
     providerSubscriptionId: row.provider_subscription_id,
     status: row.status,
@@ -52,13 +54,14 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
       this.database
         .prepare(
           `INSERT INTO subscriptions
-            (id, workspace_id, provider, provider_customer_id,
+            (id, workspace_id, provider, source, provider_customer_id,
              provider_subscription_id, status, period_start, period_end,
              cancel_at_period_end, update_payment_url, cancel_url,
              created_at, updated_at, last_provider_event_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id) DO UPDATE SET
              provider = excluded.provider,
+             source = excluded.source,
              provider_customer_id = excluded.provider_customer_id,
              provider_subscription_id = excluded.provider_subscription_id,
              status = excluded.status,
@@ -80,6 +83,7 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
           subscription.id,
           subscription.workspaceId,
           subscription.provider,
+          subscription.source === "grant" ? "grant" : "paddle",
           subscription.providerCustomerId,
           subscription.providerSubscriptionId,
           subscription.status,

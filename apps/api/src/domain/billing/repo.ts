@@ -2,6 +2,7 @@ import type {
   OverageReport,
   PendingOveragePeriod,
   Subscription,
+  SubscriptionGrant,
   UsageEvent,
 } from "./types";
 
@@ -56,4 +57,16 @@ export interface PendingOveragePeriodRepo {
     nextAttemptAt: number,
   ): Promise<void>;
   deleteFor(workspaceId: string, periodStart: number): Promise<void>;
+}
+
+export interface SubscriptionGrantRepo {
+  insert(grant: SubscriptionGrant): Promise<void>;
+  findByHash(hash: string): Promise<SubscriptionGrant | null>;
+  findValidByHash(hash: string, now: number): Promise<SubscriptionGrant | null>;
+  listByIssuer(userId: string): Promise<SubscriptionGrant[]>;
+  consume(
+    id: string,
+    workspaceId: string,
+    at: number,
+  ): Promise<boolean>;
 }

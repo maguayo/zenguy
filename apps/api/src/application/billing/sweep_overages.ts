@@ -63,6 +63,12 @@ export class SweepOverages {
         if (subscription.periodStart === null || subscription.periodEnd === null) {
           continue;
         }
+        if (
+          subscription.source === "grant" ||
+          subscription.providerSubscriptionId === null
+        ) {
+          continue;
+        }
         const report = await this.reports.findFor(
           subscription.workspaceId,
           subscription.periodStart,
@@ -92,10 +98,13 @@ export class SweepOverages {
   ): Promise<void> {
     try {
       if (period.providerSubscriptionId === null) {
-        logEvent("overage_reconciliation_requires_subscription", {
+        logEvent("overage_skipped_complimentary", {
           workspaceId: period.workspaceId,
         });
-        await this.reschedule(period, now);
+        await this.pendingPeriods.deleteFor(
+          period.workspaceId,
+          period.periodStart,
+        );
         return;
       }
       const result = await this.reporter.execute({

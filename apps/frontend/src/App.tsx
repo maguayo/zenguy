@@ -60,6 +60,8 @@ const ChannelsPage = lazy(() => import("./pages/notifications/ChannelsPage"));
 const SecretsPage = lazy(() => import("./pages/secrets/SecretsPage"));
 const MembersPage = lazy(() => import("./pages/members/MembersPage"));
 const BillingPage = lazy(() => import("./pages/billing/BillingPage"));
+const RedeemGrant = lazy(() => import("./pages/billing/RedeemGrant"));
+const IssueGrants = lazy(() => import("./pages/billing/IssueGrants"));
 const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -151,9 +153,11 @@ function AppRoutes() {
         </Route>
         <Route element={<VerifyEmail />} path="/verify-email" />
         <Route element={<AcceptInvitation />} path="/invitations/:token" />
+        <Route element={<RedeemGrant />} path="/grants/:token" />
 
         <Route element={<RequireAuth />}>
           <Route element={<VerifyPending />} path="/verify-pending" />
+          <Route element={<IssueGrants />} path="/complimentary" />
           <Route element={<CreateWorkspace />} path="/onboarding/workspace" />
           <Route element={<BillingSetup />} path="/w/:wsId/setup/billing" />
           <Route element={<WorkspaceShell />} path="/w/:wsId">

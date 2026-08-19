@@ -159,6 +159,7 @@ describe("billing routes", () => {
         environment: "sandbox",
         clientToken: "test-paddle-client-token",
         priceId: "pri_test_monthly",
+        canIssueComplimentaryGrants: false,
       },
     });
 
@@ -224,6 +225,7 @@ describe("billing routes", () => {
         },
         subscription: {
           status: "ACTIVE",
+          source: "paddle",
           periodStart: "2026-08-01T00:00:00.000Z",
           periodEnd: "2026-09-01T00:00:00.000Z",
           cancelAtPeriodEnd: false,

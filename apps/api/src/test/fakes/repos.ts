@@ -44,6 +44,7 @@ import type {
 import type {
   OverageReportRepo,
   PendingOveragePeriodRepo,
+  SubscriptionGrantRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
@@ -51,6 +52,7 @@ import type {
   OverageReport,
   PendingOveragePeriod,
   Subscription,
+  SubscriptionGrant,
   UsageEvent,
 } from "../../domain/billing/types";
 import type { ApiKeyRepo } from "../../domain/api_keys/repo";
@@ -1160,5 +1162,70 @@ export class FakeApiKeyRepo implements ApiKeyRepo {
     if (apiKey !== undefined) {
       this.apiKeys.set(id, { ...apiKey, lastUsedAt: at });
     }
+  }
+}
+
+export class FakeSubscriptionGrantRepo implements SubscriptionGrantRepo {
+  readonly grants = new Map<string, SubscriptionGrant>();
+
+  async insert(grant: SubscriptionGrant): Promise<void> {
+    if (this.grants.has(grant.id)) {
+      throw new Error("grant constraint violation");
+    }
+    this.grants.set(grant.id, clone(grant));
+  }
+
+  async findByHash(hash: string): Promise<SubscriptionGrant | null> {
+    for (const grant of this.grants.values()) {
+      if (grant.tokenHash === hash) return clone(grant);
+    }
+    return null;
+  }
+
+  async findValidByHash(
+    hash: string,
+    now: number,
+  ): Promise<SubscriptionGrant | null> {
+    for (const grant of this.grants.values()) {
+      if (
+        grant.tokenHash === hash &&
+        grant.redeemedAt === null &&
+        grant.expiresAt > now
+      ) {
+        return clone(grant);
+      }
+    }
+    return null;
+  }
+
+  async listByIssuer(userId: string): Promise<SubscriptionGrant[]> {
+    return [...this.grants.values()]
+      .filter((grant) => grant.issuedByUserId === userId)
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      )
+      .map(clone);
+  }
+
+  async consume(
+    id: string,
+    workspaceId: string,
+    at: number,
+  ): Promise<boolean> {
+    const grant = this.grants.get(id);
+    if (
+      grant === undefined ||
+      grant.redeemedAt !== null ||
+      grant.expiresAt <= at
+    ) {
+      return false;
+    }
+    this.grants.set(id, {
+      ...grant,
+      redeemedAt: at,
+      redeemedWorkspaceId: workspaceId,
+    });
+    return true;
   }
 }
