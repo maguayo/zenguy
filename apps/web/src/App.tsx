@@ -24,6 +24,7 @@ import { ErrorState } from "./components/ui/ErrorState";
 import { Spinner } from "./components/ui/Spinner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import { ApiError, apiGet } from "./lib/api";
 
 const stub = (title: string) =>
@@ -101,8 +102,12 @@ function RouteLoading() {
   );
 }
 
-function WorkspaceShellStub() {
-  return <Outlet />;
+function WorkspaceShell() {
+  return (
+    <WorkspaceProvider>
+      <Outlet />
+    </WorkspaceProvider>
+  );
 }
 
 function RootResolver() {
@@ -150,7 +155,7 @@ function AppRoutes() {
           <Route element={<VerifyPending />} path="/verify-pending" />
           <Route element={<CreateWorkspace />} path="/onboarding/workspace" />
           <Route element={<BillingSetup />} path="/w/:wsId/setup/billing" />
-          <Route element={<WorkspaceShellStub />} path="/w/:wsId">
+          <Route element={<WorkspaceShell />} path="/w/:wsId">
             <Route element={<Navigate replace to="overview" />} index />
             <Route element={<OverviewPage />} path="overview" />
             <Route element={<TestsListPage />} path="tests" />
