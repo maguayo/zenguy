@@ -1,7 +1,9 @@
 import { buildApp } from "./app";
 import { CreateRun } from "./application/browser_tests/create_run";
 import { RecordRunUsage } from "./application/billing/record_run_usage";
+import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
+import { SweepOverages } from "./application/billing/sweep_overages";
 import { DispatchNotifications } from "./application/channels/dispatch_notifications";
 import {
   SendQueuedNotification,
@@ -10,6 +12,7 @@ import {
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
+import { HourlyMaintenance } from "./application/maintenance/hourly";
 import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
 import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
@@ -36,6 +39,7 @@ import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
+import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
 import { D1StepRepo } from "./infrastructure/db/step_repo";
@@ -45,6 +49,7 @@ import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { buildEmailSender } from "./infrastructure/email";
 import { OpenAiLlmClient } from "./infrastructure/llm/openai";
 import { buildChannelSender } from "./infrastructure/notify";
+import { HttpPaddleClient } from "./infrastructure/paddle/client";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
@@ -257,7 +262,7 @@ function notifyConsumer(env: Bindings): SendQueuedNotification {
   );
 }
 
-export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
+export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
   const config = loadConfig(env);
   const runs = new D1RunRepo(env.DB);
   const attempts = new D1AttemptRepo(env.DB);
@@ -282,7 +287,7 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
     systemClock,
     realIds,
   );
-  const lifecycle = new AttemptLifecycle({
+  return new AttemptLifecycle({
     runs,
     attempts,
     steps,
@@ -318,8 +323,21 @@ export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
       ids: realIds,
     }),
   });
+}
+
+export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
+  const config = loadConfig(env);
+  const runs = new D1RunRepo(env.DB);
+  const attempts = new D1AttemptRepo(env.DB);
+  const steps = new D1StepRepo(env.DB);
+  const artifacts = new D1ArtifactRepo(env.DB);
+  const storage = new ArtifactStorage(env.ARTIFACTS);
+  const secretResolver = new ResolveSecrets(
+    new D1SecretRepo(env.DB),
+    config.encryptionKey,
+  );
   return new ExecuteAttempt({
-    lifecycle,
+    lifecycle: buildAttemptLifecycle(env),
     runs,
     attempts,
     steps,
@@ -428,12 +446,33 @@ export function buildRetentionJob(env: Bindings): PurgeExpired {
   );
 }
 
-function pendingHourlyJob(): ScheduledJob {
-  return {
-    async execute(): Promise<never> {
-      throw new Error("hourly maintenance is not wired");
-    },
-  };
+export function buildHourlyJob(env: Bindings): HourlyMaintenance {
+  const config = loadConfig(env);
+  const subscriptions = new D1SubscriptionRepo(env.DB);
+  const reports = new D1OverageReportRepo(env.DB);
+  const usageEvents = new D1UsageEventRepo(env.DB);
+  const overages = new SweepOverages(
+    subscriptions,
+    reports,
+    new ReportOverageForPeriod(
+      subscriptions,
+      usageEvents,
+      reports,
+      new HttpPaddleClient(config.paddle),
+      config.paddle.overagePriceId,
+      systemClock,
+      realIds,
+    ),
+    systemClock,
+  );
+  return new HourlyMaintenance(
+    overages,
+    new D1AttemptRepo(env.DB),
+    new D1RunRepo(env.DB),
+    buildAttemptLifecycle(env),
+    new D1MonitorRepo(env.DB),
+    systemClock,
+  );
 }
 
 export async function scheduled(
@@ -444,7 +483,7 @@ export async function scheduled(
   await processScheduledCron(controller.cron, {
     ...buildSchedulerJobs(env),
     retention: buildRetentionJob(env),
-    hourly: pendingHourlyJob(),
+    hourly: buildHourlyJob(env),
   });
 }
 

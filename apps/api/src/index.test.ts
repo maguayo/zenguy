@@ -1,13 +1,17 @@
 import type { CheckMessage, NotifyMessage } from "./domain/queues";
 import { ExecuteAttempt } from "./application/execution/execute_attempt";
+import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
+import { HourlyMaintenance } from "./application/maintenance/hourly";
 import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
 import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
 import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { fakeBindings } from "./test/fakes/bindings";
 import {
   buildAttemptConsumer,
+  buildAttemptLifecycle,
   buildCheckConsumer,
+  buildHourlyJob,
   buildRetentionJob,
   buildSchedulerJobs,
   processQueueBatch,
@@ -82,11 +86,15 @@ function consumers(overrides: Partial<QueueConsumers> = {}): QueueConsumers {
 describe("queue routing", () => {
   it("builds the concrete browser attempt consumer for the runs queue", () => {
     expect(buildAttemptConsumer(fakeBindings())).toBeInstanceOf(ExecuteAttempt);
+    expect(buildAttemptLifecycle(fakeBindings())).toBeInstanceOf(
+      AttemptLifecycle,
+    );
     expect(buildCheckConsumer(fakeBindings())).toBeInstanceOf(HandleCheckMessage);
     const scheduler = buildSchedulerJobs(fakeBindings());
     expect(scheduler.tests).toBeInstanceOf(SweepDueTests);
     expect(scheduler.monitors).toBeInstanceOf(SweepDueMonitors);
     expect(buildRetentionJob(fakeBindings())).toBeInstanceOf(PurgeExpired);
+    expect(buildHourlyJob(fakeBindings())).toBeInstanceOf(HourlyMaintenance);
   });
 
   it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {

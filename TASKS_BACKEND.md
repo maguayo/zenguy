@@ -1237,11 +1237,11 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Tests: fixture data straddling the 30-day line — only old side purged; billing tables untouched (assert rows remain); R2 delete called with exactly the old keys; loop terminates.
 
 ### BE-069: Hourly maintenance (cron `30 * * * *`)
-- [ ] `application/maintenance/hourly.ts`:
+- [x] `application/maintenance/hourly.ts`:
   1. `sweep_overages` (BE-035).
   2. Zombie attempts: `AttemptRepo.listStale(now - ATTEMPT_TIMEOUT_MS - 600000)` (STARTING/RUNNING > timeout + 10 min) → for each: `platformAlert("zombie_attempt")` + feed through `AttemptLifecycle.onAttemptFinished` with outcome SYSTEM_ERROR code `WORKER_LOST` (drives infra-retry/finalize/reversal correctly).
   3. Zombie uptime cycles: `listZombieCycles(now - 900000)` → `clearCycle` + `platformAlert("zombie_cycle")` (state left as-is; next sweep re-checks — inconclusive cycles don't flip status, §14.8).
-- [ ] Tests: zombie attempt goes through the normal SYSTEM_ERROR decision path (usage reversed when nothing ever started); cycles cleared; overage sweep invoked.
+- [x] Tests: zombie attempt goes through the normal SYSTEM_ERROR decision path (usage reversed when nothing ever started); cycles cleared; overage sweep invoked.
 
 # Phase 12 — Aggregate reads
 
