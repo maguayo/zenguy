@@ -292,8 +292,8 @@ export default defineConfig({
 - [x] All text content renders as text (never `dangerouslySetInnerHTML`).
 
 ### FE-028: Drafts note & runs from incidents
-- [ ] Ensure `/w/:wsId/runs/:runId` works for validation runs (null `testId`): breadcrumb shows `Draft validation`, no test links, banner `This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.`
-- [ ] From incident pages (FE-033) run links land here — verify the route accepts any runId in the workspace and shows NOT_FOUND state (`ErrorState` `This run is no longer available (runs are kept for 30 days).`) on 404.
+- [x] Ensure `/w/:wsId/runs/:runId` works for validation runs (null `testId`): breadcrumb shows `Draft validation`, no test links, banner `This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.`
+- [x] From incident pages (FE-033) run links land here — verify the route accepts any runId in the workspace and shows NOT_FOUND state (`ErrorState` `This run is no longer available (runs are kept for 30 days).`) on 404.
 
 # Phase 7 — Uptime
 

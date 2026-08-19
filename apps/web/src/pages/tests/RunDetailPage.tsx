@@ -25,6 +25,14 @@ import { formatDateTime, formatDuration } from "../../lib/format";
 
 export const reportNote =
   "The report describes what was observed. It contains no credentials and doesn't assert an unverified root cause.";
+export const draftValidationNote =
+  "This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.";
+export const expiredRunMessage =
+  "This run is no longer available (runs are kept for 30 days).";
+
+export function isMissingRun(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
 
 export function defaultExpandedAttemptId(attempts: AttemptSummary[]): string | null {
   return (
@@ -124,7 +132,14 @@ export default function RunDetailPage() {
       </div>
     );
   }
-  if (run.isError) return <ErrorState onRetry={() => void run.refetch()} />;
+  if (run.isError) {
+    return (
+      <ErrorState
+        message={isMissingRun(run.error) ? expiredRunMessage : undefined}
+        onRetry={() => void run.refetch()}
+      />
+    );
+  }
 
   const data: Run = run.data;
   const hasReport = data.status === "FAILED" || data.status === "TIMEOUT";
@@ -171,6 +186,13 @@ export default function RunDetailPage() {
         }
         title="Run"
       />
+
+      {data.testId === null ? (
+        <div className="flex items-start gap-2 rounded-lg border border-info-600/20 bg-info-50 p-4 text-sm text-zinc-700">
+          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-info-600" />
+          <p>{draftValidationNote}</p>
+        </div>
+      ) : null}
 
       <Card title="Progress">
         <RunStatusPanel runId={runId} wsId={current.id} />
