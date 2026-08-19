@@ -47,5 +47,12 @@ describe("uptime monitor sensitive configuration", () => {
       encryptedHeaders: null,
       encryptedBody: null,
     });
+    await expect(
+      readMonitorSensitive(
+        { encryptedHeaders: null, encryptedBody: null },
+        KEY,
+        false,
+      ),
+    ).resolves.toEqual({ headers: null, body: null, headersMasked: true });
   });
 });

@@ -1196,11 +1196,11 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Tests (fakes): example §26.6 exactly (fail then immediate retry passes → UP, no incident; all fail → DOWN + incident + alerts once); recovery closes + notifies; second DOWN cycle while incident open → event only; redelivery idempotent; deleted monitor mid-cycle → ack.
 
 ### BE-065: Monitor CRUD, test request, routes
-- [ ] `application/uptime/create_monitor.ts` (`uptime.manage` + subscription, rate `monitor_create` 30/h/ws): validate schema + channels belong to workspace → encrypt headers/body → `next_check_at = now + frequency_seconds * 1000` → insert + `setChannels` + audit `monitor.created`.
-- [ ] `update_monitor.ts` (re-encrypt when headers/body present; if `frequencySeconds` changed → `next_check_at = now + newFreq`; audit `monitor.updated`), `delete_monitor.ts` (soft-delete + resolve open incident with `MONITOR_DELETED` event + audit), `get_monitor.ts` / `list_monitors.ts` (any member; decrypt headers/body only for OWNER/ADMIN; attach `openIncidentId`, `checking: current_cycle_id !== null`).
-- [ ] `application/uptime/test_request.ts` (`uptime.manage`, rate `test_request` 30/h/ws): body = full monitor config (name optional) → run `executeCheck` inline → return the full `CheckOutcome` including per-condition details. **Never stored, never affects state, never consumes runs** (§18.10).
-- [ ] Routes: `GET /api/workspaces/:workspaceId/uptime-monitors`; `POST` 201; `GET/PATCH/DELETE .../uptime-monitors/:monitorId`; `POST /api/workspaces/:workspaceId/uptime-monitors/test-request`.
-- [ ] Tests: GET-with-body rejected 400; frequency not in enum 400; MEMBER gets masked headers; test-request returns condition detail and writes no rows.
+- [x] `application/uptime/create_monitor.ts` (`uptime.manage` + subscription, rate `monitor_create` 30/h/ws): validate schema + channels belong to workspace → encrypt headers/body → `next_check_at = now + frequency_seconds * 1000` → insert + `setChannels` + audit `monitor.created`.
+- [x] `update_monitor.ts` (re-encrypt when headers/body present; if `frequencySeconds` changed → `next_check_at = now + newFreq`; audit `monitor.updated`), `delete_monitor.ts` (soft-delete + resolve open incident with `MONITOR_DELETED` event + audit), `get_monitor.ts` / `list_monitors.ts` (any member; decrypt headers/body only for OWNER/ADMIN; attach `openIncidentId`, `checking: current_cycle_id !== null`).
+- [x] `application/uptime/test_request.ts` (`uptime.manage`, rate `test_request` 30/h/ws): body = full monitor config (name optional) → run `executeCheck` inline → return the full `CheckOutcome` including per-condition details. **Never stored, never affects state, never consumes runs** (§18.10).
+- [x] Routes: `GET /api/workspaces/:workspaceId/uptime-monitors`; `POST` 201; `GET/PATCH/DELETE .../uptime-monitors/:monitorId`; `POST /api/workspaces/:workspaceId/uptime-monitors/test-request`.
+- [x] Tests: GET-with-body rejected 400; frequency not in enum 400; MEMBER gets masked headers; test-request returns condition detail and writes no rows.
 
 ### BE-066: Uptime history & stats
 - [ ] `application/uptime/list_checks.ts` (any member, keyset on `checked_at`).

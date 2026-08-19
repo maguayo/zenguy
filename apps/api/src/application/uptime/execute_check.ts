@@ -261,6 +261,7 @@ function bodyCondition(
       };
     }
     case undefined:
+    case null:
       throw new Error("Body condition is not configured");
   }
 }
@@ -415,7 +416,7 @@ export async function executeCheck(
   });
   let bodyText: string | null = null;
   let bodyFailure: FailureReason | null = null;
-  if (monitorConfig.bodyCondition !== undefined) {
+  if (monitorConfig.bodyCondition != null) {
     let capped: CappedBody;
     try {
       capped = await readBodyCapped(response);

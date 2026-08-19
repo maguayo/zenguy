@@ -64,7 +64,7 @@ export async function readMonitorSensitive(
     return {
       headers: null,
       body: null,
-      headersMasked: monitor.encryptedHeaders !== null,
+      headersMasked: true,
     };
   }
   return {

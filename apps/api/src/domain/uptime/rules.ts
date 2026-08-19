@@ -26,7 +26,7 @@ const frequencySchema = z.number().int().refine(
   { message: "Unsupported uptime frequency" },
 );
 
-export const monitorConfigSchema = z
+const monitorConfigBaseSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     url: z.string().refine(safeExternalUrl, { message: "URL is not allowed" }),
@@ -36,71 +36,84 @@ export const monitorConfigSchema = z
     expectedStatus: z.number().int().min(100).max(599).default(200),
     bodyCondition: z
       .enum(["CONTAINS", "NOT_CONTAINS", "EQUALS", "JSON_PATH_EQUALS"])
-      .optional(),
-    bodyExpectedValue: z.string().max(2_048).optional(),
+      .nullish(),
+    bodyExpectedValue: z.string().max(2_048).nullish(),
     bodyConditionPath: z
       .string()
       .max(256)
       .regex(/^\$?\.?[A-Za-z0-9_.\[\]]+$/u)
-      .optional(),
+      .nullish(),
     frequencySeconds: frequencySchema,
     timeoutSeconds: z.number().int().min(1).max(30).default(10),
     maxRetries: z.number().int().min(0).max(3),
     notifyOnRecovery: z.boolean().default(true),
     channelIds: z.array(z.string()).max(10),
   })
-  .strict()
-  .superRefine((config, context) => {
-    if (
-      (config.method === "GET" || config.method === "HEAD") &&
-      config.body !== undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["body"],
-        message: `Body is not allowed for ${config.method}`,
-      });
-    }
-    if (
-      config.bodyCondition !== undefined &&
-      config.bodyExpectedValue === undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["bodyExpectedValue"],
-        message: "Required when bodyCondition is set",
-      });
-    }
-    if (
-      config.bodyCondition === undefined &&
-      config.bodyExpectedValue !== undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["bodyExpectedValue"],
-        message: "Requires bodyCondition",
-      });
-    }
-    if (
-      config.bodyCondition === "JSON_PATH_EQUALS" &&
-      config.bodyConditionPath === undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["bodyConditionPath"],
-        message: "Required for JSON_PATH_EQUALS",
-      });
-    }
-    if (
-      config.bodyCondition !== "JSON_PATH_EQUALS" &&
-      config.bodyConditionPath !== undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["bodyConditionPath"],
-        message: "Only allowed for JSON_PATH_EQUALS",
-      });
-    }
-  });
+  .strict();
+
+type MonitorConfigBase = z.infer<typeof monitorConfigBaseSchema>;
+
+function validateRelationships(
+  config: MonitorConfigBase,
+  context: z.RefinementCtx,
+): void {
+  if (
+    (config.method === "GET" || config.method === "HEAD") &&
+    config.body !== undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["body"],
+      message: `Body is not allowed for ${config.method}`,
+    });
+  }
+  if (config.bodyCondition != null && config.bodyExpectedValue == null) {
+    context.addIssue({
+      code: "custom",
+      path: ["bodyExpectedValue"],
+      message: "Required when bodyCondition is set",
+    });
+  }
+  if (config.bodyCondition == null && config.bodyExpectedValue != null) {
+    context.addIssue({
+      code: "custom",
+      path: ["bodyExpectedValue"],
+      message: "Requires bodyCondition",
+    });
+  }
+  if (
+    config.bodyCondition === "JSON_PATH_EQUALS" &&
+    config.bodyConditionPath == null
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["bodyConditionPath"],
+      message: "Required for JSON_PATH_EQUALS",
+    });
+  }
+  if (
+    config.bodyCondition !== "JSON_PATH_EQUALS" &&
+    config.bodyConditionPath != null
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["bodyConditionPath"],
+      message: "Only allowed for JSON_PATH_EQUALS",
+    });
+  }
+}
+
+export const monitorConfigSchema = monitorConfigBaseSchema.superRefine(
+  validateRelationships,
+);
+
+export const monitorConfigUpdateSchema = monitorConfigBaseSchema
+  .extend({
+    expectedStatus: z.number().int().min(100).max(599),
+    timeoutSeconds: z.number().int().min(1).max(30),
+    notifyOnRecovery: z.boolean(),
+  })
+  .partial();
 
 export type MonitorConfig = z.infer<typeof monitorConfigSchema>;
+export type MonitorConfigUpdate = z.infer<typeof monitorConfigUpdateSchema>;

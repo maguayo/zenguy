@@ -21,6 +21,11 @@ import type {
   IncidentEventRepo,
   IncidentRepo,
 } from "./domain/incidents/repo";
+import type { MonitorConfig } from "./domain/uptime/rules";
+import type { MonitorRepo } from "./domain/uptime/repo";
+import type { CheckOutcome } from "./application/uptime/execute_check";
+import { executeCheck } from "./application/uptime/execute_check";
+import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type {
   OverageReportRepo,
@@ -70,6 +75,7 @@ import { D1StepRepo } from "./infrastructure/db/step_repo";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
+import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
@@ -85,6 +91,7 @@ import { incidentRoutes } from "./http/routes/incidents";
 import { browserTestRoutes } from "./http/routes/browser_tests";
 import { artifactRoutes } from "./http/routes/artifacts";
 import { runEventRoutes } from "./http/routes/run_events";
+import { uptimeRoutes } from "./http/routes/uptime";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -121,6 +128,11 @@ export interface AppOverrides {
   artifactStorage?: Pick<ArtifactStorage, "put" | "get" | "delete">;
   incidents?: IncidentRepo;
   incidentEvents?: IncidentEventRepo;
+  monitors?: MonitorRepo;
+  uptimeCheckExecutor?: (
+    config: MonitorConfig,
+    workspaceId: string,
+  ) => Promise<CheckOutcome>;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   runQueue?: Pick<Queue<AttemptMessage>, "send">;
   paddleClient?: PaddleClient;
@@ -169,6 +181,19 @@ export function buildApp(
   const incidents = overrides.incidents ?? new D1IncidentRepo(env.DB);
   const incidentEvents =
     overrides.incidentEvents ?? new D1IncidentEventRepo(env.DB);
+  const monitors = overrides.monitors ?? new D1MonitorRepo(env.DB);
+  const uptimeCheckExecutor =
+    overrides.uptimeCheckExecutor ??
+    ((monitorConfig: MonitorConfig, workspaceId: string) =>
+      executeCheck(
+        {
+          fetchFn: (input, init) => globalThis.fetch(input, init),
+          clock,
+          resolveSecrets: new ResolveSecrets(secrets, config.encryptionKey),
+        },
+        monitorConfig,
+        workspaceId,
+      ));
   const incidentCloserOnTestDelete =
     overrides.incidentCloserOnTestDelete ??
     new CloseIncidentOnTestDelete(
@@ -317,6 +342,25 @@ export function buildApp(
       incidentEvents,
       deliveries,
       clock,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    uptimeRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      channels,
+      monitors,
+      incidents,
+      incidentEvents,
+      rateLimiter,
+      audit,
+      executeCheck: uptimeCheckExecutor,
+      clock,
+      ids: overrides.ids ?? realIds,
       config,
     }),
   );

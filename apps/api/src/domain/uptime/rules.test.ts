@@ -102,5 +102,13 @@ describe("monitorConfigSchema", () => {
     ]) {
       expect(monitorConfigSchema.safeParse(input).success).toBe(false);
     }
+    expect(
+      monitorConfigSchema.safeParse({
+        ...VALID,
+        bodyCondition: null,
+        bodyExpectedValue: null,
+        bodyConditionPath: null,
+      }).success,
+    ).toBe(true);
   });
 });
