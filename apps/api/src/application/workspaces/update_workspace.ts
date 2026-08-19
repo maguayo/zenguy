@@ -1,4 +1,5 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
+import type { SubscriptionRepo } from "../../domain/billing/repo";
 import { can } from "../../domain/workspaces/permissions";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Role, Workspace } from "../../domain/workspaces/types";
@@ -11,6 +12,7 @@ import { workspaceOutput, type WorkspaceOutput } from "./list_my_workspaces";
 
 export interface UpdateWorkspaceDependencies {
   workspaces: WorkspaceRepo;
+  subscriptions: SubscriptionRepo;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
 }
@@ -51,6 +53,13 @@ export class UpdateWorkspace {
       metadata: { changedFields: Object.keys(changes) },
       ip: input.ip,
     });
-    return workspaceOutput(updated, input.role);
+    const subscription = await this.dependencies.subscriptions.findByWorkspace(
+      updated.id,
+    );
+    return workspaceOutput(
+      updated,
+      input.role,
+      subscription?.status ?? "NONE",
+    );
   }
 }

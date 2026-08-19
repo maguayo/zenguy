@@ -1,3 +1,5 @@
+import type { SubscriptionRepo } from "../../domain/billing/repo";
+import type { SubscriptionStatus } from "../../domain/billing/types";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Role, Workspace } from "../../domain/workspaces/types";
 
@@ -7,13 +9,14 @@ export interface WorkspaceOutput {
   slug: string;
   timezone: string;
   role: Role;
-  subscriptionStatus: "NONE";
+  subscriptionStatus: SubscriptionStatus;
   createdAt: number;
 }
 
 export function workspaceOutput(
   workspace: Workspace,
   role: Role,
+  subscriptionStatus: SubscriptionStatus = "NONE",
 ): WorkspaceOutput {
   return {
     id: workspace.id,
@@ -21,17 +24,31 @@ export function workspaceOutput(
     slug: workspace.slug,
     timezone: workspace.timezone,
     role,
-    subscriptionStatus: "NONE",
+    subscriptionStatus,
     createdAt: workspace.createdAt,
   };
 }
 
 export class ListMyWorkspaces {
-  constructor(private readonly workspaces: WorkspaceRepo) {}
+  constructor(
+    private readonly workspaces: WorkspaceRepo,
+    private readonly subscriptions: SubscriptionRepo,
+  ) {}
 
   async execute(input: { userId: string }): Promise<WorkspaceOutput[]> {
-    return (await this.workspaces.listForUser(input.userId)).map(
-      ({ workspace, role }) => workspaceOutput(workspace, role),
+    return Promise.all(
+      (await this.workspaces.listForUser(input.userId)).map(
+        async ({ workspace, role }) => {
+          const subscription = await this.subscriptions.findByWorkspace(
+            workspace.id,
+          );
+          return workspaceOutput(
+            workspace,
+            role,
+            subscription?.status ?? "NONE",
+          );
+        },
+      ),
     );
   }
 }

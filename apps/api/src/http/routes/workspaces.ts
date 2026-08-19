@@ -8,6 +8,7 @@ import { TransferOwnership } from "../../application/workspaces/transfer_ownersh
 import { DeleteWorkspace } from "../../application/workspaces/delete_workspace";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { BillingCanceller } from "../../domain/billing/canceller";
+import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   InvitationRepo,
@@ -29,6 +30,7 @@ export interface WorkspaceRoutesDependencies {
   members: MemberRepo;
   invitations: InvitationRepo;
   billingCanceller: BillingCanceller;
+  subscriptions: SubscriptionRepo;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
@@ -64,8 +66,11 @@ export function workspaceRoutes(
   const verified = requireVerifiedEmail;
   const workspace = withWorkspace(dependencies);
   const createWorkspace = new CreateWorkspace(dependencies);
-  const listMyWorkspaces = new ListMyWorkspaces(dependencies.workspaces);
-  const getWorkspace = new GetWorkspace();
+  const listMyWorkspaces = new ListMyWorkspaces(
+    dependencies.workspaces,
+    dependencies.subscriptions,
+  );
+  const getWorkspace = new GetWorkspace(dependencies.subscriptions);
   const updateWorkspace = new UpdateWorkspace(dependencies);
   const transferOwnership = new TransferOwnership(
     dependencies.workspaces,
