@@ -190,8 +190,8 @@ export default defineConfig({
 > Shared chrome `AuthShell` component: centered column max-w-sm, wordmark `zenguy.` on top, card with the form, small footer links. Build it in FE-014 and reuse.
 
 ### FE-014: Sign in
-- [ ] `pages/auth/SignIn.tsx`: fields Email, Password (RHF + zod: email format, password required); submit → `signIn`; success → navigate to `state.next ?? "/"`. Errors: `INVALID_CREDENTIALS` → inline form error `Incorrect email or password.`; `RATE_LIMITED` → `Too many attempts. Try again in a moment.`; other → toast. Links: `Forgot password?` → `/forgot-password`; footer `Don't have an account? Sign up`.
-- [ ] `pages/auth/VerifyPending.tsx`: shown when signed in but unverified — `Verify your email` heading, `We sent a verification link to <email>.`, `Resend email` button (calls resend, then 60-s countdown disable), `Sign out` link. Auto-poll `me()` every 10 s → verified → navigate `/`.
+- [x] `pages/auth/SignIn.tsx`: fields Email, Password (RHF + zod: email format, password required); submit → `signIn`; success → navigate to `state.next ?? "/"`. Errors: `INVALID_CREDENTIALS` → inline form error `Incorrect email or password.`; `RATE_LIMITED` → `Too many attempts. Try again in a moment.`; other → toast. Links: `Forgot password?` → `/forgot-password`; footer `Don't have an account? Sign up`.
+- [x] `pages/auth/VerifyPending.tsx`: shown when signed in but unverified — `Verify your email` heading, `We sent a verification link to <email>.`, `Resend email` button (calls resend, then 60-s countdown disable), `Sign out` link. Auto-poll `me()` every 10 s → verified → navigate `/`.
 
 ### FE-015: Sign up
 - [ ] `pages/auth/SignUp.tsx`: Name, Email, Password, Confirm password (zod: min 8, confirm matches), required checkbox `I accept the Terms of Service and Privacy Policy` (plain links to `https://zenguy.com/terms` / `/privacy`). Submit → `register` → navigate `/check-email` passing the email via router state. `CONFLICT` → inline `An account with this email already exists.` + link to sign in.

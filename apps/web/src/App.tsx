@@ -32,14 +32,14 @@ const stub = (title: string) =>
     return { default: () => <StubPage title={title} /> };
   });
 
-const SignIn = stub("Sign in");
+const SignIn = lazy(() => import("./pages/auth/SignIn"));
 const SignUp = stub("Sign up");
 const CheckEmail = stub("Check your inbox");
 const VerifyEmail = stub("Verify email");
 const ForgotPassword = stub("Forgot password");
 const ResetPassword = stub("Reset password");
 const AcceptInvitation = stub("Invitation");
-const VerifyPending = stub("Verify your email");
+const VerifyPending = lazy(() => import("./pages/auth/VerifyPending"));
 const CreateWorkspace = stub("Create your workspace");
 const BillingSetup = stub("Set up billing");
 const OverviewPage = stub("Overview");
