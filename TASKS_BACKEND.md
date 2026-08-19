@@ -1170,8 +1170,8 @@ CREATE INDEX idx_checks_monitor_time ON uptime_checks(uptime_monitor_id, checked
 - [x] D1 impls + fakes + `.itest.ts`: claimDue skips open cycles; openCycle races (second call changes 0 rows); check idempotency; series ordering.
 
 ### BE-063: Check executor
-- [ ] Create `apps/api/src/shared/jsonpath.ts`: `getJsonPath(root: unknown, path: string): { found: boolean; value: unknown }` supporting `$.a.b[0].c` / `a.b[0].c` (dot segments + numeric brackets only). Tests: nested objects/arrays, missing segment, index out of range, `$` prefix optional.
-- [ ] Create `application/uptime/execute_check.ts` — `executeCheck(deps { fetchFn, clock, resolveSecrets }, monitorConfig, workspaceId): Promise<CheckOutcome>`:
+- [x] Create `apps/api/src/shared/jsonpath.ts`: `getJsonPath(root: unknown, path: string): { found: boolean; value: unknown }` supporting `$.a.b[0].c` / `a.b[0].c` (dot segments + numeric brackets only). Tests: nested objects/arrays, missing segment, index out of range, `$` prefix optional.
+- [x] Create `application/uptime/execute_check.ts` — `executeCheck(deps { fetchFn, clock, resolveSecrets }, monitorConfig, workspaceId): Promise<CheckOutcome>`:
 ```ts
 type CheckOutcome = { status: "PASSED" | "FAILED"; httpStatus: number | null; responseTimeMs: number; failureReason: FailureReason | null; responseExcerpt: string | null; conditions: { type: string; passed: boolean; detail: string }[] };
 type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BODY_MISMATCH" | "JSON_INVALID" | "JSON_PATH_MISSING" | "TOO_MANY_REDIRECTS" | "UNSAFE_REDIRECT" | "RESPONSE_TOO_LARGE" | "BLOCKED_URL" | "SECRET_DOMAIN_NOT_ALLOWED" | "UNKNOWN_SECRET";
@@ -1182,7 +1182,7 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
   4. Errors: `AbortError`/timeout → TIMEOUT; `TypeError`/network → CONNECTION_ERROR (Workers cannot distinguish DNS/TLS reliably — one bucket, comment it).
   5. Conditions (ALL must pass, §14.6): status === expectedStatus (else UNEXPECTED_STATUS, detail `expected 200, got 503`); body conditions read body streamed with cap `UPTIME_BODY_CAP = 524288` bytes (over cap with a body condition configured → RESPONSE_TOO_LARGE; without body condition the body is not read at all): CONTAINS / NOT_CONTAINS / EQUALS (trimmed) / JSON_PATH_EQUALS (`JSON.parse` fail → JSON_INVALID; path missing → JSON_PATH_MISSING; compare: scalars via `String(value) === expected`, non-scalars via `JSON.stringify(value) === expected`).
   6. `responseExcerpt`: first `UPTIME_EXCERPT_MAX = 2048` chars of body (when read), through the monitor's `Redactor` + `sanitizeUrl` for embedded URLs — stored only on FAILED checks; null on PASSED.
-- [ ] Tests (fake fetch): every failure reason has a test; redirect hop revalidation + header-drop on cross-host + GET-downgrade; body cap; all-conditions-must-pass; secret in header substituted for allowed domain and refused otherwise; excerpt redacted.
+- [x] Tests (fake fetch): every failure reason has a test; redirect hop revalidation + header-drop on cross-host + GET-downgrade; body cap; all-conditions-must-pass; secret in header substituted for allowed domain and refused otherwise; excerpt redacted.
 
 ### BE-064: Check cycle orchestration (queue consumer)
 - [ ] Add `CheckMessage = { kind: "check"; monitorId: string; workspaceId: string; cycleId: string; attemptIndex: number }` to `domain/queues.ts`.
