@@ -140,3 +140,19 @@ export interface RunSummaryRow {
   billable: boolean;
   createdAt: number;
 }
+
+export interface LatestStepSummary {
+  description: string;
+  actionType: string;
+  timestamp: number;
+}
+
+export interface LatestScreenshotSummary {
+  id: string;
+}
+
+export interface AttemptWithLatest {
+  attempt: TestAttempt;
+  latestStep: LatestStepSummary | null;
+  latestScreenshot: LatestScreenshotSummary | null;
+}

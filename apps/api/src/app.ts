@@ -8,8 +8,11 @@ import type {
   DeliveryRepo,
 } from "./domain/channels/repo";
 import type {
+  ArtifactRepo,
+  AttemptRepo,
   BrowserTestRepo,
   RunRepo,
+  StepRepo,
 } from "./domain/browser_tests/repo";
 import type { AttemptMessage } from "./domain/queues";
 import type { IncidentCloserOnDelete } from "./application/browser_tests/incident_closer";
@@ -58,6 +61,10 @@ import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
 import { D1RunRepo } from "./infrastructure/db/run_repo";
+import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
+import { D1StepRepo } from "./infrastructure/db/step_repo";
+import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
+import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
   HttpPaddleClient,
@@ -69,6 +76,7 @@ import { billingRoutes } from "./http/routes/billing";
 import { secretRoutes } from "./http/routes/secrets";
 import { channelRoutes } from "./http/routes/channels";
 import { browserTestRoutes } from "./http/routes/browser_tests";
+import { artifactRoutes } from "./http/routes/artifacts";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import type { Clock } from "./shared/clock";
@@ -99,6 +107,10 @@ export interface AppOverrides {
   channelSender?: ChannelSender;
   browserTests?: BrowserTestRepo;
   runs?: RunRepo;
+  attempts?: AttemptRepo;
+  steps?: StepRepo;
+  artifacts?: ArtifactRepo;
+  artifactStorage?: Pick<ArtifactStorage, "put" | "get" | "delete">;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   runQueue?: Pick<Queue<AttemptMessage>, "send">;
   paddleClient?: PaddleClient;
@@ -139,6 +151,11 @@ export function buildApp(
   const browserTests =
     overrides.browserTests ?? new D1BrowserTestRepo(env.DB);
   const runs = overrides.runs ?? new D1RunRepo(env.DB);
+  const attempts = overrides.attempts ?? new D1AttemptRepo(env.DB);
+  const steps = overrides.steps ?? new D1StepRepo(env.DB);
+  const artifacts = overrides.artifacts ?? new D1ArtifactRepo(env.DB);
+  const artifactStorage =
+    overrides.artifactStorage ?? new ArtifactStorage(env.ARTIFACTS);
   const incidentCloserOnTestDelete =
     overrides.incidentCloserOnTestDelete ?? new NoopIncidentCloserOnDelete();
   const paddleClient =
@@ -168,6 +185,10 @@ export function buildApp(
   app.onError(errorHandler);
 
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));
+  app.route(
+    "/api",
+    artifactRoutes({ artifacts, storage: artifactStorage, clock, config }),
+  );
   app.route(
     "/api/auth",
     authRoutes({
@@ -274,6 +295,10 @@ export function buildApp(
       channels,
       tests: browserTests,
       runs,
+      attempts,
+      steps,
+      artifacts,
+      artifactStorage,
       incidents: incidentCloserOnTestDelete,
       runQueue:
         overrides.runQueue ??

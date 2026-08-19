@@ -3,16 +3,23 @@ import type { WriteAudit } from "../../application/audit/write_audit";
 import { CreateBrowserTest } from "../../application/browser_tests/create_browser_test";
 import { CreateRun } from "../../application/browser_tests/create_run";
 import { DeleteBrowserTest } from "../../application/browser_tests/delete_browser_test";
+import { DownloadReport } from "../../application/browser_tests/download_report";
+import { GetAttempt } from "../../application/browser_tests/get_attempt";
 import { GetBrowserTest } from "../../application/browser_tests/get_browser_test";
+import { GetRun } from "../../application/browser_tests/get_run";
 import type { IncidentCloserOnDelete } from "../../application/browser_tests/incident_closer";
 import { ListBrowserTests } from "../../application/browser_tests/list_browser_tests";
+import { ListRuns } from "../../application/browser_tests/list_runs";
 import { RunNow } from "../../application/browser_tests/run_now";
 import { UpdateBrowserTest } from "../../application/browser_tests/update_browser_test";
 import { ValidateDraft } from "../../application/browser_tests/validate_draft";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
+  ArtifactRepo,
+  AttemptRepo,
   BrowserTestRepo,
   RunRepo,
+  StepRepo,
 } from "../../domain/browser_tests/repo";
 import { browserTestConfigSchema } from "../../domain/browser_tests/rules";
 import type { ChannelRepo } from "../../domain/channels/repo";
@@ -24,14 +31,21 @@ import type {
 } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
+import type { ArtifactStorage } from "../../infrastructure/storage/artifacts";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
+import { z } from "zod";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireActiveSubscription } from "../middleware/require_subscription";
 import { requireAction, withWorkspace } from "../middleware/workspace";
 import { presentBrowserTest } from "../presenters/browser_test";
-import { zjson } from "../validate";
+import {
+  presentAttempt,
+  presentRun,
+  presentRunListItem,
+} from "../presenters/run";
+import { zjson, zquery } from "../validate";
 
 export interface BrowserTestRoutesDependencies {
   users: UserRepo;
@@ -41,19 +55,40 @@ export interface BrowserTestRoutesDependencies {
   channels: ChannelRepo;
   tests: BrowserTestRepo;
   runs: RunRepo;
+  attempts: AttemptRepo;
+  steps: StepRepo;
+  artifacts: ArtifactRepo;
+  artifactStorage: Pick<ArtifactStorage, "get">;
   incidents: IncidentCloserOnDelete;
   runQueue: Pick<Queue<AttemptMessage>, "send">;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret" | "llmModel">;
+  config: Pick<
+    AppConfig,
+    "jwtSecret" | "llmModel" | "artifactUrlSecret"
+  >;
 }
 
 const updateSchema = browserTestConfigSchema.partial().refine(
   (value) => Object.keys(value).length > 0,
   { message: "At least one field is required" },
 );
+
+const runStatusSchema = z.enum([
+  "QUEUED",
+  "RUNNING",
+  "PASSED",
+  "FAILED",
+  "TIMEOUT",
+  "SYSTEM_ERROR",
+]);
+const runsQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  status: runStatusSchema.optional(),
+});
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -101,6 +136,34 @@ export function browserTestRoutes(
     dependencies.tests,
     dependencies.runs,
     dependencies.users,
+  );
+  const listRuns = new ListRuns(
+    dependencies.tests,
+    dependencies.runs,
+    dependencies.users,
+  );
+  const getRun = new GetRun(
+    dependencies.runs,
+    dependencies.attempts,
+    dependencies.users,
+    dependencies.config,
+    dependencies.clock,
+  );
+  const getAttempt = new GetAttempt(
+    dependencies.attempts,
+    dependencies.runs,
+    dependencies.steps,
+    dependencies.artifacts,
+    dependencies.config,
+    dependencies.clock,
+  );
+  const downloadReport = new DownloadReport(
+    dependencies.runs,
+    dependencies.artifacts,
+    dependencies.artifactStorage,
+    dependencies.rateLimiter,
+    dependencies.config,
+    dependencies.clock,
   );
   const createRun = new CreateRun(
     dependencies.tests,
@@ -154,6 +217,75 @@ export function browserTestRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentBrowserTest(result) }, 201);
+    },
+  );
+
+  app.get(
+    "/:workspaceId/browser-tests/:testId/runs",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    zquery(runsQuerySchema),
+    async (context) => {
+      const query = context.req.valid("query");
+      const result = await listRuns.execute({
+        workspaceId: context.get("workspace").id,
+        testId: context.req.param("testId"),
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        limit: query.limit,
+        ...(query.status === undefined ? {} : { status: query.status }),
+      });
+      return context.json({
+        data: result.runs.map(presentRunListItem),
+        nextCursor: result.nextCursor,
+      });
+    },
+  );
+
+  app.get(
+    "/:workspaceId/runs/:runId/report",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    async (context) => {
+      const result = await downloadReport.execute({
+        workspaceId: context.get("workspace").id,
+        runId: context.req.param("runId"),
+      });
+      return new Response(result.markdown, {
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${result.filename}"`,
+        },
+      });
+    },
+  );
+
+  app.get(
+    "/:workspaceId/runs/:runId",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    async (context) => {
+      const result = await getRun.execute({
+        workspaceId: context.get("workspace").id,
+        runId: context.req.param("runId"),
+      });
+      return context.json({ data: presentRun(result) });
+    },
+  );
+
+  app.get(
+    "/:workspaceId/attempts/:attemptId",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    async (context) => {
+      const result = await getAttempt.execute({
+        workspaceId: context.get("workspace").id,
+        attemptId: context.req.param("attemptId"),
+      });
+      return context.json({ data: presentAttempt(result) });
     },
   );
 

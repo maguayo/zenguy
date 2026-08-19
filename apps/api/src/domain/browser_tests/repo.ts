@@ -2,6 +2,7 @@ import type { Cursor } from "../../shared/pagination";
 import type {
   ArtifactType,
   AttemptStatus,
+  AttemptWithLatest,
   BrowserTest,
   ClaimedBrowserTest,
   Device,
@@ -101,6 +102,7 @@ export interface AttemptRepo {
     attemptIndex: number,
   ): Promise<TestAttempt | null>;
   listForRun(runId: string): Promise<TestAttempt[]>;
+  listForRunWithLatest(runId: string): Promise<AttemptWithLatest[]>;
   update(id: string, fields: AttemptUpdate): Promise<void>;
   resetForInfraRetry(id: string, queuedAt: number): Promise<void>;
   listStale(before: number): Promise<TestAttempt[]>;

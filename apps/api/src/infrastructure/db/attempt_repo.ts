@@ -4,6 +4,7 @@ import type {
 } from "../../domain/browser_tests/repo";
 import type {
   AttemptStatus,
+  AttemptWithLatest,
   TestAttempt,
 } from "../../domain/browser_tests/types";
 import { all, one, run } from "./d1";
@@ -132,6 +133,66 @@ export class D1AttemptRepo implements AttemptRepo {
           .bind(runId),
       )
     ).map(toAttempt);
+  }
+
+  async listForRunWithLatest(runId: string): Promise<AttemptWithLatest[]> {
+    const rows = await all<
+      AttemptRow & {
+        latest_step_description: string | null;
+        latest_step_action_type: string | null;
+        latest_step_timestamp: number | null;
+        latest_screenshot_id: string | null;
+      }
+    >(
+      this.database
+        .prepare(
+          `WITH latest_steps AS (
+             SELECT attempt_id, description, action_type, timestamp,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY attempt_id ORDER BY sequence DESC, id DESC
+                    ) AS row_number
+             FROM run_steps
+           ), latest_screenshots AS (
+             SELECT attempt_id, id,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY attempt_id ORDER BY created_at DESC, id DESC
+                    ) AS row_number
+             FROM run_artifacts
+             WHERE type = 'SCREENSHOT' AND attempt_id IS NOT NULL
+           )
+           SELECT attempts.*,
+                  steps.description AS latest_step_description,
+                  steps.action_type AS latest_step_action_type,
+                  steps.timestamp AS latest_step_timestamp,
+                  screenshots.id AS latest_screenshot_id
+           FROM test_attempts AS attempts
+           LEFT JOIN latest_steps AS steps
+             ON steps.attempt_id = attempts.id AND steps.row_number = 1
+           LEFT JOIN latest_screenshots AS screenshots
+             ON screenshots.attempt_id = attempts.id
+            AND screenshots.row_number = 1
+           WHERE attempts.test_run_id = ?
+           ORDER BY attempts.attempt_index ASC`,
+        )
+        .bind(runId),
+    );
+    return rows.map((row) => ({
+      attempt: toAttempt(row),
+      latestStep:
+        row.latest_step_description === null ||
+        row.latest_step_action_type === null ||
+        row.latest_step_timestamp === null
+          ? null
+          : {
+              description: row.latest_step_description,
+              actionType: row.latest_step_action_type,
+              timestamp: row.latest_step_timestamp,
+            },
+      latestScreenshot:
+        row.latest_screenshot_id === null
+          ? null
+          : { id: row.latest_screenshot_id },
+    }));
   }
 
   async update(id: string, fields: AttemptUpdate): Promise<void> {

@@ -11,6 +11,7 @@ import type {
 import type {
   BrowserTest,
   ClaimedBrowserTest,
+  AttemptWithLatest,
   RunArtifact,
   RunStatus,
   RunStep,
@@ -302,6 +303,10 @@ export class FakeRunRepo implements RunRepo {
 
 export class FakeAttemptRepo implements AttemptRepo {
   readonly attempts = new Map<string, TestAttempt>();
+  readonly latest = new Map<
+    string,
+    Pick<AttemptWithLatest, "latestStep" | "latestScreenshot">
+  >();
 
   async insert(attempt: TestAttempt): Promise<void> {
     if (
@@ -339,6 +344,16 @@ export class FakeAttemptRepo implements AttemptRepo {
       .filter((attempt) => attempt.testRunId === runId)
       .sort((left, right) => left.attemptIndex - right.attemptIndex)
       .map(copy);
+  }
+
+  async listForRunWithLatest(runId: string): Promise<AttemptWithLatest[]> {
+    return (await this.listForRun(runId)).map((attempt) => ({
+      attempt,
+      latestStep: copy(this.latest.get(attempt.id)?.latestStep ?? null),
+      latestScreenshot: copy(
+        this.latest.get(attempt.id)?.latestScreenshot ?? null,
+      ),
+    }));
   }
 
   async update(id: string, fields: AttemptUpdate): Promise<void> {
