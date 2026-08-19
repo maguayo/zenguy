@@ -76,6 +76,25 @@ export class FakeIncidentRepo implements IncidentRepo {
     return incident === undefined ? null : copy(incident);
   }
 
+  async listOverlappingMonitor(
+    monitorId: string,
+    fromMs: number,
+    toMs: number,
+  ): Promise<Incident[]> {
+    return [...this.incidents.values()]
+      .filter(
+        (incident) =>
+          incident.uptimeMonitorId === monitorId &&
+          incident.openedAt < toMs &&
+          (incident.resolvedAt === null || incident.resolvedAt > fromMs),
+      )
+      .sort(
+        (left, right) =>
+          left.openedAt - right.openedAt || left.id.localeCompare(right.id),
+      )
+      .map(copy);
+  }
+
   async findById(
     workspaceId: string,
     id: string,

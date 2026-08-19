@@ -173,6 +173,44 @@ describe("D1 incident repositories", () => {
     expect(count?.count).toBe(2);
   });
 
+  it("finds only monitor incidents that overlap a requested window", async () => {
+    const repo = new D1IncidentRepo(testEnv().DB);
+    const before = testIncident({
+      id: "inc_before_window",
+      monitorId: "mon_overlap",
+      openedAt: 100,
+    });
+    await repo.insertOpen(before);
+    await repo.resolve(before.id, 199, { checkId: "chk_before" });
+    const leftEdge = testIncident({
+      id: "inc_left_edge",
+      monitorId: "mon_overlap",
+      openedAt: 150,
+    });
+    await repo.insertOpen(leftEdge);
+    await repo.resolve(leftEdge.id, 250, { checkId: "chk_edge" });
+    const open = testIncident({
+      id: "inc_open_overlap",
+      monitorId: "mon_overlap",
+      openedAt: 350,
+    });
+    await repo.insertOpen(open);
+    await repo.insertOpen(
+      testIncident({
+        id: "inc_other_monitor",
+        monitorId: "mon_other",
+        openedAt: 300,
+      }),
+    );
+
+    await expect(
+      repo.listOverlappingMonitor("mon_overlap", 200, 400),
+    ).resolves.toMatchObject([
+      { id: leftEdge.id, resolvedAt: 250 },
+      { id: open.id, resolvedAt: null },
+    ]);
+  });
+
   it("round-trips incident events in deterministic timeline order", async () => {
     const repo = new D1IncidentEventRepo(testEnv().DB);
     const later = event("evt_z", "inc_timeline", 200);

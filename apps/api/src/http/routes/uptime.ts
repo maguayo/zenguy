@@ -5,7 +5,9 @@ import { CreateMonitor } from "../../application/uptime/create_monitor";
 import { DeleteMonitor } from "../../application/uptime/delete_monitor";
 import type { CheckOutcome } from "../../application/uptime/execute_check";
 import { GetMonitor } from "../../application/uptime/get_monitor";
+import { GetMonitorStats } from "../../application/uptime/get_monitor_stats";
 import { ListMonitors } from "../../application/uptime/list_monitors";
+import { ListChecks } from "../../application/uptime/list_checks";
 import { TestRequest } from "../../application/uptime/test_request";
 import { UpdateMonitor } from "../../application/uptime/update_monitor";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
@@ -19,7 +21,7 @@ import {
   monitorConfigUpdateSchema,
   type MonitorConfig,
 } from "../../domain/uptime/rules";
-import type { MonitorRepo } from "../../domain/uptime/repo";
+import type { CheckRepo, MonitorRepo } from "../../domain/uptime/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   MemberRepo,
@@ -33,8 +35,12 @@ import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireActiveSubscription } from "../middleware/require_subscription";
 import { requireAction, withWorkspace } from "../middleware/workspace";
-import { presentMonitor } from "../presenters/uptime";
-import { zjson } from "../validate";
+import {
+  presentCheck,
+  presentMonitor,
+  presentMonitorStats,
+} from "../presenters/uptime";
+import { zjson, zquery } from "../validate";
 
 export interface UptimeRoutesDependencies {
   users: UserRepo;
@@ -43,6 +49,7 @@ export interface UptimeRoutesDependencies {
   subscriptions: SubscriptionRepo;
   channels: ChannelRepo;
   monitors: MonitorRepo;
+  checks: CheckRepo;
   incidents: IncidentRepo;
   incidentEvents: IncidentEventRepo;
   rateLimiter: RateLimiter;
@@ -60,6 +67,10 @@ const updateSchema = monitorConfigUpdateSchema.refine(
   (value) => Object.keys(value).length > 0,
   { message: "At least one field is required" },
 );
+const checksQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+});
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -114,6 +125,13 @@ export function uptimeRoutes(
     dependencies.incidents,
     dependencies.users,
     dependencies.config.encryptionKey,
+  );
+  const listChecks = new ListChecks(dependencies.monitors, dependencies.checks);
+  const getMonitorStats = new GetMonitorStats(
+    dependencies.monitors,
+    dependencies.checks,
+    dependencies.incidents,
+    dependencies.clock,
   );
   const testRequest = new TestRequest(
     dependencies.channels,
@@ -172,6 +190,41 @@ export function uptimeRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentMonitor(result) }, 201);
+    },
+  );
+
+  app.get(
+    "/:workspaceId/uptime-monitors/:monitorId/checks",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    zquery(checksQuerySchema),
+    async (context) => {
+      const query = context.req.valid("query");
+      const result = await listChecks.execute({
+        workspaceId: context.get("workspace").id,
+        monitorId: context.req.param("monitorId"),
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        limit: query.limit,
+      });
+      return context.json({
+        data: result.checks.map(presentCheck),
+        nextCursor: result.nextCursor,
+      });
+    },
+  );
+
+  app.get(
+    "/:workspaceId/uptime-monitors/:monitorId/stats",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    async (context) => {
+      const result = await getMonitorStats.execute({
+        workspaceId: context.get("workspace").id,
+        monitorId: context.req.param("monitorId"),
+      });
+      return context.json({ data: presentMonitorStats(result) });
     },
   );
 

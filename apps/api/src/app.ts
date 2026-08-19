@@ -22,7 +22,7 @@ import type {
   IncidentRepo,
 } from "./domain/incidents/repo";
 import type { MonitorConfig } from "./domain/uptime/rules";
-import type { MonitorRepo } from "./domain/uptime/repo";
+import type { CheckRepo, MonitorRepo } from "./domain/uptime/repo";
 import type { CheckOutcome } from "./application/uptime/execute_check";
 import { executeCheck } from "./application/uptime/execute_check";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
@@ -76,6 +76,7 @@ import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
+import { D1CheckRepo } from "./infrastructure/db/check_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
 import {
@@ -129,6 +130,7 @@ export interface AppOverrides {
   incidents?: IncidentRepo;
   incidentEvents?: IncidentEventRepo;
   monitors?: MonitorRepo;
+  checks?: CheckRepo;
   uptimeCheckExecutor?: (
     config: MonitorConfig,
     workspaceId: string,
@@ -182,6 +184,7 @@ export function buildApp(
   const incidentEvents =
     overrides.incidentEvents ?? new D1IncidentEventRepo(env.DB);
   const monitors = overrides.monitors ?? new D1MonitorRepo(env.DB);
+  const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const uptimeCheckExecutor =
     overrides.uptimeCheckExecutor ??
     ((monitorConfig: MonitorConfig, workspaceId: string) =>
@@ -354,6 +357,7 @@ export function buildApp(
       subscriptions,
       channels,
       monitors,
+      checks,
       incidents,
       incidentEvents,
       rateLimiter,

@@ -11,6 +11,11 @@ export interface IncidentRepo {
   insertOpen(incident: Incident): Promise<Incident>;
   findOpenForTest(testId: string): Promise<Incident | null>;
   findOpenForMonitor(monitorId: string): Promise<Incident | null>;
+  listOverlappingMonitor(
+    monitorId: string,
+    fromMs: number,
+    toMs: number,
+  ): Promise<Incident[]>;
   findById(
     workspaceId: string,
     id: string,

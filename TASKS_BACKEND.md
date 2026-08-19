@@ -1203,12 +1203,12 @@ type FailureReason = "TIMEOUT" | "CONNECTION_ERROR" | "UNEXPECTED_STATUS" | "BOD
 - [x] Tests: GET-with-body rejected 400; frequency not in enum 400; MEMBER gets masked headers; test-request returns condition detail and writes no rows.
 
 ### BE-066: Uptime history & stats
-- [ ] `application/uptime/list_checks.ts` (any member, keyset on `checked_at`).
-- [ ] `application/uptime/get_monitor_stats.ts`: 
+- [x] `application/uptime/list_checks.ts` (any member, keyset on `checked_at`).
+- [x] `application/uptime/get_monitor_stats.ts`:
   - Uptime % per window (24h/7d/30d): downtime = sum of overlap between the window and each incident interval (`opened_at`..`resolved_at ?? now`) for this monitor (fetch incidents overlapping window, compute overlap in TS); `uptimePct = 100 * (window - downtime) / window` rounded to 2 decimals; `null` when the monitor is younger than the window start and has zero checks in it.
   - `avgResponseTimeMs24h` from `avgResponseTime`; `series` = checks last 24 h `{ t: checked_at ISO, responseTimeMs, status }`, downsampled evenly to ≤ 288 points.
-- [ ] Routes: `GET .../uptime-monitors/:monitorId/checks?cursor&limit`; `GET .../uptime-monitors/:monitorId/stats`.
-- [ ] Tests: overlap math (incident spanning window edge; open incident ongoing; multiple incidents); downsampling; young-monitor nulls.
+- [x] Routes: `GET .../uptime-monitors/:monitorId/checks?cursor&limit`; `GET .../uptime-monitors/:monitorId/stats`.
+- [x] Tests: overlap math (incident spanning window edge; open incident ongoing; multiple incidents); downsampling; young-monitor nulls.
 
 # Phase 11 — Scheduler & maintenance crons
 

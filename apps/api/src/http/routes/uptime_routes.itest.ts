@@ -5,6 +5,7 @@ import type { Subscription } from "../../domain/billing/types";
 import type { NotificationChannel } from "../../domain/channels/types";
 import type { Incident } from "../../domain/incidents/types";
 import type { MonitorConfig } from "../../domain/uptime/rules";
+import type { UptimeCheck } from "../../domain/uptime/types";
 import type { User } from "../../domain/users/types";
 import type { Role, Workspace } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
@@ -385,5 +386,83 @@ describe("uptime monitor routes", () => {
       )
       .first<{ monitors: number; checks: number }>();
     expect(counts).toEqual({ monitors: 0, checks: 0 });
+  });
+
+  it("lists member-visible check history with a keyset cursor and returns stats", async () => {
+    const created = await create();
+    const monitorId = ((await created.json()) as { data: { id: string } }).data.id;
+    const values: UptimeCheck[] = [300, 200, 100].map((responseTimeMs, index) => ({
+      id: `chk_routes_${index}`,
+      workspaceId: WORKSPACE.id,
+      uptimeMonitorId: monitorId,
+      cycleId: `cyc_routes_${index}`,
+      attemptIndex: 0,
+      status: "PASSED",
+      httpStatus: 200,
+      responseTimeMs,
+      failureReason: null,
+      responseExcerpt: `private excerpt ${index}`,
+      checkedAt: NOW - (index + 1) * 1_000,
+      createdAt: NOW - (index + 1) * 1_000,
+    }));
+    for (const value of values) await checks.insertIfAbsent(value);
+
+    const first = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors/${monitorId}/checks?limit=2`,
+      { headers: headers("member") },
+    );
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      data: { id: string; checkedAt: string }[];
+      nextCursor: string | null;
+    };
+    expect(firstBody.data).toEqual([
+      expect.objectContaining({
+        id: "chk_routes_0",
+        checkedAt: new Date(NOW - 1_000).toISOString(),
+      }),
+      expect.objectContaining({ id: "chk_routes_1" }),
+    ]);
+    expect(firstBody.data[0]).not.toHaveProperty("responseExcerpt");
+    expect(firstBody.nextCursor).not.toBeNull();
+    const second = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors/${monitorId}/checks?limit=2&cursor=${encodeURIComponent(firstBody.nextCursor as string)}`,
+      { headers: headers("member") },
+    );
+    await expect(second.json()).resolves.toMatchObject({
+      data: [{ id: "chk_routes_2" }],
+      nextCursor: null,
+    });
+
+    const stats = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors/${monitorId}/stats`,
+      { headers: headers("member") },
+    );
+    expect(stats.status).toBe(200);
+    await expect(stats.json()).resolves.toEqual({
+      data: {
+        uptime24h: 100,
+        uptime7d: 100,
+        uptime30d: 100,
+        avgResponseTimeMs24h: 200,
+        series: [
+          {
+            t: new Date(NOW - 3_000).toISOString(),
+            responseTimeMs: 100,
+            status: "PASSED",
+          },
+          {
+            t: new Date(NOW - 2_000).toISOString(),
+            responseTimeMs: 200,
+            status: "PASSED",
+          },
+          {
+            t: new Date(NOW - 1_000).toISOString(),
+            responseTimeMs: 300,
+            status: "PASSED",
+          },
+        ],
+      },
+    });
   });
 });
