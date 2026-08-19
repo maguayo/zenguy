@@ -9,8 +9,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
+import { ChevronRight } from "lucide-react";
 
 export interface DropdownItem {
+  children?: DropdownItem[];
   description?: string;
   disabled?: boolean;
   icon?: ReactNode;
@@ -52,6 +54,7 @@ export function Dropdown({
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [submenuIndex, setSubmenuIndex] = useState<number | null>(null);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 176 });
 
   const triggerElement = () =>
@@ -91,8 +94,20 @@ export function Dropdown({
     };
   }, [align, open]);
 
+  useEffect(() => {
+    if (!open) setSubmenuIndex(null);
+  }, [open]);
+
   const focusItem = (index: number) => {
-    menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[index]?.focus();
+    menuRef.current
+      ?.querySelectorAll<HTMLButtonElement>('[data-dropdown-root-item="true"]')
+      [index]?.focus();
+  };
+
+  const focusSubmenuItem = (index: number, childIndex = 0) => {
+    menuRef.current
+      ?.querySelectorAll<HTMLButtonElement>(`[data-dropdown-submenu="${index}"]`)
+      [childIndex]?.focus();
   };
 
   const openAndFocus = (direction: 1 | -1) => {
@@ -132,13 +147,15 @@ export function Dropdown({
             <div
               ref={menuRef}
               aria-labelledby={menuId}
-              className="fixed z-[60] overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
+              className="fixed z-[60] rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
               id={menuId}
               role="menu"
               style={{ left: position.left, top: position.top, width: position.width }}
               onKeyDown={(event) => {
                 const buttons = Array.from(
-                  menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+                  menuRef.current?.querySelectorAll<HTMLButtonElement>(
+                    '[data-dropdown-root-item="true"]',
+                  ) ?? [],
                 );
                 const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
                 if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -151,13 +168,32 @@ export function Dropdown({
                   event.preventDefault();
                   setOpen(false);
                   triggerElement()?.focus();
+                } else if (event.key === "ArrowRight" && current >= 0) {
+                  const children = items[current]?.children;
+                  if (children?.length) {
+                    event.preventDefault();
+                    setSubmenuIndex(current);
+                    requestAnimationFrame(() =>
+                      focusSubmenuItem(current, nextMenuIndex(-1, 1, children)),
+                    );
+                  }
+                } else if (event.key === "ArrowLeft" && submenuIndex !== null) {
+                  event.preventDefault();
+                  setSubmenuIndex(null);
+                  focusItem(submenuIndex);
                 }
               }}
             >
               {items.map((item, index) => (
                 <div
                   key={`${item.label}-${index}`}
-                  className={item.separatorBefore ? "mt-1 border-t border-zinc-200 pt-1" : undefined}
+                  className={clsx(
+                    "relative",
+                    item.separatorBefore && "mt-1 border-t border-zinc-200 pt-1",
+                  )}
+                  onMouseEnter={() => {
+                    if (item.children?.length) setSubmenuIndex(index);
+                  }}
                 >
                   <button
                     className={clsx(
@@ -165,10 +201,23 @@ export function Dropdown({
                       item.tone === "danger" ? "text-danger-700" : "text-zinc-700",
                     )}
                     disabled={item.disabled}
+                    aria-expanded={item.children?.length ? submenuIndex === index : undefined}
+                    aria-haspopup={item.children?.length ? "menu" : undefined}
+                    data-dropdown-root-item="true"
                     role="menuitem"
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (item.children?.length) {
+                        setSubmenuIndex(index);
+                        requestAnimationFrame(() =>
+                          focusSubmenuItem(
+                            index,
+                            nextMenuIndex(-1, 1, item.children ?? []),
+                          ),
+                        );
+                        return;
+                      }
                       item.onSelect();
                       setOpen(false);
                       triggerElement()?.focus();
@@ -183,8 +232,65 @@ export function Dropdown({
                         </span>
                       ) : null}
                     </span>
-                    {item.suffix ? <span className="shrink-0">{item.suffix}</span> : null}
+                    {item.suffix ? (
+                      <span className="shrink-0">{item.suffix}</span>
+                    ) : item.children?.length ? (
+                      <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
+                    ) : null}
                   </button>
+                  {item.children?.length && submenuIndex === index ? (
+                    <div
+                      aria-label={item.label}
+                      className="absolute right-full top-0 mr-1 w-40 rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
+                      role="menu"
+                    >
+                      {item.children.map((child, childIndex) => (
+                        <button
+                          key={`${child.label}-${childIndex}`}
+                          className={clsx(
+                            "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-50 focus:bg-zinc-50 disabled:pointer-events-none disabled:opacity-50",
+                            child.tone === "danger" ? "text-danger-700" : "text-zinc-700",
+                          )}
+                          data-dropdown-submenu={index}
+                          disabled={child.disabled}
+                          role="menuitem"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            child.onSelect();
+                            setOpen(false);
+                            triggerElement()?.focus();
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation();
+                            const children = item.children ?? [];
+                            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                              event.preventDefault();
+                              focusSubmenuItem(
+                                index,
+                                nextMenuIndex(
+                                  childIndex,
+                                  event.key === "ArrowDown" ? 1 : -1,
+                                  children,
+                                ),
+                              );
+                            } else if (event.key === "ArrowLeft" || event.key === "Escape") {
+                              event.preventDefault();
+                              setSubmenuIndex(null);
+                              focusItem(index);
+                            }
+                          }}
+                        >
+                          {child.icon ? (
+                            <span aria-hidden="true" className="shrink-0">
+                              {child.icon}
+                            </span>
+                          ) : null}
+                          <span className="min-w-0 flex-1 truncate">{child.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>,

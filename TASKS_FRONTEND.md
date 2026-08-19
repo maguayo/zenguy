@@ -366,11 +366,11 @@ export default defineConfig({
 # Phase 11 — Members
 
 ### FE-038: Members page
-- [ ] `src/api/members.ts` (`listMembers`, `changeRole`, `removeMember`, `listInvitations`, `invite`, `revokeInvitation`).
-- [ ] `pages/members/MembersPage.tsx` (§18.15): `PageHeader` `Members` (description `Members are unlimited and free.`) + `Invite member` (gated `members.invite`).
-- [ ] Members table: **Member** (name + email sub-line), **Role** Badge (OWNER accent, ADMIN info, MEMBER neutral), **Joined** (date), row menu: `Change role` submenu Admin/Member — only when `can("admins.manage")` (owner) and target isn't OWNER; `Remove` — shown when `can("members.remove")` AND (actor is owner ? target isn't OWNER and isn't self : target role is MEMBER); ConfirmDialog `Remove <name> from this workspace?`
-- [ ] Invite modal: Email + Role Select — options: `Member` always; `Admin` only when `can("admins.manage")` (owner). Submit → toast `Invitation sent to <email>` → refresh pending list. `CONFLICT` → inline `Already a member.`
-- [ ] **Pending invitations** Card (only when non-empty): rows email, role Badge, `Invited by <name>`, `Expires <relative>`, `Revoke` button (gated, confirm-less, toast).
+- [x] `src/api/members.ts` (`listMembers`, `changeRole`, `removeMember`, `listInvitations`, `invite`, `revokeInvitation`).
+- [x] `pages/members/MembersPage.tsx` (§18.15): `PageHeader` `Members` (description `Members are unlimited and free.`) + `Invite member` (gated `members.invite`).
+- [x] Members table: **Member** (name + email sub-line), **Role** Badge (OWNER accent, ADMIN info, MEMBER neutral), **Joined** (date), row menu: `Change role` submenu Admin/Member — only when `can("admins.manage")` (owner) and target isn't OWNER; `Remove` — shown when `can("members.remove")` AND (actor is owner ? target isn't OWNER and isn't self : target role is MEMBER); ConfirmDialog `Remove <name> from this workspace?`
+- [x] Invite modal: Email + Role Select — options: `Member` always; `Admin` only when `can("admins.manage")` (owner). Submit → toast `Invitation sent to <email>` → refresh pending list. `CONFLICT` → inline `Already a member.`
+- [x] **Pending invitations** Card (only when non-empty): rows email, role Badge, `Invited by <name>`, `Expires <relative>`, `Revoke` button (gated, confirm-less, toast).
 
 # Phase 12 — Usage & Billing
 
