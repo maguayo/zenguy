@@ -42,16 +42,23 @@ describe("seed script", () => {
       "users",
       "workspaces",
       "workspace_members",
+      "workspace_invitations",
+      "workspace_api_keys",
       "subscriptions",
       "workspace_secrets",
       "notification_channels",
+      "notification_deliveries",
       "browser_tests",
       "browser_test_channels",
       "test_runs",
       "test_attempts",
+      "run_steps",
       "uptime_monitors",
       "uptime_monitor_channels",
       "uptime_checks",
+      "incidents",
+      "incident_events",
+      "audit_logs",
     ]) {
       expect(sql).toContain(`DELETE FROM ${table};`);
       expect(sql.match(new RegExp(`INSERT INTO ${table} \\(`, "gu"))?.length).toBeGreaterThan(0);
@@ -62,16 +69,41 @@ describe("seed script", () => {
     expect(sql).toContain("marcos@aguayo.es");
     expect(sql).toContain("ana@zenguy.dev");
     expect(sql).toContain("luis@zenguy.dev");
+    expect(sql).toContain("marta@zenguy.dev");
+    expect(sql).toContain("diego@zenguy.dev");
+    expect(sql).toContain("noelia@zenguy.dev");
     expect(sql).toContain("Aguayo Staging");
     expect(sql).toContain("Europe/Madrid");
     expect(sql).toContain("'ADMIN'");
     expect(sql).toContain("'MEMBER'");
     expect(sql).toContain("Homepage smoke");
     expect(sql).toContain("Checkout flow");
+    expect(sql).toContain("Login form");
+    expect(sql).toContain("Add to cart");
+    expect(sql).toContain("Pricing page");
     expect(sql).toContain("INSERT INTO test_runs (");
     expect(sql).toContain("Homepage beat");
     expect(sql).toContain("API beat");
+    expect(sql).toContain("Webhooks receiver");
+    expect(sql).toContain("Auth service");
     expect(sql).toContain("'grant'");
+    expect(sql).toContain("'EMAIL'");
+    expect(sql).toContain("'SLACK'");
+    expect(sql).toContain("'DISCORD'");
+    expect(sql).toContain("'SMS'");
+    expect(sql).toContain("'OPEN'");
+    expect(sql).toContain("'RESOLVED'");
+    expect(sql).toContain("'TIMEOUT'");
+    expect(sql).toContain("'SYSTEM_ERROR'");
+    expect(sql).toContain("'DOWN'");
+    expect(sql).toContain("'FAILED'");
+    expect((sql.match(/'bt_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(12);
+    expect((sql.match(/'run_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(80);
+    expect((sql.match(/'mon_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(10);
+    expect((sql.match(/'chk_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(200);
+    expect((sql.match(/'inc_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(8);
+    expect((sql.match(/'aud_seed_/gu) ?? []).length).toBeGreaterThanOrEqual(20);
+    expect(sql).not.toContain("seed-demo-token");
     expect(sql).not.toContain("demo-secret-value");
     expect(sql).not.toContain("zenguy-db");
 
