@@ -2,6 +2,42 @@
 
 Zenguy is a multi-tenant SaaS for natural-language browser testing and HTTP uptime monitoring, built as a Cloudflare-first monorepo with a Hono API, React application, and Astro public website.
 
+## What Zenguy does
+
+Zenguy watches web applications from the outside, the way a real user
+experiences them, and alerts the team when something breaks.
+
+- **Browser tests written in plain language.** A test is a start URL plus
+  written instructions such as "Check that the page shows the heading
+  'Example Domain' and contains a link labeled 'More information'". An
+  LLM-driven agent (OpenAI `gpt-5-mini` by default) executes those
+  instructions in a real headless browser through Cloudflare Browser
+  Rendering, on desktop or mobile viewports, on a schedule or on demand,
+  with automatic retries. Every run keeps its verdict, expected versus
+  actual result, step timeline, screenshots, visited URLs, and
+  console/network summaries.
+- **HTTP uptime monitoring.** Scheduled checks against any endpoint with a
+  configurable method, encrypted headers and body, expected status code,
+  optional response-body conditions, timeouts, and retries.
+- **Incidents and alerting.** Consecutive failures open an incident with an
+  event timeline; recovery closes it. Failure and recovery alerts fan out to
+  per-workspace notification channels: email, SMS, WhatsApp, voice call,
+  Slack, and Discord.
+- **Team workspaces.** Workspaces with `OWNER`/`ADMIN`/`MEMBER` roles, email
+  invitations, an audit log of sensitive actions, and encrypted workspace
+  secrets that runs may use against allow-listed domains while the plaintext
+  is never shown again.
+- **Usage-based billing.** Paddle subscription at EUR 39 per month with 300
+  browser runs included and EUR 0.20 per additional run, with per-cycle
+  usage tracking and durable, replay-safe overage reporting. Allow-listed
+  issuer accounts can also mint single-use complimentary subscription
+  grants that activate a workspace without Paddle.
+- **Read-only public API.** Per-workspace API keys expose workspace,
+  uptime-monitor, browser-test, and run data over a rate-limited read-only
+  REST API.
+
+## Repository layout
+
 ```text
 zenguy/
 ├── apps/
