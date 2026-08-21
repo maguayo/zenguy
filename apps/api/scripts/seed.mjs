@@ -20,6 +20,7 @@ const MODEL_NAME = "gpt-5-mini";
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
+const SEED_TEST_PARKED_UNTIL_MS = Date.parse("2030-01-01T00:00:00Z");
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const API_DIRECTORY = path.resolve(SCRIPT_DIRECTORY, "..");
 const GENERATED_SQL_PATH = path.join(SCRIPT_DIRECTORY, ".seed.generated.sql");
@@ -1207,7 +1208,11 @@ async function generateSql(encryptionKey) {
       interval_hours: test.intervalHours,
       max_retries: test.maxRetries,
       notify_on_recovery: 1,
-      next_run_at: now + test.intervalHours * HOUR_MS,
+      // Parked far in the future: staging runs an always-on fallback runner
+      // that would otherwise execute every seeded demo test (mostly against
+      // fake domains) as soon as it came due. Bump next_run_at manually when
+      // a real staging execution is wanted.
+      next_run_at: SEED_TEST_PARKED_UNTIL_MS,
       created_by: test.createdBy,
       updated_by: test.createdBy,
       created_at: createdAt,
