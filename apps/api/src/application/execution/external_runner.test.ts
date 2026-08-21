@@ -1,0 +1,348 @@
+import { RecordRunUsage } from "../billing/record_run_usage";
+import { ReverseRunUsage } from "../billing/reverse_run_usage";
+import type {
+  BrowserTest,
+  TestAttempt,
+  TestRun,
+} from "../../domain/browser_tests/types";
+import type { AttemptMessage } from "../../domain/queues";
+import type { Workspace } from "../../domain/workspaces/types";
+import { FixedClock } from "../../shared/clock";
+import {
+  ATTEMPT_TIMEOUT_MS,
+  FALLBACK_CLAIM_MIN_AGE_MS,
+  INFRA_RETRY_DELAY_SECONDS,
+} from "../../shared/constants";
+import { FakeIds } from "../../test/fakes/ids";
+import {
+  FakeArtifactRepo,
+  FakeAttemptRepo,
+  FakeBrowserTestRepo,
+  FakeRunRepo,
+  FakeStepRepo,
+} from "../../test/fakes/browser_test_repos";
+import {
+  FakeUsageEventRepo,
+  FakeWorkspaceRepo,
+} from "../../test/fakes/repos";
+import { FakeDurableWorkflowRepo } from "../../test/fakes/durable";
+import { PublishQueueOutbox } from "../durability/publish_outbox";
+import {
+  AttemptLifecycle,
+  WORKER_LOST_GRACE_MS,
+} from "./attempt_lifecycle";
+import { ExternalRunner } from "./external_runner";
+
+const NOW = 1_700_000_000_000;
+const WORKSPACE: Workspace = {
+  id: "ws_fallback",
+  name: "Fallback",
+  slug: "fallback",
+  timezone: "UTC",
+  ownerUserId: "usr_owner",
+  createdAt: NOW,
+  updatedAt: NOW,
+  deletedAt: null,
+};
+const TEST: BrowserTest = {
+  id: "bt_fallback",
+  workspaceId: WORKSPACE.id,
+  name: "Checkout",
+  startUrl: "https://example.com",
+  instructions: "Verify checkout",
+  device: "DESKTOP",
+  intervalHours: 6,
+  maxRetries: 1,
+  notifyOnRecovery: true,
+  nextRunAt: NOW + 21_600_000,
+  createdBy: "usr_owner",
+  updatedBy: "usr_owner",
+  createdAt: NOW,
+  updatedAt: NOW,
+  deletedAt: null,
+};
+
+function run(id: string, overrides: Partial<TestRun> = {}): TestRun {
+  return {
+    id,
+    workspaceId: WORKSPACE.id,
+    browserTestId: TEST.id,
+    source: "MANUAL",
+    status: "QUEUED",
+    snapshot: {
+      name: TEST.name,
+      startUrl: TEST.startUrl,
+      instructions: TEST.instructions,
+      device: TEST.device,
+      intervalHours: TEST.intervalHours,
+      maxRetries: TEST.maxRetries,
+      notifyOnRecovery: TEST.notifyOnRecovery,
+      channelIds: [],
+      viewport: { width: 1440, height: 900 },
+      modelName: "gpt-5-mini",
+      runnerVersion: "zenguy-runner/1.0.0",
+    },
+    scheduledFor: null,
+    queuedAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
+    startedAt: null,
+    finishedAt: null,
+    durationMs: null,
+    attemptCount: 0,
+    infraAttempts: 0,
+    passedAfterRetry: false,
+    billable: true,
+    usageEventId: null,
+    triggeredByUserId: "usr_owner",
+    incidentId: null,
+    createdAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
+    ...overrides,
+  };
+}
+
+function attempt(
+  id: string,
+  runId: string,
+  overrides: Partial<TestAttempt> = {},
+): TestAttempt {
+  return {
+    id,
+    testRunId: runId,
+    attemptIndex: 0,
+    status: "QUEUED",
+    retryDelaySeconds: 0,
+    queuedAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
+    startedAt: null,
+    finishedAt: null,
+    durationMs: null,
+    summary: null,
+    expectedResult: null,
+    actualResult: null,
+    failureReason: null,
+    visitedUrlsJson: null,
+    consoleErrorsJson: null,
+    networkErrorsJson: null,
+    tokenUsage: null,
+    modelName: null,
+    runnerVersion: null,
+    systemErrorCode: null,
+    createdAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
+    ...overrides,
+  };
+}
+
+class RecordingAttemptQueue implements Pick<Queue<AttemptMessage>, "send"> {
+  readonly calls: { message: AttemptMessage; delaySeconds: number }[] = [];
+
+  async send(
+    message: AttemptMessage,
+    options?: QueueSendOptions,
+  ): Promise<QueueSendResponse> {
+    this.calls.push({
+      message: structuredClone(message),
+      delaySeconds: options?.delaySeconds ?? 0,
+    });
+    return { metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } } };
+  }
+}
+
+async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
+  const clock = new FixedClock(NOW);
+  const runs = new FakeRunRepo();
+  const usageEvents = new FakeUsageEventRepo();
+  const attempts = new FakeAttemptRepo(runs, usageEvents);
+  const steps = new FakeStepRepo();
+  const artifacts = new FakeArtifactRepo();
+  const tests = new FakeBrowserTestRepo();
+  const workspaces = new FakeWorkspaceRepo();
+  const ids = new FakeIds();
+  const queue = new RecordingAttemptQueue();
+  await workspaces.insert(WORKSPACE);
+  await tests.insert(TEST);
+  for (const entry of seed.runs) await runs.insert(entry);
+  for (const entry of seed.attempts) await attempts.insert(entry);
+  const durable = new FakeDurableWorkflowRepo({
+    runs,
+    attempts,
+    steps,
+    artifacts,
+  });
+  const unusedQueue = {
+    send: async () => ({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    }),
+  };
+  const outboxPublisher = new PublishQueueOutbox(
+    durable,
+    { RUN: queue, CHECK: unusedQueue, NOTIFY: unusedQueue },
+    clock,
+  );
+  const storage = {
+    put: async () => ({ sizeBytes: 0 }),
+    delete: async () => undefined,
+  };
+  const lifecycle = new AttemptLifecycle({
+    runs,
+    attempts,
+    steps,
+    artifacts,
+    tests,
+    workspaces,
+    storage,
+    recordUsage: new RecordRunUsage(usageEvents, clock, ids),
+    reverseUsage: new ReverseRunUsage(usageEvents, clock),
+    durable,
+    outboxPublisher,
+    clock,
+    ids,
+    runFinalizedHandler: { handle: async () => undefined },
+  });
+  const runner = new ExternalRunner({
+    lifecycle,
+    runs,
+    attempts,
+    steps,
+    artifacts,
+    storage,
+    resolveSecrets: { execute: async () => new Map() },
+    clock,
+    ids,
+  });
+  return { runner, attempts, queue };
+}
+
+describe("ExternalRunner.claimStale", () => {
+  it("skips queued attempts younger than the fallback delay", async () => {
+    const fresh = run("run_fresh", { queuedAt: NOW, createdAt: NOW });
+    const { runner, attempts } = await fixture({
+      runs: [fresh],
+      attempts: [
+        attempt("att_fresh", fresh.id, {
+          queuedAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS + 1,
+        }),
+      ],
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-1" }),
+    ).resolves.toBeNull();
+    await expect(attempts.findById("att_fresh")).resolves.toMatchObject({
+      status: "QUEUED",
+      startedAt: null,
+    });
+  });
+
+  it("claims the oldest queued attempt once the fallback delay has passed", async () => {
+    const older = run("run_older");
+    const fresh = run("run_fresh", {
+      browserTestId: null,
+      queuedAt: NOW,
+      createdAt: NOW,
+    });
+    const { runner, attempts } = await fixture({
+      runs: [older, fresh],
+      attempts: [
+        attempt("att_older", older.id),
+        attempt("att_fresh", fresh.id, { queuedAt: NOW }),
+      ],
+    });
+
+    const job = await runner.claimStale({ deliveryId: "fallback-1" });
+
+    expect(job).toMatchObject({
+      reference: {
+        runId: older.id,
+        attemptId: "att_older",
+        attemptIndex: 0,
+        executionGeneration: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
+        deliveryId: "fallback-1",
+      },
+      snapshot: { startUrl: TEST.startUrl },
+      secrets: [],
+    });
+    await expect(attempts.findById("att_older")).resolves.toMatchObject({
+      status: "STARTING",
+    });
+    await expect(
+      attempts.isRunnerDeliveryOwner("att_older", "fallback-1"),
+    ).resolves.toBe(true);
+    await expect(attempts.findById("att_fresh")).resolves.toMatchObject({
+      status: "QUEUED",
+    });
+  });
+
+  it("never claims an attempt already taken by the local worker", async () => {
+    const taken = run("run_taken", { status: "RUNNING", startedAt: NOW - 20_000 });
+    const { runner, attempts } = await fixture({
+      runs: [taken],
+      attempts: [
+        attempt("att_taken", taken.id, {
+          status: "RUNNING",
+          startedAt: NOW - 20_000,
+        }),
+      ],
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-1" }),
+    ).resolves.toBeNull();
+    await expect(attempts.findById("att_taken")).resolves.toMatchObject({
+      status: "RUNNING",
+    });
+  });
+
+  it("ignores queued attempts whose run already finished", async () => {
+    const finished = run("run_finished", {
+      status: "PASSED",
+      finishedAt: NOW - 1_000,
+    });
+    const { runner, attempts } = await fixture({
+      runs: [finished],
+      attempts: [attempt("att_finished", finished.id)],
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-1" }),
+    ).resolves.toBeNull();
+    await expect(attempts.findById("att_finished")).resolves.toMatchObject({
+      status: "QUEUED",
+    });
+  });
+
+  it("recovers an abandoned overdue attempt instead of returning it", async () => {
+    const abandonedStart = NOW - ATTEMPT_TIMEOUT_MS - WORKER_LOST_GRACE_MS - 1;
+    const abandoned = run("run_abandoned", {
+      status: "RUNNING",
+      startedAt: abandonedStart,
+    });
+    const { runner, attempts, queue } = await fixture({
+      runs: [abandoned],
+      attempts: [
+        attempt("att_abandoned", abandoned.id, {
+          status: "RUNNING",
+          startedAt: abandonedStart,
+        }),
+      ],
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-1" }),
+    ).resolves.toBeNull();
+    await expect(attempts.findById("att_abandoned")).resolves.toMatchObject({
+      status: "QUEUED",
+      queuedAt: NOW + INFRA_RETRY_DELAY_SECONDS * 1_000,
+      startedAt: null,
+    });
+    expect(queue.calls).toEqual([
+      {
+        message: {
+          kind: "attempt",
+          runId: abandoned.id,
+          attemptId: "att_abandoned",
+          attemptIndex: 0,
+          executionGeneration: NOW + INFRA_RETRY_DELAY_SECONDS * 1_000,
+        },
+        delaySeconds: INFRA_RETRY_DELAY_SECONDS,
+      },
+    ]);
+  });
+});

@@ -28,7 +28,7 @@ import { platformAlert } from "../../shared/log";
 import { createDurableJob, createOutboxEntry } from "../durability/factory";
 import type { PublishQueueOutbox } from "../durability/publish_outbox";
 
-const WORKER_LOST_GRACE_MS = 120_000;
+export const WORKER_LOST_GRACE_MS = 120_000;
 
 export interface AttemptOutcome {
   status: "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR";
@@ -130,7 +130,10 @@ function parsePayload<T>(job: DurableJob): T {
 export class AttemptLifecycle {
   constructor(private readonly dependencies: AttemptLifecycleDependencies) {}
 
-  async claim(message: AttemptMessage): Promise<"execute" | "skip"> {
+  async claim(
+    message: AttemptMessage,
+    runnerDeliveryId?: string,
+  ): Promise<"execute" | "skip"> {
     const [run, attempt] = await Promise.all([
       this.dependencies.runs.findByIdForExecution(message.runId),
       this.dependencies.attempts.findById(message.attemptId),
@@ -197,11 +200,26 @@ export class AttemptLifecycle {
           consoleErrors: [],
           networkErrors: [],
         });
+        return "skip";
+      }
+      if (
+        attempt.status === "STARTING" &&
+        runnerDeliveryId !== undefined &&
+        (await this.dependencies.attempts.isRunnerDeliveryOwner(
+          attempt.id,
+          runnerDeliveryId,
+        ))
+      ) {
+        return "execute";
       }
       return "skip";
     }
     if (attempt.status !== "QUEUED") return "skip";
-    return (await this.dependencies.attempts.claimQueued(attempt.id, now))
+    return (await this.dependencies.attempts.claimQueued(
+      attempt.id,
+      now,
+      runnerDeliveryId,
+    ))
       ? "execute"
       : "skip";
   }

@@ -112,7 +112,12 @@ export interface AttemptUpdate {
 export interface AttemptRepo {
   insert(attempt: TestAttempt): Promise<void>;
   findById(id: string): Promise<TestAttempt | null>;
-  claimQueued(id: string, claimedAt: number): Promise<boolean>;
+  claimQueued(
+    id: string,
+    claimedAt: number,
+    runnerDeliveryId?: string,
+  ): Promise<boolean>;
+  isRunnerDeliveryOwner(id: string, runnerDeliveryId: string): Promise<boolean>;
   markRunning(
     id: string,
     runId: string,
@@ -129,6 +134,11 @@ export interface AttemptRepo {
   update(id: string, fields: AttemptUpdate): Promise<void>;
   resetForInfraRetry(id: string, queuedAt: number): Promise<void>;
   listStale(before: number): Promise<TestAttempt[]>;
+  listExternallyClaimable(
+    queuedBefore: number,
+    abandonedBefore: number,
+    limit: number,
+  ): Promise<TestAttempt[]>;
 }
 
 export interface StepRepo {

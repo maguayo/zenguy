@@ -9,7 +9,6 @@ function completeBindings(): Bindings {
     DB: {} as D1Database,
     KV: {} as KVNamespace,
     ARTIFACTS: {} as R2Bucket,
-    BROWSER: {} as BrowserRun,
     RUN_QUEUE: {} as Queue,
     CHECK_QUEUE: {} as Queue,
     NOTIFY_QUEUE: {} as Queue,
@@ -19,10 +18,9 @@ function completeBindings(): Bindings {
     JWT_SECRET: "j".repeat(32),
     ENCRYPTION_KEY: encryptionKey(),
     ARTIFACT_URL_SECRET: "a".repeat(32),
+    RUNNER_API_TOKEN: "r".repeat(32),
     EMAIL_FROM: "Zenguy <notifications@example.com>",
-    OPENAI_API_KEY: "openai-test",
     LLM_MODEL: "gpt-5-mini",
-    LLM_USE_VISION: "true",
     TWILIO_ACCOUNT_SID: "twilio-sid",
     TWILIO_AUTH_TOKEN: "twilio-token",
     TWILIO_FROM_SMS: "+34600000001",
@@ -56,10 +54,9 @@ describe("loadConfig", () => {
       "JWT_SECRET",
       "ENCRYPTION_KEY",
       "ARTIFACT_URL_SECRET",
+      "RUNNER_API_TOKEN",
       "EMAIL_FROM",
-      "OPENAI_API_KEY",
       "LLM_MODEL",
-      "LLM_USE_VISION",
       "TWILIO_ACCOUNT_SID",
       "TWILIO_AUTH_TOKEN",
       "TWILIO_FROM_SMS",
@@ -81,8 +78,7 @@ describe("loadConfig", () => {
 
     expect(config.environment).toBe("development");
     expect(config.encryptionKey).toEqual(new Uint8Array(32).fill(1));
-    expect(config.llmUseVision).toBe(true);
-    expect(config.openaiApiKey).toBe("openai-test");
+    expect(config.runnerApiToken).toBe("r".repeat(32));
     expect(config.llmModel).toBe("gpt-5-mini");
     expect(config.paddle).toMatchObject({
       environment: "sandbox",

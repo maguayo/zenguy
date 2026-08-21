@@ -347,6 +347,7 @@ export class FakeRunRepo implements RunRepo {
 
 export class FakeAttemptRepo implements AttemptRepo {
   readonly attempts = new Map<string, TestAttempt>();
+  readonly runnerDeliveryIds = new Map<string, string>();
   readonly latest = new Map<
     string,
     Pick<AttemptWithLatest, "latestStep" | "latestScreenshot">
@@ -376,7 +377,11 @@ export class FakeAttemptRepo implements AttemptRepo {
     return attempt === undefined ? null : copy(attempt);
   }
 
-  async claimQueued(id: string, claimedAt: number): Promise<boolean> {
+  async claimQueued(
+    id: string,
+    claimedAt: number,
+    runnerDeliveryId?: string,
+  ): Promise<boolean> {
     const attempt = this.attempts.get(id);
     if (
       attempt === undefined ||
@@ -388,7 +393,17 @@ export class FakeAttemptRepo implements AttemptRepo {
       status: "STARTING",
       startedAt: claimedAt,
     });
+    if (runnerDeliveryId !== undefined) {
+      this.runnerDeliveryIds.set(id, runnerDeliveryId);
+    }
     return true;
+  }
+
+  async isRunnerDeliveryOwner(
+    id: string,
+    runnerDeliveryId: string,
+  ): Promise<boolean> {
+    return this.runnerDeliveryIds.get(id) === runnerDeliveryId;
   }
 
   async markRunning(
@@ -484,6 +499,7 @@ export class FakeAttemptRepo implements AttemptRepo {
   }
 
   async resetForInfraRetry(id: string, queuedAt: number): Promise<void> {
+    this.runnerDeliveryIds.delete(id);
     const attempt = this.attempts.get(id);
     if (attempt !== undefined) {
       this.attempts.set(id, {
@@ -521,6 +537,34 @@ export class FakeAttemptRepo implements AttemptRepo {
           (left.startedAt ?? 0) - (right.startedAt ?? 0) ||
           left.id.localeCompare(right.id),
       )
+      .map(copy);
+  }
+
+  async listExternallyClaimable(
+    queuedBefore: number,
+    abandonedBefore: number,
+    limit: number,
+  ): Promise<TestAttempt[]> {
+    const runs = this.runs;
+    if (runs === undefined) return [];
+    return [...this.attempts.values()]
+      .filter((attempt) => {
+        const run = runs.runs.get(attempt.testRunId);
+        if (run === undefined || (run.status !== "QUEUED" && run.status !== "RUNNING")) {
+          return false;
+        }
+        if (attempt.status === "QUEUED") return attempt.queuedAt <= queuedBefore;
+        return (
+          (attempt.status === "STARTING" || attempt.status === "RUNNING") &&
+          attempt.startedAt !== null &&
+          attempt.startedAt < abandonedBefore
+        );
+      })
+      .sort(
+        (left, right) =>
+          left.queuedAt - right.queuedAt || left.id.localeCompare(right.id),
+      )
+      .slice(0, limit)
       .map(copy);
   }
 }

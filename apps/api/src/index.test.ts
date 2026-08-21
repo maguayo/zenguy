@@ -1,5 +1,4 @@
-import type { AttemptMessage, CheckMessage, NotifyMessage } from "./domain/queues";
-import { ExecuteAttempt } from "./application/execution/execute_attempt";
+import type { CheckMessage, NotifyMessage } from "./domain/queues";
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
 import { HourlyMaintenance } from "./application/maintenance/hourly";
@@ -8,7 +7,6 @@ import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
 import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { fakeBindings } from "./test/fakes/bindings";
 import {
-  buildAttemptConsumer,
   buildAttemptLifecycle,
   buildCheckConsumer,
   buildHourlyJob,
@@ -74,7 +72,6 @@ const NOTIFY: NotifyMessage = {
 
 function consumers(overrides: Partial<QueueConsumers> = {}): QueueConsumers {
   return {
-    attempts: { execute: vi.fn(async () => undefined) },
     checks: { execute: vi.fn(async () => undefined) },
     notifications: {
       execute: vi.fn(async (_message, control) => control.ack()),
@@ -84,8 +81,7 @@ function consumers(overrides: Partial<QueueConsumers> = {}): QueueConsumers {
 }
 
 describe("queue routing", () => {
-  it("builds the concrete browser attempt consumer for the runs queue", () => {
-    expect(buildAttemptConsumer(fakeBindings())).toBeInstanceOf(ExecuteAttempt);
+  it("builds run lifecycle orchestration without an in-Worker browser consumer", () => {
     expect(buildAttemptLifecycle(fakeBindings())).toBeInstanceOf(
       AttemptLifecycle,
     );
@@ -97,40 +93,26 @@ describe("queue routing", () => {
     expect(buildHourlyJob(fakeBindings())).toBeInstanceOf(HourlyMaintenance);
   });
 
-  it("parses attempt messages, acknowledges poison, and isolates handler failures", async () => {
-    const poison = new RecordingMessage("msg_bad", { kind: "attempt" });
-    const failed = new RecordingMessage("msg_failed", {
+  it("never executes run messages inside the application Worker", async () => {
+    const runMessage = new RecordingMessage("msg_run", {
       kind: "attempt",
-      runId: "run_failed",
-      attemptId: "att_failed",
+      runId: "run_external",
+      attemptId: "att_external",
       attemptIndex: 0,
       executionGeneration: 1,
-    });
-    const valid = new RecordingMessage("msg_valid", {
-      kind: "attempt",
-      runId: "run_valid",
-      attemptId: "att_valid",
-      attemptIndex: 1,
-      executionGeneration: 2,
-    });
-    const execute = vi.fn(async (message: { runId: string }) => {
-      if (message.runId === "run_failed") throw new Error("boom");
     });
     const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await processQueueBatch(
-      batch("zenguy-runs", [poison, failed, valid]),
-      consumers({ attempts: { execute } }),
+      batch("zenguy-runs", [runMessage]),
+      consumers(),
       CONTEXT,
     );
 
-    expect(execute).toHaveBeenCalledTimes(2);
-    expect(poison.ackCount).toBe(1);
-    expect(failed.retryOptions).toEqual([{}]);
-    expect(valid.ackCount).toBe(1);
-    expect(alert.mock.calls.join(" ")).toContain('"event":"bad_queue_message"');
+    expect(runMessage.ackCount).toBe(0);
+    expect(runMessage.retryOptions).toEqual([{ delaySeconds: 60 }]);
     expect(alert.mock.calls.join(" ")).toContain(
-      '"event":"queue_message_failed"',
+      '"event":"run_push_consumer_disabled"',
     );
     alert.mockRestore();
   });
@@ -180,7 +162,7 @@ describe("queue routing", () => {
   });
 
   it("routes every staging queue and acknowledges every staging dead-letter queue", async () => {
-    const attemptBody: AttemptMessage = {
+    const attemptBody = {
       kind: "attempt",
       runId: "run_staging",
       attemptId: "att_staging",
@@ -197,13 +179,11 @@ describe("queue routing", () => {
     };
     const checkMessage = new RecordingMessage("msg_staging_check", checkBody);
     const notifyMessage = new RecordingMessage("msg_staging_notify", NOTIFY);
-    const attemptExecute = vi.fn(async () => undefined);
     const checkExecute = vi.fn(async () => undefined);
     const notifyExecute = vi.fn(async (_message, control: Pick<Message, "ack">) => {
       control.ack();
     });
     const configured = consumers({
-      attempts: { execute: attemptExecute },
       checks: { execute: checkExecute },
       notifications: { execute: notifyExecute },
     });
@@ -224,10 +204,10 @@ describe("queue routing", () => {
       CONTEXT,
     );
 
-    expect(attemptExecute).toHaveBeenCalledOnce();
     expect(checkExecute).toHaveBeenCalledWith(checkBody, CONTEXT);
     expect(notifyExecute).toHaveBeenCalledWith(NOTIFY, notifyMessage);
-    expect(attemptMessage.ackCount).toBe(1);
+    expect(attemptMessage.ackCount).toBe(0);
+    expect(attemptMessage.retryOptions).toEqual([{ delaySeconds: 60 }]);
     expect(checkMessage.ackCount).toBe(1);
     expect(notifyMessage.ackCount).toBe(1);
 

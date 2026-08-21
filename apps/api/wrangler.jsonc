@@ -6,7 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
-  "browser": { "binding": "BROWSER" },
   "send_email": [
     {
       "name": "EMAIL",
@@ -36,13 +35,6 @@
     ],
     "consumers": [
       {
-        "queue": "zenguy-runs",
-        "max_batch_size": 1,
-        "max_concurrency": 4,
-        "max_retries": 3,
-        "dead_letter_queue": "zenguy-runs-dlq"
-      },
-      {
         "queue": "zenguy-checks",
         "max_batch_size": 5,
         "max_concurrency": 10,
@@ -65,8 +57,7 @@
   "vars": {
     "ENVIRONMENT": "development",
     "APP_URL": "http://localhost:5173",
-    "LLM_MODEL": "gpt-5-mini",
-    "LLM_USE_VISION": "true",
+    "LLM_MODEL": "qwen/qwen3.8-27b",
     "PADDLE_ENVIRONMENT": "sandbox",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
@@ -83,7 +74,6 @@
           "zone_name": "zenguy.com"
         }
       ],
-      "browser": { "binding": "BROWSER" },
       "send_email": [
         {
           "name": "EMAIL",
@@ -114,13 +104,6 @@
           { "binding": "NOTIFY_QUEUE", "queue": "zenguy-staging-notify" }
         ],
         "consumers": [
-          {
-            "queue": "zenguy-staging-runs",
-            "max_batch_size": 1,
-            "max_concurrency": 4,
-            "max_retries": 3,
-            "dead_letter_queue": "zenguy-staging-runs-dlq"
-          },
           {
             "queue": "zenguy-staging-checks",
             "max_batch_size": 5,
@@ -158,8 +141,7 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_URL": "https://staging-app.zenguy.com",
-        "LLM_MODEL": "gpt-5-mini",
-        "LLM_USE_VISION": "true",
+        "LLM_MODEL": "qwen/qwen3.8-27b",
         "PADDLE_ENVIRONMENT": "sandbox",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
         "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
@@ -176,7 +158,6 @@
           "zone_name": "zenguy.com"
         }
       ],
-      "browser": { "binding": "BROWSER" },
       "send_email": [
         {
           "name": "EMAIL",
@@ -204,13 +185,6 @@
           { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
         ],
         "consumers": [
-          {
-            "queue": "zenguy-runs",
-            "max_batch_size": 1,
-            "max_concurrency": 4,
-            "max_retries": 3,
-            "dead_letter_queue": "zenguy-runs-dlq"
-          },
           {
             "queue": "zenguy-checks",
             "max_batch_size": 5,
@@ -248,8 +222,7 @@
       "vars": {
         "ENVIRONMENT": "production",
         "APP_URL": "https://app.zenguy.com",
-        "LLM_MODEL": "gpt-5-mini",
-        "LLM_USE_VISION": "true",
+        "LLM_MODEL": "qwen/qwen3.8-27b",
         "PADDLE_ENVIRONMENT": "production",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
         "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"

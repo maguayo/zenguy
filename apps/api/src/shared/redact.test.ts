@@ -14,10 +14,10 @@ describe("Redactor", () => {
 
     expect(
       redactor.redact(
-        "literal=very secret! encoded=very%20secret! unchanged=public",
+        "literal=very secret! encoded=very%20secret! form=very+secret%21 unchanged=public",
       ),
     ).toBe(
-      "literal={{PASSWORD}} encoded={{PASSWORD}} unchanged=public",
+      "literal={{PASSWORD}} encoded={{PASSWORD}} form={{PASSWORD}} unchanged=public",
     );
   });
 

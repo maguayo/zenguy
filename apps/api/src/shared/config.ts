@@ -4,7 +4,6 @@ export interface Bindings {
   DB: D1Database;
   KV: KVNamespace;
   ARTIFACTS: R2Bucket;
-  BROWSER: BrowserRun;
   RUN_QUEUE: Queue;
   CHECK_QUEUE: Queue;
   NOTIFY_QUEUE: Queue;
@@ -13,11 +12,10 @@ export interface Bindings {
   JWT_SECRET: string;
   ENCRYPTION_KEY: string;
   ARTIFACT_URL_SECRET: string;
+  RUNNER_API_TOKEN: string;
   EMAIL: SendEmail;
   EMAIL_FROM: string;
-  OPENAI_API_KEY: string;
   LLM_MODEL: string;
-  LLM_USE_VISION: string;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_FROM_SMS: string;
@@ -38,10 +36,9 @@ export interface AppConfig {
   jwtSecret: string;
   encryptionKey: Uint8Array;
   artifactUrlSecret: string;
+  runnerApiToken: string;
   emailFrom: string;
-  openaiApiKey: string;
   llmModel: string;
-  llmUseVision: boolean;
   twilio: {
     accountSid: string;
     authToken: string;
@@ -67,10 +64,9 @@ const requiredEnvKeys = [
   "JWT_SECRET",
   "ENCRYPTION_KEY",
   "ARTIFACT_URL_SECRET",
+  "RUNNER_API_TOKEN",
   "EMAIL_FROM",
-  "OPENAI_API_KEY",
   "LLM_MODEL",
-  "LLM_USE_VISION",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_FROM_SMS",
@@ -90,10 +86,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(1),
   ARTIFACT_URL_SECRET: z.string().min(32),
+  RUNNER_API_TOKEN: z.string().min(32),
   EMAIL_FROM: z.string().min(1),
-  OPENAI_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
-  LLM_USE_VISION: z.enum(["true", "false"]),
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_FROM_SMS: z.string().min(1),
@@ -163,10 +158,9 @@ export function loadConfig(env: Bindings): AppConfig {
     jwtSecret: parsed.JWT_SECRET,
     encryptionKey: decodeEncryptionKey(parsed.ENCRYPTION_KEY),
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
+    runnerApiToken: parsed.RUNNER_API_TOKEN,
     emailFrom: parsed.EMAIL_FROM,
-    openaiApiKey: parsed.OPENAI_API_KEY,
     llmModel: parsed.LLM_MODEL,
-    llmUseVision: parsed.LLM_USE_VISION === "true",
     twilio: {
       accountSid: parsed.TWILIO_ACCOUNT_SID,
       authToken: parsed.TWILIO_AUTH_TOKEN,

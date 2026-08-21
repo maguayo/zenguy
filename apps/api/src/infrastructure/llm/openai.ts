@@ -1,4 +1,3 @@
-import type { AppConfig } from "../../shared/config";
 import {
   agentActionSchema,
   type AgentAction,
@@ -64,7 +63,10 @@ export class LlmUnavailableError extends Error {
 
 class RetryableLlmError extends Error {}
 
-type LlmConfig = Pick<AppConfig, "openaiApiKey" | "llmModel">;
+interface LlmConfig {
+  openaiApiKey: string;
+  llmModel: string;
+}
 type Sleep = (milliseconds: number) => Promise<void>;
 
 export interface OpenAiClientOptions {

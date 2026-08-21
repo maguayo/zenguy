@@ -8,7 +8,6 @@
   "preview_urls": false,
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
-  "browser": { "binding": "BROWSER" },
   "send_email": [
     {
       "name": "EMAIL",
@@ -39,8 +38,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "APP_URL": "https://app.zenguy.com",
-    "LLM_MODEL": "gpt-5-mini",
-    "LLM_USE_VISION": "true",
+    "LLM_MODEL": "qwen/qwen3.8-27b",
     "PADDLE_ENVIRONMENT": "production",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"

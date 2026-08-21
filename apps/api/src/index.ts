@@ -13,7 +13,6 @@ import {
   type NotificationQueueControl,
 } from "./application/channels/send_queued_notification";
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
-import { ExecuteAttempt } from "./application/execution/execute_attempt";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
 import { HourlyMaintenance } from "./application/maintenance/hourly";
 import { PurgeExpired } from "./application/maintenance/purge_expired";
@@ -25,14 +24,12 @@ import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import { executeCheck } from "./application/uptime/execute_check";
 import { HandleCheckMessage } from "./application/uptime/handle_check_message";
 import {
-  attemptMessageSchema,
   checkMessageSchema,
   notifyMessageSchema,
   type AttemptMessage,
   type CheckMessage,
   type NotifyMessage,
 } from "./domain/queues";
-import { launchSession } from "./infrastructure/browser/session";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "./infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
@@ -55,7 +52,6 @@ import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
 import { buildEmailSender } from "./infrastructure/email";
-import { OpenAiLlmClient } from "./infrastructure/llm/openai";
 import { buildChannelSender } from "./infrastructure/notify";
 import { HttpPaddleClient } from "./infrastructure/paddle/client";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
@@ -65,16 +61,11 @@ import { realIds } from "./shared/ids";
 import { platformAlert } from "./shared/log";
 
 type NotifyConsumer = Pick<SendQueuedNotification, "execute">;
-export interface AttemptQueueConsumer {
-  execute(message: AttemptMessage, context: ExecutionContext): Promise<void>;
-}
-
 export interface CheckQueueConsumer {
   execute(message: CheckMessage, context: ExecutionContext): Promise<void>;
 }
 
 export interface QueueConsumers {
-  attempts: AttemptQueueConsumer;
   checks: CheckQueueConsumer;
   notifications: NotifyConsumer;
   deadLetters?: Pick<RedriveDeadLetter, "execute">;
@@ -164,23 +155,10 @@ function failedQueueMessage(
   message.retry();
 }
 
-export async function processAttemptBatch(
-  batch: MessageBatch<unknown>,
-  consumer: AttemptQueueConsumer,
-  context: ExecutionContext,
-): Promise<void> {
-  for (const queueMessage of batch.messages) {
-    const parsed = attemptMessageSchema.safeParse(queueMessage.body);
-    if (!parsed.success) {
-      badQueueMessage(batch, queueMessage);
-      continue;
-    }
-    try {
-      await consumer.execute(parsed.data, context);
-      queueMessage.ack();
-    } catch {
-      failedQueueMessage(batch, queueMessage);
-    }
+function deferExternalRunBatch(batch: MessageBatch<unknown>): void {
+  platformAlert("run_push_consumer_disabled", { queue: batch.queue });
+  for (const message of batch.messages) {
+    message.retry({ delaySeconds: 60 });
   }
 }
 
@@ -250,7 +228,7 @@ export async function processQueueBatch(
   }
   switch (classifyQueue(batch.queue)) {
     case "runs":
-      await processAttemptBatch(batch, consumers.attempts, context);
+      deferExternalRunBatch(batch);
       return;
     case "checks":
       await processCheckBatch(batch, consumers.checks, context);
@@ -382,33 +360,6 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
       clock: systemClock,
       ids: realIds,
     }),
-  });
-}
-
-export function buildAttemptConsumer(env: Bindings): ExecuteAttempt {
-  const config = loadConfig(env);
-  const runs = new D1RunRepo(env.DB);
-  const attempts = new D1AttemptRepo(env.DB);
-  const steps = new D1StepRepo(env.DB);
-  const artifacts = new D1ArtifactRepo(env.DB);
-  const storage = new ArtifactStorage(env.ARTIFACTS);
-  const secretResolver = new ResolveSecrets(
-    new D1SecretRepo(env.DB),
-    config.encryptionKey,
-  );
-  return new ExecuteAttempt({
-    lifecycle: buildAttemptLifecycle(env),
-    runs,
-    attempts,
-    steps,
-    artifacts,
-    storage,
-    resolveSecrets: secretResolver,
-    launchSession: (device) => launchSession(env.BROWSER, device),
-    llm: new OpenAiLlmClient(config),
-    llmUseVision: config.llmUseVision,
-    clock: systemClock,
-    ids: realIds,
   });
 }
 
@@ -618,7 +569,7 @@ export async function queue(
   }
   switch (classifyQueue(batch.queue)) {
     case "runs":
-      await processAttemptBatch(batch, buildAttemptConsumer(env), context);
+      deferExternalRunBatch(batch);
       return;
     case "checks":
       await processCheckBatch(batch, buildCheckConsumer(env), context);

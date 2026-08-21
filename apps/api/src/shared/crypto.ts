@@ -93,6 +93,20 @@ export function timingSafeEqualBytes(
   return difference === 0;
 }
 
+export async function timingSafeEqualText(
+  left: string,
+  right: string,
+): Promise<boolean> {
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(left)),
+    crypto.subtle.digest("SHA-256", encoder.encode(right)),
+  ]);
+  return timingSafeEqualBytes(
+    new Uint8Array(leftDigest),
+    new Uint8Array(rightDigest),
+  );
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const hash = await derivePasswordHash(password, salt, PBKDF2_ITERATIONS);

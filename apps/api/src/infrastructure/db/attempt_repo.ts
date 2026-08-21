@@ -108,17 +108,37 @@ export class D1AttemptRepo implements AttemptRepo {
     return row === null ? null : toAttempt(row);
   }
 
-  async claimQueued(id: string, claimedAt: number): Promise<boolean> {
+  async claimQueued(
+    id: string,
+    claimedAt: number,
+    runnerDeliveryId?: string,
+  ): Promise<boolean> {
     const result = await run(
       this.database
         .prepare(
           `UPDATE test_attempts
-           SET status = 'STARTING', started_at = ?
+           SET status = 'STARTING', started_at = ?, runner_delivery_id = ?
            WHERE id = ? AND status = 'QUEUED' AND queued_at <= ?`,
         )
-        .bind(claimedAt, id, claimedAt),
+        .bind(claimedAt, runnerDeliveryId ?? null, id, claimedAt),
     );
     return result.meta.changes === 1;
+  }
+
+  async isRunnerDeliveryOwner(
+    id: string,
+    runnerDeliveryId: string,
+  ): Promise<boolean> {
+    const row = await one<{ owned: number }>(
+      this.database
+        .prepare(
+          `SELECT 1 AS owned
+           FROM test_attempts
+           WHERE id = ? AND runner_delivery_id = ?`,
+        )
+        .bind(id, runnerDeliveryId),
+    );
+    return row !== null;
   }
 
   async markRunning(
@@ -400,6 +420,7 @@ export class D1AttemptRepo implements AttemptRepo {
         .prepare(
           `UPDATE test_attempts
            SET status = 'QUEUED', queued_at = ?, started_at = NULL,
+               runner_delivery_id = NULL,
                finished_at = NULL, duration_ms = NULL, summary = NULL,
                expected_result = NULL, actual_result = NULL,
                failure_reason = NULL, visited_urls_json = NULL,
@@ -422,6 +443,34 @@ export class D1AttemptRepo implements AttemptRepo {
              ORDER BY started_at ASC, id ASC`,
           )
           .bind(before),
+      )
+    ).map(toAttempt);
+  }
+
+  async listExternallyClaimable(
+    queuedBefore: number,
+    abandonedBefore: number,
+    limit: number,
+  ): Promise<TestAttempt[]> {
+    return (
+      await all<AttemptRow>(
+        this.database
+          .prepare(
+            `SELECT attempts.* FROM test_attempts AS attempts
+             JOIN test_runs AS runs ON runs.id = attempts.test_run_id
+             WHERE runs.status IN ('QUEUED', 'RUNNING')
+               AND (
+                 (attempts.status = 'QUEUED' AND attempts.queued_at <= ?)
+                 OR (
+                   attempts.status IN ('STARTING', 'RUNNING')
+                   AND attempts.started_at IS NOT NULL
+                   AND attempts.started_at < ?
+                 )
+               )
+             ORDER BY attempts.queued_at ASC, attempts.id ASC
+             LIMIT ?`,
+          )
+          .bind(queuedBefore, abandonedBefore, limit),
       )
     ).map(toAttempt);
   }

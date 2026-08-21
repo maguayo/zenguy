@@ -15,6 +15,12 @@ function encodedValue(value: string): string | null {
   }
 }
 
+function formEncodedValue(value: string): string {
+  return new URLSearchParams([["value", value]])
+    .toString()
+    .slice("value=".length);
+}
+
 export class Redactor {
   private readonly replacements: Replacement[];
   private readonly pattern: RegExp | null;
@@ -31,6 +37,10 @@ export class Redactor {
       const encoded = encodedValue(secret.value);
       if (encoded !== null && encoded !== secret.value && encoded.length > 0) {
         replacements.push({ value: encoded, placeholder });
+      }
+      const formEncoded = formEncodedValue(secret.value);
+      if (formEncoded !== secret.value && formEncoded.length > 0) {
+        replacements.push({ value: formEncoded, placeholder });
       }
     }
     replacements.sort((left, right) => right.value.length - left.value.length);

@@ -1,15 +1,17 @@
 # Zenguy API
 
 Zenguy's backend is a Hono application on Cloudflare Workers. It provides
-authentication, workspace RBAC, browser-test execution, uptime monitoring,
-notifications, billing, encrypted secrets, reports, and operational cleanup.
+authentication, workspace RBAC, browser-run queueing and result ingestion,
+uptime monitoring, notifications, billing, encrypted secrets, reports, and
+operational cleanup. Browser and model execution live in the separate local
+Python worker under `runner/`.
 
 ## Prerequisites
 
 - Node.js 22 or newer and pnpm.
 - A Cloudflare account authenticated with Wrangler.
-- Workers Paid for the deployed environments. Zenguy relies on Browser
-  Rendering, five-minute CPU limits, Queues, and Cloudflare Email Service.
+- Workers Paid for the deployed environments. Zenguy relies on Queues, D1,
+  R2, KV, and Cloudflare Email Service.
 - Provider accounts described below.
 
 All commands in this document run from the repository root unless a section
@@ -23,16 +25,17 @@ Install dependencies and create the ignored local secrets file:
     cp apps/api/.dev.vars.example apps/api/.dev.vars
 
 Replace every placeholder in apps/api/.dev.vars. Generate independent values
-for the three local cryptographic secrets:
+for the four local cryptographic/runner secrets:
 
     openssl rand -hex 32
     openssl rand -base64 32
     openssl rand -hex 32
+    openssl rand -hex 32
 
-Use those outputs for JWT_SECRET, ENCRYPTION_KEY, and ARTIFACT_URL_SECRET,
-respectively. Keep apps/api/.dev.vars out of source control. Set
-OPENAI_API_KEY to an OpenAI project key; the checked-in model setting is the
-low-cost gpt-5-mini. No Anthropic credential is used.
+Use those outputs for JWT_SECRET, ENCRYPTION_KEY, ARTIFACT_URL_SECRET, and
+RUNNER_API_TOKEN, respectively. Keep apps/api/.dev.vars out of source control.
+`LLM_MODEL` records the requested local model in each immutable run snapshot.
+The one-command Python worker fixes the matching Bionic model locally.
 
 Apply migrations, load the deterministic demo fixture, and start the API:
 
@@ -43,13 +46,11 @@ Apply migrations, load the deterministic demo fixture, and start the API:
 The API listens on http://localhost:8787 and its health endpoint is
 http://localhost:8787/api/health.
 
-Browser Rendering requires a remote Cloudflare binding:
-
-    pnpm --filter @zenguy/api dev:remote
-
-Current Wrangler remote mode does not consume Queue messages. Use the deployed
-staging Worker for the complete API-to-Queue-to-browser path, or use the
-hybrid local-worker/remote-Browser procedure recorded in the BE-057 deviation.
+The API never consumes `RUN_QUEUE` and never launches a browser. Run the
+external Python worker described in `../../runner/README.md` against the
+staging or production Queue HTTP pull endpoint for the complete path. Local
+Wrangler remains useful for API/UI work, but its local Queue is not the remote
+HTTP pull queue.
 
 The frontend has no runtime environment variables. Run it in a second terminal:
 
@@ -202,21 +203,21 @@ https://www.twilio.com/docs/numbers-and-senders/add-numbers-and-senders.
 5. Complete all regional registration, user opt-in, and template requirements
    before enabling production alerts.
 
-### OpenAI
+### Local browser/model runner
 
-Create an API key following
-https://platform.openai.com/docs/quickstart/make-your-first-api-request and set
-OPENAI_API_KEY. Zenguy uses OpenAI Responses and gpt-5-mini by default to keep
-execution cost low. Change LLM_MODEL only after validating the agent contract
-and cost impact.
+The API has no OpenAI credential and no Browser Rendering binding. Configure a
+Cloudflare Queue HTTP pull consumer, a dedicated `RUNNER_API_TOKEN`, the pinned
+`browser-use` local worker, Google Chrome, and an OpenAI-compatible local model endpoint by following
+`../../runner/README.md`. The configured model id is `qwen/qwen3.8-27b`; use the exact id
+installed in Ollama, LM Studio, or the selected local server.
 
 ### Cloudflare plan
 
 Treat Workers Paid as a release prerequisite for this project. It provides the
-runtime headroom expected by the five-minute browser attempts and the Queue
-consumers. Review current limits and pricing before launch:
+Queue and Worker capacity expected by the API, while five-minute browser
+execution runs only on the external machine. Review current limits and pricing
+before launch:
 
-- https://developers.cloudflare.com/browser-run/pricing/
 - https://developers.cloudflare.com/queues/platform/pricing/
 - https://developers.cloudflare.com/workers/platform/limits/
 
@@ -284,7 +285,7 @@ provider credentials:
     pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env production
 
 Repeat those commands for `JWT_SECRET`, `ENCRYPTION_KEY`,
-`ARTIFACT_URL_SECRET`, `OPENAI_API_KEY`, all five `TWILIO_*` values, and all
+`ARTIFACT_URL_SECRET`, `RUNNER_API_TOKEN`, all five `TWILIO_*` values, and all
 five `PADDLE_*` values. Do not paste secret values into shell history,
 documentation, `wrangler.jsonc`, or Git.
 
@@ -295,13 +296,13 @@ Environment variables are fixed as follows:
 | `ENVIRONMENT` | `staging` | `production` |
 | `APP_URL` | `https://staging-app.zenguy.com` | `https://app.zenguy.com` |
 | `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
-| `LLM_MODEL` | `gpt-5-mini` | `gpt-5-mini` |
+| `LLM_MODEL` | `qwen/qwen3.8-27b` | `qwen/qwen3.8-27b` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
 
 Staging uses only Paddle Sandbox tokens, keys, price IDs, customers, and its
 verified staging webhook secret. Production must use only Paddle Live
-equivalents and its own production webhook secret once activated. Both use
-OpenAI Responses with `gpt-5-mini`; there is no Anthropic credential. Deployed
+equivalents and its own production webhook secret once activated. Browser
+inference is performed by the separately configured local runner. Deployed
 environments use the native Cloudflare Email Service `EMAIL` binding for the
 enabled `zenguy.com` sending domain.
 
@@ -321,8 +322,10 @@ Apply migrations before its Worker deployment:
     pnpm --filter @zenguy/api deploy:production
 
 The normal production deploy is intentionally different from the bootstrap:
-it activates the `/api/*` route, three cron triggers, and all Queue consumers.
-Do not use it as a harmless first upload.
+it activates the `/api/*` route, three cron triggers, and the check,
+notification, and DLQ Worker consumers. The run queue must separately have its
+HTTP pull consumer enabled as documented in `../../runner/README.md`. Do not use
+production as a harmless first upload.
 
 A push to the `staging` branch runs `.github/workflows/staging.yml`: it
 migrates `zenguy-staging-db`, deploys `zenguy-api-staging`, then wipes and
@@ -341,9 +344,9 @@ Each deploy registers these Cron Triggers for that environment:
 - Daily at 03:00 UTC: retention cleanup.
 - At minute 30 of every hour: stale work and billing maintenance.
 
-Under Workers & Pages, verify the three triggers, all six Queue consumers, and
-their dead-letter queues on both `zenguy-api-staging` and
-`zenguy-api-production`.
+Under Workers & Pages, verify the three triggers, five Worker consumers (check,
+notify, and the three DLQs), and one HTTP pull consumer on the run queue in each
+active environment. The run queue must not list the API Worker as its consumer.
 
 ### 5. Verify Pages domains and Worker Routes
 
@@ -390,9 +393,10 @@ first failure:
 3. Create a workspace and complete a Paddle Sandbox checkout. Poll
    `GET /api/workspaces/{workspaceId}/billing` until it is `ACTIVE`, then replay
    the sandbox webhook and confirm it does not duplicate subscription or usage.
-4. Create an `example.com` Browser Test and run **Test it**. Confirm the run
-   reaches `PASSED`, its attempt and screenshots load, and usage increases by
-   exactly one.
+4. Start the local Python runner and its local model, create an `example.com`
+   Browser Test, and run **Test it**. Confirm the run is pulled on the local
+   machine, reaches `PASSED`, its attempt and screenshots load, and usage
+   increases by exactly one.
 5. Create a GET monitor for `https://example.com` expecting 200. Confirm it
    becomes `UP` within five minutes without changing browser-run usage.
 6. Trigger one safe failure and recovery. Confirm one failure delivery and one
@@ -409,10 +413,12 @@ approved release transaction.
 
 ## First-demo acceptance record
 
-The PROJECT.md section 33 flow was executed on 2026-08-19. Because current
-Wrangler remote mode cannot consume Queues, the walkthrough used an isolated
-local D1/R2/Queue state with a real remote Cloudflare Browser binding and the
-OpenAI gpt-5-mini execution path. No production customer data was used.
+The PROJECT.md section 33 flow was executed on 2026-08-19, before the external
+runner migration in this change. That historical walkthrough used an isolated
+local D1/R2/Queue state with a remote Cloudflare Browser binding and OpenAI. It
+is retained only as an acceptance record; the active architecture is the Queue
+HTTP pull + local Python worker documented above. No production customer data
+was used.
 
 | Step | Expected demonstration | Recorded evidence |
 |---:|---|---|
@@ -437,10 +443,9 @@ Service smoke above is the external delivery check.
 
 ### Deployed staging smoke record
 
-The following non-destructive checks were executed against the deployed
-staging origin on 2026-08-19. They use the isolated staging D1, R2, Browser
-Rendering, and Queue resources; they are separate from the local/remote
-first-demo walkthrough above.
+The following checks were executed against the deployed staging origin. They
+use the isolated staging D1, R2, and Queue resources; they are separate from
+the local/remote first-demo walkthrough above.
 
 | Check | Recorded evidence |
 |---|---|
@@ -450,6 +455,10 @@ first-demo walkthrough above.
 | Uptime scheduling | PASS — monitor `mon_01m0dp0x7csks3ypafm0wzkm6y` was claimed by the deployed `*/5` cron and became `UP` |
 | Uptime evidence | PASS — check `chk_01m0dpbz3ey0rtvh09w3bphfx1` finished `PASSED` in 9 ms; history and 24-hour stats each exposed the result |
 | Uptime billing isolation | PASS — browser-run usage stayed at one after the uptime check |
+| External-runner queue topology (2026-08-20) | PASS — `zenguy-staging-runs` has one HTTP pull consumer (15-minute visibility, batch size 1) and no Worker consumer |
+| Local Bionic/Chrome execution (2026-08-20) | PASS — run `run_01m0ftedz912vye0w75yrtqf0j` was enqueued by staging, claimed over HTTP, executed in local Chrome with `qwen/qwen3.8-27b`, persisted as `PASSED`, and acknowledged only after completion |
+| External-runner evidence (2026-08-20) | PASS — attempt `att_01m0ftedz9hj02vmwtzxa1rrwv` recorded runner `zenguy-local-runner/1.0.0`, model `qwen/qwen3.8-27b`, and 2,734 tokens; the disposable smoke test was removed afterwards |
+| Current browser-use runtime smoke (2026-08-20) | PASS — `browser-use 0.13.8` used the current `JobExecutor`, visible Chrome and local `qwen/qwen3.8-27b` to verify `example.com`; structured `done` returned `PASSED` in two steps with one screenshot and 9,886 tokens. This local-only smoke made no Queue/API writes |
 
 The release acceptance is intentionally still open: a real Cloudflare Email
 Service recipient, the corrected Paddle Sandbox notification destination and

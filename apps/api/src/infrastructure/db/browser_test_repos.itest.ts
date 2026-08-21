@@ -352,6 +352,69 @@ describe("D1 browser test repositories", () => {
     ]);
   });
 
+  it("lists externally claimable attempts for the fallback runner", async () => {
+    const runs = new D1RunRepo(testEnv().DB);
+    const attempts = new D1AttemptRepo(testEnv().DB);
+    await runs.insert(
+      testRun({ id: "run_old", testId: null, status: "QUEUED", createdAt: 100 }),
+    );
+    await runs.insert(
+      testRun({ id: "run_fresh", testId: null, status: "QUEUED", createdAt: 500 }),
+    );
+    await runs.insert(
+      testRun({ id: "run_done", testId: null, status: "PASSED", createdAt: 100 }),
+    );
+    await runs.insert(
+      testRun({
+        id: "run_abandoned",
+        testId: null,
+        status: "RUNNING",
+        createdAt: 40,
+      }),
+    );
+    const queued = (id: string, runId: string, queuedAt: number): TestAttempt => ({
+      ...attempt(id),
+      testRunId: runId,
+      status: "QUEUED",
+      queuedAt,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+      systemErrorCode: null,
+    });
+    await attempts.insert(queued("att_old", "run_old", 100));
+    await attempts.insert(queued("att_fresh", "run_fresh", 500));
+    await attempts.insert(queued("att_done", "run_done", 100));
+    await attempts.insert({
+      ...queued("att_abandoned", "run_abandoned", 40),
+      status: "RUNNING",
+      startedAt: 50,
+    });
+
+    const ids = async (
+      queuedBefore: number,
+      abandonedBefore: number,
+      limit: number,
+    ) =>
+      (
+        await attempts.listExternallyClaimable(
+          queuedBefore,
+          abandonedBefore,
+          limit,
+        )
+      ).map((entry) => entry.id);
+
+    await expect(ids(250, 60, 5)).resolves.toEqual(["att_abandoned", "att_old"]);
+    await expect(ids(250, 50, 5)).resolves.toEqual(["att_old"]);
+    await expect(ids(99, 50, 5)).resolves.toEqual([]);
+    await expect(ids(600, 60, 1)).resolves.toEqual(["att_abandoned"]);
+    await expect(ids(600, 60, 5)).resolves.toEqual([
+      "att_abandoned",
+      "att_old",
+      "att_fresh",
+    ]);
+  });
+
   it("resets attempts and round-trips ordered steps and artifacts", async () => {
     const attempts = new D1AttemptRepo(testEnv().DB);
     const steps = new D1StepRepo(testEnv().DB);

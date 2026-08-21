@@ -15,7 +15,6 @@ interface QueueConfig {
 
 interface EnvironmentConfig {
   routes: { pattern: string; zone_name?: string; custom_domain?: boolean }[];
-  browser: { binding: string };
   send_email: {
     name: string;
     remote?: boolean;
@@ -34,7 +33,6 @@ interface EnvironmentConfig {
 }
 
 interface WranglerConfig {
-  browser: { binding: string };
   send_email: EnvironmentConfig["send_email"];
   d1_databases: EnvironmentConfig["d1_databases"];
   kv_namespaces: EnvironmentConfig["kv_namespaces"];
@@ -56,7 +54,6 @@ interface BootstrapConfig {
   preview_urls: boolean;
   observability: { enabled: boolean };
   limits: { cpu_ms: number };
-  browser: EnvironmentConfig["browser"];
   send_email: EnvironmentConfig["send_email"];
   d1_databases: EnvironmentConfig["d1_databases"];
   kv_namespaces: EnvironmentConfig["kv_namespaces"];
@@ -102,7 +99,6 @@ function expectQueueTopology(queues: QueueConfig, prefix: string): void {
   );
   expect([...byName.keys()].sort()).toEqual(
     [
-      `${prefix}-runs`,
       `${prefix}-checks`,
       `${prefix}-notify`,
       `${prefix}-runs-dlq`,
@@ -110,12 +106,7 @@ function expectQueueTopology(queues: QueueConfig, prefix: string): void {
       `${prefix}-notify-dlq`,
     ].sort(),
   );
-  expect(byName.get(`${prefix}-runs`)).toMatchObject({
-    max_batch_size: 1,
-    max_concurrency: 4,
-    max_retries: 3,
-    dead_letter_queue: `${prefix}-runs-dlq`,
-  });
+  expect(byName.has(`${prefix}-runs`)).toBe(false);
   expect(byName.get(`${prefix}-checks`)).toMatchObject({
     max_batch_size: 5,
     max_concurrency: 10,
@@ -176,8 +167,7 @@ describe("wrangler environments", () => {
     expect(staging.vars).toEqual({
       ENVIRONMENT: "staging",
       APP_URL: "https://staging-app.zenguy.com",
-      LLM_MODEL: "gpt-5-mini",
-      LLM_USE_VISION: "true",
+      LLM_MODEL: "qwen/qwen3.8-27b",
       PADDLE_ENVIRONMENT: "sandbox",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
@@ -185,8 +175,7 @@ describe("wrangler environments", () => {
     expect(production.vars).toEqual({
       ENVIRONMENT: "production",
       APP_URL: "https://app.zenguy.com",
-      LLM_MODEL: "gpt-5-mini",
-      LLM_USE_VISION: "true",
+      LLM_MODEL: "qwen/qwen3.8-27b",
       PADDLE_ENVIRONMENT: "production",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
@@ -221,8 +210,6 @@ describe("wrangler environments", () => {
       { binding: "ARTIFACTS", bucket_name: "zenguy-artifacts" },
     ]);
 
-    expect(staging.browser).toEqual({ binding: "BROWSER" });
-    expect(production.browser).toEqual({ binding: "BROWSER" });
     expect(config.send_email).toEqual([
       {
         name: "EMAIL",
@@ -269,7 +256,6 @@ describe("production bootstrap", () => {
         "preview_urls",
         "observability",
         "limits",
-        "browser",
         "send_email",
         "d1_databases",
         "kv_namespaces",
@@ -284,7 +270,6 @@ describe("production bootstrap", () => {
     const production = readConfig().env.production;
     const bootstrap = readBootstrapConfig();
 
-    expect(bootstrap.browser).toEqual(production.browser);
     expect(bootstrap.send_email).toEqual(production.send_email);
     expect(bootstrap.d1_databases).toEqual(production.d1_databases);
     expect(bootstrap.kv_namespaces).toEqual(production.kv_namespaces);
@@ -296,7 +281,7 @@ describe("production bootstrap", () => {
       "JWT_SECRET",
       "ENCRYPTION_KEY",
       "ARTIFACT_URL_SECRET",
-      "OPENAI_API_KEY",
+      "RUNNER_API_TOKEN",
       "TWILIO_ACCOUNT_SID",
       "TWILIO_AUTH_TOKEN",
       "TWILIO_FROM_SMS",

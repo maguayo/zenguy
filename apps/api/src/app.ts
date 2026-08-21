@@ -108,10 +108,18 @@ import { overviewRoutes } from "./http/routes/overview";
 import { auditRoutes } from "./http/routes/audit";
 import { apiKeyRoutes } from "./http/routes/api_keys";
 import { publicApiRoutes } from "./http/routes/public_api";
+import { runnerRoutes } from "./http/routes/runner";
 import type { ApiKeyRepo } from "./domain/api_keys/repo";
 import { D1ApiKeyRepo } from "./infrastructure/db/api_key_repo";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
+import { RecordRunUsage } from "./application/billing/record_run_usage";
+import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
+import { DispatchNotifications } from "./application/channels/dispatch_notifications";
+import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
+import { ExternalRunner } from "./application/execution/external_runner";
+import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
+import { GenerateReport } from "./application/reports/generate_report";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
@@ -162,6 +170,10 @@ export interface AppOverrides {
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
   apiKeys?: ApiKeyRepo;
+  externalRunner?: Pick<
+    ExternalRunner,
+    "claim" | "claimStale" | "start" | "recordStep" | "complete"
+  >;
 }
 
 export function buildApp(
@@ -268,6 +280,65 @@ export function buildApp(
     clock,
     ids: overrides.ids ?? realIds,
   });
+  const externalRunner =
+    overrides.externalRunner ??
+    new ExternalRunner({
+      lifecycle: new AttemptLifecycle({
+        runs,
+        attempts,
+        steps,
+        artifacts,
+        tests: browserTests,
+        workspaces,
+        storage: artifactStorage,
+        recordUsage: new RecordRunUsage(
+          usageEvents,
+          clock,
+          overrides.ids ?? realIds,
+        ),
+        reverseUsage: new ReverseRunUsage(usageEvents, clock),
+        durable: durableWorkflows,
+        outboxPublisher,
+        clock,
+        ids: overrides.ids ?? realIds,
+        runFinalizedHandler: new HandleRunFinalized({
+          incidents,
+          events: incidentEvents,
+          runs,
+          attempts,
+          dispatchNotifications: new DispatchNotifications(
+            channels,
+            durableWorkflows,
+            outboxPublisher,
+            clock,
+            overrides.ids ?? realIds,
+          ),
+          channels,
+          workspaces,
+          reports: new GenerateReport({
+            attempts,
+            steps,
+            artifacts,
+            workspaces,
+            resolveSecrets,
+            storage: artifactStorage,
+            clock,
+            ids: overrides.ids ?? realIds,
+          }),
+          appUrl: config.appUrl,
+          clock,
+          ids: overrides.ids ?? realIds,
+        }),
+      }),
+      runs,
+      attempts,
+      steps,
+      artifacts,
+      storage: artifactStorage,
+      resolveSecrets,
+      clock,
+      ids: overrides.ids ?? realIds,
+    });
 
   app.use("*", requestId);
   app.use("*", securityHeaders);
@@ -297,6 +368,10 @@ export function buildApp(
   app.onError(errorHandler);
 
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));
+  app.route(
+    "/api/runner",
+    runnerRoutes({ token: config.runnerApiToken, runner: externalRunner }),
+  );
   app.route(
     "/api",
     artifactRoutes({ artifacts, storage: artifactStorage, clock, config }),

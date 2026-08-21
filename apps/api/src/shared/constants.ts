@@ -1,4 +1,4 @@
-export const RUNNER_VERSION = "zenguy-runner/1.0.0";
+export const RUNNER_VERSION = "zenguy-local-runner/1.0.0";
 export const ACCESS_TOKEN_TTL_SECONDS = 1800;
 export const REFRESH_TOKEN_TTL_DAYS = 30;
 export const EMAIL_VERIFY_TTL_HOURS = 24;
@@ -21,6 +21,9 @@ export const RETRY_DELAY_SECONDS: Record<number, number> = {
 };
 export const MAX_INFRA_RETRIES = 2;
 export const INFRA_RETRY_DELAY_SECONDS = 30;
+// A queued attempt older than this may be claimed by the fallback runner; the
+// primary (local) worker keeps exclusive first access during the window.
+export const FALLBACK_CLAIM_MIN_AGE_MS = 10_000;
 
 export const MAX_AGENT_STEPS = 40;
 export const MAX_ELEMENTS = 150;

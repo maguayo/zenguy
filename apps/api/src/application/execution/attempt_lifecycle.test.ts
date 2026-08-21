@@ -266,6 +266,27 @@ async function current(
 }
 
 describe("AttemptLifecycle", () => {
+  it("replays a starting claim only for the same external delivery", async () => {
+    const value = await fixture();
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+
+    await expect(value.lifecycle.claim(message, "lease_1")).resolves.toBe(
+      "execute",
+    );
+    await expect(value.lifecycle.claim(message, "lease_1")).resolves.toBe(
+      "execute",
+    );
+    await expect(value.lifecycle.claim(message, "lease_2")).resolves.toBe(
+      "skip",
+    );
+  });
+
   it("runs the full 26.2 flow with delays and records usage once", async () => {
     const value = await fixture();
     const firstMessage: AttemptMessage = {

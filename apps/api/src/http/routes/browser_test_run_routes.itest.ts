@@ -11,6 +11,7 @@ import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
 import { D1BrowserTestRepo } from "../../infrastructure/db/browser_test_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1RunRepo } from "../../infrastructure/db/run_repo";
+import { D1StepRepo } from "../../infrastructure/db/step_repo";
 import { D1SubscriptionRepo } from "../../infrastructure/db/subscription_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
@@ -18,6 +19,7 @@ import { D1DurableWorkflowRepo } from "../../infrastructure/db/durable_workflow_
 import { PublishQueueOutbox } from "../../application/durability/publish_outbox";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
+import { FALLBACK_CLAIM_MIN_AGE_MS } from "../../shared/constants";
 import { FakeIds } from "../../test/fakes/ids";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import type { AppEnv } from "../env";
@@ -184,7 +186,7 @@ describe("browser test run creation routes", () => {
         channelIds: ["ch_email"],
         viewport: { width: 1440, height: 900 },
         modelName: "gpt-5-mini",
-        runnerVersion: "zenguy-runner/1.0.0",
+        runnerVersion: "zenguy-local-runner/1.0.0",
       },
     });
     const initialAttempts = await attempts.listForRun(body.data.runId);
@@ -226,6 +228,202 @@ describe("browser test run creation routes", () => {
     expect(audit[0]).toMatchObject({
       action: "test.run_manual",
       resourceId: TEST.id,
+    });
+  });
+
+  it("lets the external runner claim, start, stream a step, and complete the queued attempt", async () => {
+    const created = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST.id}/run-now`,
+      { method: "POST", headers: headers(ownerToken) },
+    );
+    const createdBody = (await created.json()) as { data: { runId: string } };
+    const message = queue.messages[0];
+    expect(message).toBeDefined();
+    if (message === undefined) throw new Error("Run message missing");
+    const runnerHeaders = headers(
+      `Bearer ${"runner-test-secret".padEnd(32, "-")}`,
+    );
+
+    const claimed = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "cf-message-1", message }),
+    });
+    expect(claimed.status).toBe(200);
+    const claimBody = (await claimed.json()) as {
+      data: {
+        disposition: "EXECUTE";
+        job: { reference: Record<string, unknown>; snapshot: { startUrl: string } };
+      };
+    };
+    expect(claimBody.data).toMatchObject({
+      disposition: "EXECUTE",
+      job: {
+        snapshot: { startUrl: TEST.startUrl },
+        secrets: [],
+      },
+    });
+    const reference = claimBody.data.job.reference;
+
+    const repeatedClaim = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "cf-message-1", message }),
+    });
+    await expect(repeatedClaim.json()).resolves.toMatchObject({
+      data: { disposition: "EXECUTE" },
+    });
+    const competingClaim = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "cf-message-2", message }),
+    });
+    await expect(competingClaim.json()).resolves.toEqual({
+      data: { disposition: "SKIP" },
+    });
+
+    const started = await app.request(
+      `/api/runner/attempts/${message.attemptId}/start`,
+      {
+        method: "POST",
+        headers: runnerHeaders,
+        body: JSON.stringify({ reference }),
+      },
+    );
+    expect(started.status).toBe(200);
+    await expect(started.json()).resolves.toMatchObject({
+      data: { disposition: "STARTED", startedAt: NOW },
+    });
+
+    const step = await app.request(
+      `/api/runner/attempts/${message.attemptId}/steps`,
+      {
+        method: "POST",
+        headers: runnerHeaders,
+        body: JSON.stringify({
+          reference,
+          step: {
+            sequence: 1,
+            actionType: "navigate",
+            description: "Opened the checkout",
+            url: TEST.startUrl,
+            result: "OK",
+            screenshotJpegBase64: null,
+          },
+        }),
+      },
+    );
+    expect(step.status).toBe(200);
+
+    const completed = await app.request(
+      `/api/runner/attempts/${message.attemptId}/complete`,
+      {
+        method: "POST",
+        headers: runnerHeaders,
+        body: JSON.stringify({
+          reference,
+          outcome: {
+            status: "PASSED",
+            summary: "Checkout is available",
+            expectedResult: "Checkout loads",
+            actualResult: "Checkout loaded",
+            tokenUsage: 120,
+            modelName: "qwen3:8b",
+            runnerVersion: "zenguy-local-runner/1.0.0",
+            visitedUrls: [TEST.startUrl],
+            consoleErrors: [],
+            networkErrors: [],
+          },
+        }),
+      },
+    );
+    expect(completed.status).toBe(200);
+    await expect(completed.json()).resolves.toEqual({
+      data: { disposition: "COMPLETED" },
+    });
+
+    await expect(runs.findById(WORKSPACE.id, createdBody.data.runId)).resolves.toMatchObject({
+      status: "PASSED",
+      attemptCount: 1,
+      billable: true,
+    });
+    await expect(attempts.findById(message.attemptId)).resolves.toMatchObject({
+      status: "PASSED",
+      modelName: "qwen3:8b",
+      runnerVersion: "zenguy-local-runner/1.0.0",
+    });
+    await expect(
+      new D1StepRepo(testEnv().DB).listForAttempt(message.attemptId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        sequence: 1,
+        actionType: "navigate",
+        description: "Opened the checkout",
+        result: "OK",
+      }),
+    ]);
+  });
+
+  it("hands unclaimed attempts to the fallback runner only after the delay", async () => {
+    const created = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST.id}/run-now`,
+      { method: "POST", headers: headers(ownerToken) },
+    );
+    expect(created.status).toBe(202);
+    const message = queue.messages[0];
+    if (message === undefined) throw new Error("Run message missing");
+    const runnerHeaders = headers(
+      `Bearer ${"runner-test-secret".padEnd(32, "-")}`,
+    );
+
+    const early = await app.request("/api/runner/attempts/claim-stale", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "fallback-vps-1" }),
+    });
+    expect(early.status).toBe(200);
+    await expect(early.json()).resolves.toEqual({
+      data: { disposition: "SKIP" },
+    });
+
+    const laterApp = buildApp(testEnv(), {
+      clock: new FixedClock(NOW + FALLBACK_CLAIM_MIN_AGE_MS),
+      ids: new FakeIds(),
+      runQueue: queue,
+    });
+    const claimed = await laterApp.request("/api/runner/attempts/claim-stale", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "fallback-vps-1" }),
+    });
+    expect(claimed.status).toBe(200);
+    const claimedBody = (await claimed.json()) as {
+      data: { disposition: string; job: { reference: Record<string, unknown> } };
+    };
+    expect(claimedBody.data).toMatchObject({
+      disposition: "EXECUTE",
+      job: {
+        reference: {
+          runId: message.runId,
+          attemptId: message.attemptId,
+          attemptIndex: 0,
+          executionGeneration: message.executionGeneration,
+          deliveryId: "fallback-vps-1",
+        },
+        snapshot: { startUrl: TEST.startUrl },
+      },
+    });
+    await expect(attempts.findById(message.attemptId)).resolves.toMatchObject({
+      status: "STARTING",
+    });
+
+    const localClaim = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({ deliveryId: "cf-late-delivery", message }),
+    });
+    await expect(localClaim.json()).resolves.toEqual({
+      data: { disposition: "SKIP" },
     });
   });
 
