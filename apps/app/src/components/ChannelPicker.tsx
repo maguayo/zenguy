@@ -9,6 +9,11 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { colors, radius, spacing } from "@/theme";
 import { Badge, Body, Card, ErrorState, Label, Muted, Spinner } from "@/ui";
 
+/** Channels flagged as workspace defaults (enabled only), preselected on new tests/monitors. */
+export function defaultChannelIds(channels: Channel[]): string[] {
+  return channels.filter((channel) => channel.enabled && channel.isDefault === true).map((channel) => channel.id);
+}
+
 export function toggleChannelId(value: string[], channelId: string): string[] {
   return value.includes(channelId)
     ? value.filter((candidate) => candidate !== channelId)

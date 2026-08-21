@@ -42,6 +42,7 @@ experiences them, and alerts the team when something breaks.
 zenguy/
 ├── apps/
 │   ├── api/      # Cloudflare Worker API, queues, crons, and storage adapters
+│   ├── app/      # Expo (React Native) iOS app — standalone pnpm root, see apps/app/README.md
 │   ├── frontend/ # React application
 │   └── website/  # Astro public website
 ├── runner/        # External Python Queue consumer, browser-use, Chrome and local LLM
@@ -51,7 +52,8 @@ zenguy/
 ```
 
 See `apps/api/README.md` / `apps/frontend/README.md` for service-specific setup and
-staging and production deployment details.
+staging and production deployment details, and `apps/app/README.md` for the iOS app
+(Expo; `pnpm app:install`, `pnpm app:ios`).
 
 ## Deployment architecture and current status
 

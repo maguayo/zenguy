@@ -25,9 +25,23 @@ export async function register(name: string, email: string, password: string): P
   return result.user;
 }
 
+export class SessionStorageError extends Error {
+  constructor() {
+    super("Couldn't store the session securely on this device.");
+    this.name = "SessionStorageError";
+  }
+}
+
 export async function login(email: string, password: string): Promise<AuthSession> {
   const session = await apiPost<AuthSession>("/api/auth/login", { email, password });
-  await storeSession(session);
+  try {
+    await storeSession(session);
+  } catch {
+    // Keychain unavailable (for example an unsigned build): never keep a
+    // half-stored session around.
+    await clearSession();
+    throw new SessionStorageError();
+  }
   return session;
 }
 

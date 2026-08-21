@@ -404,7 +404,9 @@ export interface IncidentDelivery {
   attemptCount: number;
   channelName: string;
   channelType: ChannelType;
+  costCents?: number | null;
   createdAt: string;
+  destinationCountry?: string | null;
   errorSanitized: string | null;
   eventType: "FAILURE" | "RECOVERY";
   id: string;

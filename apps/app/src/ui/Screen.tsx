@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
   KeyboardAvoidingView,
   RefreshControl,
@@ -23,6 +23,8 @@ interface Props {
   /** Safe-area edges to respect; headers/tab bars handle top/bottom by default. */
   safe?: Edge[];
   scroll?: boolean;
+  /** Access to the underlying ScrollView (for programmatic scrolling). */
+  scrollRef?: Ref<ScrollView>;
 }
 
 export function Screen({
@@ -34,9 +36,11 @@ export function Screen({
   refreshing = false,
   safe = [],
   scroll = true,
+  scrollRef,
 }: Props) {
   const content = scroll ? (
     <ScrollView
+      ref={scrollRef}
       alwaysBounceVertical
       contentContainerStyle={[padded && styles.padded, styles.grow, contentContainerStyle]}
       contentInsetAdjustmentBehavior="automatic"

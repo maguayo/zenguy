@@ -1,0 +1,27 @@
+appId: com.zenguy.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 60000
+- tapOn:
+    id: "signin-email"
+- inputText: "marcos@aguayo.es"
+- tapOn:
+    id: "signin-password"
+- inputText: "abc123456"
+- takeScreenshot: dbg-0-filled
+- tapOn: "Welcome back"
+- takeScreenshot: dbg-1-after-dismiss
+- tapOn:
+    id: "signin-submit"
+- takeScreenshot: dbg-2-immediately
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: dbg-3-after-3s
+- extendedWaitUntil:
+    visible: "Loading"
+    timeout: 3000
+    optional: true
+- takeScreenshot: dbg-4-after-6s

@@ -1,0 +1,27 @@
+# Smoke flow: sign in with the seeded local account and reach the Overview.
+# Run: maestro test maestro/sign-in.yaml (simulator booted, Metro + local API running)
+appId: com.zenguy.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 60000
+- takeScreenshot: smoke-01-sign-in
+- tapOn:
+    id: "signin-email"
+- inputText: "marcos@aguayo.es"
+- tapOn:
+    id: "signin-password"
+- inputText: "abc123456"
+- tapOn: "Welcome back"
+- tapOn:
+    id: "signin-submit"
+# iOS may offer to save the password; the prompt belongs to the system, not the app.
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "Usage this cycle"
+    timeout: 30000
+- takeScreenshot: smoke-02-overview

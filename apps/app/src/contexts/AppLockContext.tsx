@@ -82,7 +82,10 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const backgroundedAt = useRef<number | null>(null);
   const preferencesRef = useRef(preferences);
-  preferencesRef.current = preferences;
+
+  useEffect(() => {
+    preferencesRef.current = preferences;
+  }, [preferences]);
 
   useEffect(() => {
     let active = true;

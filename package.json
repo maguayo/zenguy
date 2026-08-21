@@ -1,12 +1,19 @@
 {
   "name": "zenguy",
   "private": true,
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev:api": "pnpm --filter @zenguy/api dev",
     "dev:frontend": "pnpm --filter @zenguy/frontend dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "app:install": "pnpm --dir apps/app install",
+    "app:start": "pnpm --dir apps/app start",
+    "app:ios": "pnpm --dir apps/app ios",
+    "app:test": "pnpm --dir apps/app test",
+    "app:typecheck": "pnpm --dir apps/app typecheck"
   }
 }

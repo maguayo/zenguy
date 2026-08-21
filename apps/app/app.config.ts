@@ -57,7 +57,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
   ],
   experiments: {
-    typedRoutes: true,
+    // Typed routes reject string-built hrefs and only exist after `expo start`,
+    // which makes typecheck non-deterministic; routes are covered by tests instead.
+    typedRoutes: false,
   },
   extra: {
     router: {},

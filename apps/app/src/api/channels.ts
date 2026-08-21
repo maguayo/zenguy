@@ -15,6 +15,7 @@ import type {
 
 export interface CreateChannelInput {
   config: ChannelConfigInput;
+  isDefault?: boolean;
   name: string;
   type: ChannelType;
 }
@@ -22,6 +23,7 @@ export interface CreateChannelInput {
 export interface UpdateChannelInput {
   config?: ChannelConfigInput;
   enabled?: boolean;
+  isDefault?: boolean;
   name?: string;
 }
 

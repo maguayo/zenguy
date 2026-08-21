@@ -54,7 +54,7 @@ export default function SignIn() {
       description="Sign in to your workspace."
       footer={
         <Muted>
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/(auth)/sign-up">
             <Label color={colors.accentDark}>Sign up</Label>
           </Link>
@@ -77,6 +77,7 @@ export default function SignIn() {
                 keyboardType="email-address"
                 placeholder="you@company.com"
                 returnKeyType="next"
+                testID="signin-email"
                 textContentType="username"
                 value={field.value}
                 onBlur={field.onBlur}
@@ -96,6 +97,7 @@ export default function SignIn() {
                 autoComplete="current-password"
                 invalid={Boolean(fieldState.error)}
                 returnKeyType="go"
+                testID="signin-password"
                 textContentType="password"
                 value={field.value}
                 onBlur={field.onBlur}
@@ -115,6 +117,7 @@ export default function SignIn() {
           fullWidth
           loading={form.formState.isSubmitting}
           size="lg"
+          testID="signin-submit"
           title="Sign in"
           variant="primary"
           onPress={() => void submit()}

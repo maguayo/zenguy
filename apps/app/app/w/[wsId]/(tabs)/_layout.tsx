@@ -7,10 +7,20 @@ import { colors } from "@/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
-function icon(active: IconName, inactive: IconName) {
-  return ({ color, focused, size }: { color: ColorValue; focused: boolean; size: number }) => (
-    <Ionicons color={color} name={focused ? active : inactive} size={size} />
-  );
+function TabIcon({
+  active,
+  color,
+  focused,
+  inactive,
+  size,
+}: {
+  active: IconName;
+  color: ColorValue;
+  focused: boolean;
+  inactive: IconName;
+  size: number;
+}) {
+  return <Ionicons color={color} name={focused ? active : inactive} size={size} />;
 }
 
 export default function WorkspaceTabs() {
@@ -23,11 +33,49 @@ export default function WorkspaceTabs() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
-      <Tabs.Screen name="(overview)" options={{ tabBarIcon: icon("grid", "grid-outline"), title: "Overview" }} />
-      <Tabs.Screen name="(tests)" options={{ tabBarIcon: icon("globe", "globe-outline"), title: "Tests" }} />
-      <Tabs.Screen name="(uptime)" options={{ tabBarIcon: icon("pulse", "pulse-outline"), title: "Uptime" }} />
-      <Tabs.Screen name="(incidents)" options={{ tabBarIcon: icon("alert-circle", "alert-circle-outline"), title: "Incidents" }} />
-      <Tabs.Screen name="(more)" options={{ tabBarIcon: icon("ellipsis-horizontal-circle", "ellipsis-horizontal-circle-outline"), title: "More" }} />
+      <Tabs.Screen
+        name="(overview)"
+        options={{
+          tabBarIcon: (props) => <TabIcon {...props} active="grid" inactive="grid-outline" />,
+          title: "Overview",
+        }}
+      />
+      <Tabs.Screen
+        name="(tests)"
+        options={{
+          tabBarIcon: (props) => <TabIcon {...props} active="globe" inactive="globe-outline" />,
+          title: "Tests",
+        }}
+      />
+      <Tabs.Screen
+        name="(uptime)"
+        options={{
+          tabBarIcon: (props) => <TabIcon {...props} active="pulse" inactive="pulse-outline" />,
+          title: "Uptime",
+        }}
+      />
+      <Tabs.Screen
+        name="(incidents)"
+        options={{
+          tabBarIcon: (props) => (
+            <TabIcon {...props} active="alert-circle" inactive="alert-circle-outline" />
+          ),
+          title: "Incidents",
+        }}
+      />
+      <Tabs.Screen
+        name="(more)"
+        options={{
+          tabBarIcon: (props) => (
+            <TabIcon
+              {...props}
+              active="ellipsis-horizontal-circle"
+              inactive="ellipsis-horizontal-circle-outline"
+            />
+          ),
+          title: "More",
+        }}
+      />
     </Tabs>
   );
 }
