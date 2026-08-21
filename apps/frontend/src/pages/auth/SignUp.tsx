@@ -60,7 +60,7 @@ export default function SignUp() {
 
   return (
     <AuthShell
-      description="Start watching your site in minutes."
+      description="Start free with the complete Zenguy plan. No card required."
       footer={
         <>
           Already have an account?{" "}

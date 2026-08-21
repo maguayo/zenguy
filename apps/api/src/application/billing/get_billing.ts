@@ -3,6 +3,7 @@ import type {
   SubscriptionSource,
   SubscriptionStatus,
 } from "../../domain/billing/types";
+import { isComplimentarySubscription } from "../../domain/billing/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type {
@@ -54,6 +55,7 @@ export class GetBilling {
     const subscription = await this.subscriptions.findByWorkspace(
       input.workspaceId,
     );
+    const complimentary = isComplimentarySubscription(subscription);
     const usage = await this.getCycleUsage.execute({
       workspaceId: input.workspaceId,
     });
@@ -93,14 +95,16 @@ export class GetBilling {
     }
     return {
       plan: {
-        pricePerMonthCents: PLAN_PRICE_CENTS,
+        pricePerMonthCents: complimentary ? 0 : PLAN_PRICE_CENTS,
         currency: "EUR",
         includedRuns: INCLUDED_RUNS,
-        overagePerRunCents: OVERAGE_CENTS_PER_RUN,
+        overagePerRunCents: complimentary ? 0 : OVERAGE_CENTS_PER_RUN,
       },
       subscription: {
         status: subscription?.status ?? "NONE",
-        source: subscription?.source === "grant" ? "grant" : "paddle",
+        source:
+          subscription?.source ??
+          (subscription?.provider === "internal" ? "free" : "paddle"),
         periodStart: subscription?.periodStart ?? null,
         periodEnd: subscription?.periodEnd ?? null,
         cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,

@@ -4,6 +4,7 @@ import type { User } from "../../domain/users/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
 import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
+import { D1SubscriptionRepo } from "../../infrastructure/db/subscription_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
@@ -16,7 +17,7 @@ interface WorkspaceJson {
   slug: string;
   timezone: string;
   role: "OWNER" | "ADMIN" | "MEMBER";
-  subscriptionStatus: "NONE";
+  subscriptionStatus: "ACTIVE";
   createdAt: string;
 }
 
@@ -66,6 +67,7 @@ describe("workspace routes", () => {
   let app: Hono<AppEnv>;
   let users: D1UserRepo;
   let members: D1MemberRepo;
+  let subscriptions: D1SubscriptionRepo;
   let audits: D1AuditRepo;
   let tokens: Record<keyof typeof USERS, string>;
 
@@ -74,6 +76,7 @@ describe("workspace routes", () => {
     const bindings = testEnv();
     users = new D1UserRepo(bindings.DB);
     members = new D1MemberRepo(bindings.DB);
+    subscriptions = new D1SubscriptionRepo(bindings.DB);
     audits = new D1AuditRepo(bindings.DB);
     for (const user of Object.values(USERS)) await users.insert(user);
     const config = loadConfig(bindings);
@@ -104,12 +107,21 @@ describe("workspace routes", () => {
       slug: "acme-team",
       timezone: "Europe/Madrid",
       role: "OWNER",
-      subscriptionStatus: "NONE",
+      subscriptionStatus: "ACTIVE",
     });
     expect(Number.isNaN(Date.parse(created.createdAt))).toBe(false);
     await expect(members.find(created.id, USERS.owner.id)).resolves.toMatchObject(
       { role: "OWNER", invitedBy: null },
     );
+    await expect(subscriptions.findByWorkspace(created.id)).resolves.toMatchObject({
+      provider: "internal",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      source: "free",
+      status: "ACTIVE",
+      periodStart: null,
+      periodEnd: null,
+    });
 
     const listResponse = await app.request("/api/workspaces", {
       headers: { Authorization: tokens.owner },

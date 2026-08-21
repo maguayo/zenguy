@@ -82,6 +82,10 @@ export default function BillingSetup() {
     queryFn: () => getWorkspace(wsId),
     queryKey: ["ws", wsId],
   });
+  const billingConfigQuery = useQuery({
+    queryFn: getBillingConfig,
+    queryKey: ["billing-config"],
+  });
   const isOwner = workspaceQuery.data?.role === "OWNER";
   const membersQuery = useQuery({
     enabled: Boolean(wsId) && workspaceQuery.isSuccess && !isOwner,
@@ -119,6 +123,11 @@ export default function BillingSetup() {
     setPhase("opening");
     try {
       const config = await getBillingConfig();
+      if (config.mode !== "paddle") {
+        toast.error("Free access should activate automatically. Please try again.");
+        setPhase("idle");
+        return;
+      }
       await loadPaddle();
       await initPaddle(config);
       openCheckout({
@@ -154,6 +163,34 @@ export default function BillingSetup() {
     workspaceQuery.data.subscriptionStatus === "PAST_DUE"
   ) {
     return <Navigate replace to={`/w/${wsId}/overview`} />;
+  }
+  if (billingConfigQuery.isPending) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Spinner label="Loading plan" size={6} />
+      </div>
+    );
+  }
+  if (billingConfigQuery.isError) {
+    return (
+      <main className="mx-auto max-w-xl px-4 py-12">
+        <ErrorState onRetry={() => void billingConfigQuery.refetch()} />
+      </main>
+    );
+  }
+  if (billingConfigQuery.data.mode === "free") {
+    return (
+      <AuthShell
+        description="Every workspace receives the complete Zenguy plan for free during launch. No card is required."
+        title="Free access"
+      >
+        <ErrorState
+          message="This workspace was not activated automatically. Check again; if it persists, contact privacy@zenguy.com."
+          onRetry={() => void workspaceQuery.refetch()}
+          retryLabel="Check again"
+        />
+      </AuthShell>
+    );
   }
   if (!isOwner && membersQuery.isPending) {
     return (

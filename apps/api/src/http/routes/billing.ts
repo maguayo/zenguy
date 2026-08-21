@@ -54,16 +54,25 @@ export function billingRoutes(
 
   app.get("/billing/config", auth, (context) => {
     const paddle = dependencies.config.paddle;
-    if (paddle === null) throw unavailable("Billing is not configured");
+    const canIssueComplimentaryGrants =
+      dependencies.config.complimentaryIssuerEmails.includes(
+        context.get("user").email.trim().toLowerCase(),
+      );
+    if (paddle === null) {
+      return context.json({
+        data: {
+          mode: "free" as const,
+          canIssueComplimentaryGrants,
+        },
+      });
+    }
     return context.json({
       data: {
+        mode: "paddle" as const,
         environment: paddle.environment,
         clientToken: paddle.clientToken,
         priceId: paddle.priceId,
-        canIssueComplimentaryGrants:
-          dependencies.config.complimentaryIssuerEmails.includes(
-            context.get("user").email.trim().toLowerCase(),
-          ),
+        canIssueComplimentaryGrants,
       },
     });
   });

@@ -21,14 +21,18 @@ interface SubscriptionRow {
 }
 
 function toSubscription(row: SubscriptionRow): Subscription {
-  if (row.provider !== "paddle") {
+  if (row.provider !== "internal" && row.provider !== "paddle") {
     throw new Error("Unsupported billing provider");
   }
+  const source =
+    row.source === "free" || row.source === "grant"
+      ? row.source
+      : "paddle";
   const subscription: Subscription = {
     id: row.id,
     workspaceId: row.workspace_id,
-    provider: "paddle",
-    source: row.source === "grant" ? "grant" : "paddle",
+    provider: row.provider,
+    source,
     providerCustomerId: row.provider_customer_id,
     providerSubscriptionId: row.provider_subscription_id,
     status: row.status,
@@ -83,7 +87,8 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
           subscription.id,
           subscription.workspaceId,
           subscription.provider,
-          subscription.source === "grant" ? "grant" : "paddle",
+          subscription.source ??
+            (subscription.provider === "internal" ? "free" : "paddle"),
           subscription.providerCustomerId,
           subscription.providerSubscriptionId,
           subscription.status,

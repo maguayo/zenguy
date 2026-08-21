@@ -118,6 +118,48 @@ describe("GetCycleUsage", () => {
     });
   });
 
+  it("uses a monthly cycle and never bills the free launch plan", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      provider: "internal",
+      source: "free",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      periodStart: null,
+      periodEnd: null,
+    });
+    const usageEvents = new FakeUsageEventRepo();
+    await usageEvents.insertIfAbsent({
+      id: "ue_free_launch",
+      workspaceId: "ws_primary",
+      testRunId: "run_free_launch",
+      type: "BROWSER_RUN",
+      quantity: 350,
+      billable: true,
+      idempotencyKey: "run:run_free_launch",
+      occurredAt: Date.parse("2026-08-20T12:00:00Z"),
+      reversedAt: null,
+      createdAt: Date.parse("2026-08-20T12:00:00Z"),
+    });
+    const getUsage = new GetCycleUsage(
+      subscriptions,
+      usageEvents,
+      new FixedClock(Date.parse("2026-08-20T12:00:00Z")),
+    );
+
+    await expect(getUsage.execute({ workspaceId: "ws_primary" })).resolves.toEqual({
+      periodStart: Date.parse("2026-08-01T00:00:00Z"),
+      periodEnd: Date.parse("2026-09-01T00:00:00Z"),
+      billableRuns: 350,
+      includedRuns: 300,
+      remainingRuns: 0,
+      overageRuns: 0,
+      overageAmountCents: 0,
+      projectedTotalCents: 0,
+    });
+  });
+
   it("falls back to the current UTC calendar month without usable periods", async () => {
     const subscriptions = new FakeSubscriptionRepo();
     await subscriptions.upsertByWorkspace({

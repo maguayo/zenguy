@@ -12,14 +12,14 @@ describe("workspace navigation", () => {
       "Notifications",
       "Secrets",
       "Members",
-      "Usage & Billing",
+      "Plan & Usage",
       "Workspace Settings",
     ]);
   });
 
   it("hides billing when the role cannot view it", () => {
     const memberItems = visibleNavigationItems(() => false);
-    expect(memberItems.map((item) => item.label)).not.toContain("Usage & Billing");
+    expect(memberItems.map((item) => item.label)).not.toContain("Plan & Usage");
     expect(memberItems).toHaveLength(navigationItems.length - 1);
   });
 

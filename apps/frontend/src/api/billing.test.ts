@@ -49,6 +49,7 @@ describe("billing API", () => {
           canIssueComplimentaryGrants: false,
           clientToken: "test_token",
           environment: "sandbox",
+          mode: "paddle",
           priceId: "pri_1",
         });
       }
@@ -57,7 +58,10 @@ describe("billing API", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(getBillingConfig()).resolves.toMatchObject({ environment: "sandbox" });
+    await expect(getBillingConfig()).resolves.toMatchObject({
+      environment: "sandbox",
+      mode: "paddle",
+    });
     await expect(getBilling("ws/one")).resolves.toEqual(billing);
     await expect(getInvoiceUrl("ws/one", "txn two")).resolves.toBe(
       "https://paddle.test/invoice.pdf",

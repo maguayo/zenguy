@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { Invoice } from "../../api/types";
-import { invoiceColumns, invoiceStatus, subscriptionPresentation } from "./BillingPage";
+import {
+  invoiceColumns,
+  invoiceStatus,
+  planPresentation,
+  subscriptionPresentation,
+} from "./BillingPage";
 
 const invoice: Invoice = {
   billedAt: "2026-08-01T10:00:00.000Z",
@@ -25,6 +30,21 @@ describe("billing page", () => {
     expect(subscriptionPresentation("ACTIVE")).not.toEqual({
       label: "Complimentary",
       tone: "ok",
+    });
+  });
+
+  it("presents free launch access without payment controls", () => {
+    expect(planPresentation("free", "ACTIVE")).toEqual({
+      description:
+        "300 browser runs each month · extra runs are free during launch · Unlimited members",
+      label: "Free",
+      name: "Zenguy — Free",
+      paid: false,
+      tone: "ok",
+    });
+    expect(planPresentation("paddle", "ACTIVE")).toMatchObject({
+      name: "Zenguy — 39 €/month",
+      paid: true,
     });
   });
 

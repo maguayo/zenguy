@@ -4,7 +4,12 @@ import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getBilling, getInvoiceUrl } from "../../api/billing";
-import type { Billing, Invoice, SubscriptionStatus } from "../../api/types";
+import type {
+  Billing,
+  Invoice,
+  SubscriptionSource,
+  SubscriptionStatus,
+} from "../../api/types";
 import { AccessDenied } from "../../components/AccessDenied";
 import { UsageMeter } from "../../components/UsageMeter";
 import { Badge, type BadgeProps } from "../../components/ui/Badge";
@@ -54,6 +59,46 @@ export function invoiceStatus(status: string): SubscriptionPresentation {
     return { label: normalized === "FAILED" ? "Failed" : "Canceled", tone: "danger" };
   }
   return { label: status, tone: "neutral" };
+}
+
+export interface PlanPresentation extends SubscriptionPresentation {
+  description: string;
+  name: string;
+  paid: boolean;
+}
+
+export function planPresentation(
+  source: SubscriptionSource | undefined,
+  status: SubscriptionStatus,
+): PlanPresentation {
+  if (source === "free") {
+    return {
+      description:
+        "300 browser runs each month · extra runs are free during launch · Unlimited members",
+      label: "Free",
+      name: "Zenguy — Free",
+      paid: false,
+      tone: "ok",
+    };
+  }
+  if (source === "grant") {
+    return {
+      description:
+        "300 runs included · extra runs are not billed · Unlimited members",
+      label: "Complimentary",
+      name: "Zenguy — complimentary",
+      paid: false,
+      tone: "ok",
+    };
+  }
+  const subscription = subscriptionPresentation(status);
+  return {
+    ...subscription,
+    description:
+      "300 runs included · 0,20 € per extra run · Unlimited members",
+    name: "Zenguy — 39 €/month",
+    paid: true,
+  };
 }
 
 export function invoiceColumns(
@@ -115,27 +160,23 @@ function BillingSkeleton() {
 
 function PlanCard({ billing }: { billing: Billing }) {
   const { current, timezone } = useWorkspace();
-  const complimentary = billing.subscription.source === "grant";
-  const status = complimentary
-    ? { label: "Complimentary", tone: "ok" as const }
-    : subscriptionPresentation(billing.subscription.status);
+  const plan = planPresentation(
+    billing.subscription.source,
+    billing.subscription.status,
+  );
   const needsSetup =
-    !complimentary &&
+    plan.paid &&
     (billing.subscription.status === "NONE" || billing.subscription.status === "CANCELED");
 
   return (
     <Card title="Plan">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-lg font-semibold text-zinc-900">
-          {complimentary ? "Zenguy — complimentary" : "Zenguy — 39 €/month"}
+          {plan.name}
         </p>
-        <Badge tone={status.tone}>{status.label}</Badge>
+        <Badge tone={plan.tone}>{plan.label}</Badge>
       </div>
-      <p className="mt-3 text-sm text-zinc-600">
-        {complimentary
-          ? "300 runs included · extra runs are not billed · Unlimited members"
-          : "300 runs included · 0,20 € per extra run · Unlimited members"}
-      </p>
+      <p className="mt-3 text-sm text-zinc-600">{plan.description}</p>
       {billing.subscription.cancelAtPeriodEnd && billing.subscription.periodEnd ? (
         <p className="mt-4 rounded-md border border-warn-600/25 bg-warn-50 p-3 text-sm text-warn-600">
           Your subscription ends on {formatDateTime(billing.subscription.periodEnd, timezone)}.
@@ -274,7 +315,7 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Usage & Billing" />
+      <PageHeader title="Plan & Usage" />
       {billing.isPending ? (
         <BillingSkeleton />
       ) : billing.isError ? (
@@ -283,8 +324,15 @@ export default function BillingPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <PlanCard billing={billing.data} />
           <UsageCard billing={billing.data} />
-          <InvoicesCard billing={billing.data} />
-          <PaymentCard billing={billing.data} />
+          {planPresentation(
+            billing.data.subscription.source,
+            billing.data.subscription.status,
+          ).paid ? (
+            <>
+              <InvoicesCard billing={billing.data} />
+              <PaymentCard billing={billing.data} />
+            </>
+          ) : null}
         </div>
       )}
     </div>

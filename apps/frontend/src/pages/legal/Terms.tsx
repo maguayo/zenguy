@@ -61,11 +61,14 @@ export default function Terms() {
 
       <LegalSection title="5. Fees and third-party services">
         <p>
-          Paid features, usage charges, taxes, billing cycles, and cancellation
-          terms shown at purchase form part of these Terms. Third-party services
-          such as Cloudflare, Twilio, OpenAI, and Paddle may have their own terms
-          and availability. Zenguy is not responsible for third-party systems
-          outside our reasonable control.
+          During Zenguy's free launch, no payment method is required and no
+          subscription or usage fee is charged. The product limits shown in the
+          application still apply. If paid plans are introduced later, their
+          price, usage charges, taxes, billing cycle, and cancellation terms will
+          be shown before purchase and will require your express agreement.
+          Third-party services such as Cloudflare, Twilio, OpenAI, and Paddle may
+          have their own terms and availability. Zenguy is not responsible for
+          third-party systems outside our reasonable control.
         </p>
       </LegalSection>
 

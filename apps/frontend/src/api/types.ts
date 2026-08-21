@@ -45,14 +45,24 @@ export interface PublicInvitation {
   workspaceName: string;
 }
 
-export type SubscriptionSource = "paddle" | "grant";
+export type SubscriptionSource = "free" | "grant" | "paddle";
 
-export interface BillingConfig {
+interface BillingConfigBase {
   canIssueComplimentaryGrants?: boolean;
+}
+
+export interface FreeBillingConfig extends BillingConfigBase {
+  mode: "free";
+}
+
+export interface PaddleBillingConfig extends BillingConfigBase {
+  mode: "paddle";
   clientToken: string;
   environment: "sandbox" | "production";
   priceId: string;
 }
+
+export type BillingConfig = FreeBillingConfig | PaddleBillingConfig;
 
 export interface Usage {
   billableRuns: number;
@@ -79,8 +89,8 @@ export interface Billing {
   plan: {
     currency: "EUR";
     includedRuns: 300;
-    overagePerRunCents: 20;
-    pricePerMonthCents: 3900;
+    overagePerRunCents: number;
+    pricePerMonthCents: number;
   };
   subscription: {
     cancelAtPeriodEnd: boolean;

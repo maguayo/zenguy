@@ -79,7 +79,7 @@ export default function CreateWorkspace() {
       const workspace = await createWorkspace(values);
       localStorage.setItem("zenguy:lastWorkspace", workspace.id);
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      navigate(`/w/${workspace.id}/setup/billing`, { replace: true });
+      navigate(`/w/${workspace.id}/overview`, { replace: true });
     } catch (error) {
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
@@ -97,7 +97,7 @@ export default function CreateWorkspace() {
 
   return (
     <AuthShell
-      description="Set the name and timezone your team will use for schedules and reports."
+      description="Set the name and timezone your team will use. Free access starts immediately — no card required."
       footer={
         backWorkspace ? (
           <Link
