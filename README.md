@@ -10,12 +10,12 @@ experiences them, and alerts the team when something breaks.
 - **Browser tests written in plain language.** A test is a start URL plus
   written instructions such as "Check that the page shows the heading
   'Example Domain' and contains a link labeled 'More information'". An
-  LLM-driven agent (OpenAI `gpt-5-mini` by default) executes those
-  instructions in a real headless browser through Cloudflare Browser
-  Rendering, on desktop or mobile viewports, on a schedule or on demand,
-  with automatic retries. Every run keeps its verdict, expected versus
-  actual result, step timeline, screenshots, visited URLs, and
-  console/network summaries.
+  `browser-use` Agent executes those instructions in an isolated Chrome on a
+  separate computer, using an OpenAI-compatible model served locally (the
+  example is Qwen). The application publishes attempts to Cloudflare Queue; the local
+  Python worker pulls them, runs its own browser/model, and posts steps and the
+  outcome back. Every run keeps its verdict, expected versus actual result,
+  step timeline, screenshots, visited URLs, and console/network summaries.
 - **HTTP uptime monitoring.** Scheduled checks against any endpoint with a
   configurable method, encrypted headers and body, expected status code,
   optional response-body conditions, timeouts, and retries.
@@ -44,6 +44,7 @@ zenguy/
 │   ├── api/      # Cloudflare Worker API, queues, crons, and storage adapters
 │   ├── frontend/ # React application
 │   └── website/  # Astro public website
+├── runner/        # External Python Queue consumer, browser-use, Chrome and local LLM
 ├── PROJECT.md
 ├── TASKS_BACKEND.md
 └── TASKS_FRONTEND.md
@@ -70,10 +71,9 @@ migrations, and an unreachable bootstrap Worker are prepared; that Worker has
 no public route, cron trigger, or Queue consumer. Production remains inactive
 until Paddle Live credentials and catalog, Twilio production
 credentials/senders, the signed Paddle Live webhook, and the final Worker
-activation are complete. Deployed
-environments send transactional email through Cloudflare Email Service on
-`zenguy.com` and use the low-cost OpenAI `gpt-5-mini` model by default. No
-Anthropic integration is required.
+activation are complete. Deployed environments send transactional email
+through Cloudflare Email Service on `zenguy.com`; browser-model inference runs
+only in the separately operated local Python worker.
 
 ## Local development
 
@@ -83,6 +83,8 @@ Requirements:
 - `pnpm`.
 - A populated, ignored `apps/api/.dev.vars` file. Start from
   `apps/api/.dev.vars.example`; never commit API keys or provider secrets.
+- Python 3.11+, `browser-use`, Google Chrome, and a local model server for end-to-end browser
+  execution; see `runner/README.md`.
 
 Install dependencies, prepare the local database, and load the deterministic
 demo fixture:
@@ -220,12 +222,14 @@ sanitized operator log. They never repeat the charge request.
 - The development sender is
   `Zenguy <notifications@zenguy.com>`. The sending domain must remain
   enabled in the connected Cloudflare account before starting the API.
-- Zenguy uses the OpenAI Responses API and defaults to the low-cost
-  `gpt-5-mini` model through `LLM_MODEL=gpt-5-mini`.
-- No Anthropic credential is required or used.
-- Keep `OPENAI_API_KEY`, Paddle credentials, cryptographic keys, and all other
-  secrets in the ignored `apps/api/.dev.vars` file. Do not copy their values
-  into this README, source files, screenshots, or test reports.
+- Browser runs are pulled by `runner/browser_worker.py`; the API has neither a
+  Browser Rendering binding nor a cloud-model credential. Deployed snapshots
+  record `LLM_MODEL=qwen/qwen3.8-27b`, and the local runner fixes the same Bionic
+  model at `http://127.0.0.1:1234/v1`.
+- Keep the local runner tokens in the ignored, mode-0600
+  `runner/.browser_worker.local.json`; keep other local API secrets in
+  `apps/api/.dev.vars`. Do not copy their values into source, screenshots, logs,
+  or test reports.
 - Remote email bindings send real transactional messages during local
   development. Use only inboxes you control.
 
@@ -301,7 +305,7 @@ the following flow:
    cards.
 4. Open Browser Tests, a test detail, and a completed run. Check status,
    attempts, screenshots, visited URLs, console/network summaries, and the
-   `gpt-5-mini` model label.
+   model and runner-version labels reported by the local worker.
 5. Open Uptime, a monitor detail, and its recent checks. From the edit screen,
    `Send test request` should return HTTP 200 for the seeded example monitor
    without consuming a browser run.
@@ -337,13 +341,18 @@ pnpm build
 pnpm --filter @zenguy/api test:integration
 ```
 
-Last local verification on 2026-08-19:
+Latest automated verification on 2026-08-20:
 
-- API unit tests: 543 passed across 81 files.
-- Web unit tests: 180 passed across 61 files.
-- API integration tests: 185 passed across 36 files.
-- Total: 908 passed tests.
+- API unit tests: 638 passed across 93 files.
+- Web unit tests: 190 passed across 62 files.
+- API integration tests: 224 passed across 42 files.
+- Local Python runner tests: 21 passed.
+- Total recorded: 1,073 passed tests.
 - Monorepo typecheck and production builds: passed.
+- Staging Worker dry-run bundle: passed with no Browser Rendering binding.
+
+Provider and UI smoke record from 2026-08-19:
+
 - Cloudflare Email Sending: `zenguy.com` enabled in the personal account;
   Wrangler's remote `EMAIL` binding connected with
   `notifications@zenguy.com` as the only permitted sender.
@@ -351,6 +360,19 @@ Last local verification on 2026-08-19:
   responsive layout, keyboard navigation, and console inspection passed.
 - No real email was sent during verification; perform an inbox smoke only with
   an explicitly approved recipient address.
+- External runner smoke on 2026-08-20: PASS — the staging application queued
+  run `run_01m0ftedz912vye0w75yrtqf0j`; local Chrome and Bionic
+  `qwen/qwen3.8-27b` completed it as `PASSED`; D1 recorded runner version
+  `zenguy-local-runner/1.0.0` and 2,734 tokens; the disposable test was then
+  removed. `zenguy-staging-runs` now has one HTTP pull consumer and no Worker
+  consumer. This run predates the browser-use migration and remains evidence
+  of the Queue/callback protocol.
+- Current browser-use smoke on 2026-08-20: PASS — `browser-use 0.13.8` opened
+  visible local Chrome through the production `JobExecutor`, verified
+  `example.com`, emitted structured `done`, captured a screenshot, and returned
+  `PASSED` in two steps with runner
+  `zenguy-local-runner/2.0.0+browser-use-0.13.8` and 9,886 tokens. The smoke did
+  not write to Queue or a remote API.
 
 ### Local troubleshooting notes
 
@@ -359,6 +381,6 @@ Last local verification on 2026-08-19:
 - Paddle invoice retrieval is provider-backed. If Billing shows no invoices,
   inspect Wrangler logs for `billing_invoice_list_failed` before concluding
   that the workspace has no Paddle invoices.
-- Wrangler local mode does not reproduce every remote Queue and Browser
-  Rendering behavior. Follow the hybrid/deployed development guidance in
-  `apps/api/README.md` for an end-to-end Browser Rendering run.
+- Wrangler local mode does not expose the deployed Queue HTTP pull endpoint.
+  Follow `runner/README.md` to run the Python worker against the staging run
+  queue for an end-to-end browser run.

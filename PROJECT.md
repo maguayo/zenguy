@@ -716,7 +716,7 @@ Reglas:
 
 ### 10.14 Contrato de ejecución del agente
 
-El servicio basado en `browser-use` debe recibir:
+El servicio externo del agente de navegador debe recibir:
 
 * URL inicial;
 * instrucciones;
@@ -2089,12 +2089,13 @@ La implementación debe separar ejecución web y ejecución de navegador.
 
 6. **Browser Worker Service**
 
-   * preferentemente Python por integración con `browser-use`;
-   * inicia navegador aislado;
-   * ejecuta attempts;
-   * emite eventos;
-   * sube artifacts;
-   * destruye entorno.
+   * proceso Python externo a la Application API;
+   * consume los jobs mediante Queue HTTP pull;
+   * usa la librería `browser-use`, Google Chrome y un modelo OpenAI-compatible servido localmente;
+   * inicia un contexto de navegador aislado;
+   * ejecuta attempts y devuelve eventos/resultados por una API autenticada;
+   * no accede directamente a la base de datos ni al object storage;
+   * destruye el contexto de navegador al terminar.
 
 7. **Uptime Worker**
 
@@ -2682,7 +2683,6 @@ No implementar como requisito inicial:
 * live browser obligatorio;
 * auto-fix del código;
 * root-cause analysis garantizado;
-* self-hosted runners;
 * SSO empresarial;
 * SCIM;
 * API pública completa;

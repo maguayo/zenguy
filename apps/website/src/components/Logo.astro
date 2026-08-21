@@ -1,13 +1,13 @@
 ---
 // Official lockup: icon (from icon-logo.svg) + lowercase wordmark + violet dot.
 interface Props {
-  iconSize?: number; // icon square in px (nav 19, footer 18, pricing 26)
+  iconSize?: number; // icon square in px (nav 24, footer 18, pricing 26)
   textSize?: number; // wordmark font-size in px (default scales with icon)
   dark?: boolean; // wordmark color on dark surfaces
   iconOnly?: boolean;
 }
 
-const { iconSize = 19, textSize, dark = false, iconOnly = false } = Astro.props;
+const { iconSize = 24, textSize, dark = false, iconOnly = false } = Astro.props;
 const ts = textSize ?? Math.round(iconSize * 0.84);
 ---
 
