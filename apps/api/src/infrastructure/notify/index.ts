@@ -6,6 +6,7 @@ import {
   discordChannelConfigSchema,
   emailChannelConfigSchema,
   phoneChannelConfigSchema,
+  smsChannelConfigSchema,
   slackChannelConfigSchema,
 } from "../../domain/channels/types";
 import type { EmailSender } from "../../domain/email/sender";
@@ -38,16 +39,19 @@ export function buildChannelSender(
             message,
           );
         case "SMS": {
-          const parsed = phoneChannelConfigSchema.parse(channel.config);
+          const parsed = smsChannelConfigSchema.parse(channel.config);
           return {
             providerMessageId: await twilio.sendSms(
               parsed.phoneNumber,
               config.twilio.fromSms,
-              message.shortText,
+              `${message.shortText} Reply STOP to opt out; HELP for help.`,
             ),
           };
         }
         case "WHATSAPP": {
+          if (config.twilio.fromWhatsapp === null) {
+            throw new Error("WhatsApp is not configured");
+          }
           const parsed = phoneChannelConfigSchema.parse(channel.config);
           return {
             providerMessageId: await twilio.sendWhatsapp(

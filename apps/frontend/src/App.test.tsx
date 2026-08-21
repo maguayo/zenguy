@@ -4,6 +4,8 @@ import { shouldRetryQuery } from "./App";
 import { ApiError } from "./lib/api";
 import RedeemGrant from "./pages/billing/RedeemGrant";
 import IssueGrants from "./pages/billing/IssueGrants";
+import Privacy from "./pages/legal/Privacy";
+import Terms from "./pages/legal/Terms";
 
 describe("application query policy", () => {
   it("does not retry client-side API errors", () => {
@@ -29,5 +31,10 @@ describe("application query policy", () => {
   it("ships redeem and issue pages for complimentary links", () => {
     expect(RedeemGrant).toEqual(expect.any(Function));
     expect(IssueGrants).toEqual(expect.any(Function));
+  });
+
+  it("ships public privacy and terms pages", () => {
+    expect(Privacy).toEqual(expect.any(Function));
+    expect(Terms).toEqual(expect.any(Function));
   });
 });

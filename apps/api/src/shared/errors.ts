@@ -10,6 +10,7 @@ export type ErrorCode =
   | "CONFLICT"
   | "ACTIVE_RUN_EXISTS"
   | "RATE_LIMITED"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL";
 
 export interface ValidationDetail {
@@ -41,6 +42,7 @@ const statusByCode: Record<ErrorCode, number> = {
   ACTIVE_RUN_EXISTS: 409,
   GONE: 410,
   RATE_LIMITED: 429,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 
@@ -60,6 +62,10 @@ export function forbidden(
 
 export function conflict(message: string): AppError {
   return new AppError("CONFLICT", message);
+}
+
+export function unavailable(message: string): AppError {
+  return new AppError("SERVICE_UNAVAILABLE", message);
 }
 
 export function validation(details: ValidationDetail[]): AppError {

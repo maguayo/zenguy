@@ -521,20 +521,23 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
   const reports = new D1OverageReportRepo(env.DB);
   const pendingPeriods = new D1PendingOveragePeriodRepo(env.DB);
   const usageEvents = new D1UsageEventRepo(env.DB);
-  const overages = new SweepOverages(
-    subscriptions,
-    reports,
-    pendingPeriods,
-    new ReportOverageForPeriod(
-      usageEvents,
-      reports,
-      new HttpPaddleClient(config.paddle),
-      config.paddle.overagePriceId,
-      systemClock,
-      realIds,
-    ),
-    systemClock,
-  );
+  const overages =
+    config.paddle === null
+      ? { execute: async () => undefined }
+      : new SweepOverages(
+          subscriptions,
+          reports,
+          pendingPeriods,
+          new ReportOverageForPeriod(
+            usageEvents,
+            reports,
+            new HttpPaddleClient(config.paddle),
+            config.paddle.overagePriceId,
+            systemClock,
+            realIds,
+          ),
+          systemClock,
+        );
   return new HourlyMaintenance(
     overages,
     new D1AttemptRepo(env.DB),

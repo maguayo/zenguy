@@ -89,10 +89,12 @@ import { D1OverviewRepo } from "./infrastructure/db/overview_repo";
 import { D1DurableWorkflowRepo } from "./infrastructure/db/durable_workflow_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
+import { NoopBillingCanceller } from "./infrastructure/billing/noop";
 import {
   HttpPaddleClient,
   type PaddleClient,
 } from "./infrastructure/paddle/client";
+import { UnavailablePaddleClient } from "./infrastructure/paddle/unavailable";
 import { buildEmailSender } from "./infrastructure/email";
 import { webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
@@ -261,20 +263,27 @@ export function buildApp(
       overrides.ids ?? realIds,
     );
   const paddleClient =
-    overrides.paddleClient ?? new HttpPaddleClient(config.paddle);
+    overrides.paddleClient ??
+    (config.paddle === null
+      ? new UnavailablePaddleClient()
+      : new HttpPaddleClient(config.paddle));
   const overageReporter =
     overrides.overageReporter ??
-    new ReportOverageForPeriod(
-      usageEvents,
-      overageReports,
-      paddleClient,
-      config.paddle.overagePriceId,
-      clock,
-      overrides.ids ?? realIds,
-    );
+    (config.paddle === null
+      ? null
+      : new ReportOverageForPeriod(
+          usageEvents,
+          overageReports,
+          paddleClient,
+          config.paddle.overagePriceId,
+          clock,
+          overrides.ids ?? realIds,
+        ));
   const billingCanceller =
     overrides.billingCanceller ??
-    new PaddleBillingCanceller(subscriptions, paddleClient, clock);
+    (config.paddle === null
+      ? new NoopBillingCanceller()
+      : new PaddleBillingCanceller(subscriptions, paddleClient, clock));
   const audit = new WriteAudit({
     audits,
     clock,
@@ -606,19 +615,21 @@ export function buildApp(
       config,
     }),
   );
-  app.route(
-    "/api/webhooks",
-    webhookRoutes({
-      webhookSecret: config.paddle.webhookSecret,
-      kv: env.KV,
-      subscriptions,
-      pendingOveragePeriods,
-      overageReporter,
-      audit,
-      clock,
-      ids: overrides.ids ?? realIds,
-    }),
-  );
+  if (config.paddle !== null && overageReporter !== null) {
+    app.route(
+      "/api/webhooks",
+      webhookRoutes({
+        webhookSecret: config.paddle.webhookSecret,
+        kv: env.KV,
+        subscriptions,
+        pendingOveragePeriods,
+        overageReporter,
+        audit,
+        clock,
+        ids: overrides.ids ?? realIds,
+      }),
+    );
+  }
 
   app.notFound((context) => {
     if (context.req.path.startsWith("/api/")) {

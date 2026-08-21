@@ -114,7 +114,9 @@ async function channel(
   const config =
     type === "EMAIL"
       ? { emails: ["ops@example.com"] }
-      : { phoneNumber: "+34600123456" };
+      : type === "SMS"
+        ? { phoneNumber: "+34600123456", consent: true }
+        : { phoneNumber: "+34600123456" };
   return {
     id,
     workspaceId: "ws_1",

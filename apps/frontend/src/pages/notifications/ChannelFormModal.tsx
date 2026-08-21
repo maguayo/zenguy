@@ -5,7 +5,6 @@ import {
   Gamepad2,
   Hash,
   Mail,
-  MessageCircle,
   MessageSquare,
   Phone,
   type LucideIcon,
@@ -22,6 +21,7 @@ import {
 import type { Channel, ChannelConfigInput, ChannelType } from "../../api/types";
 import { EmailListInput } from "../../components/EmailListInput";
 import { Button } from "../../components/ui/Button";
+import { Checkbox } from "../../components/ui/Checkbox";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
@@ -34,7 +34,6 @@ import { apiErrorMessage } from "../../lib/errors";
 const channelTypes: Array<{ icon: LucideIcon; label: string; type: ChannelType }> = [
   { icon: Mail, label: "Email", type: "EMAIL" },
   { icon: MessageSquare, label: "SMS", type: "SMS" },
-  { icon: MessageCircle, label: "WhatsApp", type: "WHATSAPP" },
   { icon: Phone, label: "Phone call", type: "CALL" },
   { icon: Hash, label: "Slack", type: "SLACK" },
   { icon: Gamepad2, label: "Discord", type: "DISCORD" },
@@ -48,6 +47,7 @@ const baseSchema = z.object({
     .min(1, "Name is required.")
     .max(80, "Name must be 80 characters or fewer."),
   phoneNumber: z.string(),
+  smsConsent: z.boolean(),
   type: z.enum(["EMAIL", "SMS", "WHATSAPP", "CALL", "SLACK", "DISCORD"]),
   webhookUrl: z.string(),
 });
@@ -75,6 +75,14 @@ export function channelFormSchema(editing = false) {
       });
     }
 
+    if (values.type === "SMS" && !values.smsConsent) {
+      context.addIssue({
+        code: "custom",
+        message: "Confirm the recipient's SMS consent.",
+        path: ["smsConsent"],
+      });
+    }
+
     if (values.type === "SLACK" || values.type === "DISCORD") {
       const url = values.webhookUrl.trim();
       if (editing && !url) return;
@@ -97,6 +105,7 @@ const blankValues: ChannelFormValues = {
   emails: [],
   name: "",
   phoneNumber: "",
+  smsConsent: false,
   type: "EMAIL",
   webhookUrl: "",
 };
@@ -107,6 +116,7 @@ export function channelFormDefaults(channel?: Channel): ChannelFormValues {
     emails: channel.configPreview.emails ?? [],
     name: channel.name,
     phoneNumber: channel.configPreview.phoneNumber ?? "",
+    smsConsent: channel.type === "SMS",
     type: channel.type,
     webhookUrl: "",
   };
@@ -116,7 +126,10 @@ export function channelConfigFromValues(values: ChannelFormValues): ChannelConfi
   switch (values.type) {
     case "EMAIL":
       return { emails: values.emails };
-    case "SMS":
+    case "SMS": {
+      if (!values.smsConsent) throw new Error("SMS consent is required");
+      return { consent: true, phoneNumber: values.phoneNumber.trim() };
+    }
     case "WHATSAPP":
     case "CALL":
       return { phoneNumber: values.phoneNumber.trim() };
@@ -318,6 +331,43 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
                 {...form.register("phoneNumber")}
               />
             </Field>
+          ) : null}
+
+          {selectedType === "SMS" ? (
+            <div>
+              <label
+                className="flex items-start gap-2 text-sm text-zinc-600"
+                htmlFor="channel-sms-consent"
+              >
+                <Checkbox
+                  className="mt-0.5"
+                  id="channel-sms-consent"
+                  invalid={Boolean(fieldError(form.formState, "smsConsent"))}
+                  {...form.register("smsConsent")}
+                />
+                <span>
+                  I confirm that this recipient explicitly agreed to receive recurring
+                  operational SMS alerts from Zenguy. Frequency varies. Message and data rates
+                  may apply. Reply STOP to opt out or HELP for help. See the{
+                  " "}
+                  <a className="font-medium text-accent-700 hover:underline" href="/terms/">
+                    Terms
+                  </a>{
+                  " "}
+                  and{
+                  " "}
+                  <a className="font-medium text-accent-700 hover:underline" href="/privacy/">
+                    Privacy Policy
+                  </a>
+                  .
+                </span>
+              </label>
+              {fieldError(form.formState, "smsConsent") ? (
+                <p className="mt-1 text-xs text-danger-600" role="alert">
+                  {fieldError(form.formState, "smsConsent")}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {selectedType === "SLACK" || selectedType === "DISCORD" ? (

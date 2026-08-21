@@ -14,6 +14,7 @@ import type {
 import type { PaddleClient } from "../../infrastructure/paddle/client";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
+import { unavailable } from "../../shared/errors";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireAction, withWorkspace } from "../middleware/workspace";
@@ -51,19 +52,21 @@ export function billingRoutes(
     dependencies.paddle,
   );
 
-  app.get("/billing/config", auth, (context) =>
-    context.json({
+  app.get("/billing/config", auth, (context) => {
+    const paddle = dependencies.config.paddle;
+    if (paddle === null) throw unavailable("Billing is not configured");
+    return context.json({
       data: {
-        environment: dependencies.config.paddle.environment,
-        clientToken: dependencies.config.paddle.clientToken,
-        priceId: dependencies.config.paddle.priceId,
+        environment: paddle.environment,
+        clientToken: paddle.clientToken,
+        priceId: paddle.priceId,
         canIssueComplimentaryGrants:
           dependencies.config.complimentaryIssuerEmails.includes(
             context.get("user").email.trim().toLowerCase(),
           ),
       },
-    }),
-  );
+    });
+  });
 
   app.get(
     "/workspaces/:workspaceId/billing",
@@ -87,6 +90,9 @@ export function billingRoutes(
     workspace,
     requireAction("billing.view"),
     async (context) => {
+      if (dependencies.config.paddle === null) {
+        throw unavailable("Billing is not configured");
+      }
       const result = await getInvoiceUrl.execute({
         workspaceId: context.get("workspace").id,
         role: context.get("role"),

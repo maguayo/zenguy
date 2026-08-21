@@ -714,7 +714,7 @@ const ROUTES: RouteCase[] = [
       });
       const timestamp = Math.floor(NOW / 1_000);
       const signature = await hmacSha256Hex(
-        fixture.config.paddle.webhookSecret,
+        fixture.config.paddle!.webhookSecret,
         `${timestamp}:${rawBody}`,
       );
       return {

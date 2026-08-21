@@ -20,7 +20,7 @@ describe("Paddle webhook route", () => {
     const rawBody = JSON.stringify(PADDLE_SUBSCRIPTION_CREATED);
     const timestamp = NOW / 1_000;
     const signature = await hmacSha256Hex(
-      env.PADDLE_WEBHOOK_SECRET,
+      env.PADDLE_WEBHOOK_SECRET!,
       `${timestamp}:${rawBody}`,
     );
 

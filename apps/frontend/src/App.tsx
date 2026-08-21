@@ -63,6 +63,8 @@ const BillingPage = lazy(() => import("./pages/billing/BillingPage"));
 const RedeemGrant = lazy(() => import("./pages/billing/RedeemGrant"));
 const IssueGrants = lazy(() => import("./pages/billing/IssueGrants"));
 const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
+const Privacy = lazy(() => import("./pages/legal/Privacy"));
+const Terms = lazy(() => import("./pages/legal/Terms"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 export function shouldRetryQuery(count: number, error: unknown): boolean {
@@ -154,6 +156,8 @@ function AppRoutes() {
         <Route element={<VerifyEmail />} path="/verify-email" />
         <Route element={<AcceptInvitation />} path="/invitations/:token" />
         <Route element={<RedeemGrant />} path="/grants/:token" />
+        <Route element={<Privacy />} path="/privacy" />
+        <Route element={<Terms />} path="/terms" />
 
         <Route element={<RequireAuth />}>
           <Route element={<VerifyPending />} path="/verify-pending" />

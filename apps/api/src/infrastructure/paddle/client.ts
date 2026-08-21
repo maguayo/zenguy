@@ -45,7 +45,10 @@ export type PaddleFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-type PaddleConfig = Pick<AppConfig["paddle"], "apiKey" | "apiBase">;
+type PaddleConfig = Pick<
+  NonNullable<AppConfig["paddle"]>,
+  "apiKey" | "apiBase"
+>;
 
 function invalidResponse(): never {
   throw new Error("paddle response invalid");

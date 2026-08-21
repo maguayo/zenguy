@@ -16,6 +16,24 @@ describe("HTTP kernel", () => {
     await expect(response.json()).resolves.toEqual({ data: { ok: true } });
   });
 
+  it("boots with SMS and voice when Paddle and WhatsApp are disabled", async () => {
+    const env = fakeBindings();
+    delete env.TWILIO_FROM_WHATSAPP;
+    delete env.PADDLE_API_KEY;
+    delete env.PADDLE_WEBHOOK_SECRET;
+    delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRICE_ID;
+    delete env.PADDLE_OVERAGE_PRICE_ID;
+    const app = buildApp(env);
+
+    const health = await app.request("/api/health");
+    expect(health.status).toBe(200);
+    const paddleWebhook = await app.request("/api/webhooks/paddle", {
+      method: "POST",
+    });
+    expect(paddleWebhook.status).toBe(404);
+  });
+
   it("formats unhandled errors without exposing internals", async () => {
     const app = testApp();
     app.get("/api/_boom", () => {

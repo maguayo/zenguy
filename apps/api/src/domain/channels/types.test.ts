@@ -25,7 +25,7 @@ describe("channel config schemas", () => {
     ).toBe(false);
   });
 
-  it.each(["SMS", "WHATSAPP", "CALL"] as const)(
+  it.each(["WHATSAPP", "CALL"] as const)(
     "validates %s E.164 phone numbers",
     (type) => {
       expect(
@@ -45,6 +45,19 @@ describe("channel config schemas", () => {
       }
     },
   );
+
+  it("requires explicit consent for SMS", () => {
+    expect(
+      channelConfigSchema("SMS").safeParse({
+        phoneNumber: "+34600123456",
+        consent: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      channelConfigSchema("SMS").safeParse({ phoneNumber: "+34600123456" })
+        .success,
+    ).toBe(false);
+  });
 
   it("accepts only provider-owned Slack and Discord webhook URLs", () => {
     expect(
@@ -76,6 +89,7 @@ describe("channel config schemas", () => {
     expect(
       channelConfigSchema("SMS").safeParse({
         phoneNumber: "+34600123456",
+        consent: true,
         token: "must-not-pass",
       }).success,
     ).toBe(false);
@@ -85,7 +99,11 @@ describe("channel config schemas", () => {
 describe("configPreview", () => {
   it.each([
     ["EMAIL", { emails: ["alerts@example.com"] }, { emails: ["alerts@example.com"] }],
-    ["SMS", { phoneNumber: "+34600123456" }, { phoneNumber: "+34600123456" }],
+    [
+      "SMS",
+      { phoneNumber: "+34600123456", consent: true },
+      { phoneNumber: "+34600123456" },
+    ],
     ["WHATSAPP", { phoneNumber: "+34600123456" }, { phoneNumber: "+34600123456" }],
     ["CALL", { phoneNumber: "+34600123456" }, { phoneNumber: "+34600123456" }],
   ] as const)("previews %s config", (type, config, expected) => {

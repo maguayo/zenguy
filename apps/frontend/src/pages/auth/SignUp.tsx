@@ -132,11 +132,11 @@ export default function SignUp() {
             />
             <span>
               I accept the{" "}
-              <a className="font-medium text-accent-700 hover:underline" href="https://zenguy.com/terms">
+              <a className="font-medium text-accent-700 hover:underline" href="/terms/">
                 Terms of Service
               </a>{" "}
               and{" "}
-              <a className="font-medium text-accent-700 hover:underline" href="https://zenguy.com/privacy">
+              <a className="font-medium text-accent-700 hover:underline" href="/privacy/">
                 Privacy Policy
               </a>
             </span>

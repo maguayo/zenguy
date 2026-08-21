@@ -259,7 +259,8 @@ describe("channel routes", () => {
   it("validates configuration for every channel type", async () => {
     const invalid: [ChannelType, unknown][] = [
       ["EMAIL", { emails: ["not-an-email"] }],
-      ["SMS", { phoneNumber: "600123456" }],
+      ["SMS", { phoneNumber: "600123456", consent: true }],
+      ["SMS", { phoneNumber: "+34600123456" }],
       ["WHATSAPP", { phoneNumber: "+01234567" }],
       ["CALL", { phoneNumber: "+123" }],
       ["SLACK", { webhookUrl: "https://example.com/not-slack" }],
@@ -285,7 +286,7 @@ describe("channel routes", () => {
 
     const valid: [ChannelType, unknown][] = [
       ["EMAIL", { emails: ["ops@example.com"] }],
-      ["SMS", { phoneNumber: "+34600123456" }],
+      ["SMS", { phoneNumber: "+34600123456", consent: true }],
       ["WHATSAPP", { phoneNumber: "+34600123456" }],
       ["CALL", { phoneNumber: "+34600123456" }],
       [

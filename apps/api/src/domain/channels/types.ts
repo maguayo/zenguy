@@ -52,6 +52,13 @@ export const phoneChannelConfigSchema = z
   .object({ phoneNumber: z.string().regex(/^\+[1-9]\d{6,14}$/u) })
   .strict();
 
+export const smsChannelConfigSchema = z
+  .object({
+    phoneNumber: z.string().regex(/^\+[1-9]\d{6,14}$/u),
+    consent: z.literal(true),
+  })
+  .strict();
+
 export const slackChannelConfigSchema = z
   .object({
     webhookUrl: z
@@ -72,10 +79,12 @@ export const discordChannelConfigSchema = z
 
 export type EmailChannelConfig = z.infer<typeof emailChannelConfigSchema>;
 export type PhoneChannelConfig = z.infer<typeof phoneChannelConfigSchema>;
+export type SmsChannelConfig = z.infer<typeof smsChannelConfigSchema>;
 export type WebhookChannelConfig = z.infer<typeof slackChannelConfigSchema>;
 export type ChannelConfig =
   | EmailChannelConfig
   | PhoneChannelConfig
+  | SmsChannelConfig
   | WebhookChannelConfig;
 
 export function channelConfigSchema(type: ChannelType): z.ZodType<ChannelConfig> {
@@ -83,6 +92,7 @@ export function channelConfigSchema(type: ChannelType): z.ZodType<ChannelConfig>
     case "EMAIL":
       return emailChannelConfigSchema;
     case "SMS":
+      return smsChannelConfigSchema;
     case "WHATSAPP":
     case "CALL":
       return phoneChannelConfigSchema;
@@ -107,7 +117,10 @@ export function configPreview(
       const parsed = emailChannelConfigSchema.parse(config);
       return { emails: [...parsed.emails] };
     }
-    case "SMS":
+    case "SMS": {
+      const parsed = smsChannelConfigSchema.parse(config);
+      return { phoneNumber: parsed.phoneNumber };
+    }
     case "WHATSAPP":
     case "CALL": {
       const parsed = phoneChannelConfigSchema.parse(config);

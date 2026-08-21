@@ -12,6 +12,7 @@ runner/.browser_worker.local.json
 coverage/
 *.log
 .DS_Store
+TWILIO_TOKENS.md
 apps/api/scripts/.seed.generated.sql
 apps/api/.ci.staging.vars
 apps/landing/.astro/

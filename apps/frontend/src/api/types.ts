@@ -107,6 +107,7 @@ export interface Secret {
 export type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD";
 export type ChannelConfigInput =
   | { emails: string[] }
+  | { consent: true; phoneNumber: string }
   | { phoneNumber: string }
   | { webhookUrl: string };
 

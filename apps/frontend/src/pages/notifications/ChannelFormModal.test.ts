@@ -24,6 +24,7 @@ const values: ChannelFormValues = {
   emails: [],
   name: " Slack alerts ",
   phoneNumber: "",
+  smsConsent: false,
   type: "SLACK",
   webhookUrl: "https://hooks.slack.com/services/T/B/secret",
 };
@@ -36,6 +37,14 @@ describe("channel form", () => {
     ).toBe(false);
     expect(
       createSchema.safeParse({ ...values, phoneNumber: "612345678", type: "SMS" }).success,
+    ).toBe(false);
+    expect(
+      createSchema.safeParse({
+        ...values,
+        phoneNumber: "+34612345678",
+        smsConsent: false,
+        type: "SMS",
+      }).success,
     ).toBe(false);
     expect(
       createSchema.safeParse({
@@ -68,6 +77,18 @@ describe("channel form", () => {
         type: "CALL",
       }),
     ).toMatchObject({ config: { phoneNumber: "+34612345678" }, type: "CALL" });
+    expect(
+      createChannelInput({
+        ...values,
+        name: "SMS",
+        phoneNumber: " +34612345678 ",
+        smsConsent: true,
+        type: "SMS",
+      }),
+    ).toMatchObject({
+      config: { consent: true, phoneNumber: "+34612345678" },
+      type: "SMS",
+    });
   });
 
   it("never reads back or resends a masked webhook during an ordinary edit", () => {

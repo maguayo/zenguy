@@ -19,15 +19,25 @@ export interface Bindings {
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_FROM_SMS: string;
-  TWILIO_FROM_WHATSAPP: string;
+  TWILIO_FROM_WHATSAPP?: string;
   TWILIO_FROM_CALL: string;
-  PADDLE_API_KEY: string;
-  PADDLE_WEBHOOK_SECRET: string;
-  PADDLE_CLIENT_TOKEN: string;
-  PADDLE_ENVIRONMENT: string;
-  PADDLE_PRICE_ID: string;
-  PADDLE_OVERAGE_PRICE_ID: string;
+  PADDLE_API_KEY?: string;
+  PADDLE_WEBHOOK_SECRET?: string;
+  PADDLE_CLIENT_TOKEN?: string;
+  PADDLE_ENVIRONMENT?: string;
+  PADDLE_PRICE_ID?: string;
+  PADDLE_OVERAGE_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
+}
+
+export interface PaddleConfig {
+  apiKey: string;
+  webhookSecret: string;
+  clientToken: string;
+  environment: "sandbox" | "production";
+  priceId: string;
+  overagePriceId: string;
+  apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
 }
 
 export interface AppConfig {
@@ -43,18 +53,10 @@ export interface AppConfig {
     accountSid: string;
     authToken: string;
     fromSms: string;
-    fromWhatsapp: string;
+    fromWhatsapp: string | null;
     fromCall: string;
   };
-  paddle: {
-    apiKey: string;
-    webhookSecret: string;
-    clientToken: string;
-    environment: "sandbox" | "production";
-    priceId: string;
-    overagePriceId: string;
-    apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
-  };
+  paddle: PaddleConfig | null;
   complimentaryIssuerEmails: string[];
 }
 
@@ -70,15 +72,29 @@ const requiredEnvKeys = [
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_FROM_SMS",
-  "TWILIO_FROM_WHATSAPP",
   "TWILIO_FROM_CALL",
+] as const satisfies readonly (keyof Bindings)[];
+
+const paddleSecretKeys = [
   "PADDLE_API_KEY",
   "PADDLE_WEBHOOK_SECRET",
   "PADDLE_CLIENT_TOKEN",
-  "PADDLE_ENVIRONMENT",
   "PADDLE_PRICE_ID",
   "PADDLE_OVERAGE_PRICE_ID",
 ] as const satisfies readonly (keyof Bindings)[];
+
+const paddleRequiredKeys = [
+  ...paddleSecretKeys,
+  "PADDLE_ENVIRONMENT",
+] as const satisfies readonly (keyof Bindings)[];
+
+function optionalNonEmptyString() {
+  return z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().min(1).optional(),
+  );
+}
 
 const envSchema = z.object({
   APP_URL: z.url(),
@@ -92,8 +108,11 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_FROM_SMS: z.string().min(1),
-  TWILIO_FROM_WHATSAPP: z.string().min(1),
+  TWILIO_FROM_WHATSAPP: optionalNonEmptyString(),
   TWILIO_FROM_CALL: z.string().min(1),
+});
+
+const paddleEnvSchema = z.object({
   PADDLE_API_KEY: z.string().min(1),
   PADDLE_WEBHOOK_SECRET: z.string().min(1),
   PADDLE_CLIENT_TOKEN: z.string().min(1),
@@ -147,10 +166,33 @@ export function loadConfig(env: Bindings): AppConfig {
   }
 
   const parsed = envSchema.parse(env);
-  const paddleApiBase =
-    parsed.PADDLE_ENVIRONMENT === "sandbox"
-      ? "https://sandbox-api.paddle.com"
-      : "https://api.paddle.com";
+  const paddleEnabled = paddleSecretKeys.some((key) => {
+    const value = env[key];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+  let paddle: PaddleConfig | null = null;
+  if (paddleEnabled) {
+    const missingPaddle = paddleRequiredKeys.filter((key) => {
+      const value = env[key];
+      return typeof value !== "string" || value.trim().length === 0;
+    });
+    if (missingPaddle.length > 0) {
+      throw new Error(`Missing Paddle env: ${missingPaddle.join(", ")}`);
+    }
+    const parsedPaddle = paddleEnvSchema.parse(env);
+    paddle = {
+      apiKey: parsedPaddle.PADDLE_API_KEY,
+      webhookSecret: parsedPaddle.PADDLE_WEBHOOK_SECRET,
+      clientToken: parsedPaddle.PADDLE_CLIENT_TOKEN,
+      environment: parsedPaddle.PADDLE_ENVIRONMENT,
+      priceId: parsedPaddle.PADDLE_PRICE_ID,
+      overagePriceId: parsedPaddle.PADDLE_OVERAGE_PRICE_ID,
+      apiBase:
+        parsedPaddle.PADDLE_ENVIRONMENT === "sandbox"
+          ? "https://sandbox-api.paddle.com"
+          : "https://api.paddle.com",
+    };
+  }
 
   return {
     appUrl: parsed.APP_URL,
@@ -165,18 +207,10 @@ export function loadConfig(env: Bindings): AppConfig {
       accountSid: parsed.TWILIO_ACCOUNT_SID,
       authToken: parsed.TWILIO_AUTH_TOKEN,
       fromSms: parsed.TWILIO_FROM_SMS,
-      fromWhatsapp: parsed.TWILIO_FROM_WHATSAPP,
+      fromWhatsapp: parsed.TWILIO_FROM_WHATSAPP ?? null,
       fromCall: parsed.TWILIO_FROM_CALL,
     },
-    paddle: {
-      apiKey: parsed.PADDLE_API_KEY,
-      webhookSecret: parsed.PADDLE_WEBHOOK_SECRET,
-      clientToken: parsed.PADDLE_CLIENT_TOKEN,
-      environment: parsed.PADDLE_ENVIRONMENT,
-      priceId: parsed.PADDLE_PRICE_ID,
-      overagePriceId: parsed.PADDLE_OVERAGE_PRICE_ID,
-      apiBase: paddleApiBase,
-    },
+    paddle,
     complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
       env.COMPLIMENTARY_ISSUER_EMAILS,
     ),

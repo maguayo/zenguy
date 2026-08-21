@@ -60,17 +60,12 @@ describe("loadConfig", () => {
       "TWILIO_ACCOUNT_SID",
       "TWILIO_AUTH_TOKEN",
       "TWILIO_FROM_SMS",
-      "TWILIO_FROM_WHATSAPP",
       "TWILIO_FROM_CALL",
-      "PADDLE_API_KEY",
-      "PADDLE_WEBHOOK_SECRET",
-      "PADDLE_CLIENT_TOKEN",
-      "PADDLE_ENVIRONMENT",
-      "PADDLE_PRICE_ID",
-      "PADDLE_OVERAGE_PRICE_ID",
     ]) {
       expect(message).toContain(name);
     }
+    expect(message).not.toContain("TWILIO_FROM_WHATSAPP");
+    expect(message).not.toContain("PADDLE_API_KEY");
   });
 
   it("parses a complete environment", () => {
@@ -87,6 +82,36 @@ describe("loadConfig", () => {
       overagePriceId: "pri_overage",
     });
     expect(config.complimentaryIssuerEmails).toEqual([]);
+  });
+
+  it("starts safely with Paddle and WhatsApp disabled", () => {
+    const env = completeBindings();
+    delete env.TWILIO_FROM_WHATSAPP;
+    delete env.PADDLE_API_KEY;
+    delete env.PADDLE_WEBHOOK_SECRET;
+    delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRICE_ID;
+    delete env.PADDLE_OVERAGE_PRICE_ID;
+    // Wrangler may still provide this non-secret variable. It must not enable
+    // Paddle without the complete secret group.
+    env.PADDLE_ENVIRONMENT = "production";
+
+    const config = loadConfig(env);
+
+    expect(config.twilio.fromWhatsapp).toBeNull();
+    expect(config.paddle).toBeNull();
+  });
+
+  it("rejects a partially configured Paddle secret group", () => {
+    const env = completeBindings();
+    delete env.PADDLE_WEBHOOK_SECRET;
+    delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRICE_ID;
+    delete env.PADDLE_OVERAGE_PRICE_ID;
+
+    expect(() => loadConfig(env)).toThrowError(
+      "Missing Paddle env: PADDLE_WEBHOOK_SECRET, PADDLE_CLIENT_TOKEN, PADDLE_PRICE_ID, PADDLE_OVERAGE_PRICE_ID",
+    );
   });
 
   it("parses complimentary issuer emails without requiring the binding", () => {
