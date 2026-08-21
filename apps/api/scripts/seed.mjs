@@ -300,7 +300,7 @@ function browserTests() {
       name: "Homepage smoke",
       startUrl: "https://example.com",
       instructions:
-        "Check that the page shows the heading 'Example Domain' and contains a link labeled 'More information'.",
+        "Check that the page shows the heading 'Example Domain' and contains a link labeled 'Learn more'.",
       device: "DESKTOP",
       intervalHours: 24,
       maxRetries: 1,
