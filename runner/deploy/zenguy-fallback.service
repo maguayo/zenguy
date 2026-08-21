@@ -1,0 +1,33 @@
+# Example systemd unit for the Zenguy fallback (plan-B) runner on a VPS.
+# Install as /etc/systemd/system/zenguy-fallback.service, then:
+#   systemctl daemon-reload && systemctl enable --now zenguy-fallback
+#
+# /etc/zenguy/fallback.env (root:root, mode 0600) must define:
+#   ZENGUY_RUNNER_TOKEN=...   # same value as the environment's RUNNER_API_TOKEN secret
+#   OPENAI_API_KEY=...
+# Optional overrides:
+#   ZENGUY_FALLBACK_MODEL=gpt-5-mini
+#   ZENGUY_FALLBACK_REASONING_EFFORT=low
+#   ZENGUY_FALLBACK_CHROME=/usr/bin/chromium
+#   ZENGUY_FALLBACK_POLL_SECONDS=5
+#
+# Append --staging to ExecStart to back up staging instead of production.
+
+[Unit]
+Description=Zenguy fallback browser-test runner (plan B)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zenguy
+WorkingDirectory=/opt/zenguy/runner
+EnvironmentFile=/etc/zenguy/fallback.env
+ExecStart=/opt/zenguy/runner/.venv/bin/python /opt/zenguy/runner/browser_worker.py --fallback
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

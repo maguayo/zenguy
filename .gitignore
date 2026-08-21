@@ -5,6 +5,10 @@ dist/
 .dev.vars
 .env
 .env.*
+.venv/
+__pycache__/
+*.pyc
+runner/.browser_worker.local.json
 coverage/
 *.log
 .DS_Store
