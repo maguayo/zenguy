@@ -1,7 +1,8 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ForgotPassword } from "../../application/auth/forgot_password";
-import { Login } from "../../application/auth/login";
+import { Login, type AuthSession } from "../../application/auth/login";
 import { Logout } from "../../application/auth/logout";
 import { Refresh } from "../../application/auth/refresh";
 import { Register } from "../../application/auth/register";
@@ -22,7 +23,7 @@ import {
   RATE_LIMITS,
   REFRESH_TOKEN_TTL_DAYS,
 } from "../../shared/constants";
-import { AppError } from "../../shared/errors";
+import { AppError, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
 import {
@@ -97,6 +98,55 @@ function sessionPayload(session: {
   };
 }
 
+// Native apps (iOS) opt in with this header. They keep the refresh token in
+// the device Keychain instead of a browser cookie, so the token travels in the
+// JSON body and no Set-Cookie header is ever emitted for them. Browsers cannot
+// send the header cross-origin: it is not in the CORS allow-list, so the
+// preflight rejects it, and the cookie flow below stays byte-for-byte intact.
+const NATIVE_CLIENT_HEADER = "X-Zenguy-Client";
+const nativeRefreshSchema = z.object({
+  refreshToken: z.string().min(1).max(512),
+});
+const nativeLogoutSchema = z.object({
+  refreshToken: z.string().min(1).max(512).optional(),
+});
+
+function isNativeClient(context: Context<AppEnv>): boolean {
+  return (
+    context.req.header(NATIVE_CLIENT_HEADER)?.trim().toLowerCase() === "native"
+  );
+}
+
+async function readNativeBody<T extends z.ZodType>(
+  context: Context<AppEnv>,
+  schema: T,
+): Promise<z.infer<T>> {
+  let raw: unknown = {};
+  try {
+    raw = await context.req.json();
+  } catch {
+    raw = {};
+  }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw validation(
+      parsed.error.issues.map((issue) => ({
+        field: issue.path.map(String).join("."),
+        message: issue.message,
+      })),
+    );
+  }
+  return parsed.data;
+}
+
+function nativeSessionPayload(session: AuthSession, refreshMaxAge: number) {
+  return {
+    ...sessionPayload(session),
+    refreshToken: session.refreshTokenPlain,
+    refreshExpiresIn: refreshMaxAge,
+  };
+}
+
 export function authRoutes(
   dependencies: AuthRoutesDependencies,
 ): Hono<AppEnv> {
@@ -155,6 +205,11 @@ export function authRoutes(
       RATE_LIMITS.login,
     );
     const session = await login.execute(input);
+    if (isNativeClient(context)) {
+      return context.json({
+        data: nativeSessionPayload(session, refreshMaxAge),
+      });
+    }
     context.header(
       "Set-Cookie",
       refreshCookieHeader(
@@ -167,6 +222,15 @@ export function authRoutes(
   });
 
   app.post("/refresh", async (context) => {
+    if (isNativeClient(context)) {
+      const input = await readNativeBody(context, nativeRefreshSchema);
+      const session = await refresh.execute({
+        refreshTokenPlain: input.refreshToken,
+      });
+      return context.json({
+        data: nativeSessionPayload(session, refreshMaxAge),
+      });
+    }
     try {
       const refreshTokenPlain = readRefreshCookie(context);
       if (refreshTokenPlain === null) {
@@ -192,6 +256,11 @@ export function authRoutes(
   });
 
   app.post("/logout", async (context) => {
+    if (isNativeClient(context)) {
+      const input = await readNativeBody(context, nativeLogoutSchema);
+      await logout.execute({ refreshTokenPlain: input.refreshToken ?? null });
+      return context.body(null, 204);
+    }
     await logout.execute({ refreshTokenPlain: readRefreshCookie(context) });
     context.header("Set-Cookie", clearRefreshCookieHeader(secureCookies));
     return context.body(null, 204);

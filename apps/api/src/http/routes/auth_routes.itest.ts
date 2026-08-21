@@ -22,6 +22,13 @@ interface SessionResponse {
   };
 }
 
+interface NativeSessionResponse {
+  data: SessionResponse["data"] & {
+    refreshToken: string;
+    refreshExpiresIn: number;
+  };
+}
+
 function jsonRequest(body: object, headers: HeadersInit = {}): RequestInit {
   return {
     method: "POST",
@@ -431,5 +438,139 @@ describe("auth routes", () => {
       ),
     );
     expect(replacementLogin.status).toBe(200);
+  });
+
+  it("serves native clients with body refresh tokens and no cookies", async () => {
+    await registerUser(app, "198.51.100.40");
+    const verifyResponse = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest({ token: tokenFromMessage(emails.messages[0]?.text) }),
+    );
+    expect(verifyResponse.status).toBe(200);
+
+    const native = {
+      "X-Zenguy-Client": "native",
+      "CF-Connecting-IP": "198.51.100.41",
+    };
+    const loginResponse = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "alice@example.com", password: "initial-password" },
+        native,
+      ),
+    );
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers.get("Set-Cookie")).toBeNull();
+    const login = (await loginResponse.json()) as NativeSessionResponse;
+    expect(login.data.user.email).toBe("alice@example.com");
+    expect(login.data.accessToken).toEqual(expect.any(String));
+    expect(login.data.expiresIn).toBe(1_800);
+    expect(login.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
+    expect(login.data.refreshExpiresIn).toBe(2_592_000);
+
+    const meResponse = await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${login.data.accessToken}` },
+    });
+    expect(meResponse.status).toBe(200);
+
+    const refreshResponse = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: login.data.refreshToken }, native),
+    );
+    expect(refreshResponse.status).toBe(200);
+    expect(refreshResponse.headers.get("Set-Cookie")).toBeNull();
+    const refreshed = (await refreshResponse.json()) as NativeSessionResponse;
+    expect(refreshed.data.accessToken).toEqual(expect.any(String));
+    expect(refreshed.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
+    expect(refreshed.data.refreshToken).not.toBe(login.data.refreshToken);
+
+    // Rotation: reusing the replaced token revokes the whole family.
+    const reuse = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: login.data.refreshToken }, native),
+    );
+    expect(reuse.status).toBe(401);
+    expect(reuse.headers.get("Set-Cookie")).toBeNull();
+    const afterReuse = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: refreshed.data.refreshToken }, native),
+    );
+    expect(afterReuse.status).toBe(401);
+
+    const secondLoginResponse = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "alice@example.com", password: "initial-password" },
+        native,
+      ),
+    );
+    const secondLogin =
+      (await secondLoginResponse.json()) as NativeSessionResponse;
+    const logoutResponse = await app.request(
+      "/api/auth/logout",
+      jsonRequest({ refreshToken: secondLogin.data.refreshToken }, native),
+    );
+    expect(logoutResponse.status).toBe(204);
+    expect(await logoutResponse.text()).toBe("");
+    expect(logoutResponse.headers.get("Set-Cookie")).toBeNull();
+    const afterLogout = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: secondLogin.data.refreshToken }, native),
+    );
+    expect(afterLogout.status).toBe(401);
+  });
+
+  it("validates native refresh bodies and ignores cookies for native clients", async () => {
+    const native = { "X-Zenguy-Client": "native" };
+    const missing = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({}, native),
+    );
+    expect(missing.status).toBe(400);
+    expect(missing.headers.get("Set-Cookie")).toBeNull();
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
+
+    const cookieOnly = await app.request("/api/auth/refresh", {
+      method: "POST",
+      headers: { ...native, Cookie: "zenguy_rt=anything" },
+    });
+    expect(cookieOnly.status).toBe(400);
+
+    const oversized = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: "a".repeat(513) }, native),
+    );
+    expect(oversized.status).toBe(400);
+
+    const unknown = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: "not-a-real-token" }, native),
+    );
+    expect(unknown.status).toBe(401);
+    expect(unknown.headers.get("Set-Cookie")).toBeNull();
+
+    const logoutWithoutToken = await app.request(
+      "/api/auth/logout",
+      jsonRequest({}, native),
+    );
+    expect(logoutWithoutToken.status).toBe(204);
+    expect(logoutWithoutToken.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("keeps the cookie flow for browsers even when the client header is wrong", async () => {
+    await registerUser(app, "198.51.100.42");
+    const loginResponse = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "alice@example.com", password: "initial-password" },
+        { "X-Zenguy-Client": "web", "CF-Connecting-IP": "198.51.100.43" },
+      ),
+    );
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers.get("Set-Cookie")).toMatch(/^zenguy_rt=/u);
+    const body = (await loginResponse.json()) as { data: Record<string, unknown> };
+    expect(body.data).not.toHaveProperty("refreshToken");
   });
 });
