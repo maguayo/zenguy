@@ -250,8 +250,8 @@ Rutas: `/login` y `/` (protegida; sin sesión redirige a `/login`). Sin más nav
 - Cabeceras de seguridad equivalentes a las de `apps/api` (`securityHeaders`), CSP estricta
   para la SPA, `Cache-Control: no-store` en `/api/*`.
 - No se amplía el `Domain` de ninguna cookie del producto; la sesión admin es host-only.
-- Secrets del Worker admin: `ADMIN_SESSION_SECRET` (≥32 chars). Vars: `ADMIN_EMAILS`,
-  `ZENGUY_API_ORIGIN`.
+- Secrets del Worker admin: `ADMIN_SESSION_SECRET` (≥32 chars). Vars: `ADMIN_EMAILS`
+  (valor inicial: `marcos@aguayo.es`), `ZENGUY_API_ORIGIN`.
 - Los datos mostrados (emails de clientes) son PII: solo accesibles tras sesión admin.
 
 ## 11. Testing (TDD, como el resto del repo)
@@ -277,7 +277,8 @@ Rutas: `/login` y `/` (protegida; sin sesión redirige a `/login`). Sin más nav
    `dev`/`build`/`test`/`typecheck`/`deploy` coherentes con las demás apps.
 2. Deploy manual: `pnpm --filter @zenguy/admin exec wrangler deploy --profile zenguy-personal`.
    El `custom_domain` provisiona `admin.zenguy.com` en la zona existente.
-3. Instalar `ADMIN_SESSION_SECRET` (secret) y configurar `ADMIN_EMAILS` (var).
+3. Instalar `ADMIN_SESSION_SECRET` (secret) y configurar `ADMIN_EMAILS` (var; valor
+   inicial: `marcos@aguayo.es`).
 4. `apps/api`: aplicar `0018` en staging y desplegar staging para que los workers empiecen
    a reportar (visible en el panel cuando producción se active o si se apunta una copia del
    panel a staging). Producción sigue sus gates de release normales.
