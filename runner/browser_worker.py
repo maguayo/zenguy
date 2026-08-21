@@ -1419,6 +1419,38 @@ def _history_visited_urls(history: Any, redactor: Redactor) -> list[str]:
     return values[:100]
 
 
+_LLM_PROVIDER_ERROR_SIGNATURES = (
+    "insufficient_quota",
+    "credit_balance_exhausted",
+    "rate_limit",
+    "invalid_api_key",
+    "incorrect api key",
+    "apiconnectionerror",
+    "apitimeouterror",
+    "error code: 429",
+    "error code: 401",
+    "error code: 403",
+    "error code: 500",
+    "error code: 502",
+    "error code: 503",
+)
+
+
+def _llm_provider_failure(errors: list[str]) -> str | None:
+    """Return the most recent agent error that points at the model provider.
+
+    browser-use retries provider errors internally and can finish "normally"
+    with no structured output; without this check those attempts would be
+    reported as FAILED (a customer-facing site failure) instead of
+    SYSTEM_ERROR (a Zenguy infrastructure failure).
+    """
+    for message in reversed(errors):
+        lowered = message.lower()
+        if any(signature in lowered for signature in _LLM_PROVIDER_ERROR_SIGNATURES):
+            return message
+    return None
+
+
 def browser_use_outcome(
     history: Any,
     snapshot: Mapping[str, Any],
@@ -1443,13 +1475,24 @@ def browser_use_outcome(
         final = None
         with contextlib.suppress(Exception):
             final = history.final_result()
-        outcome: dict[str, Any] = {
-            "status": "FAILED",
-            "summary": "browser-use did not return the required structured result",
-            "expectedResult": str(snapshot.get("instructions", ""))[:2_000],
-            "actualResult": str(final or "not verified")[:2_000],
-            "failureReason": (errors[-1] if errors else "Agent stopped without a valid done result")[:2_000],
-        }
+        provider_error = _llm_provider_failure(errors)
+        if provider_error is not None:
+            outcome: dict[str, Any] = {
+                "status": "SYSTEM_ERROR",
+                "systemErrorCode": "LLM_UNAVAILABLE",
+                "summary": "The language model provider rejected inference for this attempt",
+                "expectedResult": str(snapshot.get("instructions", ""))[:2_000],
+                "actualResult": str(final or "not verified")[:2_000],
+                "failureReason": provider_error[:2_000],
+            }
+        else:
+            outcome = {
+                "status": "FAILED",
+                "summary": "browser-use did not return the required structured result",
+                "expectedResult": str(snapshot.get("instructions", ""))[:2_000],
+                "actualResult": str(final or "not verified")[:2_000],
+                "failureReason": (errors[-1] if errors else "Agent stopped without a valid done result")[:2_000],
+            }
     else:
         failed = structured.status == "FAILED"
         outcome = {

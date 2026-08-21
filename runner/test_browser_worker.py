@@ -329,6 +329,49 @@ class BrowserUseIntegrationTests(unittest.TestCase):
         self.assertEqual(outcome["visitedUrls"], ["https://example.com/"])
         self.assertIn("browser-use-0.13.8", outcome["runnerVersion"])
 
+    def test_llm_provider_failure_maps_to_system_error(self):
+        history = SimpleNamespace(
+            structured_output=None,
+            errors=lambda: [
+                "Error code: 429 - {'error': {'message': 'You have no credits "
+                "remaining.', 'type': 'insufficient_quota', 'code': "
+                "'credit_balance_exhausted'}}"
+            ],
+            final_result=lambda: None,
+            usage=SimpleNamespace(total_tokens=0),
+            urls=lambda: [],
+        )
+
+        outcome = worker.browser_use_outcome(
+            history,
+            {"instructions": "Verify the heading"},
+            worker.Redactor({}),
+            "gpt-5-mini",
+        )
+
+        self.assertEqual(outcome["status"], "SYSTEM_ERROR")
+        self.assertEqual(outcome["systemErrorCode"], "LLM_UNAVAILABLE")
+        self.assertIn("insufficient_quota", outcome["failureReason"])
+
+    def test_agent_stop_without_llm_error_stays_failed(self):
+        history = SimpleNamespace(
+            structured_output=None,
+            errors=lambda: ["Element with index 7 was not clickable"],
+            final_result=lambda: None,
+            usage=SimpleNamespace(total_tokens=1200),
+            urls=lambda: ["https://example.com/"],
+        )
+
+        outcome = worker.browser_use_outcome(
+            history,
+            {"instructions": "Verify the heading"},
+            worker.Redactor({}),
+            "gpt-5-mini",
+        )
+
+        self.assertEqual(outcome["status"], "FAILED")
+        self.assertNotIn("systemErrorCode", outcome)
+
     def test_browser_use_telemetry_and_cloud_sync_are_disabled(self):
         self.assertEqual(worker.os.environ["ANONYMIZED_TELEMETRY"], "false")
         self.assertEqual(worker.os.environ["BROWSER_USE_CLOUD_SYNC"], "false")
