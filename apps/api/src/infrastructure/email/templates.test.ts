@@ -3,6 +3,7 @@ import {
   renderInvitationEmail,
   renderResetPasswordEmail,
   renderVerifyEmail,
+  renderWelcomeEmail,
 } from "./templates";
 
 describe("email templates", () => {
@@ -14,9 +15,9 @@ describe("email templates", () => {
       ctaUrl: "https://example.com/action?a=1&b=2",
     });
 
-    expect(result.html).toContain("width=\"560\"");
-    expect(result.html).toContain("#4F46E5");
-    expect(result.html).toContain(">Take action</a>");
+    expect(result.html).toContain("max-width:600px");
+    expect(result.html).toContain("#4f46e5");
+    expect(result.html).toContain("Take action&nbsp;&nbsp;→</a>");
     expect(result.html).toContain(
       'href="https://example.com/action?a=1&amp;b=2"',
     );
@@ -34,6 +35,32 @@ describe("email templates", () => {
     expect(result.html).toContain("&lt;Title&gt;");
   });
 
+  it("renders the branded welcome and verification email", () => {
+    const welcome = renderWelcomeEmail(
+      "https://app.zenguy.example/",
+      "Ana & <Team>",
+      "token +/",
+    );
+
+    expect(welcome.subject).toBe("Welcome to Zenguy — verify your email");
+    expect(welcome.html).toContain("<!doctype html>");
+    expect(welcome.html).toContain("Welcome, Ana &amp; &lt;Team&gt;.");
+    expect(welcome.html).toContain("YOUR LAUNCH PLAN");
+    expect(welcome.html).toContain("300 browser-test runs every month");
+    expect(welcome.html).toContain("Unlimited uptime checks");
+    expect(welcome.html).toContain("Unlimited team members");
+    expect(welcome.html).toContain("No card required.");
+    expect(welcome.html).toContain("role=\"presentation\"");
+    expect(welcome.html).not.toContain("<Team>");
+    expect(welcome.text).toContain("Welcome to Zenguy, Ana & <Team>.");
+    expect(welcome.text).toContain(
+      "https://app.zenguy.example/verify-email?token=token%20%2B%2F",
+    );
+    expect(new TextEncoder().encode(welcome.html).byteLength).toBeLessThan(
+      30_000,
+    );
+  });
+
   it("renders the exact auth subjects, copies, and token URLs", () => {
     const verify = renderVerifyEmail(
       "https://app.zenguy.example/",
@@ -46,9 +73,8 @@ describe("email templates", () => {
     );
 
     expect(verify.subject).toBe("Verify your email — Zenguy");
-    expect(verify.text).toContain("Welcome to Zenguy, Ana.");
     expect(verify.text).toContain(
-      "Confirm your email address to start using your account.",
+      "Hi Ana, confirm your email address to start using your Zenguy account.",
     );
     expect(verify.text).toContain(
       "https://app.zenguy.example/verify-email?token=token%20%2B%2F",
@@ -57,7 +83,7 @@ describe("email templates", () => {
       "This link expires in 24 hours. If you didn't create an account, ignore this email.",
     );
     expect(reset.subject).toBe("Reset your password — Zenguy");
-    expect(reset.html).toContain(">Reset password</a>");
+    expect(reset.html).toContain("Reset password&nbsp;&nbsp;→</a>");
     expect(reset.text).toContain(
       "https://app.zenguy.example/reset-password?token=reset-token",
     );

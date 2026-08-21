@@ -4,7 +4,7 @@ import type {
   UserRepo,
 } from "../../domain/users/repo";
 import type { User } from "../../domain/users/types";
-import { renderVerifyEmail } from "../../infrastructure/email/templates";
+import { renderWelcomeEmail } from "../../infrastructure/email/templates";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import { EMAIL_VERIFY_TTL_HOURS } from "../../shared/constants";
@@ -77,7 +77,7 @@ export class Register {
       createdAt: now,
     });
 
-    const message = renderVerifyEmail(
+    const message = renderWelcomeEmail(
       this.dependencies.config.appUrl,
       user.name,
       tokenPlain,

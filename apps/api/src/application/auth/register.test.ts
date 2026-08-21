@@ -29,7 +29,10 @@ describe("Register", () => {
     expect(dependencies.emailSender.messages).toHaveLength(1);
     const message = dependencies.emailSender.messages[0];
     expect(message?.to).toEqual([user.email]);
-    expect(message?.subject).toBe("Verify your email — Zenguy");
+    expect(message?.subject).toBe("Welcome to Zenguy — verify your email");
+    expect(message?.html).toContain("Welcome, Alice.");
+    expect(message?.html).toContain("YOUR LAUNCH PLAN");
+    expect(message?.text).toContain("No card required.");
 
     const tokenPlain = new URL(
       message?.text.match(/https:\/\/\S+/u)?.[0] ?? "invalid:",
