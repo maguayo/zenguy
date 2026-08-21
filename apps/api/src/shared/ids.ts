@@ -28,6 +28,7 @@ export const ID_PREFIXES = {
   queueOutbox: "out",
   durableJob: "job",
   apiKey: "ak",
+  alertCreditEntry: "ace",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

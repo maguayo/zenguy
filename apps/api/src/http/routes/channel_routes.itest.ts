@@ -9,6 +9,8 @@ import type { Subscription } from "../../domain/billing/types";
 import type { User } from "../../domain/users/types";
 import type { Role, Workspace } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
+import { defaultAlertSettings } from "../../domain/alerts/types";
+import { D1AlertRepo } from "../../infrastructure/db/alert_repo";
 import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
 import { D1ChannelRepo } from "../../infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "../../infrastructure/db/delivery_repo";
@@ -114,6 +116,7 @@ describe("channel routes", () => {
   let deliveries: D1DeliveryRepo;
   let subscriptions: D1SubscriptionRepo;
   let audits: D1AuditRepo;
+  let alerts: D1AlertRepo;
   let encryptionKey: Uint8Array;
 
   beforeEach(async () => {
@@ -141,6 +144,7 @@ describe("channel routes", () => {
     channels = new D1ChannelRepo(bindings.DB);
     deliveries = new D1DeliveryRepo(bindings.DB);
     audits = new D1AuditRepo(bindings.DB);
+    alerts = new D1AlertRepo(bindings.DB);
     const config = loadConfig(bindings);
     encryptionKey = config.encryptionKey;
     tokens = {
@@ -284,6 +288,10 @@ describe("channel routes", () => {
       });
     }
 
+    await alerts.insertSettings({
+      ...defaultAlertSettings(WORKSPACE.id, 1),
+      paidChannelsEnabled: true,
+    });
     const valid: [ChannelType, unknown][] = [
       ["EMAIL", { emails: ["ops@example.com"] }],
       ["SMS", { phoneNumber: "+34600123456", consent: true }],
@@ -301,6 +309,160 @@ describe("channel routes", () => {
     for (const [type, config] of valid) {
       await createChannel(type, config);
     }
+  });
+
+  it("gates paid channel types behind the add-on and prices them per destination", async () => {
+    const blocked = await app.request(`/api/workspaces/${WORKSPACE.id}/channels`, {
+      method: "POST",
+      headers: headers("owner"),
+      body: JSON.stringify({
+        name: "On-call",
+        type: "SMS",
+        config: { phoneNumber: "+34600123456", consent: true },
+      }),
+    });
+    expect(blocked.status).toBe(400);
+    await expect(blocked.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: [{ field: "type", message: expect.stringContaining("SMS & calls") }],
+      },
+    });
+
+    await alerts.insertSettings({
+      ...defaultAlertSettings(WORKSPACE.id, 1),
+      paidChannelsEnabled: true,
+    });
+    const created = await createChannel("SMS", {
+      phoneNumber: "+34600123456",
+      consent: true,
+    });
+    expect(JSON.parse(created.responseText)).toMatchObject({
+      data: {
+        type: "SMS",
+        isDefault: false,
+        price: { cents: 18, currency: "EUR", destination: "Spain" },
+        paused: { reason: "NO_CREDIT" },
+      },
+    });
+
+    await alerts.credit({
+      id: "ace_channels",
+      workspaceId: WORKSPACE.id,
+      amountCents: 100,
+      kind: "GRANT",
+      idempotencyKey: "grant:channels",
+      description: "Grant",
+      deliveryId: null,
+      providerTransactionId: null,
+      at: 1,
+    });
+    const listed = await app.request(`/api/workspaces/${WORKSPACE.id}/channels`, {
+      headers: headers("member"),
+    });
+    await expect(listed.json()).resolves.toMatchObject({
+      data: [{ id: created.id, price: { cents: 18 }, paused: null }],
+    });
+
+    const madeDefault = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
+      {
+        method: "PATCH",
+        headers: headers("admin"),
+        body: JSON.stringify({ isDefault: true }),
+      },
+    );
+    expect(madeDefault.status).toBe(200);
+    await expect(madeDefault.json()).resolves.toMatchObject({
+      data: { isDefault: true },
+    });
+    await expect(channels.findById(WORKSPACE.id, created.id)).resolves.toMatchObject({
+      isDefault: true,
+    });
+
+    await alerts.updateSettings(WORKSPACE.id, { paidChannelsEnabled: false }, 2);
+    const disabled = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
+      {
+        method: "PATCH",
+        headers: headers("admin"),
+        body: JSON.stringify({ enabled: false }),
+      },
+    );
+    expect(disabled.status).toBe(200);
+    const reenabled = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
+      {
+        method: "PATCH",
+        headers: headers("admin"),
+        body: JSON.stringify({ enabled: true }),
+      },
+    );
+    expect(reenabled.status).toBe(400);
+    await expect(reenabled.json()).resolves.toMatchObject({
+      error: { details: [{ field: "enabled" }] },
+    });
+  });
+
+  it("charges a test SMS from the credit and records its cost", async () => {
+    await alerts.insertSettings({
+      ...defaultAlertSettings(WORKSPACE.id, 1),
+      paidChannelsEnabled: true,
+    });
+    const created = await createChannel("SMS", {
+      phoneNumber: "+34600123456",
+      consent: true,
+    });
+    const skipped = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}/test`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(skipped.status).toBe(200);
+    await expect(skipped.json()).resolves.toMatchObject({
+      data: {
+        delivery: {
+          status: "FAILED",
+          errorSanitized: expect.stringContaining("not enough alert credit"),
+          costCents: null,
+        },
+      },
+    });
+    expect(sender.calls).toHaveLength(0);
+
+    await alerts.credit({
+      id: "ace_test",
+      workspaceId: WORKSPACE.id,
+      amountCents: 50,
+      kind: "GRANT",
+      idempotencyKey: "grant:test",
+      description: "Grant",
+      deliveryId: null,
+      providerTransactionId: null,
+      at: 1,
+    });
+    const sent = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}/test`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(sent.status).toBe(200);
+    await expect(sent.json()).resolves.toMatchObject({
+      data: {
+        delivery: { status: "SENT", costCents: 18, destinationCountry: "Spain" },
+      },
+    });
+    expect(sender.calls).toHaveLength(1);
+    await expect(alerts.getBalanceCents(WORKSPACE.id)).resolves.toBe(32);
+
+    sender.failure = new Error("twilio error 500");
+    const failed = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${created.id}/test`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(failed.status).toBe(200);
+    await expect(failed.json()).resolves.toMatchObject({
+      data: { delivery: { status: "FAILED", costCents: null } },
+    });
+    await expect(alerts.getBalanceCents(WORKSPACE.id)).resolves.toBe(32);
   });
 
   it("records successful and failed test deliveries and keyset-paginates them", async () => {

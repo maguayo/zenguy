@@ -6,6 +6,14 @@ import { Card } from "./ui/Card";
 import { Checkbox } from "./ui/Checkbox";
 import { ErrorState } from "./ui/ErrorState";
 import { Spinner } from "./ui/Spinner";
+import { formatEuros } from "../lib/format";
+
+/** Channels preselected for a new test or monitor. */
+export function defaultChannelIds(channels: Channel[]): string[] {
+  return channels
+    .filter((channel) => channel.enabled && channel.isDefault)
+    .map((channel) => channel.id);
+}
 
 export function toggleChannelId(value: string[], channelId: string): string[] {
   return value.includes(channelId)
@@ -47,7 +55,7 @@ export function ChannelPicker({
         <ErrorState onRetry={onRetry} />
       ) : channels.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          No channels yet — create one under Notifications.
+          No channels yet — create one under Alerts.
         </p>
       ) : (
         <fieldset>
@@ -63,6 +71,12 @@ export function ChannelPicker({
                   onChange={() => onChange(toggleChannelId(value, channel.id))}
                 />
                 <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+                {channel.price ? (
+                  <span className="whitespace-nowrap text-xs text-zinc-500">
+                    {formatEuros(channel.price.cents)}
+                  </span>
+                ) : null}
+                {channel.enabled && channel.paused ? <Badge tone="warn">Paused</Badge> : null}
                 <Badge>{channel.type}</Badge>
               </label>
             ))}

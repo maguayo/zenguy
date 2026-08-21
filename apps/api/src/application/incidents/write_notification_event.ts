@@ -31,7 +31,9 @@ export class WriteIncidentNotificationEvent implements IncidentEventWriter {
       type: input.type,
       sourceId: input.deliveryId,
       message: truncate(
-        `Notification via ${input.channelName}: ${input.status}`,
+        input.detail === undefined
+          ? `Notification via ${input.channelName}: ${input.status}`
+          : `Notification via ${input.channelName}: ${input.status} — ${input.detail}`,
         2_000,
       ),
       metadataJson: JSON.stringify({
@@ -39,6 +41,7 @@ export class WriteIncidentNotificationEvent implements IncidentEventWriter {
         channelName: input.channelName,
         deliveryId: input.deliveryId,
         status: input.status,
+        ...(input.detail === undefined ? {} : { detail: input.detail }),
       }),
       createdAt: now,
     });

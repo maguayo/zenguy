@@ -1,5 +1,6 @@
 import type { WriteAudit } from "../audit/write_audit";
 import { ensureActiveSubscription } from "../billing/ensure_active_subscription";
+import { isPaidChannelType } from "../../domain/alerts/types";
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
@@ -20,6 +21,7 @@ import { AppError, forbidden, notFound } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
 import { Redactor, truncate } from "../../shared/redact";
+import type { PaidDeliveryCharger } from "../alerts/charge_paid_delivery";
 import { deliveryOutput, type DeliveryOutput } from "./types";
 
 function errorMessage(error: unknown): string {
@@ -59,6 +61,7 @@ export class TestChannel {
     private readonly config: Pick<AppConfig, "appUrl" | "encryptionKey">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly charger: PaidDeliveryCharger,
   ) {}
 
   async execute(input: {
@@ -117,6 +120,8 @@ export class TestChannel {
 
     let result: NotificationDelivery;
     let redactor = new Redactor([]);
+    const paid = isPaidChannelType(channel.type);
+    let charged = false;
     try {
       const plaintext = await decryptSecret(
         channel.encryptedConfig,
@@ -125,6 +130,36 @@ export class TestChannel {
       redactor = channelConfigRedactor(plaintext);
       const parsedConfig = JSON.parse(plaintext) as unknown;
       redactor = channelConfigRedactor(plaintext, parsedConfig);
+      let cost: Pick<NotificationDelivery, "costCents" | "destinationCountry"> =
+        {};
+      if (paid) {
+        const charge = await this.charger.charge({
+          workspaceId: input.workspaceId,
+          deliveryId: delivery.id,
+          channelType: channel.type,
+          config: parsedConfig,
+        });
+        if (!charge.ok) {
+          result = {
+            ...delivery,
+            status: "FAILED",
+            attemptCount: 1,
+            errorSanitized: charge.message,
+          };
+          await this.deliveries.update(delivery.id, {
+            status: "FAILED",
+            errorSanitized: charge.message,
+            attemptCount: 1,
+          });
+          await this.channels.setLastDeliveryStatus(channel.id, "FAILED");
+          return this.finish(input, channel, result);
+        }
+        charged = true;
+        cost = {
+          costCents: charge.costCents,
+          destinationCountry: charge.destination.name,
+        };
+      }
       const sent = await this.sender.send(
         { type: channel.type, config: parsedConfig },
         message,
@@ -135,6 +170,7 @@ export class TestChannel {
         providerMessageId: sent.providerMessageId,
         attemptCount: 1,
         sentAt: now,
+        ...cost,
       };
       await this.deliveries.update(delivery.id, {
         status: "SENT",
@@ -142,6 +178,7 @@ export class TestChannel {
         errorSanitized: null,
         attemptCount: 1,
         sentAt: now,
+        ...cost,
       });
       await this.channels.setVerified(channel.id, now);
       await this.channels.setLastDeliveryStatus(channel.id, "SENT");
@@ -162,7 +199,22 @@ export class TestChannel {
         attemptCount: 1,
       });
       await this.channels.setLastDeliveryStatus(channel.id, "FAILED");
+      if (charged) {
+        await this.charger.refund({
+          workspaceId: input.workspaceId,
+          deliveryId: delivery.id,
+          reason: "test notification failed",
+        });
+      }
     }
+    return this.finish(input, channel, result);
+  }
+
+  private async finish(
+    input: { workspaceId: string; actor: User; ip?: string },
+    channel: { id: string; name: string; type: string },
+    result: NotificationDelivery,
+  ): Promise<DeliveryOutput> {
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,

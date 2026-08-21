@@ -82,7 +82,8 @@ describe("TwilioApi", () => {
       To: "+34600123456",
       From: "+15550000003",
       Twiml:
-        '<Response><Say voice="alice">Checkout &lt;Prod&gt; &amp; &quot;API&quot; isn&apos;t healthy.</Say></Response>',
+        '<Response><Say voice="alice">Checkout &lt;Prod&gt; &amp; &quot;API&quot; isn&apos;t healthy.</Say><Pause length="1"/><Say voice="alice">Checkout &lt;Prod&gt; &amp; &quot;API&quot; isn&apos;t healthy.</Say></Response>',
+      TimeLimit: "55",
     });
 
     for (const request of recorder.requests) {

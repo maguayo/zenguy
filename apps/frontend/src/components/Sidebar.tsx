@@ -34,7 +34,7 @@ export const navigationItems: NavigationItem[] = [
   { icon: Globe, label: "Browser Tests", path: "tests" },
   { icon: Activity, label: "Uptime", path: "uptime" },
   { icon: Siren, label: "Incidents", path: "incidents" },
-  { icon: Bell, label: "Notifications", path: "notifications" },
+  { icon: Bell, label: "Alerts", path: "alerts" },
   { icon: KeyRound, label: "Secrets", path: "secrets" },
   { icon: Users, label: "Members", path: "members" },
   {

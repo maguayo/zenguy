@@ -14,7 +14,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
-import { formatDateTime } from "../../lib/format";
+import { formatDateTime, formatEuros } from "../../lib/format";
 
 const eventLabels: Record<
   Delivery["eventType"],
@@ -55,6 +55,12 @@ export function DeliveryRow({
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={delivery.status} />
         <span className="text-xs text-zinc-500">{deliveryAttempts(delivery.attemptCount)}</span>
+        {delivery.costCents !== null ? (
+          <span className="text-xs text-zinc-500">
+            {formatEuros(delivery.costCents)}
+            {delivery.destinationCountry ? ` · ${delivery.destinationCountry}` : ""}
+          </span>
+        ) : null}
         {delivery.incidentId ? (
           <Link
             aria-label="Open incident"

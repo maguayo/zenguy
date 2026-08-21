@@ -5,9 +5,9 @@ export interface PaddleEvent {
 }
 
 export interface PaddleCheckoutOptions {
-  customData: { workspace_id: string };
+  customData: Record<string, string>;
   customer: { email: string };
-  items: [{ priceId: string; quantity: 1 }];
+  items: [{ priceId: string; quantity: number }];
   settings: { displayMode: "overlay" };
 }
 
@@ -36,18 +36,22 @@ let initializedToken: string | null = null;
 let checkoutCompletedCallback: (() => void) | null = null;
 
 export function checkoutOptions({
+  customData,
   email,
   priceId,
+  quantity = 1,
   workspaceId,
 }: {
+  customData?: Record<string, string>;
   email: string;
   priceId: string;
+  quantity?: number;
   workspaceId: string;
 }): PaddleCheckoutOptions {
   return {
-    customData: { workspace_id: workspaceId },
+    customData: { workspace_id: workspaceId, ...customData },
     customer: { email },
-    items: [{ priceId, quantity: 1 }],
+    items: [{ priceId, quantity }],
     settings: { displayMode: "overlay" },
   };
 }
@@ -116,20 +120,26 @@ export async function initPaddle(config: PaddleBillingConfig): Promise<Paddle> {
 }
 
 export function openCheckout({
+  customData,
   email,
   onCompleted,
   priceId,
+  quantity,
   workspaceId,
 }: {
+  customData?: Record<string, string>;
   email: string;
   onCompleted: () => void;
   priceId: string;
+  quantity?: number;
   workspaceId: string;
 }): void {
   if (!initializedPaddle) throw new Error("Paddle has not been initialized.");
   checkoutCompletedCallback = onCompleted;
   try {
-    initializedPaddle.Checkout.open(checkoutOptions({ email, priceId, workspaceId }));
+    initializedPaddle.Checkout.open(
+      checkoutOptions({ customData, email, priceId, quantity, workspaceId }),
+    );
   } catch (error) {
     checkoutCompletedCallback = null;
     throw error;

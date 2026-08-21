@@ -18,6 +18,9 @@ const DELETE_STATEMENTS = [
   "DELETE FROM test_runs",
   "DELETE FROM browser_test_channels",
   "DELETE FROM browser_tests",
+  "DELETE FROM alert_credit_entries",
+  "DELETE FROM alert_credit_balances",
+  "DELETE FROM workspace_alert_settings",
   "DELETE FROM notification_deliveries",
   "DELETE FROM notification_channels",
   "DELETE FROM workspace_secrets",
@@ -58,6 +61,7 @@ export function testEnv(): Bindings {
     PADDLE_ENVIRONMENT: "sandbox",
     PADDLE_PRICE_ID: "pri_test_monthly",
     PADDLE_OVERAGE_PRICE_ID: "pri_test_overage",
+    PADDLE_ALERT_CREDIT_PRICE_ID: "pri_test_alert_credit",
   };
 }
 

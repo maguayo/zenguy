@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { formatEuros } from "../../lib/format";
+
 import type { Channel } from "../../api/types";
 import {
   channelFormDefaults,
   channelFormSchema,
   createChannelInput,
+  isPaidChannelType,
+  quoteHint,
   updateChannelInput,
   type ChannelFormValues,
 } from "./ChannelFormModal";
@@ -14,8 +18,11 @@ const slack: Channel = {
   createdAt: "2026-08-19T10:00:00.000Z",
   enabled: true,
   id: "channel_1",
+  isDefault: false,
   lastDeliveryStatus: null,
   name: "Slack alerts",
+  paused: null,
+  price: null,
   type: "SLACK",
   verifiedAt: null,
 };
@@ -30,6 +37,26 @@ const values: ChannelFormValues = {
 };
 
 describe("channel form", () => {
+  it("labels paid types and turns quotes into price hints", () => {
+    expect(isPaidChannelType("SMS")).toBe(true);
+    expect(isPaidChannelType("CALL")).toBe(true);
+    expect(isPaidChannelType("EMAIL")).toBe(false);
+    const quote = {
+      callCents: 20,
+      currency: "EUR" as const,
+      destination: { iso: "ES", name: "Spain", region: "EUROPE" as const },
+      smsCents: 18,
+    };
+    expect(quoteHint("SMS", quote)).toBe(
+      `Spain · ${formatEuros(18)} per SMS, charged from alert credit`,
+    );
+    expect(quoteHint("CALL", quote)).toBe(
+      `Spain · ${formatEuros(20)} per call, charged from alert credit`,
+    );
+    expect(quoteHint("EMAIL", quote)).toBeNull();
+    expect(quoteHint("SMS", undefined)).toBeNull();
+  });
+
   it("validates each channel config like the backend", () => {
     const createSchema = channelFormSchema(false);
     expect(

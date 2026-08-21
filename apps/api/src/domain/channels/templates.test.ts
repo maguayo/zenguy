@@ -45,7 +45,7 @@ describe("buildNotificationMessage", () => {
 
     expect(
       buildNotificationMessage({ ...standalone, eventType: "TEST" }).link,
-    ).toBe("https://app.zenguy.test/w/ws_123/notifications");
+    ).toBe("https://app.zenguy.test/w/ws_123/alerts");
   });
 
   it("bounds failure summaries and removes URLs defensively", () => {

@@ -124,6 +124,8 @@ describe("WriteAudit", () => {
         "auth.password_reset",
         "api_key.created",
         "api_key.revoked",
+        "alerts.settings_updated",
+        "alerts.credit_topup",
       ].sort(),
     );
   });

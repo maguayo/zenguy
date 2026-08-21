@@ -39,6 +39,8 @@ export interface IncidentDeliveryOutput {
   errorSanitized: string | null;
   sentAt: number | null;
   createdAt: number;
+  costCents: number | null;
+  destinationCountry: string | null;
 }
 
 export interface IncidentDetailOutput extends IncidentListItemOutput {

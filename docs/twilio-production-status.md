@@ -111,6 +111,16 @@ Twilio references:
 - [Campaign registration guide](https://help.twilio.com/hc/en-us/articles/1260803965530-A2P-10DLC-Campaign-Registration-Guide)
 - [A2P 10DLC registration API](https://www.twilio.com/docs/messaging/api/usapptoperson-resource)
 
+## Pricing and prepaid credit
+
+Since 2026-08-22 SMS, voice and WhatsApp alerts are pay-as-you-go: each alert
+is charged from a prepaid per-workspace credit at a per-destination price
+derived from Twilio's rates for this US number (×2 markup, €0.05/€0.20
+minimums, flat rest-of-world rate). Calls carry `TimeLimit=55` so one alert is
+always a single billed minute, and SMS bodies are trimmed to one segment. See
+`docs/alerts-paid-channels.md` for the table, the refresh procedure, and the
+Paddle price needed to open top-ups.
+
 ## Voice status
 
 The purchased number is the configured outbound caller ID. Zenguy creates an

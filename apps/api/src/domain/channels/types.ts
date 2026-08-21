@@ -18,6 +18,8 @@ export interface NotificationChannel {
   type: ChannelType;
   encryptedConfig: string;
   enabled: boolean;
+  /** Preselected for new tests and monitors. */
+  isDefault?: boolean;
   verifiedAt: number | null;
   lastDeliveryStatus: string | null;
   createdBy: string | null;
@@ -37,6 +39,10 @@ export interface NotificationDelivery {
   errorSanitized: string | null;
   sentAt: number | null;
   createdAt: number;
+  /** Euro cents charged to the workspace's alert credit, for paid channels. */
+  costCents?: number | null;
+  /** Destination country name used for pricing, for paid channels. */
+  destinationCountry?: string | null;
 }
 
 export interface IncidentNotificationDelivery extends NotificationDelivery {

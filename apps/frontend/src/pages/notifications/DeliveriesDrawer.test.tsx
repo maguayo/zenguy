@@ -7,7 +7,9 @@ import { DeliveryRow, deliveryAttempts, deliveryEvent } from "./DeliveriesDrawer
 
 const failed: Delivery = {
   attemptCount: 2,
+  costCents: null,
   createdAt: "2026-08-19T10:02:00.000Z",
+  destinationCountry: null,
   errorSanitized: "provider unavailable",
   eventType: "FAILURE",
   id: "delivery_1",
@@ -39,5 +41,25 @@ describe("delivery history", () => {
     expect(html).toContain("19 Aug 2026, 10:02");
     expect(html).toContain('/w/ws_1/incidents/incident_1');
     expect(html).toContain('aria-label="Open incident"');
+  });
+
+  it("shows what a paid delivery cost", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <DeliveryRow
+          delivery={{
+            ...failed,
+            costCents: 18,
+            destinationCountry: "Spain",
+            errorSanitized: null,
+            status: "SENT",
+          }}
+          timezone="UTC"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("0,18");
+    expect(html).toContain("Spain");
   });
 });

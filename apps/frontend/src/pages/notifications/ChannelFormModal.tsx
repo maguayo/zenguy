@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Gamepad2,
   Hash,
@@ -10,15 +10,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 
+import { alertsQueryKey, quoteAlertPrice } from "../../api/alerts";
 import {
   createChannel,
   updateChannel,
   type CreateChannelInput,
   type UpdateChannelInput,
 } from "../../api/channels";
-import type { Channel, ChannelConfigInput, ChannelType } from "../../api/types";
+import type { AlertQuote, Channel, ChannelConfigInput, ChannelType } from "../../api/types";
 import { EmailListInput } from "../../components/EmailListInput";
 import { Button } from "../../components/ui/Button";
 import { Checkbox } from "../../components/ui/Checkbox";
@@ -30,14 +32,33 @@ import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
+import { formatEuros } from "../../lib/format";
 
-const channelTypes: Array<{ icon: LucideIcon; label: string; type: ChannelType }> = [
+const channelTypes: Array<{
+  icon: LucideIcon;
+  label: string;
+  paid?: boolean;
+  type: ChannelType;
+}> = [
   { icon: Mail, label: "Email", type: "EMAIL" },
-  { icon: MessageSquare, label: "SMS", type: "SMS" },
-  { icon: Phone, label: "Phone call", type: "CALL" },
+  { icon: MessageSquare, label: "SMS", paid: true, type: "SMS" },
+  { icon: Phone, label: "Phone call", paid: true, type: "CALL" },
   { icon: Hash, label: "Slack", type: "SLACK" },
   { icon: Gamepad2, label: "Discord", type: "DISCORD" },
 ];
+
+const E164 = /^\+[1-9]\d{6,14}$/u;
+
+export function isPaidChannelType(type: ChannelType | null): boolean {
+  return type === "SMS" || type === "CALL" || type === "WHATSAPP";
+}
+
+export function quoteHint(type: ChannelType | null, quote: AlertQuote | undefined): string | null {
+  if (!quote || !isPaidChannelType(type)) return null;
+  const cents = type === "CALL" ? quote.callCents : quote.smsCents;
+  const unit = type === "CALL" ? "call" : type === "WHATSAPP" ? "message" : "SMS";
+  return `${quote.destination.name} · ${formatEuros(cents)} per ${unit}, charged from alert credit`;
+}
 
 const baseSchema = z.object({
   emails: z.array(z.email("Enter a valid email address.")).max(10),
@@ -161,7 +182,7 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
     <div>
       <p className="mb-3 text-sm text-zinc-600">Choose how Zenguy should notify your team.</p>
       <div className="grid gap-3 sm:grid-cols-3">
-        {channelTypes.map(({ icon: Icon, label, type }) => (
+        {channelTypes.map(({ icon: Icon, label, paid, type }) => (
           <button
             key={type}
             className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white p-3 text-sm font-medium text-zinc-800 hover:border-accent-600 hover:bg-accent-50 hover:text-accent-700"
@@ -170,6 +191,11 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
           >
             <Icon aria-hidden="true" className="size-5" />
             {label}
+            {paid ? (
+              <span className="text-[11px] font-normal text-zinc-500">Pay as you go</span>
+            ) : (
+              <span className="text-[11px] font-normal text-zinc-500">Free</span>
+            )}
           </button>
         ))}
       </div>
@@ -181,9 +207,16 @@ export interface ChannelFormModalProps {
   channel?: Channel;
   onClose: () => void;
   open: boolean;
+  /** False hides the form for paid types until SMS & calls are turned on. */
+  paidChannelsEnabled?: boolean;
 }
 
-export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalProps) {
+export function ChannelFormModal({
+  channel,
+  onClose,
+  open,
+  paidChannelsEnabled,
+}: ChannelFormModalProps) {
   const editing = Boolean(channel);
   const { current } = useWorkspace();
   const queryClient = useQueryClient();
@@ -201,6 +234,14 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
         ? updateChannel(current.id, channel.id, updateChannelInput(values))
         : createChannel(current.id, createChannelInput(values)),
   });
+  const phoneNumber = form.watch("phoneNumber").trim();
+  const quote = useQuery({
+    enabled: open && isPaidChannelType(selectedType) && E164.test(phoneNumber),
+    queryFn: () => quoteAlertPrice(current.id, phoneNumber),
+    queryKey: [...alertsQueryKey(current.id), "quote", phoneNumber],
+    staleTime: 5 * 60_000,
+  });
+  const gated = !editing && paidChannelsEnabled === false && isPaidChannelType(selectedType);
 
   useEffect(() => {
     if (!open) return;
@@ -234,21 +275,23 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
     setSelectedType(type);
   };
 
-  const phoneHint =
-    selectedType === "WHATSAPP" ? (
-      <>
-        E.164 format, with country code. The number must have WhatsApp and accept messages from
-        your Twilio sender.
-      </>
-    ) : (
-      "E.164 format, with country code."
-    );
+  const priceHint = quoteHint(selectedType, quote.data);
+  const phoneHint = priceHint ? (
+    <span className="font-medium text-zinc-700">{priceHint}</span>
+  ) : selectedType === "WHATSAPP" ? (
+    <>
+      E.164 format, with country code. The number must have WhatsApp and accept messages from
+      your Twilio sender.
+    </>
+  ) : (
+    "E.164 format, with country code. The price per alert appears once the number is complete."
+  );
   const rootError = form.formState.errors.root?.message;
 
   return (
     <Modal
       footer={
-        selectedType ? (
+        selectedType && !gated ? (
           <>
             {!editing ? (
               <Button disabled={save.isPending} onClick={() => setSelectedType(null)}>
@@ -262,6 +305,11 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
               {editing ? "Save changes" : "Create channel"}
             </Button>
           </>
+        ) : selectedType ? (
+          <>
+            <Button onClick={() => setSelectedType(null)}>Back</Button>
+            <Button onClick={close}>Cancel</Button>
+          </>
         ) : (
           <Button onClick={close}>Cancel</Button>
         )
@@ -272,6 +320,22 @@ export function ChannelFormModal({ channel, onClose, open }: ChannelFormModalPro
     >
       {!selectedType ? (
         <TypePicker onSelect={selectType} />
+      ) : gated ? (
+        <div className="rounded-md border border-info-600/20 bg-info-50 p-4 text-sm text-zinc-700">
+          <p className="font-medium text-zinc-900">
+            {selectedType === "CALL" ? "Phone calls" : "SMS"} are a pay-as-you-go add-on.
+          </p>
+          <p className="mt-1">
+            Turn on SMS & calls and add credit first. Each alert is charged at the destination
+            rate; email, Slack and Discord stay free.
+          </p>
+          <Link
+            className="mt-3 inline-flex h-8 items-center rounded-md bg-accent-600 px-3 text-xs font-medium text-white hover:bg-accent-700"
+            to={`/w/${current.id}/alerts/sms-calls`}
+          >
+            Open SMS & calls
+          </Link>
+        </div>
       ) : (
         <form className="space-y-4" id="channel-form" noValidate onSubmit={(event) => void submit(event)}>
           <Field

@@ -62,6 +62,8 @@ export class GetIncident {
         errorSanitized: delivery.errorSanitized,
         sentAt: delivery.sentAt,
         createdAt: delivery.createdAt,
+        costCents: delivery.costCents ?? null,
+        destinationCountry: delivery.destinationCountry ?? null,
       })),
     };
   }

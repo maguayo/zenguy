@@ -23,6 +23,8 @@ interface DeliveryRow {
   error_sanitized: string | null;
   sent_at: number | null;
   created_at: number;
+  cost_cents: number | null;
+  destination_country: string | null;
 }
 
 interface IncidentDeliveryRow extends DeliveryRow {
@@ -43,6 +45,8 @@ function toDelivery(row: DeliveryRow): NotificationDelivery {
     errorSanitized: row.error_sanitized,
     sentAt: row.sent_at,
     createdAt: row.created_at,
+    costCents: row.cost_cents ?? null,
+    destinationCountry: row.destination_country ?? null,
   };
 }
 
@@ -129,7 +133,9 @@ export class D1DeliveryRepo implements DeliveryRepo {
                provider_message_id = CASE WHEN ? = 1 THEN ? ELSE provider_message_id END,
                error_sanitized = CASE WHEN ? = 1 THEN ? ELSE error_sanitized END,
                attempt_count = ?,
-               sent_at = CASE WHEN ? = 1 THEN ? ELSE sent_at END
+               sent_at = CASE WHEN ? = 1 THEN ? ELSE sent_at END,
+               cost_cents = CASE WHEN ? = 1 THEN ? ELSE cost_cents END,
+               destination_country = CASE WHEN ? = 1 THEN ? ELSE destination_country END
            WHERE id = ?`,
         )
         .bind(
@@ -141,6 +147,10 @@ export class D1DeliveryRepo implements DeliveryRepo {
           changes.attemptCount,
           changes.sentAt === undefined ? 0 : 1,
           changes.sentAt ?? null,
+          changes.costCents === undefined ? 0 : 1,
+          changes.costCents ?? null,
+          changes.destinationCountry === undefined ? 0 : 1,
+          changes.destinationCountry ?? null,
           id,
         ),
     );

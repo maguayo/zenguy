@@ -1,5 +1,8 @@
 import type { WriteAudit } from "../audit/write_audit";
+import { loadPaidChannelContext } from "../alerts/settings";
 import { ensureActiveSubscription } from "../billing/ensure_active_subscription";
+import type { AlertRepo } from "../../domain/alerts/repo";
+import { isPaidChannelType } from "../../domain/alerts/types";
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { ChannelRepo } from "../../domain/channels/repo";
@@ -9,15 +12,19 @@ import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
 import { encryptSecret } from "../../shared/crypto";
-import { forbidden } from "../../shared/errors";
+import { forbidden, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import { channelName, parseChannelConfig } from "./input";
 import { channelOutput, type ChannelOutput } from "./types";
+
+export const PAID_CHANNELS_OFF_MESSAGE =
+  "Turn on SMS & calls under Alerts before adding this channel";
 
 export class CreateChannel {
   constructor(
     private readonly channels: ChannelRepo,
     private readonly subscriptions: SubscriptionRepo,
+    private readonly alerts: Pick<AlertRepo, "findSettings" | "getBalanceCents">,
     private readonly audit: Pick<WriteAudit, "execute">,
     private readonly encryptionKey: Uint8Array,
     private readonly clock: Clock,
@@ -31,12 +38,17 @@ export class CreateChannel {
     name: string;
     type: ChannelType;
     config: unknown;
+    isDefault?: boolean;
     ip?: string;
   }): Promise<ChannelOutput> {
     if (!can(input.actorRole, "channels.manage")) throw forbidden();
     await ensureActiveSubscription(this.subscriptions, input.workspaceId);
     const name = channelName(input.name);
     const config = parseChannelConfig(input.type, input.config);
+    const paid = await loadPaidChannelContext(this.alerts, input.workspaceId);
+    if (isPaidChannelType(input.type) && !paid.enabled) {
+      throw validation([{ field: "type", message: PAID_CHANNELS_OFF_MESSAGE }]);
+    }
     const now = this.clock.now();
     const channel = {
       id: this.ids.newId("ch"),
@@ -48,6 +60,7 @@ export class CreateChannel {
         this.encryptionKey,
       ),
       enabled: true,
+      isDefault: input.isDefault === true,
       verifiedAt: null,
       lastDeliveryStatus: null,
       createdBy: input.actor.id,
@@ -61,9 +74,13 @@ export class CreateChannel {
       action: AUDIT_ACTIONS.channelCreated,
       resourceType: "notification_channel",
       resourceId: channel.id,
-      metadata: { name: channel.name, type: channel.type },
+      metadata: {
+        name: channel.name,
+        type: channel.type,
+        isDefault: channel.isDefault,
+      },
       ip: input.ip,
     });
-    return channelOutput(channel, this.encryptionKey);
+    return channelOutput(channel, this.encryptionKey, paid);
   }
 }

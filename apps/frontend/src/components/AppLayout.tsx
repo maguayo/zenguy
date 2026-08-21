@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
+import { alertsQueryKey, getAlertsOverview } from "../api/alerts";
+import type { AlertsOverview } from "../api/types";
 import { useWorkspace } from "../contexts/WorkspaceContext";
 import { IconButton } from "./ui/IconButton";
 import { Sidebar } from "./Sidebar";
@@ -82,10 +85,33 @@ function MobileDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
+export function alertCreditBanner(
+  overview: AlertsOverview | undefined,
+  canManageBilling: boolean,
+): { message: string; showTopUp: boolean } | null {
+  if (
+    !overview ||
+    overview.status.pauseReason !== "NO_CREDIT" ||
+    overview.status.paidChannelCount === 0
+  ) {
+    return null;
+  }
+  return {
+    message: "Alert credit is empty — SMS and call alerts are paused until you top up.",
+    showTopUp: canManageBilling,
+  };
+}
+
 export function AppLayout() {
   const location = useLocation();
   const { can, current, subscriptionStatus } = useWorkspace();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const alerts = useQuery({
+    queryFn: () => getAlertsOverview(current.id),
+    queryKey: alertsQueryKey(current.id),
+    staleTime: 60_000,
+  });
+  const creditBanner = alertCreditBanner(alerts.data, can("billing.manage"));
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -125,6 +151,24 @@ export function AppLayout() {
                 </Link>
               ) : (
                 <p className="font-medium">Contact your workspace owner.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {creditBanner ? (
+          <div className="border-b border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-zinc-800 md:px-6">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+              <p>{creditBanner.message}</p>
+              {creditBanner.showTopUp ? (
+                <Link
+                  className="inline-flex h-8 items-center rounded-md border border-danger-600/30 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-danger-50"
+                  to={`/w/${current.id}/alerts/sms-calls`}
+                >
+                  Top up
+                </Link>
+              ) : (
+                <p className="font-medium">Ask the workspace owner to top up.</p>
               )}
             </div>
           </div>

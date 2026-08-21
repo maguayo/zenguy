@@ -6,6 +6,7 @@ import { ListMyWorkspaces } from "../../application/workspaces/list_my_workspace
 import { UpdateWorkspace } from "../../application/workspaces/update_workspace";
 import { TransferOwnership } from "../../application/workspaces/transfer_ownership";
 import { DeleteWorkspace } from "../../application/workspaces/delete_workspace";
+import type { EnsureDefaultEmailChannel } from "../../application/alerts/ensure_default_email_channel";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { BillingCanceller } from "../../domain/billing/canceller";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
@@ -31,6 +32,7 @@ export interface WorkspaceRoutesDependencies {
   invitations: InvitationRepo;
   billingCanceller: BillingCanceller;
   subscriptions: SubscriptionRepo;
+  defaultChannel: Pick<EnsureDefaultEmailChannel, "execute">;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;

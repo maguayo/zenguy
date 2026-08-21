@@ -17,15 +17,20 @@ const channel: Channel = {
   createdAt: "2026-08-19T10:00:00.000Z",
   enabled: true,
   id: "channel_1",
+  isDefault: false,
   lastDeliveryStatus: "SENT",
   name: "Engineering inbox",
+  paused: null,
+  price: null,
   type: "EMAIL",
   verifiedAt: "2026-08-19T10:01:00.000Z",
 };
 
 const delivery: Delivery = {
   attemptCount: 1,
+  costCents: null,
   createdAt: "2026-08-19T10:02:00.000Z",
+  destinationCountry: null,
   errorSanitized: null,
   eventType: "TEST",
   id: "delivery_1",

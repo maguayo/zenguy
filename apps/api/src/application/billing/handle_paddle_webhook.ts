@@ -1,4 +1,8 @@
 import { z } from "zod";
+import type { AlertRepo } from "../../domain/alerts/repo";
+import { ALERT_CREDIT_PACK_CENTS } from "../../domain/alerts/types";
+import { ALERT_CREDIT_PURPOSE } from "../alerts/start_credit_topup";
+import { ensureAlertSettings } from "../alerts/settings";
 import type { WriteAudit } from "../audit/write_audit";
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type {
@@ -46,6 +50,26 @@ const subscriptionSchema = z.object({
     .optional(),
 });
 
+const transactionSchema = z.object({
+  id: z.string().min(1),
+  status: z.string().min(1),
+  custom_data: z
+    .object({
+      workspace_id: z.string().min(1),
+      purpose: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  items: z
+    .array(
+      z.object({
+        price: z.object({ id: z.string().min(1) }),
+        quantity: z.number().int().positive(),
+      }),
+    )
+    .default([]),
+});
+
 const SUBSCRIPTION_EVENTS = new Set([
   "subscription.created",
   "subscription.updated",
@@ -71,6 +95,10 @@ export interface HandlePaddleWebhookDependencies {
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
+  /** Alert-credit ledger; top-ups are ignored when absent. */
+  alerts?: AlertRepo;
+  /** Paddle price of one alert-credit pack; top-ups are ignored when null. */
+  alertCreditPriceId?: string | null;
 }
 
 function unauthorized(): AppError {
@@ -181,12 +209,73 @@ export class HandlePaddleWebhook {
         event.data,
         input.ip,
       );
+    } else if (event.event_type === "transaction.completed") {
+      handled = await this.processTransaction(event.data, input.ip);
     }
 
     await this.dependencies.kv.put(idempotencyKey, "1", {
       expirationTtl: IDEMPOTENCY_TTL_SECONDS,
     });
     return { handled };
+  }
+
+  /**
+   * Credits alert-credit packs bought through the one-time checkout. Only
+   * transactions tagged with our purpose and containing the configured pack
+   * price are credited; the ledger is idempotent on the transaction id.
+   */
+  private async processTransaction(
+    rawData: unknown,
+    ip: string | undefined,
+  ): Promise<"processed" | "ignored"> {
+    const alerts = this.dependencies.alerts;
+    const priceId = this.dependencies.alertCreditPriceId ?? null;
+    if (alerts === undefined || priceId === null) return "ignored";
+    const parsed = transactionSchema.safeParse(rawData);
+    if (!parsed.success) return "ignored";
+    const data = parsed.data;
+    if (
+      data.status !== "completed" ||
+      data.custom_data === null ||
+      data.custom_data === undefined ||
+      data.custom_data.purpose !== ALERT_CREDIT_PURPOSE
+    ) {
+      return "ignored";
+    }
+    const packs = data.items
+      .filter((item) => item.price.id === priceId)
+      .reduce((total, item) => total + item.quantity, 0);
+    if (packs === 0) {
+      logEvent("alert_credit_topup_unmatched", { transactionId: data.id });
+      return "ignored";
+    }
+    const workspaceId = data.custom_data.workspace_id;
+    const now = this.dependencies.clock.now();
+    const amountCents = packs * ALERT_CREDIT_PACK_CENTS;
+    const written = await alerts.credit({
+      id: this.dependencies.ids.newId("ace"),
+      workspaceId,
+      amountCents,
+      kind: "TOPUP",
+      idempotencyKey: `paddle_txn:${data.id}`,
+      description: `Top-up (${packs} × €${ALERT_CREDIT_PACK_CENTS / 100})`,
+      deliveryId: null,
+      providerTransactionId: data.id,
+      at: now,
+    });
+    if (!written.created) return "processed";
+    await ensureAlertSettings(alerts, workspaceId, now);
+    await alerts.updateSettings(workspaceId, { lowBalanceNotifiedAt: null }, now);
+    await this.dependencies.audit.execute({
+      workspaceId,
+      actorUserId: null,
+      action: AUDIT_ACTIONS.alertsCreditTopup,
+      resourceType: "alert_credit",
+      resourceId: data.id,
+      metadata: { amountCents, packs },
+      ip,
+    });
+    return "processed";
   }
 
   private async processSubscription(

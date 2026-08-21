@@ -3,9 +3,11 @@ import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
 import { uniqueSlug } from "../../domain/workspaces/slug";
 import type { User } from "../../domain/users/types";
+import type { EnsureDefaultEmailChannel } from "../alerts/ensure_default_email_channel";
 import type { WriteAudit } from "../audit/write_audit";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
+import { logEvent } from "../../shared/log";
 import { workspaceName, workspaceTimezone } from "./input";
 import { workspaceOutput, type WorkspaceOutput } from "./list_my_workspaces";
 
@@ -13,6 +15,7 @@ export interface CreateWorkspaceDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
   subscriptions: SubscriptionRepo;
+  defaultChannel: Pick<EnsureDefaultEmailChannel, "execute">;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
@@ -65,6 +68,18 @@ export class CreateWorkspace {
       createdAt: now,
       updatedAt: now,
     });
+    // Every workspace starts with a free email channel to the owner so the
+    // first test or monitor alerts someone. Failing here must not undo the
+    // workspace; the hourly backfill retries.
+    try {
+      await this.dependencies.defaultChannel.execute({
+        workspaceId: workspace.id,
+        ownerUserId: input.actor.id,
+        ownerEmail: input.actor.email,
+      });
+    } catch {
+      logEvent("default_email_channel_failed", { workspaceId: workspace.id });
+    }
     await this.dependencies.audit.execute({
       workspaceId: workspace.id,
       actorUserId: input.actor.id,

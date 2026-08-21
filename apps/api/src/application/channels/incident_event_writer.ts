@@ -6,6 +6,8 @@ export interface IncidentNotificationEvent {
   channelName: string;
   deliveryId: string;
   status: "SENT" | "FAILED";
+  /** Human-readable reason for a failed or skipped delivery. */
+  detail?: string;
 }
 
 export interface IncidentEventWriter {

@@ -127,20 +127,36 @@ export interface ChannelPreview {
   webhookUrlMasked?: string;
 }
 
+export type PaidAlertsPauseReason = "PAID_OFF" | "NO_CREDIT";
+
+export interface ChannelPrice {
+  cents: number;
+  currency: "EUR";
+  destination: string;
+}
+
 export interface Channel {
   configPreview: ChannelPreview;
   createdAt: string;
   enabled: boolean;
   id: string;
+  /** Preselected for new tests and monitors. */
+  isDefault: boolean;
   lastDeliveryStatus: "SENT" | "FAILED" | null;
   name: string;
+  /** Why a pay-as-you-go channel cannot deliver right now; null when it can. */
+  paused: { reason: PaidAlertsPauseReason } | null;
+  /** Price per alert for SMS, call, and WhatsApp channels; null for free ones. */
+  price: ChannelPrice | null;
   type: ChannelType;
   verifiedAt: string | null;
 }
 
 export interface Delivery {
   attemptCount: number;
+  costCents: number | null;
   createdAt: string;
+  destinationCountry: string | null;
   errorSanitized: string | null;
   eventType: "FAILURE" | "RECOVERY" | "TEST";
   id: string;
@@ -397,7 +413,9 @@ export interface IncidentDelivery {
   attemptCount: number;
   channelName: string;
   channelType: ChannelType;
+  costCents: number | null;
   createdAt: string;
+  destinationCountry: string | null;
   errorSanitized: string | null;
   eventType: "FAILURE" | "RECOVERY";
   id: string;
@@ -449,6 +467,81 @@ export interface Overview {
     up: number;
   };
   usage: Usage;
+}
+
+export type AlertRegion = "US_CA" | "EUROPE" | "ROW";
+
+export interface CountryPrice {
+  callCents: number;
+  iso: string;
+  name: string;
+  region: AlertRegion;
+  smsCents: number;
+}
+
+export interface PricingRegion {
+  countries: CountryPrice[];
+  flat: { callCents: number; smsCents: number } | null;
+  key: AlertRegion;
+  name: string;
+}
+
+export interface PricingTable {
+  capturedOn: string;
+  currency: "EUR";
+  markup: number;
+  regions: PricingRegion[];
+}
+
+export interface AlertsOverview {
+  credit: {
+    balanceCents: number;
+    currency: "EUR";
+    lowBalance: boolean;
+    lowBalanceThresholdCents: number;
+    paidAlertsLast24h: number;
+  } | null;
+  destinations: { channels: number; iso: string | null; name: string }[];
+  pricing: PricingTable;
+  settings: { dailyPaidAlertLimit: number; paidChannelsEnabled: boolean };
+  status: {
+    paidAlertsPaused: boolean;
+    paidChannelCount: number;
+    pauseReason: PaidAlertsPauseReason | null;
+  };
+  topUp: { available: boolean; maxPacks: number; minPacks: number; packCents: number };
+}
+
+export interface AlertSettings {
+  dailyPaidAlertLimit: number;
+  paidChannelsEnabled: boolean;
+  updatedAt: string;
+}
+
+export interface AlertQuote {
+  callCents: number;
+  currency: "EUR";
+  destination: { iso: string | null; name: string; region: AlertRegion };
+  smsCents: number;
+}
+
+export type CreditEntryKind = "TOPUP" | "GRANT" | "CHARGE" | "REFUND" | "ADJUSTMENT";
+
+export interface CreditEntry {
+  amountCents: number;
+  balanceAfterCents: number;
+  createdAt: string;
+  deliveryId: string | null;
+  description: string;
+  id: string;
+  kind: CreditEntryKind;
+}
+
+export interface CreditTopUpCheckout {
+  amountCents: number;
+  customData: { purpose: "alert_credit"; workspace_id: string };
+  priceId: string;
+  quantity: number;
 }
 
 export interface AuditEntry {

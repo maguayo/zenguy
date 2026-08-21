@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Smartphone, TriangleAlert } from "lucide-react";
@@ -9,7 +9,7 @@ import { z } from "zod";
 import { listChannels } from "../../api/channels";
 import { createTest, getTest, updateTest, validateDraft } from "../../api/tests";
 import type { BrowserTestInput } from "../../api/types";
-import { ChannelPicker } from "../../components/ChannelPicker";
+import { ChannelPicker, defaultChannelIds } from "../../components/ChannelPicker";
 import { RecoveryToggle } from "../../components/RecoveryToggle";
 import { RunStatusPanel } from "../../components/RunStatusPanel";
 import { Button } from "../../components/ui/Button";
@@ -99,6 +99,15 @@ export default function TestFormPage() {
     mode: "onChange",
     resolver: zodResolver(testFormSchema),
   });
+
+  const appliedDefaults = useRef(false);
+  useEffect(() => {
+    if (editing || appliedDefaults.current || !channels.data) return;
+    appliedDefaults.current = true;
+    if (form.getValues("channelIds").length === 0) {
+      form.setValue("channelIds", defaultChannelIds(channels.data));
+    }
+  }, [channels.data, editing, form]);
 
   useEffect(() => {
     if (!test.data) return;
@@ -323,7 +332,7 @@ export default function TestFormPage() {
             channels={channels.data ?? []}
             error={channels.isError}
             loading={channels.isPending}
-            manageHref={`/w/${current.id}/notifications`}
+            manageHref={`/w/${current.id}/alerts`}
             value={field.value}
             onChange={field.onChange}
             onRetry={() => void channels.refetch()}

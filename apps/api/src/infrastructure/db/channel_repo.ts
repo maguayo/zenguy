@@ -15,6 +15,7 @@ interface ChannelRow {
   type: ChannelType;
   encrypted_config: string;
   enabled: number;
+  is_default: number;
   verified_at: number | null;
   last_delivery_status: string | null;
   created_by: string | null;
@@ -30,6 +31,7 @@ function toChannel(row: ChannelRow): NotificationChannel {
     type: row.type,
     encryptedConfig: row.encrypted_config,
     enabled: row.enabled === 1,
+    isDefault: row.is_default === 1,
     verifiedAt: row.verified_at,
     lastDeliveryStatus: row.last_delivery_status,
     createdBy: row.created_by,
@@ -46,9 +48,9 @@ export class D1ChannelRepo implements ChannelRepo {
       this.database
         .prepare(
           `INSERT INTO notification_channels
-            (id, workspace_id, name, type, encrypted_config, enabled,
+            (id, workspace_id, name, type, encrypted_config, enabled, is_default,
              verified_at, last_delivery_status, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           channel.id,
@@ -57,6 +59,7 @@ export class D1ChannelRepo implements ChannelRepo {
           channel.type,
           channel.encryptedConfig,
           channel.enabled ? 1 : 0,
+          channel.isDefault === true ? 1 : 0,
           channel.verifiedAt,
           channel.lastDeliveryStatus,
           channel.createdBy,
@@ -123,6 +126,7 @@ export class D1ChannelRepo implements ChannelRepo {
           `UPDATE notification_channels
            SET name = CASE WHEN ? = 1 THEN ? ELSE name END,
                enabled = CASE WHEN ? = 1 THEN ? ELSE enabled END,
+               is_default = CASE WHEN ? = 1 THEN ? ELSE is_default END,
                encrypted_config = CASE WHEN ? = 1 THEN ? ELSE encrypted_config END,
                updated_at = ?
            WHERE id = ?`,
@@ -132,6 +136,8 @@ export class D1ChannelRepo implements ChannelRepo {
           changes.name ?? null,
           changes.enabled === undefined ? 0 : 1,
           changes.enabled === true ? 1 : 0,
+          changes.isDefault === undefined ? 0 : 1,
+          changes.isDefault === true ? 1 : 0,
           changes.encryptedConfig === undefined ? 0 : 1,
           changes.encryptedConfig ?? null,
           at,

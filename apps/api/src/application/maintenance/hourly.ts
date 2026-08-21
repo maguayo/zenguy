@@ -43,10 +43,18 @@ export class HourlyMaintenance {
     >,
     private readonly clock: Clock,
     private readonly alert: PlatformAlerter = platformAlert,
+    private readonly defaultChannels: { execute(): Promise<unknown> } | null = null,
   ) {}
 
   async execute(): Promise<HourlyMaintenanceResult> {
     await this.overages.execute();
+    if (this.defaultChannels !== null) {
+      try {
+        await this.defaultChannels.execute();
+      } catch {
+        this.alert("default_channel_backfill_failed");
+      }
+    }
     const now = this.clock.now();
     const staleAttempts = await this.attempts.listStale(
       now - ATTEMPT_TIMEOUT_MS - ZOMBIE_ATTEMPT_GRACE_MS,

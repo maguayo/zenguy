@@ -27,6 +27,7 @@ export interface Bindings {
   PADDLE_ENVIRONMENT?: string;
   PADDLE_PRICE_ID?: string;
   PADDLE_OVERAGE_PRICE_ID?: string;
+  PADDLE_ALERT_CREDIT_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
 }
 
@@ -37,6 +38,8 @@ export interface PaddleConfig {
   environment: "sandbox" | "production";
   priceId: string;
   overagePriceId: string;
+  /** One-time price for a €10 alert-credit pack; null disables top-ups. */
+  alertCreditPriceId: string | null;
   apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
 }
 
@@ -119,6 +122,7 @@ const paddleEnvSchema = z.object({
   PADDLE_ENVIRONMENT: z.enum(["sandbox", "production"]),
   PADDLE_PRICE_ID: z.string().min(1),
   PADDLE_OVERAGE_PRICE_ID: z.string().min(1),
+  PADDLE_ALERT_CREDIT_PRICE_ID: optionalNonEmptyString(),
 });
 
 export function parseComplimentaryIssuerEmails(value: unknown): string[] {
@@ -187,6 +191,7 @@ export function loadConfig(env: Bindings): AppConfig {
       environment: parsedPaddle.PADDLE_ENVIRONMENT,
       priceId: parsedPaddle.PADDLE_PRICE_ID,
       overagePriceId: parsedPaddle.PADDLE_OVERAGE_PRICE_ID,
+      alertCreditPriceId: parsedPaddle.PADDLE_ALERT_CREDIT_PRICE_ID ?? null,
       apiBase:
         parsedPaddle.PADDLE_ENVIRONMENT === "sandbox"
           ? "https://sandbox-api.paddle.com"

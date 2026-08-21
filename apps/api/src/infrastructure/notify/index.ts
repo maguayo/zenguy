@@ -9,6 +9,7 @@ import {
   smsChannelConfigSchema,
   slackChannelConfigSchema,
 } from "../../domain/channels/types";
+import { smsBody } from "../../domain/alerts/sms";
 import type { EmailSender } from "../../domain/email/sender";
 import type { AppConfig } from "../../shared/config";
 import { DiscordWebhookSender } from "./discord";
@@ -44,7 +45,7 @@ export function buildChannelSender(
             providerMessageId: await twilio.sendSms(
               parsed.phoneNumber,
               config.twilio.fromSms,
-              `${message.shortText} Reply STOP to opt out; HELP for help.`,
+              smsBody(message.shortText),
             ),
           };
         }

@@ -33,8 +33,12 @@ export function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
+/** Hard cap so one alert call is always billed as a single minute. */
+export const CALL_TIME_LIMIT_SECONDS = 55;
+
 export function speechTwiml(speakText: string): string {
-  return `<Response><Say voice="alice">${escapeXml(speakText)}</Say></Response>`;
+  const say = `<Say voice="alice">${escapeXml(speakText)}</Say>`;
+  return `<Response>${say}<Pause length="1"/>${say}</Response>`;
 }
 
 export class TwilioApi {
@@ -98,7 +102,13 @@ export class TwilioApi {
     to: string,
     from: string,
     twiml: string,
+    timeLimitSeconds: number = CALL_TIME_LIMIT_SECONDS,
   ): Promise<string | null> {
-    return this.post("Calls", { To: to, From: from, Twiml: twiml });
+    return this.post("Calls", {
+      To: to,
+      From: from,
+      Twiml: twiml,
+      TimeLimit: String(timeLimitSeconds),
+    });
   }
 }

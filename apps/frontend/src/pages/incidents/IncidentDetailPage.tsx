@@ -16,7 +16,7 @@ import { Table, type TableColumn } from "../../components/ui/Table";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { itemQueryErrorMessage } from "../../lib/errors";
-import { formatDateTime, formatDuration } from "../../lib/format";
+import { formatDateTime, formatDuration, formatEuros } from "../../lib/format";
 
 export const emptyDeliveriesCopy =
   "No notifications were configured when this incident opened.";
@@ -53,6 +53,16 @@ export function incidentDeliveryColumns(timezone: string): TableColumn<IncidentD
       },
     },
     { header: "Attempts", key: "attempts", render: (delivery) => delivery.attemptCount },
+    {
+      header: "Cost",
+      key: "cost",
+      render: (delivery) =>
+        delivery.costCents === null ? (
+          "—"
+        ) : (
+          <span className="whitespace-nowrap">{formatEuros(delivery.costCents)}</span>
+        ),
+    },
     {
       header: "Time",
       key: "time",

@@ -57,6 +57,7 @@ const EditMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
 const IncidentsPage = lazy(() => import("./pages/incidents/IncidentsPage"));
 const IncidentDetailPage = lazy(() => import("./pages/incidents/IncidentDetailPage"));
 const ChannelsPage = lazy(() => import("./pages/notifications/ChannelsPage"));
+const PaidAlertsPage = lazy(() => import("./pages/alerts/PaidAlertsPage"));
 const SecretsPage = lazy(() => import("./pages/secrets/SecretsPage"));
 const MembersPage = lazy(() => import("./pages/members/MembersPage"));
 const BillingPage = lazy(() => import("./pages/billing/BillingPage"));
@@ -97,6 +98,12 @@ export function PublicOnly({ children }: { children?: ReactNode }) {
   const { status } = useAuth();
   if (status === "signedIn") return <Navigate replace to="/" />;
   return <>{children ?? <Outlet />}</>;
+}
+
+/** `/notifications` moved to `/alerts`; keep old links and panel query params working. */
+export function LegacyNotificationsRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={{ pathname: "../alerts", search: location.search }} />;
 }
 
 function RouteLoading() {
@@ -178,7 +185,9 @@ function AppRoutes() {
             <Route element={<EditMonitorPage />} path="uptime/:monitorId/edit" />
             <Route element={<IncidentsPage />} path="incidents" />
             <Route element={<IncidentDetailPage />} path="incidents/:incidentId" />
-            <Route element={<ChannelsPage />} path="notifications" />
+            <Route element={<ChannelsPage />} path="alerts" />
+            <Route element={<PaidAlertsPage />} path="alerts/sms-calls" />
+            <Route element={<LegacyNotificationsRedirect />} path="notifications" />
             <Route element={<SecretsPage />} path="secrets" />
             <Route element={<MembersPage />} path="members" />
             <Route element={<BillingPage />} path="billing" />

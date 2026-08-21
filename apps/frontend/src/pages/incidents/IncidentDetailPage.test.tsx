@@ -8,7 +8,9 @@ const delivery: IncidentDelivery = {
   attemptCount: 2,
   channelName: "Ops Slack",
   channelType: "SLACK",
+  costCents: null,
   createdAt: "2026-08-19T10:00:00.000Z",
+  destinationCountry: null,
   errorSanitized: "Webhook returned 404",
   eventType: "FAILURE",
   id: "delivery_1",
@@ -24,6 +26,7 @@ describe("incident detail", () => {
       "event",
       "status",
       "attempts",
+      "cost",
       "time",
     ]);
     const html = renderToStaticMarkup(
@@ -34,6 +37,11 @@ describe("incident detail", () => {
     expect(html).toContain("Failed");
     expect(html).toContain("Webhook returned 404");
     expect(html).toContain(">2<");
+    expect(html).toContain("—");
+    const paid = renderToStaticMarkup(
+      <>{columns.map((column) => <div key={column.key}>{column.render({ ...delivery, costCents: 18 })}</div>)}</>,
+    );
+    expect(paid).toContain("0,18");
   });
 
   it("keeps the required empty-deliveries copy verbatim", () => {

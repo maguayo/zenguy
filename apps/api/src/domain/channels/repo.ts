@@ -9,6 +9,7 @@ import type {
 export interface ChannelUpdate {
   name?: string;
   enabled?: boolean;
+  isDefault?: boolean;
   encryptedConfig?: string;
 }
 
@@ -18,6 +19,8 @@ export interface DeliveryUpdate {
   errorSanitized?: string | null;
   attemptCount: number;
   sentAt?: number | null;
+  costCents?: number | null;
+  destinationCountry?: string | null;
 }
 
 export interface ChannelRepo {

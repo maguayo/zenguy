@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { PaidDeliveryCharger } from "../../application/alerts/charge_paid_delivery";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import { CreateChannel } from "../../application/channels/create_channel";
 import { DeleteChannel } from "../../application/channels/delete_channel";
@@ -7,6 +8,7 @@ import { ListChannels } from "../../application/channels/list_channels";
 import { ListDeliveries } from "../../application/channels/list_deliveries";
 import { TestChannel } from "../../application/channels/test_channel";
 import { UpdateChannel } from "../../application/channels/update_channel";
+import type { AlertRepo } from "../../domain/alerts/repo";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
   ChannelRepo,
@@ -34,6 +36,8 @@ export interface ChannelRoutesDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
   subscriptions: SubscriptionRepo;
+  alerts: AlertRepo;
+  charger: PaidDeliveryCharger;
   channels: ChannelRepo;
   deliveries: DeliveryRepo;
   sender: ChannelSender;
@@ -59,17 +63,20 @@ const createSchema = z.object({
   name: z.string(),
   type: channelTypeSchema,
   config: requiredConfig,
+  isDefault: z.boolean().optional(),
 });
 const updateSchema = z
   .object({
     name: z.string().optional(),
     enabled: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
     config: z.unknown().optional(),
   })
   .refine(
     (input) =>
       input.name !== undefined ||
       input.enabled !== undefined ||
+      input.isDefault !== undefined ||
       input.config !== undefined,
     { message: "At least one field is required" },
   );
@@ -94,6 +101,7 @@ export function channelRoutes(
   const createChannel = new CreateChannel(
     dependencies.channels,
     dependencies.subscriptions,
+    dependencies.alerts,
     dependencies.audit,
     dependencies.config.encryptionKey,
     dependencies.clock,
@@ -102,6 +110,7 @@ export function channelRoutes(
   const updateChannel = new UpdateChannel(
     dependencies.channels,
     dependencies.subscriptions,
+    dependencies.alerts,
     dependencies.audit,
     dependencies.config.encryptionKey,
     dependencies.clock,
@@ -121,9 +130,11 @@ export function channelRoutes(
     dependencies.config,
     dependencies.clock,
     dependencies.ids,
+    dependencies.charger,
   );
   const listChannels = new ListChannels(
     dependencies.channels,
+    dependencies.alerts,
     dependencies.config.encryptionKey,
   );
   const listDeliveries = new ListDeliveries(

@@ -25,7 +25,7 @@ function notificationLink(input: NotificationTemplateInput): string {
   if (input.runId !== undefined) {
     return `${workspaceUrl}/runs/${input.runId}`;
   }
-  return `${workspaceUrl}/notifications`;
+  return `${workspaceUrl}/alerts`;
 }
 
 function safeFailureSummary(summary: string): string {

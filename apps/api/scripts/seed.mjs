@@ -260,6 +260,9 @@ const WIPE_STATEMENTS = [
   "DELETE FROM test_runs;",
   "DELETE FROM browser_test_channels;",
   "DELETE FROM browser_tests;",
+  "DELETE FROM alert_credit_entries;",
+  "DELETE FROM alert_credit_balances;",
+  "DELETE FROM workspace_alert_settings;",
   "DELETE FROM notification_deliveries;",
   "DELETE FROM notification_channels;",
   "DELETE FROM workspace_secrets;",
@@ -834,7 +837,10 @@ async function generateSql(encryptionKey) {
       JSON.stringify({ emails: [OWNER_EMAIL, ADMIN_EMAIL] }),
       encryptionKey,
     ),
-    encryptSecret(JSON.stringify({ phoneNumber: "+34600111222" }), encryptionKey),
+    encryptSecret(
+      JSON.stringify({ phoneNumber: "+34600111222", consent: true }),
+      encryptionKey,
+    ),
     encryptSecret(
       JSON.stringify({
         webhookUrl: "https://hooks.slack.com/services/T000/B000/SEED",
@@ -1184,6 +1190,7 @@ async function generateSql(encryptionKey) {
         type: channel.type,
         encrypted_config: channel.config,
         enabled: channel.enabled,
+        is_default: channel.id === channelIds.email ? 1 : 0,
         verified_at: channel.verifiedAt,
         last_delivery_status: channel.lastDeliveryStatus,
         created_by: channel.createdBy,
@@ -1192,6 +1199,41 @@ async function generateSql(encryptionKey) {
       }),
     );
   }
+
+  // Alerts: the demo workspace has SMS & calls on, a little prepaid credit,
+  // and a ledger that shows a top-up plus the charges behind the SMS deliveries.
+  statements.push(
+    insertRow("workspace_alert_settings", {
+      workspace_id: IDS.workspace,
+      paid_channels_enabled: 1,
+      daily_paid_alert_limit: 20,
+      default_email_channel_created_at: workspaceCreated + 2 * DAY_MS,
+      low_balance_notified_at: null,
+      created_at: workspaceCreated + 2 * DAY_MS,
+      updated_at: now - 3 * HOUR_MS,
+    }),
+  );
+  // Running balances are computed chronologically once every entry exists,
+  // because deliveries are generated per incident rather than in time order.
+  const alertCredit = { balance: 0, sequence: 0, entries: [] };
+  function addCreditEntry(kind, amountCents, description, at, extra = {}) {
+    alertCredit.sequence += 1;
+    alertCredit.entries.push({
+      id: `ace_seed_${pad(alertCredit.sequence, 3)}`,
+      workspace_id: IDS.workspace,
+      kind,
+      amount_cents: amountCents,
+      balance_after_cents: 0,
+      delivery_id: extra.deliveryId ?? null,
+      provider_transaction_id: extra.transactionId ?? null,
+      description,
+      idempotency_key: extra.idempotencyKey ?? `seed:${alertCredit.sequence}`,
+      created_at: at,
+    });
+  }
+  addCreditEntry("GRANT", 500, "Staging demo credit", workspaceCreated + 2 * DAY_MS, {
+    idempotencyKey: "grant:seed-demo",
+  });
 
   const testRows = [];
   const testChannelRows = [];
@@ -1591,9 +1633,23 @@ async function generateSql(encryptionKey) {
     });
   }
 
+  const PAID_SEED_CHANNELS = {
+    [channelIds.sms]: { cost: 18, country: "Spain", label: "SMS" },
+    [channelIds.whatsapp]: { cost: 18, country: "Spain", label: "WhatsApp" },
+    [channelIds.call]: { cost: 20, country: "Spain", label: "Phone call" },
+  };
+
   function addDelivery(input) {
     deliverySequence += 1;
     const id = `del_seed_${pad(deliverySequence, 3)}`;
+    const paid = PAID_SEED_CHANNELS[input.channelId];
+    const charged = paid !== undefined && input.status === "SENT";
+    if (charged) {
+      addCreditEntry("CHARGE", -paid.cost, `${paid.label} to ${paid.country}`, input.at + 200, {
+        deliveryId: id,
+        idempotencyKey: `charge:${id}`,
+      });
+    }
     deliveryRows.push({
       id,
       workspace_id: IDS.workspace,
@@ -1610,6 +1666,8 @@ async function generateSql(encryptionKey) {
       created_at: input.at,
       dedupe_key: input.dedupeKey,
       processing_at: null,
+      cost_cents: charged ? paid.cost : null,
+      destination_country: charged ? paid.country : null,
     });
     return id;
   }
@@ -1775,6 +1833,22 @@ async function generateSql(encryptionKey) {
   statements.push(...insertMany("incidents", incidentRows));
   statements.push(...insertMany("incident_events", eventRows));
   statements.push(...insertMany("notification_deliveries", deliveryRows));
+  alertCredit.entries.sort(
+    (left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id),
+  );
+  for (const entry of alertCredit.entries) {
+    alertCredit.balance += entry.amount_cents;
+    entry.balance_after_cents = alertCredit.balance;
+  }
+  statements.push(
+    insertRow("alert_credit_balances", {
+      workspace_id: IDS.workspace,
+      balance_cents: Math.max(0, alertCredit.balance),
+      last_entry_token: null,
+      updated_at: now - 3 * HOUR_MS,
+    }),
+  );
+  statements.push(...insertMany("alert_credit_entries", alertCredit.entries));
 
   const auditEntries = [
     {

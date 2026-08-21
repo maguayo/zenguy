@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Send, X } from "lucide-react";
@@ -14,7 +14,7 @@ import {
   updateMonitor,
 } from "../../api/uptime";
 import type { Monitor, MonitorInput } from "../../api/types";
-import { ChannelPicker } from "../../components/ChannelPicker";
+import { ChannelPicker, defaultChannelIds } from "../../components/ChannelPicker";
 import { KeyValueEditor } from "../../components/KeyValueEditor";
 import { RecoveryToggle } from "../../components/RecoveryToggle";
 import { Button } from "../../components/ui/Button";
@@ -222,6 +222,14 @@ export default function MonitorFormPage() {
     mode: "onChange",
     resolver: zodResolver(monitorFormSchema),
   });
+  const appliedDefaults = useRef(false);
+  useEffect(() => {
+    if (editing || appliedDefaults.current || !channels.data) return;
+    appliedDefaults.current = true;
+    if (form.getValues("channelIds").length === 0) {
+      form.setValue("channelIds", defaultChannelIds(channels.data));
+    }
+  }, [channels.data, editing, form]);
   const requestTest = useMutation({
     mutationFn: (values: MonitorInput) => sendTestRequest(current.id, values),
   });
@@ -453,7 +461,7 @@ export default function MonitorFormPage() {
             channels={channels.data ?? []}
             error={channels.isError}
             loading={channels.isPending}
-            manageHref={`/w/${current.id}/notifications`}
+            manageHref={`/w/${current.id}/alerts`}
             value={field.value}
             onChange={field.onChange}
             onRetry={() => void channels.refetch()}

@@ -2,12 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { Channel, Delivery } from "../../api/types";
+import { formatEuros } from "../../lib/format";
 import {
   ChannelSummary,
+  channelPriceLabel,
   channelTarget,
   closeChannelPanel,
   lastDeliveryText,
   openChannelPanel,
+  pausedLabel,
   testDeliveryResult,
 } from "./ChannelsPage";
 
@@ -16,15 +19,20 @@ const baseChannel: Channel = {
   createdAt: "2026-08-19T10:00:00.000Z",
   enabled: true,
   id: "channel_1",
+  isDefault: true,
   lastDeliveryStatus: "SENT",
   name: "Engineering inbox",
+  paused: null,
+  price: null,
   type: "EMAIL",
   verifiedAt: "2026-08-19T10:01:00.000Z",
 };
 
 const delivery: Delivery = {
   attemptCount: 1,
+  costCents: null,
   createdAt: new Date(Date.now() - 60_000).toISOString(),
+  destinationCountry: null,
   errorSanitized: null,
   eventType: "TEST",
   id: "delivery_1",
@@ -43,6 +51,33 @@ describe("notification channels list", () => {
     expect(html).toContain("eng@example.com, oncall@example.com");
     expect(html).toContain("Verified");
     expect(html).toContain("Delivered 1m ago");
+    expect(html).toContain("Default");
+  });
+
+  it("shows the destination price and pause state of paid channels", () => {
+    const sms: Channel = {
+      ...baseChannel,
+      configPreview: { phoneNumber: "+34612345678" },
+      isDefault: false,
+      paused: { reason: "NO_CREDIT" },
+      price: { cents: 18, currency: "EUR", destination: "Spain" },
+      type: "SMS",
+    };
+    expect(channelPriceLabel(sms)).toBe(`Spain · ${formatEuros(18)} per alert`);
+    expect(channelPriceLabel({ ...sms, type: "CALL", price: { ...sms.price!, cents: 20 } })).toBe(
+      `Spain · ${formatEuros(20)} per call`,
+    );
+    expect(channelPriceLabel(baseChannel)).toBeNull();
+    expect(pausedLabel(sms)).toBe("Paused · no credit");
+    expect(pausedLabel({ ...sms, paused: { reason: "PAID_OFF" } })).toBe(
+      "Paused · SMS & calls off",
+    );
+    expect(pausedLabel(baseChannel)).toBeNull();
+    const html = renderToStaticMarkup(<ChannelSummary channel={sms} />);
+    expect(html).toContain("per alert");
+    expect(html).toContain("0,18");
+    expect(html).toContain("Paused · no credit");
+    expect(html).not.toContain("Default");
   });
 
   it("derives safe targets for every config shape", () => {

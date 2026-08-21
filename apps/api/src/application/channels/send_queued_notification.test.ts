@@ -19,7 +19,19 @@ import type {
   IncidentEventWriter,
   IncidentNotificationEvent,
 } from "./incident_event_writer";
+import { ROW_DESTINATION } from "../../domain/alerts/pricing";
+import type { PaidDeliveryCharger } from "../alerts/charge_paid_delivery";
 import { SendQueuedNotification } from "./send_queued_notification";
+
+const allowAllCharger: PaidDeliveryCharger = {
+  charge: async () => ({
+    ok: true,
+    costCents: 0,
+    destination: ROW_DESTINATION,
+    replayed: false,
+  }),
+  refund: async () => false,
+};
 
 const ENCRYPTION_KEY = new Uint8Array(32).fill(9);
 const MESSAGE: NotificationMessage = {
@@ -174,6 +186,7 @@ function consumerFixture() {
     incidents,
     ENCRYPTION_KEY,
     clock,
+    allowAllCharger,
   );
   return { channels, deliveries, sender, incidents, clock, consumer };
 }
@@ -205,6 +218,7 @@ describe("SendQueuedNotification", () => {
         eventWriter,
         ENCRYPTION_KEY,
         clock,
+        allowAllCharger,
       );
       await channelRepo.insert(await channel("ch_reconcile", "EMAIL"));
       await deliveryRepo.insert(delivery("del_reconcile", "ch_reconcile"));

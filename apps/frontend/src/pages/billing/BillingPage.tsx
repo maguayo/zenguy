@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { alertsQueryKey, getAlertsOverview } from "../../api/alerts";
 import { getBilling, getInvoiceUrl } from "../../api/billing";
 import type {
+  AlertsOverview,
   Billing,
   Invoice,
   SubscriptionSource,
@@ -137,6 +139,52 @@ export function invoiceColumns(
       render: (invoice) => renderAction?.(invoice) ?? null,
     },
   ];
+}
+
+export function alertCreditSummary(overview: AlertsOverview): string {
+  if (!overview.settings.paidChannelsEnabled) {
+    return "SMS & calls are off. Email, Slack and Discord alerts are free.";
+  }
+  if (overview.status.pauseReason === "NO_CREDIT") {
+    return "Paused — no credit left for SMS and calls.";
+  }
+  const sent = overview.credit?.paidAlertsLast24h ?? 0;
+  return `Pay-as-you-go SMS and calls · ${sent} sent in the last 24 h`;
+}
+
+function AlertCreditCard() {
+  const { current } = useWorkspace();
+  const overview = useQuery({
+    queryFn: () => getAlertsOverview(current.id),
+    queryKey: alertsQueryKey(current.id),
+  });
+
+  return (
+    <Card
+      actions={
+        <Link
+          className="text-xs font-medium text-accent-700 hover:underline"
+          to={`/w/${current.id}/alerts/sms-calls`}
+        >
+          SMS & calls
+        </Link>
+      }
+      title="Alert credit"
+    >
+      {overview.isPending ? (
+        <Skeleton className="h-8 w-32" />
+      ) : overview.isError || overview.data.credit === null ? (
+        <p className="text-sm text-zinc-500">The alert credit could not be loaded.</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tracking-tight text-zinc-900">
+            {formatEuros(overview.data.credit.balanceCents)}
+          </p>
+          <p className="mt-2 text-sm text-zinc-600">{alertCreditSummary(overview.data)}</p>
+        </>
+      )}
+    </Card>
+  );
 }
 
 function BillingSkeleton() {
@@ -324,6 +372,7 @@ export default function BillingPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <PlanCard billing={billing.data} />
           <UsageCard billing={billing.data} />
+          <AlertCreditCard />
           {planPresentation(
             billing.data.subscription.source,
             billing.data.subscription.status,

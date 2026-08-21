@@ -1356,7 +1356,11 @@ Guardar:
 
 ### 16.13 Coste de notificaciones
 
-En V1 no se cobra una tarifa separada por cada email, SMS, WhatsApp o llamada.
+> Actualizado el 2026-08-22: email, Slack y Discord siguen siendo gratis. SMS,
+> llamadas y WhatsApp son un add-on de pago por uso cobrado de un crédito
+> prepago por workspace, con precios por destino (coste Twilio con margen).
+> Ver `docs/superpowers/specs/2026-08-21-alerts-paid-channels-design.md` y
+> `docs/alerts-paid-channels.md`.
 
 Se deben aplicar rate limits y protecciones anti-abuso internas.
 

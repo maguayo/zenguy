@@ -13,6 +13,8 @@ import {
   Plus,
   Power,
   Send,
+  Star,
+  StarOff,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -34,13 +36,14 @@ import { Dropdown, type DropdownItem } from "../../components/ui/Dropdown";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { IconButton } from "../../components/ui/IconButton";
-import { PageHeader } from "../../components/ui/PageHeader";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
-import { formatRelative } from "../../lib/format";
+import { formatEuros, formatRelative } from "../../lib/format";
+import { alertsQueryKey, getAlertsOverview } from "../../api/alerts";
+import { AlertsTabs } from "../alerts/AlertsTabs";
 import { ChannelFormModal } from "./ChannelFormModal";
 import { DeliveriesDrawer } from "./DeliveriesDrawer";
 
@@ -74,6 +77,19 @@ export function channelTarget(channel: Channel): string {
     case "DISCORD":
       return channel.configPreview.webhookUrlMasked ?? "—";
   }
+}
+
+export function channelPriceLabel(channel: Channel): string | null {
+  if (!channel.price) return null;
+  const unit = channel.type === "CALL" ? "call" : "alert";
+  return `${channel.price.destination} · ${formatEuros(channel.price.cents)} per ${unit}`;
+}
+
+export function pausedLabel(channel: Channel): string | null {
+  if (!channel.paused) return null;
+  return channel.paused.reason === "PAID_OFF"
+    ? "Paused · SMS & calls off"
+    : "Paused · no credit";
 }
 
 export function lastDeliveryText(
@@ -145,9 +161,16 @@ export function ChannelSummary({
       <p className="mt-4 truncate text-sm text-zinc-600" title={channelTarget(channel)}>
         {channelTarget(channel)}
       </p>
+      {channelPriceLabel(channel) ? (
+        <p className="mt-1 text-xs text-zinc-500">{channelPriceLabel(channel)}</p>
+      ) : null}
 
       <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2">
         {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}
+        {channel.isDefault ? <Badge tone="accent">Default</Badge> : null}
+        {channel.enabled && pausedLabel(channel) ? (
+          <Badge tone="warn">{pausedLabel(channel)}</Badge>
+        ) : null}
         {channel.verifiedAt ? <Badge tone="ok">Verified</Badge> : null}
         {loadingLastDelivery ? (
           <Skeleton aria-label="Loading latest delivery" className="h-3 w-24" />
@@ -177,6 +200,10 @@ function ChannelActions({ channel }: { channel: Channel }) {
   const toggle = useMutation({
     mutationFn: () => updateChannel(current.id, channel.id, { enabled: !channel.enabled }),
   });
+  const setDefault = useMutation({
+    mutationFn: () =>
+      updateChannel(current.id, channel.id, { isDefault: !channel.isDefault }),
+  });
 
   const refresh = async () => {
     await Promise.all([
@@ -203,6 +230,20 @@ function ChannelActions({ channel }: { channel: Channel }) {
     try {
       await toggle.mutateAsync();
       toast.success(channel.enabled ? "Channel disabled" : "Channel enabled");
+      await refresh();
+    } catch (error) {
+      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
+    }
+  };
+
+  const toggleDefault = async () => {
+    try {
+      await setDefault.mutateAsync();
+      toast.success(
+        channel.isDefault
+          ? "Removed from defaults"
+          : "New tests and monitors will preselect this channel",
+      );
       await refresh();
     } catch (error) {
       if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
@@ -243,6 +284,12 @@ function ChannelActions({ channel }: { channel: Channel }) {
             label: "Edit",
             onSelect: () =>
               setSearchParams(openChannelPanel(searchParams, "channel", channel.id)),
+          },
+          {
+            disabled: setDefault.isPending,
+            icon: channel.isDefault ? <StarOff className="size-4" /> : <Star className="size-4" />,
+            label: channel.isDefault ? "Remove from defaults" : "Use as default",
+            onSelect: () => void toggleDefault(),
           },
           {
             disabled: toggle.isPending,
@@ -349,6 +396,10 @@ export default function ChannelsPage() {
     queryKey: ["ws", current.id, "channels"],
     refetchInterval: 30_000,
   });
+  const overview = useQuery({
+    queryFn: () => getAlertsOverview(current.id),
+    queryKey: alertsQueryKey(current.id),
+  });
   const addChannel = () =>
     setSearchParams(openChannelPanel(searchParams, "channel", "new"));
   const channelParam = searchParams.get("channel");
@@ -370,7 +421,7 @@ export default function ChannelsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <AlertsTabs
         actions={
           can("channels.manage") ? (
             <Button onClick={addChannel} variant="primary">
@@ -379,7 +430,8 @@ export default function ChannelsPage() {
             </Button>
           ) : undefined
         }
-        title="Notifications"
+        active="channels"
+        description="Where Zenguy reaches you when a test fails or a monitor goes down. Default channels are preselected for new tests and monitors."
       />
 
       {channels.isPending ? (
@@ -411,6 +463,7 @@ export default function ChannelsPage() {
         channel={editingChannel}
         onClose={closeForm}
         open={formOpen}
+        paidChannelsEnabled={overview.data?.settings.paidChannelsEnabled}
       />
       <DeliveriesDrawer
         channel={deliveriesChannel}

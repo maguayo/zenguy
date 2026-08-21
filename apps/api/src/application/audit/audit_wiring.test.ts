@@ -31,6 +31,8 @@ const ACTION_USE_CASES = {
   authPasswordReset: "../auth/reset_password.ts",
   apiKeyCreated: "../api_keys/create_api_key.ts",
   apiKeyRevoked: "../api_keys/revoke_api_key.ts",
+  alertsSettingsUpdated: "../alerts/update_alert_settings.ts",
+  alertsCreditTopup: "../billing/handle_paddle_webhook.ts",
 } as const satisfies Record<keyof typeof AUDIT_ACTIONS, string>;
 
 describe("audit action wiring", () => {

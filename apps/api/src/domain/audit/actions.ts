@@ -25,6 +25,8 @@ export const AUDIT_ACTIONS = {
   billingSubscriptionUpdated: "billing.subscription_updated",
   billingGrantIssued: "billing.grant_issued",
   billingGrantRedeemed: "billing.grant_redeemed",
+  alertsSettingsUpdated: "alerts.settings_updated",
+  alertsCreditTopup: "alerts.credit_topup",
   authPasswordReset: "auth.password_reset",
   apiKeyCreated: "api_key.created",
   apiKeyRevoked: "api_key.revoked",

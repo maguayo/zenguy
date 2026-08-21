@@ -209,6 +209,10 @@ https://www.twilio.com/docs/numbers-and-senders/add-numbers-and-senders.
 4. Provision a voice-capable number for TWILIO_FROM_CALL.
 5. Complete all regional registration, user opt-in, and template requirements
    before enabling production alerts.
+6. SMS, call, and WhatsApp alerts are pay-as-you-go: they are charged from a
+   prepaid per-workspace credit using the destination prices in
+   `src/domain/alerts/pricing.ts`. Refresh that table whenever Twilio changes
+   its rates; see `docs/alerts-paid-channels.md`.
 
 ### Local browser/model runner
 
@@ -289,8 +293,9 @@ provider credentials:
     pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env production
 
 Repeat those commands for `JWT_SECRET`, `ENCRYPTION_KEY`,
-`ARTIFACT_URL_SECRET`, `RUNNER_API_TOKEN`, all five `TWILIO_*` values, and all
-five `PADDLE_*` values. Do not paste secret values into shell history,
+`ARTIFACT_URL_SECRET`, `RUNNER_API_TOKEN`, all five `TWILIO_*` values, all
+five `PADDLE_*` values, and — once alert-credit top-ups should open — the
+optional `PADDLE_ALERT_CREDIT_PRICE_ID` (see `docs/alerts-paid-channels.md`). Do not paste secret values into shell history,
 documentation, `wrangler.jsonc`, or Git.
 
 Environment variables are fixed as follows:

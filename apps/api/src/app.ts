@@ -112,6 +112,11 @@ import { apiKeyRoutes } from "./http/routes/api_keys";
 import { publicApiRoutes } from "./http/routes/public_api";
 import { runnerRoutes } from "./http/routes/runner";
 import type { ApiKeyRepo } from "./domain/api_keys/repo";
+import type { AlertRepo } from "./domain/alerts/repo";
+import { D1AlertRepo } from "./infrastructure/db/alert_repo";
+import { ChargePaidDelivery } from "./application/alerts/charge_paid_delivery";
+import { EnsureDefaultEmailChannel } from "./application/alerts/ensure_default_email_channel";
+import { alertRoutes } from "./http/routes/alerts";
 import { D1ApiKeyRepo } from "./infrastructure/db/api_key_repo";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
@@ -172,6 +177,7 @@ export interface AppOverrides {
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
   apiKeys?: ApiKeyRepo;
+  alerts?: AlertRepo;
   externalRunner?: Pick<
     ExternalRunner,
     "claim" | "claimStale" | "start" | "recordStep" | "complete"
@@ -230,6 +236,23 @@ export function buildApp(
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
   const apiKeys = overrides.apiKeys ?? new D1ApiKeyRepo(env.DB);
+  const alerts = overrides.alerts ?? new D1AlertRepo(env.DB);
+  const charger = new ChargePaidDelivery(
+    alerts,
+    workspaces,
+    users,
+    emailSender,
+    config.appUrl,
+    clock,
+    overrides.ids ?? realIds,
+  );
+  const defaultChannel = new EnsureDefaultEmailChannel(
+    channels,
+    alerts,
+    config.encryptionKey,
+    clock,
+    overrides.ids ?? realIds,
+  );
   const durableWorkflows = new D1DurableWorkflowRepo(env.DB);
   const runQueue =
     overrides.runQueue ??
@@ -444,9 +467,23 @@ export function buildApp(
       invitations,
       billingCanceller,
       subscriptions,
+      defaultChannel,
       audit,
       clock,
       ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    alertRoutes({
+      users,
+      workspaces,
+      members,
+      channels,
+      alerts,
+      audit,
+      clock,
       config,
     }),
   );
@@ -499,6 +536,8 @@ export function buildApp(
       workspaces,
       members,
       subscriptions,
+      alerts,
+      charger,
       channels,
       deliveries,
       sender: channelSender,
@@ -627,6 +666,8 @@ export function buildApp(
         audit,
         clock,
         ids: overrides.ids ?? realIds,
+        alerts,
+        alertCreditPriceId: config.paddle.alertCreditPriceId,
       }),
     );
   }

@@ -26,6 +26,7 @@ async function channel(
       ENCRYPTION_KEY,
     ),
     enabled: true,
+    isDefault: false,
     verifiedAt: null,
     lastDeliveryStatus: null,
     createdBy: "usr_owner",
@@ -52,6 +53,8 @@ function delivery(
     errorSanitized: null,
     sentAt: null,
     createdAt,
+    costCents: null,
+    destinationCountry: null,
   };
 }
 

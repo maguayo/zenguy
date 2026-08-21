@@ -8,10 +8,15 @@ import type {
   NotificationChannel,
   NotificationDelivery,
 } from "../../domain/channels/types";
+import { isPaidChannelType } from "../../domain/alerts/types";
 import type { Clock } from "../../shared/clock";
 import { decryptSecret } from "../../shared/crypto";
 import { logEvent } from "../../shared/log";
 import { Redactor, truncate } from "../../shared/redact";
+import type {
+  ChargeOutcome,
+  PaidDeliveryCharger,
+} from "../alerts/charge_paid_delivery";
 import type { IncidentEventWriter } from "./incident_event_writer";
 
 export type NotificationQueueControl = Pick<
@@ -55,6 +60,7 @@ export class SendQueuedNotification {
     private readonly incidentEvents: IncidentEventWriter,
     private readonly encryptionKey: Uint8Array,
     private readonly clock: Clock,
+    private readonly charger: PaidDeliveryCharger,
   ) {}
 
   async execute(
@@ -104,7 +110,9 @@ export class SendQueuedNotification {
     }
 
     const attemptCount = delivery.attemptCount + 1;
+    const paid = isPaidChannelType(channel.type);
     let sent: { providerMessageId: string | null };
+    let charge: ChargeOutcome | null = null;
     let redactor = new Redactor([]);
     try {
       const plaintext = await decryptSecret(
@@ -113,6 +121,21 @@ export class SendQueuedNotification {
       );
       const parsedConfig = JSON.parse(plaintext) as unknown;
       redactor = channelConfigRedactor(plaintext, parsedConfig);
+      if (paid) {
+        // Charge before the provider call. The charge is idempotent per
+        // delivery, so a Queue retry of this message never pays twice.
+        charge = await this.charger.charge({
+          workspaceId: input.workspaceId,
+          deliveryId: delivery.id,
+          channelType: channel.type,
+          config: parsedConfig,
+        });
+        if (!charge.ok) {
+          await this.skip(delivery, channel, attemptCount, charge.message);
+          queueMessage.ack();
+          return;
+        }
+      }
       sent = await this.sender.send(
         { type: channel.type, config: parsedConfig },
         input.message,
@@ -135,6 +158,9 @@ export class SendQueuedNotification {
         errorSanitized,
         attemptCount,
       });
+      if (paid) {
+        await this.refundSafely(delivery, "provider delivery failed");
+      }
       await this.reconcileTerminal(
         {
           ...delivery,
@@ -154,12 +180,20 @@ export class SendQueuedNotification {
       return;
     }
     const sentAt = this.clock.now();
+    const cost =
+      charge !== null && charge.ok
+        ? {
+            costCents: charge.costCents,
+            destinationCountry: charge.destination.name,
+          }
+        : {};
     await this.deliveries.update(delivery.id, {
       status: "SENT",
       providerMessageId: sent.providerMessageId,
       errorSanitized: null,
       attemptCount,
       sentAt,
+      ...cost,
     });
     await this.reconcileTerminal(
       {
@@ -169,10 +203,48 @@ export class SendQueuedNotification {
         errorSanitized: null,
         attemptCount,
         sentAt,
+        ...cost,
       },
       channel,
     );
     queueMessage.ack();
+  }
+
+  private async skip(
+    delivery: NotificationDelivery,
+    channel: NotificationChannel,
+    attemptCount: number,
+    reason: string,
+  ): Promise<void> {
+    await this.deliveries.update(delivery.id, {
+      status: "FAILED",
+      errorSanitized: reason,
+      attemptCount,
+    });
+    await this.reconcileTerminal(
+      { ...delivery, status: "FAILED", errorSanitized: reason, attemptCount },
+      channel,
+    );
+    logEvent("notification_delivery_skipped", {
+      deliveryId: delivery.id,
+      channelId: channel.id,
+      reason,
+    });
+  }
+
+  private async refundSafely(
+    delivery: NotificationDelivery,
+    reason: string,
+  ): Promise<void> {
+    try {
+      await this.charger.refund({
+        workspaceId: delivery.workspaceId,
+        deliveryId: delivery.id,
+        reason,
+      });
+    } catch {
+      logEvent("alert_credit_refund_failed", { deliveryId: delivery.id });
+    }
   }
 
   private async markRemoved(
@@ -232,6 +304,11 @@ export class SendQueuedNotification {
       channelName: channel?.name ?? "Removed channel",
       deliveryId: delivery.id,
       status: delivery.status,
+      ...(delivery.status === "FAILED" &&
+      delivery.errorSanitized !== null &&
+      delivery.errorSanitized.length > 0
+        ? { detail: delivery.errorSanitized }
+        : {}),
     });
   }
 }

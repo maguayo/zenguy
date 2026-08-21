@@ -1,4 +1,11 @@
 import { buildApp } from "./app";
+import { ChargePaidDelivery } from "./application/alerts/charge_paid_delivery";
+import {
+  BackfillDefaultEmailChannels,
+  EnsureDefaultEmailChannel,
+} from "./application/alerts/ensure_default_email_channel";
+import { D1AlertRepo } from "./infrastructure/db/alert_repo";
+import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { CreateRun } from "./application/browser_tests/create_run";
 import { RecordRunUsage } from "./application/billing/record_run_usage";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
@@ -59,6 +66,22 @@ import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
 import { realIds } from "./shared/ids";
 import { platformAlert } from "./shared/log";
+
+function buildCharger(
+  env: Bindings,
+  config: ReturnType<typeof loadConfig>,
+  emailSender: ReturnType<typeof buildEmailSender>,
+): ChargePaidDelivery {
+  return new ChargePaidDelivery(
+    new D1AlertRepo(env.DB),
+    new D1WorkspaceRepo(env.DB),
+    new D1UserRepo(env.DB),
+    emailSender,
+    config.appUrl,
+    systemClock,
+    realIds,
+  );
+}
 
 type NotifyConsumer = Pick<SendQueuedNotification, "execute">;
 export interface CheckQueueConsumer {
@@ -286,6 +309,7 @@ function notifyConsumer(env: Bindings): SendQueuedNotification {
     ),
     config.encryptionKey,
     systemClock,
+    buildCharger(env, config, emailSender),
   );
 }
 
@@ -538,6 +562,7 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
           ),
           systemClock,
         );
+  const alerts = new D1AlertRepo(env.DB);
   return new HourlyMaintenance(
     overages,
     new D1AttemptRepo(env.DB),
@@ -545,6 +570,17 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
     buildAttemptLifecycle(env),
     new D1MonitorRepo(env.DB),
     systemClock,
+    platformAlert,
+    new BackfillDefaultEmailChannels(
+      alerts,
+      new EnsureDefaultEmailChannel(
+        new D1ChannelRepo(env.DB),
+        alerts,
+        config.encryptionKey,
+        systemClock,
+        realIds,
+      ),
+    ),
   );
 }
 

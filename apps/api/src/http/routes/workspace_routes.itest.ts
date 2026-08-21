@@ -2,7 +2,9 @@ import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import type { User } from "../../domain/users/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
+import { D1AlertRepo } from "../../infrastructure/db/alert_repo";
 import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
+import { D1ChannelRepo } from "../../infrastructure/db/channel_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1SubscriptionRepo } from "../../infrastructure/db/subscription_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
@@ -69,6 +71,8 @@ describe("workspace routes", () => {
   let members: D1MemberRepo;
   let subscriptions: D1SubscriptionRepo;
   let audits: D1AuditRepo;
+  let channels: D1ChannelRepo;
+  let alerts: D1AlertRepo;
   let tokens: Record<keyof typeof USERS, string>;
 
   beforeEach(async () => {
@@ -78,6 +82,8 @@ describe("workspace routes", () => {
     members = new D1MemberRepo(bindings.DB);
     subscriptions = new D1SubscriptionRepo(bindings.DB);
     audits = new D1AuditRepo(bindings.DB);
+    channels = new D1ChannelRepo(bindings.DB);
+    alerts = new D1AlertRepo(bindings.DB);
     for (const user of Object.values(USERS)) await users.insert(user);
     const config = loadConfig(bindings);
     tokens = {
@@ -159,6 +165,40 @@ describe("workspace routes", () => {
     );
     expect(JSON.parse(updateAudit?.metadataJson ?? "null")).toEqual({
       changedFields: ["name", "timezone"],
+    });
+  });
+
+  it("gives every new workspace a default email channel to its owner", async () => {
+    const created = await createWorkspace();
+    const list = await channels.list(created.id);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      type: "EMAIL",
+      name: "Workspace email",
+      enabled: true,
+      isDefault: true,
+      createdBy: USERS.owner.id,
+    });
+    expect(list[0]?.verifiedAt).not.toBeNull();
+    await expect(alerts.findSettings(created.id)).resolves.toMatchObject({
+      paidChannelsEnabled: false,
+      dailyPaidAlertLimit: 20,
+    });
+    expect((await alerts.findSettings(created.id))?.defaultEmailChannelCreatedAt).not.toBeNull();
+
+    const listed = await app.request(`/api/workspaces/${created.id}/channels`, {
+      headers: { Authorization: tokens.owner },
+    });
+    await expect(listed.json()).resolves.toMatchObject({
+      data: [
+        {
+          type: "EMAIL",
+          isDefault: true,
+          price: null,
+          paused: null,
+          configPreview: { emails: [USERS.owner.email] },
+        },
+      ],
     });
   });
 
