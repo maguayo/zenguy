@@ -1,0 +1,10 @@
+# apps/app is its own pnpm root (nested inside the monorepo on purpose):
+# React Native / Metro tooling expects a flat node_modules, and keeping the
+# lockfile here leaves the monorepo lockfile untouched.
+packages:
+  - "."
+nodeLinker: hoisted
+shamefullyHoist: true
+allowBuilds:
+  unrs-resolver: true
+verifyDepsBeforeRun: false

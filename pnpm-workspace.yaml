@@ -1,5 +1,7 @@
 packages:
   - "apps/*"
+  # apps/app (Expo) is a standalone pnpm project with hoisted node_modules.
+  - "!apps/app"
 allowBuilds:
   esbuild: true
   sharp: true
