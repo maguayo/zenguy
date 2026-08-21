@@ -204,6 +204,51 @@ describe("GetBilling", () => {
     expect(paddle.transactionLists).toEqual([]);
     expect(paddle.managementUrlRequests).toEqual([]);
   });
+
+  it("returns free launch access without contacting Paddle", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      provider: "internal",
+      source: "free",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      periodStart: null,
+      periodEnd: null,
+      cancelAtPeriodEnd: false,
+    });
+    const usageEvents = new FakeUsageEventRepo();
+    const paddle = new RecordingPaddleClient();
+    const clock = new FixedClock(Date.parse("2026-08-20T12:00:00Z"));
+    const getBilling = new GetBilling(
+      subscriptions,
+      new GetCycleUsage(subscriptions, usageEvents, clock),
+      paddle,
+    );
+
+    await expect(
+      getBilling.execute({ workspaceId: "ws_primary", role: "OWNER" }),
+    ).resolves.toMatchObject({
+      plan: {
+        pricePerMonthCents: 0,
+        overagePerRunCents: 0,
+      },
+      subscription: {
+        source: "free",
+        status: "ACTIVE",
+        periodStart: null,
+        periodEnd: null,
+        updatePaymentMethodUrl: null,
+        cancelUrl: null,
+      },
+      usage: {
+        projectedTotalCents: 0,
+      },
+      invoices: [],
+    });
+    expect(paddle.transactionLists).toEqual([]);
+    expect(paddle.managementUrlRequests).toEqual([]);
+  });
 });
 
 describe("GetInvoiceUrl", () => {

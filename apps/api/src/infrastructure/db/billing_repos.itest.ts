@@ -87,6 +87,30 @@ describe("D1 billing repositories", () => {
     });
   });
 
+  it("round-trips the internal free launch subscription", async () => {
+    const repo = new D1SubscriptionRepo(testEnv().DB);
+    const free: Subscription = {
+      id: "sub_free",
+      workspaceId: "ws_free",
+      provider: "internal",
+      source: "free",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      status: "ACTIVE",
+      periodStart: null,
+      periodEnd: null,
+      cancelAtPeriodEnd: false,
+      updatePaymentUrl: null,
+      cancelUrl: null,
+      createdAt: 100,
+      updatedAt: 100,
+    };
+
+    await repo.upsertByWorkspace(free);
+
+    await expect(repo.findByWorkspace(free.workspaceId)).resolves.toEqual(free);
+  });
+
   it("rejects stale provider state and paginates only unqueued reports", async () => {
     const subscriptions = new D1SubscriptionRepo(testEnv().DB);
     const reports = new D1OverageReportRepo(testEnv().DB);

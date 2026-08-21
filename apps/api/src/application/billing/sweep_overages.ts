@@ -64,6 +64,7 @@ export class SweepOverages {
           continue;
         }
         if (
+          subscription.source === "free" ||
           subscription.source === "grant" ||
           subscription.providerSubscriptionId === null
         ) {

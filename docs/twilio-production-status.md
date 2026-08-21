@@ -39,7 +39,30 @@ The local ignored file `TWILIO_TOKENS.md` holds the production credentials for
 transfer to 1Password. It must not be committed.
 
 The four required SMS/voice secrets were installed in the production Worker on
-2026-08-21. `TWILIO_FROM_WHATSAPP` and every Paddle secret remain unset.
+2026-08-21. The production encryption key was also replaced with a valid
+32-byte key after a read-only audit confirmed that the production D1 database
+contained no encrypted records. `TWILIO_FROM_WHATSAPP` and every Paddle secret
+remain unset.
+
+## Production deployment
+
+- Release commit: `0dcadb7` (`Enable Twilio SMS and voice production release`)
+- GitHub production workflow: `32523049985`, completed successfully
+- Worker tests, migrations `0001` through `0017`, and deployment: successful
+- `https://app.zenguy.com/api/health`: HTTP 200, `{"data":{"ok":true}}`
+- `https://api.zenguy.com/api/health`: HTTP 200, `{"data":{"ok":true}}`
+- Public privacy policy: <https://app.zenguy.com/privacy/>, HTTP 200
+- Public terms: <https://app.zenguy.com/terms/>, HTTP 200
+- Privacy contact: `privacy@zenguy.com`, routed to the verified production
+  mailbox through Cloudflare Email Routing
+- SMS geographic permission for Spain (`+34`): enabled
+- Voice dialing permission for Spain: low-risk numbers enabled; high-risk
+  special and toll-fraud ranges disabled
+
+The deployed notification form requires an unchecked, explicit SMS-consent
+checkbox. The API rejects SMS channel creation unless `consent: true` is sent.
+Every outbound Zenguy SMS includes `Reply STOP to opt out; HELP for help.`
+WhatsApp is not offered when creating a new notification channel.
 
 ## SMS release gate still open
 
@@ -56,32 +79,31 @@ The Console failure is therefore not a Brand-approval failure.
 
 Consequences:
 
-- The application and Twilio number can be configured for SMS now.
+- The application, Worker secrets, consent flow, legal pages, Messaging Service,
+  and Twilio number are ready for SMS.
 - Application-to-person SMS from this US long-code number to US recipients must
   not be considered production-ready until a campaign is submitted and approved.
-- Twilio currently documents a campaign vetting fee and a monthly low-volume
-  campaign fee. Confirm the live price in the Console immediately before the
-  paid submission.
+- Twilio's current official pricing is USD 15 for campaign vetting plus USD 1.50
+  per month for a low-volume mixed campaign, in addition to per-message and
+  carrier fees. A rejected submission can incur another vetting fee when
+  resubmitted.
 - No real SMS has been sent from Zenguy yet.
 
 Resume steps:
 
-1. Open Twilio Console > Messaging > Regulatory Compliance > A2P 10DLC.
-2. Re-open campaign registration under the completed brand/profile.
-3. Select the low-volume mixed use case (under 6,000 messages per day).
-4. Publish public Privacy and Terms pages that satisfy Twilio's SMS disclosure
-   requirements. At the time of this audit, `https://zenguy.com/privacy` and
-   `https://zenguy.com/terms` return 404.
-5. Add an explicit SMS-consent control to the Zenguy notification-channel form
-   and enforce the consent flag in the API.
-6. Complete the campaign description, sample messages, opt-in workflow, and
-   opt-out/help wording using that actual Zenguy product behavior.
-7. Review the live vetting and recurring fees and obtain action-time approval
-   before submitting the charge.
-8. Wait for carrier approval; then associate the approved campaign with the
-   existing Messaging Service and number.
-9. Send one explicitly approved SMS test and retain its Twilio message SID and
-   delivery status.
+1. Obtain action-time approval for the USD 15 vetting charge and USD 1.50/month
+   recurring fee.
+2. Submit the prepared `LOW_VOLUME` campaign through Twilio's documented API;
+   this is the fallback because the Console wizard errors before showing the
+   form.
+3. Record the returned Campaign SID and status without storing credentials in
+   this document.
+4. Wait for carrier approval. Campaign review is asynchronous and approval is
+   not guaranteed.
+5. Confirm that the approved Campaign, Messaging Service, and existing number
+   are associated.
+6. Send one explicitly approved SMS test and retain its Twilio message SID and
+   final delivery status.
 
 Twilio references:
 
@@ -95,8 +117,11 @@ The purchased number is the configured outbound caller ID. Zenguy creates an
 outbound Twilio call with inline TwiML that reads the notification text aloud,
 so no inbound voice webhook is required for the current feature.
 
-No real voice call has been placed from Zenguy yet. Before declaring the channel
-live, make one explicitly approved test call and confirm the Twilio call status.
+The code and production secrets are deployed. Spain is enabled for low-risk
+voice destinations, while high-risk special and toll-fraud ranges remain
+blocked. No real voice call has been placed from Zenguy yet. Before declaring
+the channel live, make one explicitly approved test call and confirm the Twilio
+call's final status.
 
 ## WhatsApp checkpoint — intentionally parked
 

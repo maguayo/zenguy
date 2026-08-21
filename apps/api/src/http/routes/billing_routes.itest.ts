@@ -156,6 +156,7 @@ describe("billing routes", () => {
     expect(config.status).toBe(200);
     await expect(config.json()).resolves.toEqual({
       data: {
+        mode: "paddle",
         environment: "sandbox",
         clientToken: "test-paddle-client-token",
         priceId: "pri_test_monthly",
@@ -246,6 +247,30 @@ describe("billing routes", () => {
       },
     });
     expect(paddle.managementUrlRequests).toEqual(["sub_provider_billing"]);
+  });
+
+  it("serves free launch config without Paddle credentials", async () => {
+    const bindings = {
+      ...testEnv(),
+      PADDLE_API_KEY: undefined,
+      PADDLE_WEBHOOK_SECRET: undefined,
+      PADDLE_CLIENT_TOKEN: undefined,
+      PADDLE_ENVIRONMENT: undefined,
+      PADDLE_PRICE_ID: undefined,
+      PADDLE_OVERAGE_PRICE_ID: undefined,
+    };
+    const freeApp = buildApp(bindings);
+    const response = await freeApp.request("/api/billing/config", {
+      headers: headers("owner"),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        mode: "free",
+        canIssueComplimentaryGrants: false,
+      },
+    });
   });
 
   it("returns an invoice URL only for a listed workspace transaction", async () => {

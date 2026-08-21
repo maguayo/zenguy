@@ -31,6 +31,7 @@ describe("Paddle integration", () => {
     configurePaddle(paddle, {
       clientToken: "test_client_token",
       environment: "sandbox",
+      mode: "paddle",
       priceId: "pri_test",
     });
 

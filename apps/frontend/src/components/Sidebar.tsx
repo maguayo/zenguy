@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import {
   Activity,
   Bell,
-  CreditCard,
+  Gauge,
   Globe,
   KeyRound,
   LayoutDashboard,
@@ -38,8 +38,8 @@ export const navigationItems: NavigationItem[] = [
   { icon: KeyRound, label: "Secrets", path: "secrets" },
   { icon: Users, label: "Members", path: "members" },
   {
-    icon: CreditCard,
-    label: "Usage & Billing",
+    icon: Gauge,
+    label: "Plan & Usage",
     path: "billing",
     permission: "billing.view",
   },

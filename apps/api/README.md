@@ -122,7 +122,14 @@ workspaces are rejected with a uniform 401.
 
 ### Paddle Billing
 
-Use the Paddle sandbox until the entire checkout and webhook smoke test passes.
+**Deferred during the free launch.** New workspaces receive an active internal
+free subscription with the same product capabilities and limits as the planned
+paid plan. Signup requires no checkout or payment card. See
+[`docs/free-launch-plan.md`](../../docs/free-launch-plan.md) for the active
+contract and future activation checklist.
+
+When paid plans are resumed, use the Paddle sandbox until the entire checkout
+and webhook smoke test passes.
 The official catalog workflow is documented in
 https://developer.paddle.com/build/products/create-products-prices/.
 
@@ -228,17 +235,14 @@ The matching Worker environment is registered only as a zone route for
 `/api/*`. This keeps frontend assets independent from API releases while
 preserving relative API requests and same-origin cookies.
 
-| Environment | Worker | Application / Pages origin | Worker Route | Paddle | Status |
+| Environment | Worker | Application / Pages origin | Worker Route | Billing | Status |
 |---|---|---|---|---|---|
-| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Sandbox | Operational |
-| Production | `zenguy-api-production` | `https://app.zenguy.com` | Target: `app.zenguy.com/api/*` | Live | Isolated bootstrap; activation pending |
+| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Free; Paddle deferred | Operational |
+| Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` | Free; Paddle deferred | Operational |
 
-Production resources, migrations, and an isolated bootstrap Worker are
-prepared. The bootstrap has `workers.dev` and preview URLs disabled and has no
-route, cron trigger, or Queue consumer. It must remain unreachable until Paddle
-Live credentials/catalog, Twilio production credentials and approved senders,
-the signed Paddle Live webhook, and all production secrets are ready. Never
-substitute Sandbox values to unblock a production deploy.
+Production owns both `app.zenguy.com/api/*` and `api.zenguy.com`. Paddle is not a
+production release gate during the free launch and its secret group remains
+unset. Never substitute Sandbox values in production.
 
 Do not configure either complete application hostname as a Worker custom
 domain. Pages owns the hostname and static routes; the Worker Route owns only
@@ -390,9 +394,8 @@ first failure:
 2. Register an address you control, receive the real Cloudflare Email Service
    verification email from `notifications@zenguy.com`, verify it, and log in.
    Confirm refresh and secure cookies stay on `staging-app.zenguy.com`.
-3. Create a workspace and complete a Paddle Sandbox checkout. Poll
-   `GET /api/workspaces/{workspaceId}/billing` until it is `ACTIVE`, then replay
-   the sandbox webhook and confirm it does not duplicate subscription or usage.
+3. Create a workspace and confirm it is immediately `ACTIVE` with source
+   `free`, reaches Overview without checkout, and asks for no payment card.
 4. Start the local Python runner and its local model, create an `example.com`
    Browser Test, and run **Test it**. Confirm the run is pulled on the local
    machine, reaches `PASSED`, its attempt and screenshots load, and usage
@@ -403,13 +406,11 @@ first failure:
    recovery delivery are recorded, then verify no plaintext secret appears in
    the API response, report, logs, or notification error.
 
-After the Paddle Live, Twilio, webhook, secret, and activation gates are
-complete, deploy production and repeat the non-destructive checks against
+Deploy production and repeat the non-destructive checks against
 `https://app.zenguy.com`. Confirm `/api/health` is handled by
 `zenguy-api-production`, the application shell is served by Pages, email uses
-`zenguy.com`, and billing config reports Paddle Live. Do not create a real
-charge merely as a smoke test; exercise the live checkout only as an explicitly
-approved release transaction.
+`zenguy.com`, and billing config reports `mode: "free"`. Paddle Live activation
+is a separate future release and any real checkout requires explicit approval.
 
 ## First-demo acceptance record
 

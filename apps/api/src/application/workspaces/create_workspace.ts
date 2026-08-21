@@ -1,4 +1,5 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
+import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
 import { uniqueSlug } from "../../domain/workspaces/slug";
 import type { User } from "../../domain/users/types";
@@ -11,6 +12,7 @@ import { workspaceOutput, type WorkspaceOutput } from "./list_my_workspaces";
 export interface CreateWorkspaceDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
+  subscriptions: SubscriptionRepo;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
@@ -47,6 +49,22 @@ export class CreateWorkspace {
       invitedBy: null,
       joinedAt: now,
     });
+    await this.dependencies.subscriptions.upsertByWorkspace({
+      id: this.dependencies.ids.newId("sub"),
+      workspaceId: workspace.id,
+      provider: "internal",
+      source: "free",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      status: "ACTIVE",
+      periodStart: null,
+      periodEnd: null,
+      cancelAtPeriodEnd: false,
+      updatePaymentUrl: null,
+      cancelUrl: null,
+      createdAt: now,
+      updatedAt: now,
+    });
     await this.dependencies.audit.execute({
       workspaceId: workspace.id,
       actorUserId: input.actor.id,
@@ -56,6 +74,6 @@ export class CreateWorkspace {
       metadata: { name: workspace.name },
       ip: input.ip,
     });
-    return workspaceOutput(workspace, "OWNER");
+    return workspaceOutput(workspace, "OWNER", "ACTIVE");
   }
 }

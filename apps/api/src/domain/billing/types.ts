@@ -4,12 +4,13 @@ export type SubscriptionStatus =
   | "PAST_DUE"
   | "CANCELED";
 
-export type SubscriptionSource = "paddle" | "grant";
+export type SubscriptionProvider = "internal" | "paddle";
+export type SubscriptionSource = "free" | "grant" | "paddle";
 
 export interface Subscription {
   id: string;
   workspaceId: string;
-  provider: "paddle";
+  provider: SubscriptionProvider;
   source?: SubscriptionSource;
   providerCustomerId: string | null;
   providerSubscriptionId: string | null;
@@ -82,6 +83,7 @@ export function isComplimentarySubscription(
 ): boolean {
   if (subscription === null) return false;
   return (
+    subscription.source === "free" ||
     subscription.source === "grant" ||
     subscription.providerSubscriptionId === null
   );

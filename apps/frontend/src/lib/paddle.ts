@@ -1,4 +1,4 @@
-import type { BillingConfig } from "../api/types";
+import type { PaddleBillingConfig } from "../api/types";
 
 export interface PaddleEvent {
   name: string;
@@ -52,7 +52,10 @@ export function checkoutOptions({
   };
 }
 
-export function configurePaddle(paddle: Paddle, config: BillingConfig): void {
+export function configurePaddle(
+  paddle: Paddle,
+  config: PaddleBillingConfig,
+): void {
   if (config.environment === "sandbox") paddle.Environment.set("sandbox");
   paddle.Initialize({
     eventCallback: (event) => {
@@ -102,7 +105,7 @@ export function loadPaddle(): Promise<Paddle> {
   return paddlePromise;
 }
 
-export async function initPaddle(config: BillingConfig): Promise<Paddle> {
+export async function initPaddle(config: PaddleBillingConfig): Promise<Paddle> {
   const paddle = await loadPaddle();
   if (initializedPaddle !== paddle || initializedToken !== config.clientToken) {
     configurePaddle(paddle, config);
