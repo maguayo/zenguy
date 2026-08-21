@@ -1,7 +1,7 @@
 # Plan B: worker de respaldo (fallback runner)
 
 **Fecha:** 20 de agosto de 2026
-**Estado:** implementado y testeado en local (suites completas en verde). **No desplegado** — la activación en staging/producción está en la checklist de abajo, porque el working tree contiene trabajo sin commitear de otras sesiones y no quise desplegar medio trabajo ajeno.
+**Estado (actualizado 21-08-2026):** **activo en staging.** La API con `claim-stale` está commiteada y desplegada (migración `0017` aplicada) y el worker de respaldo corre como unidad systemd `zenguy-fallback` en el servidor dedicado (`142.132.220.44`, repo en `/opt/projects/zenguy`, credenciales en `/etc/zenguy/fallback.env`, modo `--fallback --staging`, Google Chrome headless, Python 3.12). Validado extremo a extremo con runs reales de gpt-5-mini: un fallo funcional legítimo con retry y un `PASSED` limpio, ambos con `runnerVersion zenguy-fallback-runner/2.0.0`. Los errores del proveedor LLM (cuota/auth/conexión) se reportan ahora como `SYSTEM_ERROR/LLM_UNAVAILABLE`, no como `FAILED`. Los tests seed de staging se siembran aparcados (`next_run_at` 2030) para que el daemon no ejecute basura tras cada reseed; para un run real, adelanta `next_run_at` de `bt_seed_homepage`. Producción sigue pendiente de sus gates de release.
 
 ## Qué pediste
 
