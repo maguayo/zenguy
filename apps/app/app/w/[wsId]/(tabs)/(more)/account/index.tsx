@@ -18,7 +18,6 @@ import { useAppLock } from "@/contexts/AppLockContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { apiErrorMessage } from "@/lib/errors";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, radius, spacing } from "@/theme";
 import {
   Button,
@@ -88,7 +87,7 @@ export default function AccountScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ ...largeTitleOptions, title: "Account" }} />
+      <Stack.Screen options={{ title: "Account" }} />
       <Screen>
         <View style={styles.stack}>
           <Card>

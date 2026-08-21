@@ -29,7 +29,6 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { apiErrorMessage } from "@/lib/errors";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, spacing } from "@/theme";
 import {
   ActionMenu,
@@ -210,7 +209,6 @@ export default function MembersScreen() {
     <>
       <Stack.Screen
         options={{
-          ...largeTitleOptions,
           headerRight: canInvite
             ? () => <Button size="sm" title="Invite" variant="ghost" onPress={() => setInviteOpen(true)} />
             : undefined,

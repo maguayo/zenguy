@@ -20,7 +20,6 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { apiErrorMessage } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, radius, spacing } from "@/theme";
 import {
   ActionMenu,
@@ -110,7 +109,6 @@ export default function SecretsScreen() {
     <>
       <Stack.Screen
         options={{
-          ...largeTitleOptions,
           headerRight: manage ? () => <HeaderAddButton onPress={() => openEditor("create")} /> : undefined,
           title: "Secrets",
         }}

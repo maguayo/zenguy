@@ -36,7 +36,6 @@ import { ApiError, type ApiPage } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
 import { secureStorage, storageKeys } from "@/lib/secure-storage";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { timezoneLabel } from "@/lib/timezones";
 import { colors, spacing } from "@/theme";
 import {
@@ -417,7 +416,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ ...largeTitleOptions, title: "Workspace Settings" }} />
+      <Stack.Screen options={{ title: "Workspace Settings" }} />
       <Screen keyboard refreshing={canAudit && audit.isRefetching && !audit.isPending} onRefresh={refresh}>
         <View style={styles.stack}>
           <GeneralCard workspace={current} />

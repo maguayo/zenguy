@@ -36,6 +36,7 @@ export default function WorkspaceTabs() {
       <Tabs.Screen
         name="(overview)"
         options={{
+          tabBarButtonTestID: "tab-overview",
           tabBarIcon: (props) => <TabIcon {...props} active="grid" inactive="grid-outline" />,
           title: "Overview",
         }}
@@ -43,6 +44,7 @@ export default function WorkspaceTabs() {
       <Tabs.Screen
         name="(tests)"
         options={{
+          tabBarButtonTestID: "tab-tests",
           tabBarIcon: (props) => <TabIcon {...props} active="globe" inactive="globe-outline" />,
           title: "Tests",
         }}
@@ -50,6 +52,7 @@ export default function WorkspaceTabs() {
       <Tabs.Screen
         name="(uptime)"
         options={{
+          tabBarButtonTestID: "tab-uptime",
           tabBarIcon: (props) => <TabIcon {...props} active="pulse" inactive="pulse-outline" />,
           title: "Uptime",
         }}
@@ -57,6 +60,7 @@ export default function WorkspaceTabs() {
       <Tabs.Screen
         name="(incidents)"
         options={{
+          tabBarButtonTestID: "tab-incidents",
           tabBarIcon: (props) => (
             <TabIcon {...props} active="alert-circle" inactive="alert-circle-outline" />
           ),
@@ -66,6 +70,7 @@ export default function WorkspaceTabs() {
       <Tabs.Screen
         name="(more)"
         options={{
+          tabBarButtonTestID: "tab-more",
           tabBarIcon: (props) => (
             <TabIcon
               {...props}

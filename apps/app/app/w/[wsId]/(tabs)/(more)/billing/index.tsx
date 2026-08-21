@@ -17,7 +17,6 @@ import {
 import { UsageMeter } from "@/components/UsageMeter";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { formatDateTime, formatEuros } from "@/lib/format";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, radius, spacing } from "@/theme";
 import {
   Badge,
@@ -157,7 +156,7 @@ export default function BillingScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ ...largeTitleOptions, title: "Plan & Usage" }} />
+      <Stack.Screen options={{ title: "Plan & Usage" }} />
       <Screen
         refreshing={allowed && billing.isRefetching && !billing.isPending}
         onRefresh={allowed ? () => void billing.refetch() : undefined}

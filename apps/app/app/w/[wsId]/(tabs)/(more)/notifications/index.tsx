@@ -18,7 +18,6 @@ import { ChannelCard } from "@/components/notifications/ChannelCard";
 import { ChannelForm } from "@/components/notifications/ChannelForm";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { firstParam } from "@/lib/links";
-import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, spacing } from "@/theme";
 import { Button, EmptyState, ErrorState, Muted, Screen, Spinner } from "@/ui";
 
@@ -77,7 +76,6 @@ export default function NotificationsScreen() {
     <>
       <Stack.Screen
         options={{
-          ...largeTitleOptions,
           headerRight: manage
             ? () => (
                 <Pressable

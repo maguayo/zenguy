@@ -1,0 +1,133 @@
+# End-to-end smoke flow against the local API seed (see README.md).
+# Signs in when needed, then visits every tab and the "More" screens.
+# Run: maestro test maestro/smoke.yaml
+appId: com.zenguy.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: "Welcome back|Usage this cycle"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Welcome back"
+    commands:
+      - tapOn:
+          id: "signin-email"
+      - inputText: "marcos@aguayo.es"
+      - tapOn:
+          id: "signin-password"
+      - inputText: "abc123456"
+      - tapOn: "Welcome back"
+      - tapOn:
+          id: "signin-submit"
+      - tapOn:
+          text: "Not Now"
+          optional: true
+- extendedWaitUntil:
+    visible: "Usage this cycle"
+    timeout: 30000
+- takeScreenshot: s01-overview
+
+# Browser tests
+- tapOn:
+    id: "tab-tests"
+- extendedWaitUntil:
+    visible: ".*Blog listing.*"
+    timeout: 20000
+- takeScreenshot: s02-tests
+- tapOn: ".*Blog listing.*"
+- extendedWaitUntil:
+    visible: ".*Configuration.*"
+    timeout: 20000
+- takeScreenshot: s03-test-detail
+- tapOn:
+    id: "tab-tests"
+
+# Uptime
+- tapOn:
+    id: "tab-uptime"
+- extendedWaitUntil:
+    visible: ".*Billing API.*"
+    timeout: 20000
+- takeScreenshot: s04-uptime
+- tapOn: ".*Billing API.*"
+- extendedWaitUntil:
+    visible: "Response time.*"
+    timeout: 20000
+- takeScreenshot: s05-monitor-detail
+- tapOn:
+    id: "tab-uptime"
+
+# Incidents
+- tapOn:
+    id: "tab-incidents"
+- extendedWaitUntil:
+    visible: ".*Add to cart.*"
+    timeout: 20000
+- takeScreenshot: s06-incidents
+- tapOn: ".*Add to cart.*"
+- extendedWaitUntil:
+    visible: ".*Timeline.*"
+    timeout: 20000
+- takeScreenshot: s07-incident-detail
+- tapOn:
+    id: "tab-incidents"
+
+# More
+- tapOn:
+    id: "tab-more"
+- extendedWaitUntil:
+    visible: ".*Workspace Settings.*"
+    timeout: 20000
+- takeScreenshot: s08-more
+- tapOn: ".*Notifications.*"
+- extendedWaitUntil:
+    visible: ".*Slack #incidents.*"
+    timeout: 20000
+- takeScreenshot: s09-notifications
+- tapOn:
+    id: "tab-more"
+- tapOn: ".*Secrets.*"
+- extendedWaitUntil:
+    visible: ".*ADMIN_OTP.*"
+    timeout: 20000
+- takeScreenshot: s10-secrets
+- tapOn:
+    id: "tab-more"
+- tapOn: ".*Members.*"
+- extendedWaitUntil:
+    visible: ".*Ana Ruiz.*"
+    timeout: 20000
+- takeScreenshot: s11-members
+- tapOn:
+    id: "tab-more"
+- tapOn: ".*Plan & Usage.*"
+- extendedWaitUntil:
+    visible: ".*Usage.*"
+    timeout: 20000
+- takeScreenshot: s12-billing
+- tapOn:
+    id: "tab-more"
+- tapOn: ".*Workspace Settings.*"
+- extendedWaitUntil:
+    visible: ".*General.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: ".*Danger zone.*"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: s13-settings
+- tapOn:
+    id: "tab-more"
+- tapOn: ".*Account.*"
+- extendedWaitUntil:
+    visible: ".*Account.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: ".*App Lock.*"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: s14-account
