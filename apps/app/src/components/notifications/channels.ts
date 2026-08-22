@@ -10,6 +10,7 @@ export const channelTypeLabels: Record<ChannelType, string> = {
   CALL: "Phone call",
   DISCORD: "Discord",
   EMAIL: "Email",
+  PUSH: "Mobile push",
   SLACK: "Slack",
   SMS: "SMS",
   WHATSAPP: "WhatsApp",
@@ -19,6 +20,7 @@ export const channelIcons: Record<ChannelType, IoniconName> = {
   CALL: "call-outline",
   DISCORD: "logo-discord",
   EMAIL: "mail-outline",
+  PUSH: "phone-portrait-outline",
   SLACK: "logo-slack",
   SMS: "chatbox-ellipses-outline",
   WHATSAPP: "logo-whatsapp",
@@ -35,7 +37,16 @@ export function channelTarget(channel: Channel): string {
     case "SLACK":
     case "DISCORD":
       return channel.configPreview.webhookUrlMasked ?? "—";
+    case "PUSH":
+      return "All workspace members with the Zenguy app";
   }
+}
+
+/** "3 devices · 2 members" for push channels, null otherwise. */
+export function channelReachLabel(channel: Channel): string | null {
+  if (channel.type !== "PUSH" || !channel.reach) return null;
+  const { devices, members } = channel.reach;
+  return `${devices} ${devices === 1 ? "device" : "devices"} · ${members} ${members === 1 ? "member" : "members"}`;
 }
 
 export function channelPriceLabel(channel: Channel): string | null {

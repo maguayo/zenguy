@@ -10,6 +10,7 @@ const options: SecureStore.SecureStoreOptions = {
 export const storageKeys = {
   appLock: "zenguy.appLock",
   lastWorkspace: "zenguy.lastWorkspace",
+  pushDevice: "zenguy.pushDevice",
   refreshToken: "zenguy.refreshToken",
 } as const;
 

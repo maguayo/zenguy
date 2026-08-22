@@ -12,6 +12,7 @@ import { PrivacyShield } from "@/components/PrivacyShield";
 import { UpdateGate } from "@/components/UpdateGate";
 import { AppLockProvider } from "@/contexts/AppLockContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { PushProvider } from "@/contexts/PushContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { queryClient } from "@/lib/query-client";
 import { colors } from "@/theme";
@@ -86,13 +87,15 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
             <AuthProvider>
-              <AppLockProvider>
-                <StatusBar style="dark" />
-                <RootNavigator />
-                <UpdateGate />
-                <AppLockGate />
-                <PrivacyShield />
-              </AppLockProvider>
+              <PushProvider>
+                <AppLockProvider>
+                  <StatusBar style="dark" />
+                  <RootNavigator />
+                  <UpdateGate />
+                  <AppLockGate />
+                  <PrivacyShield />
+                </AppLockProvider>
+              </PushProvider>
             </AuthProvider>
           </ToastProvider>
         </QueryClientProvider>

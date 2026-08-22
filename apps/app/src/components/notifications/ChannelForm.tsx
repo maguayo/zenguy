@@ -30,6 +30,7 @@ import {
   webhookHint,
   type ChannelFormField,
   type ChannelFormValues,
+  isEditableChannelType,
 } from "./channel-form";
 import { channelIcons, channelTypeLabels } from "./channels";
 import { EmailListInput } from "./EmailListInput";
@@ -117,6 +118,7 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
   });
 
   const selectType = (type: ChannelType) => {
+    if (!isEditableChannelType(type)) return;
     form.setValue("type", type, { shouldValidate: false });
     form.clearErrors();
     setSelectedType(type);

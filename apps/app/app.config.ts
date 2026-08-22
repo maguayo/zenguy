@@ -55,6 +55,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     "expo-font",
+    [
+      "expo-notifications",
+      {
+        // aps-environment: production for store builds, development otherwise.
+        mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
+      },
+    ],
   ],
   experiments: {
     // Typed routes reject string-built hrefs and only exist after `expo start`,

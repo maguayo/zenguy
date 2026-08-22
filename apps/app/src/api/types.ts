@@ -114,7 +114,7 @@ export interface Secret {
   updatedAt: string;
 }
 
-export type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD";
+export type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD" | "PUSH";
 export type ChannelConfigInput =
   | { emails: string[] }
   | { consent: true; phoneNumber: string }
@@ -124,6 +124,7 @@ export type ChannelConfigInput =
 export interface ChannelPreview {
   emails?: string[];
   phoneNumber?: string;
+  recipients?: "WORKSPACE_MEMBERS";
   webhookUrlMasked?: string;
 }
 
@@ -141,6 +142,8 @@ export interface Channel {
   isDefault?: boolean;
   paused?: { reason: "PAID_OFF" | "NO_CREDIT" } | null;
   price?: { cents: number; currency: "EUR"; destination: string } | null;
+  /** PUSH channels only: how many devices and members currently receive alerts. */
+  reach?: { devices: number; members: number } | null;
 }
 
 export interface Delivery {

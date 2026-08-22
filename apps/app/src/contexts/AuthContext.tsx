@@ -12,6 +12,7 @@ import { login, logout, me, refresh } from "@/api/auth";
 import type { User } from "@/api/types";
 import { authEvents, clearSession, hasStoredSession, isAuthRejection } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
+import { runBeforeSignOut } from "@/lib/session-hooks";
 
 /**
  * - loading: the stored session is being checked
@@ -79,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Device-level cleanup (push unregistration) needs the session to still be valid.
+    await runBeforeSignOut();
     try {
       await logout();
     } finally {

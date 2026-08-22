@@ -108,6 +108,7 @@ describe("notification channels list", () => {
       CALL: "Phone call",
       DISCORD: "Discord",
       EMAIL: "Email",
+      PUSH: "Mobile push",
       SLACK: "Slack",
       SMS: "SMS",
       WHATSAPP: "WhatsApp",

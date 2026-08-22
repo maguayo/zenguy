@@ -14,6 +14,7 @@ import {
   userInitial,
 } from "@/components/more/account";
 import { toHref } from "@/components/more/links";
+import { NotificationsCard } from "@/components/push/NotificationsCard";
 import { useAppLock } from "@/contexts/AppLockContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -124,6 +125,8 @@ export default function AccountScreen() {
             ) : null}
             <Caption style={styles.note}>{sessionStorageNote}</Caption>
           </Card>
+
+          <NotificationsCard />
 
           <Card padding="none">
             <ListRow

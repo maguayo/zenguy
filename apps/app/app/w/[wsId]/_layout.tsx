@@ -1,5 +1,6 @@
 import { Redirect, Stack, usePathname } from "expo-router";
 
+import { PushPrompt } from "@/components/push/PushPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import { colors } from "@/theme";
@@ -31,6 +32,7 @@ export default function WorkspaceLayout() {
   return (
     <WorkspaceProvider>
       <WorkspaceStack />
+      <PushPrompt />
     </WorkspaceProvider>
   );
 }

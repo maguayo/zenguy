@@ -26,6 +26,7 @@ import {
 import {
   channelIcons,
   channelPriceLabel,
+  channelReachLabel,
   channelTarget,
   channelTypeLabels,
   lastDeliveryText,
@@ -126,9 +127,9 @@ export function ChannelCard({
       onSelect: () =>
         router.push(`/w/${current.id}/notifications/${channel.id}/deliveries` as Href),
     },
+    ...(manage && channel.type !== "PUSH" ? [{ label: "Edit", onSelect: () => onEdit(channel) }] : []),
     ...(manage
       ? [
-          { label: "Edit", onSelect: () => onEdit(channel) },
           {
             disabled: toggle.isPending,
             label: channel.enabled ? "Disable" : "Enable",
@@ -147,6 +148,7 @@ export function ChannelCard({
   const lastDelivery = deliveries.data?.items[0];
   const loadingLastDelivery = Boolean(channel.lastDeliveryStatus) && deliveries.isPending;
   const price = channelPriceLabel(channel);
+  const reach = channelReachLabel(channel);
   const paused = pausedLabel(channel);
 
   return (
@@ -173,6 +175,7 @@ export function ChannelCard({
           {channelTarget(channel)}
         </Muted>
         {price ? <Caption style={styles.price}>{price}</Caption> : null}
+        {reach ? <Caption style={styles.price}>{reach}</Caption> : null}
 
         <View style={styles.badges}>
           {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}

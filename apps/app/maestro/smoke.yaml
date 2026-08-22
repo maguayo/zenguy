@@ -83,9 +83,14 @@ appId: com.zenguy.app
 - takeScreenshot: s08-more
 - tapOn: ".*Notifications.*"
 - extendedWaitUntil:
-    visible: ".*Slack #incidents.*"
+    visible: ".*Mobile push.*"
     timeout: 20000
 - takeScreenshot: s09-notifications
+- scrollUntilVisible:
+    element:
+      text: ".*Slack #incidents.*"
+    direction: DOWN
+    timeout: 20000
 - tapOn:
     id: "tab-more"
 - tapOn: ".*Secrets.*"
@@ -131,3 +136,9 @@ appId: com.zenguy.app
     direction: DOWN
     timeout: 20000
 - takeScreenshot: s14-account
+- scrollUntilVisible:
+    element:
+      text: ".*Push alerts are free.*"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: s15-account-notifications

@@ -5,6 +5,13 @@ import type { Channel, ChannelConfigInput, ChannelType } from "@/api/types";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 
+/** Channel types a user can create or edit; PUSH channels are managed by the API. */
+export type EditableChannelType = Exclude<ChannelType, "PUSH">;
+
+export function isEditableChannelType(type: ChannelType | null | undefined): type is EditableChannelType {
+  return type !== null && type !== undefined && type !== "PUSH";
+}
+
 export interface ChannelTypeOption {
   label: string;
   paid?: boolean;
@@ -120,7 +127,7 @@ const blankValues: ChannelFormValues = {
 };
 
 export function channelFormDefaults(channel?: Channel): ChannelFormValues {
-  if (!channel) return { ...blankValues, emails: [] };
+  if (!channel || !isEditableChannelType(channel.type)) return { ...blankValues, emails: [] };
   return {
     emails: channel.configPreview.emails ?? [],
     name: channel.name,

@@ -87,6 +87,30 @@ Not covered (documented decisions): certificate pinning, jailbreak detection,
 push notifications, universal links (needs an AASA file on `app.zenguy.com`;
 the `zenguy://` scheme works today, e.g. `zenguy://verify-email?token=…`).
 
+## Push notifications
+
+Alerts also arrive as push notifications (free, every workspace member with the
+app). The app side (`src/contexts/PushContext.tsx`):
+
+- After the first workspace loads, a soft prompt ("Get alerts on this iPhone")
+  precedes the iOS permission dialog; "Not now" keeps quiet until the next
+  launch. Account → Notifications shows the permission state, an "Open
+  Settings" shortcut when denied, and a per-device switch.
+- With permission granted the app registers its Expo push token with
+  `PUT /api/me/push-devices` on every launch and whenever the token changes,
+  and calls `DELETE /api/me/push-devices/:id` right before signing out (the
+  session must still be valid). The API creates the default "Mobile push"
+  channel (`type: "PUSH"`) for the user's workspaces.
+- Tapping a notification opens its `data.url` only when it is a
+  `zenguy://w/<workspace>/…` route (`src/lib/push.ts`); anything else is ignored.
+- Foreground notifications still show as banners.
+
+Prerequisites before it works on a phone: `eas init` (stores the EAS
+`projectId` in `app.config.ts` → `extra.eas.projectId`), an EAS build (EAS
+provisions the APNs key; the `expo-notifications` plugin sets
+`aps-environment` to production for the `production` profile) and a physical
+iPhone — the simulator cannot receive APNs and reports push as unavailable.
+
 ## Configuration
 
 | Setting | Where | Values |

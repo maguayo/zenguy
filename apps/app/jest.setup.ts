@@ -29,6 +29,18 @@ jest.mock("expo-haptics", () => ({
   NotificationFeedbackType: { Success: "success", Error: "error", Warning: "warning" },
 }));
 
+jest.mock("expo-device", () => ({ isDevice: false, modelName: "iPhone" }));
+
+jest.mock("expo-notifications", () => ({
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: "ExponentPushToken[test]", type: "expo" })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  getPermissionsAsync: jest.fn(async () => ({ canAskAgain: true, granted: false, status: "undetermined" })),
+  requestPermissionsAsync: jest.fn(async () => ({ canAskAgain: true, granted: true, status: "granted" })),
+  setNotificationHandler: jest.fn(),
+}));
+
 beforeEach(() => {
   mockSecureStore.clear();
 });
