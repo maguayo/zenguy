@@ -30,6 +30,7 @@ export interface Bindings {
   PADDLE_ALERT_CREDIT_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
   IOS_APP_STORE_URL?: string;
+  EXPO_PUSH_ACCESS_TOKEN?: string;
 }
 
 export interface PaddleConfig {
@@ -63,6 +64,8 @@ export interface AppConfig {
   paddle: PaddleConfig | null;
   complimentaryIssuerEmails: string[];
   iosAppStoreUrl: string | null;
+  /** Expo push "enhanced security" token; null sends without one. */
+  expoPushAccessToken: string | null;
 }
 
 const requiredEnvKeys = [
@@ -115,6 +118,7 @@ const envSchema = z.object({
   TWILIO_FROM_SMS: z.string().min(1),
   TWILIO_FROM_WHATSAPP: optionalNonEmptyString(),
   TWILIO_FROM_CALL: z.string().min(1),
+  EXPO_PUSH_ACCESS_TOKEN: optionalNonEmptyString(),
 });
 
 const paddleEnvSchema = z.object({
@@ -239,6 +243,7 @@ export function loadConfig(env: Bindings): AppConfig {
       fromCall: parsed.TWILIO_FROM_CALL,
     },
     paddle,
+    expoPushAccessToken: parsed.EXPO_PUSH_ACCESS_TOKEN ?? null,
     complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
       env.COMPLIMENTARY_ISSUER_EMAILS,
     ),

@@ -53,6 +53,8 @@ export interface MonitorRepo {
   listZombieCycles(before: number): Promise<UptimeMonitor[]>;
   clearCycle(id: string, expectedCycleId: string): Promise<boolean>;
   setChannels(monitorId: string, channelIds: string[]): Promise<void>;
+  /** Links a channel to every live monitor of the workspace (idempotent). */
+  addChannelToAll(workspaceId: string, channelId: string): Promise<void>;
   getChannelIds(monitorId: string): Promise<string[]>;
   statusCounts(workspaceId: string): Promise<MonitorStatusCounts>;
 }

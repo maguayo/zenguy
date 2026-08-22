@@ -9,6 +9,7 @@ export interface AlertSettingsUpdate {
   paidChannelsEnabled?: boolean;
   dailyPaidAlertLimit?: number;
   defaultEmailChannelCreatedAt?: number | null;
+  defaultPushChannelCreatedAt?: number | null;
   lowBalanceNotifiedAt?: number | null;
 }
 

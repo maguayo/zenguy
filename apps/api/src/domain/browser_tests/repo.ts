@@ -36,6 +36,8 @@ export interface BrowserTestRepo {
   setNextRunAt(id: string, at: number): Promise<void>;
   claimDue(now: number, limit: number): Promise<ClaimedBrowserTest[]>;
   setChannels(testId: string, channelIds: string[]): Promise<void>;
+  /** Links a channel to every live test of the workspace (idempotent). */
+  addChannelToAll(workspaceId: string, channelId: string): Promise<void>;
   getChannelIds(testId: string): Promise<string[]>;
 }
 

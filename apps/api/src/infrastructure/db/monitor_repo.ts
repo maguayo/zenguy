@@ -340,6 +340,19 @@ export class D1MonitorRepo implements MonitorRepo {
     ]);
   }
 
+  async addChannelToAll(workspaceId: string, channelId: string): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `INSERT OR IGNORE INTO uptime_monitor_channels
+            (uptime_monitor_id, notification_channel_id)
+           SELECT id, ? FROM uptime_monitors
+           WHERE workspace_id = ? AND deleted_at IS NULL`,
+        )
+        .bind(channelId, workspaceId),
+    );
+  }
+
   async getChannelIds(monitorId: string): Promise<string[]> {
     const rows = await all<{ notification_channel_id: string }>(
       this.database

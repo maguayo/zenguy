@@ -17,6 +17,7 @@ export interface AlertSettings {
   paidChannelsEnabled: boolean;
   dailyPaidAlertLimit: number;
   defaultEmailChannelCreatedAt: number | null;
+  defaultPushChannelCreatedAt: number | null;
   lowBalanceNotifiedAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -31,6 +32,7 @@ export function defaultAlertSettings(
     paidChannelsEnabled: false,
     dailyPaidAlertLimit: DEFAULT_DAILY_PAID_ALERT_LIMIT,
     defaultEmailChannelCreatedAt: null,
+    defaultPushChannelCreatedAt: null,
     lowBalanceNotifiedAt: null,
     createdAt: at,
     updatedAt: at,

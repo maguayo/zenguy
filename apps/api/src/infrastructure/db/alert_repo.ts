@@ -19,6 +19,7 @@ interface SettingsRow {
   paid_channels_enabled: number;
   daily_paid_alert_limit: number;
   default_email_channel_created_at: number | null;
+  default_push_channel_created_at: number | null;
   low_balance_notified_at: number | null;
   created_at: number;
   updated_at: number;
@@ -43,6 +44,7 @@ function toSettings(row: SettingsRow): AlertSettings {
     paidChannelsEnabled: row.paid_channels_enabled === 1,
     dailyPaidAlertLimit: row.daily_paid_alert_limit,
     defaultEmailChannelCreatedAt: row.default_email_channel_created_at,
+    defaultPushChannelCreatedAt: row.default_push_channel_created_at ?? null,
     lowBalanceNotifiedAt: row.low_balance_notified_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -86,9 +88,9 @@ export class D1AlertRepo implements AlertRepo {
         .prepare(
           `INSERT INTO workspace_alert_settings
             (workspace_id, paid_channels_enabled, daily_paid_alert_limit,
-             default_email_channel_created_at, low_balance_notified_at,
-             created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+             default_email_channel_created_at, default_push_channel_created_at,
+             low_balance_notified_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id) DO NOTHING`,
         )
         .bind(
@@ -96,6 +98,7 @@ export class D1AlertRepo implements AlertRepo {
           settings.paidChannelsEnabled ? 1 : 0,
           settings.dailyPaidAlertLimit,
           settings.defaultEmailChannelCreatedAt,
+          settings.defaultPushChannelCreatedAt,
           settings.lowBalanceNotifiedAt,
           settings.createdAt,
           settings.updatedAt,
@@ -115,6 +118,7 @@ export class D1AlertRepo implements AlertRepo {
            SET paid_channels_enabled = CASE WHEN ? = 1 THEN ? ELSE paid_channels_enabled END,
                daily_paid_alert_limit = CASE WHEN ? = 1 THEN ? ELSE daily_paid_alert_limit END,
                default_email_channel_created_at = CASE WHEN ? = 1 THEN ? ELSE default_email_channel_created_at END,
+               default_push_channel_created_at = CASE WHEN ? = 1 THEN ? ELSE default_push_channel_created_at END,
                low_balance_notified_at = CASE WHEN ? = 1 THEN ? ELSE low_balance_notified_at END,
                updated_at = ?
            WHERE workspace_id = ?`,
@@ -126,6 +130,8 @@ export class D1AlertRepo implements AlertRepo {
           changes.dailyPaidAlertLimit ?? 0,
           changes.defaultEmailChannelCreatedAt === undefined ? 0 : 1,
           changes.defaultEmailChannelCreatedAt ?? null,
+          changes.defaultPushChannelCreatedAt === undefined ? 0 : 1,
+          changes.defaultPushChannelCreatedAt ?? null,
           changes.lowBalanceNotifiedAt === undefined ? 0 : 1,
           changes.lowBalanceNotifiedAt ?? null,
           at,

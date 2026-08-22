@@ -701,6 +701,18 @@ const ROUTES: RouteCase[] = [
     }),
   },
   route("GET /api/billing/config", "A", 200, "/api/billing/config"),
+  route("GET /api/me/push-devices", "A", 200, "/api/me/push-devices"),
+  route(
+    "PUT /api/me/push-devices",
+    "A",
+    200,
+    "/api/me/push-devices",
+    json("PUT", {
+      token: "ExponentPushToken[rbacmatrix000000000000]",
+      platform: "ios",
+      deviceName: "Matrix iPhone",
+    }),
+  ),
   {
     label: "POST /api/webhooks/paddle",
     access: "P",

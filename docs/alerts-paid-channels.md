@@ -117,6 +117,36 @@ for paid types) and `paused` (`{ reason: "PAID_OFF" | "NO_CREDIT" }`); `PATCH
 while the add-on is off returns `400 VALIDATION_ERROR` on field `type` /
 `enabled`. Deliveries carry `costCents` and `destinationCountry`.
 
+## Mobile push (free)
+
+- The iOS app registers each device's Expo push token through
+  `PUT /api/me/push-devices` (see the route table below). A token belongs to
+  one device; registering it again moves it to the signed-in user and
+  re-enables it. `PATCH …/:id { enabled }` pauses a device, `DELETE …/:id`
+  removes it (sign-out).
+- The first registration by a workspace member creates that workspace's
+  `PUSH` channel "Mobile push" (`isDefault`, free, config
+  `{ recipients: "WORKSPACE_MEMBERS" }`) and attaches it once to every
+  existing test and monitor; `workspace_alert_settings.default_push_channel_created_at`
+  prevents recreating a channel the team deleted. The hourly cron backfills
+  workspaces whose members registered devices before joining.
+- Delivery goes through the Expo Push Service in batches of 100 with
+  `{ title, body, data: { url, workspaceId, incidentId?, eventType }, sound,
+  priority: "high" }`; `data.url` is the `zenguy://` deep link. Tokens Expo
+  reports as `DeviceNotRegistered` are disabled automatically. A workspace
+  without enabled devices fails the delivery with "No mobile devices are
+  registered for this workspace".
+- Prerequisites owned by Marcos: link the app to an Expo account (`eas init`
+  → `projectId`), let EAS manage APNs on the first build, test on a physical
+  iPhone. Optional `EXPO_PUSH_ACCESS_TOKEN` for Expo's enhanced push security.
+
+| Method | Route | Permission |
+|---|---|---|
+| GET | `/api/me/push-devices` | signed-in user |
+| PUT | `/api/me/push-devices` `{ token, platform, deviceName?, appVersion? }` | signed-in user |
+| PATCH | `/api/me/push-devices/:id` `{ enabled }` | device owner |
+| DELETE | `/api/me/push-devices/:id` | device owner |
+
 ## Operations checklist
 
 - Staging seed (`pnpm --filter @zenguy/api seed`) turns the add-on on for the
@@ -124,7 +154,9 @@ while the add-on is off returns `400 VALIDATION_ERROR` on field `type` /
 - Audit actions: `alerts.settings_updated`, `alerts.credit_topup`.
 - Logs: `notification_delivery_skipped`, `alert_credit_refund_failed`,
   `alert_credit_notice_failed`, `alert_credit_topup_unmatched`,
-  `default_email_channel_failed`, `default_channel_backfill_failed`.
+  `default_email_channel_failed`, `default_channel_backfill_failed`,
+  `default_push_channel_created`, `default_push_channel_failed`,
+  `expo_push_error`, `push_devices_unregistered`.
 - Follow-ups not built: complimentary alert-credit links for early adopters,
   an EU voice number, OTP verification of phone numbers, public pricing on the
   marketing site.

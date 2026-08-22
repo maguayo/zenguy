@@ -13,6 +13,7 @@ const channel = (overrides: Partial<Channel>): Channel => ({
   name: "Channel",
   paused: null,
   price: null,
+  reach: null,
   type: "EMAIL",
   verifiedAt: null,
   ...overrides,

@@ -29,6 +29,7 @@ export const ID_PREFIXES = {
   durableJob: "job",
   apiKey: "ak",
   alertCreditEntry: "ace",
+  pushDevice: "pd",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

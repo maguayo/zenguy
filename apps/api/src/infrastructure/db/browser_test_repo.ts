@@ -223,6 +223,19 @@ export class D1BrowserTestRepo implements BrowserTestRepo {
     ]);
   }
 
+  async addChannelToAll(workspaceId: string, channelId: string): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `INSERT OR IGNORE INTO browser_test_channels
+            (browser_test_id, notification_channel_id)
+           SELECT id, ? FROM browser_tests
+           WHERE workspace_id = ? AND deleted_at IS NULL`,
+        )
+        .bind(channelId, workspaceId),
+    );
+  }
+
   async getChannelIds(testId: string): Promise<string[]> {
     const rows = await all<{ notification_channel_id: string }>(
       this.database

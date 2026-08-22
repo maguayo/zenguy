@@ -214,6 +214,17 @@ https://www.twilio.com/docs/numbers-and-senders/add-numbers-and-senders.
    `src/domain/alerts/pricing.ts`. Refresh that table whenever Twilio changes
    its rates; see `docs/alerts-paid-channels.md`.
 
+### Mobile push (Expo)
+
+The iOS app registers its Expo push token at `PUT /api/me/push-devices`; the
+API then creates a free "Mobile push" channel in each of the user's
+workspaces and sends through the Expo Push Service
+(`https://exp.host/--/api/v2/push/send`). No APNs credentials live in the
+Worker: EAS manages them for the app. Set `EXPO_PUSH_ACCESS_TOKEN` only if
+"enhanced push security" is enabled for the Expo project. Details in
+`docs/alerts-paid-channels.md` and
+`docs/superpowers/specs/2026-08-22-push-notifications-design.md`.
+
 ### Local browser/model runner
 
 The API has no OpenAI credential and no Browser Rendering binding. Configure a

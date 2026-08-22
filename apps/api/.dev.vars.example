@@ -20,3 +20,6 @@ PADDLE_OVERAGE_PRICE_ID=pri_replace_overage
 # Optional: one-time Paddle price for a €10 alert-credit pack (SMS & calls).
 # Leave unset to keep top-ups unavailable.
 PADDLE_ALERT_CREDIT_PRICE_ID=pri_replace_alert_credit
+# Optional: Expo push "enhanced security" access token (Expo dashboard). Leave
+# unset unless enhanced push security is enabled for the Expo project.
+# EXPO_PUSH_ACCESS_TOKEN=

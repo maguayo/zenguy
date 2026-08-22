@@ -1238,7 +1238,8 @@ V1 debe soportar:
 * WhatsApp mediante Twilio;
 * Phone Call mediante Twilio;
 * Slack;
-* Discord.
+* Discord;
+* push móvil (Expo, app iOS; gratuito, creado por defecto al registrar el primer dispositivo — añadido el 2026-08-22).
 
 ### 16.3 Campos comunes
 

@@ -272,6 +272,7 @@ describe("channel routes", () => {
         "DISCORD",
         { webhookUrl: "https://hooks.slack.com/services/not-discord" },
       ],
+      ["PUSH", { recipients: "OWNER_ONLY" }],
     ];
     for (const [type, config] of invalid) {
       const response = await app.request(
@@ -305,10 +306,25 @@ describe("channel routes", () => {
         "DISCORD",
         { webhookUrl: "https://discord.com/api/webhooks/123/token" },
       ],
+      ["PUSH", { recipients: "WORKSPACE_MEMBERS" }],
     ];
     for (const [type, config] of valid) {
       await createChannel(type, config);
     }
+
+    const secondPush = await app.request(`/api/workspaces/${WORKSPACE.id}/channels`, {
+      method: "POST",
+      headers: headers("owner"),
+      body: JSON.stringify({
+        name: "Another push",
+        type: "PUSH",
+        config: { recipients: "WORKSPACE_MEMBERS" },
+      }),
+    });
+    expect(secondPush.status).toBe(400);
+    await expect(secondPush.json()).resolves.toMatchObject({
+      error: { details: [{ field: "type", message: expect.stringContaining("push") }] },
+    });
   });
 
   it("gates paid channel types behind the add-on and prices them per destination", async () => {

@@ -118,6 +118,10 @@ import { D1AlertRepo } from "./infrastructure/db/alert_repo";
 import { ChargePaidDelivery } from "./application/alerts/charge_paid_delivery";
 import { EnsureDefaultEmailChannel } from "./application/alerts/ensure_default_email_channel";
 import { alertRoutes } from "./http/routes/alerts";
+import type { PushDeviceRepo } from "./domain/push/repo";
+import { D1PushDeviceRepo } from "./infrastructure/db/push_device_repo";
+import { EnsureDefaultPushChannel } from "./application/push/ensure_default_push_channel";
+import { pushDeviceRoutes } from "./http/routes/push_devices";
 import { D1ApiKeyRepo } from "./infrastructure/db/api_key_repo";
 import { buildChannelSender } from "./infrastructure/notify";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
@@ -179,6 +183,7 @@ export interface AppOverrides {
   billingCanceller?: BillingCanceller;
   apiKeys?: ApiKeyRepo;
   alerts?: AlertRepo;
+  pushDevices?: PushDeviceRepo;
   externalRunner?: Pick<
     ExternalRunner,
     "claim" | "claimStale" | "start" | "recordStep" | "complete"
@@ -220,8 +225,15 @@ export function buildApp(
   const resolveSecrets = new ResolveSecrets(secrets, config.encryptionKey);
   const channels = overrides.channels ?? new D1ChannelRepo(env.DB);
   const deliveries = overrides.deliveries ?? new D1DeliveryRepo(env.DB);
+  const pushDevices = overrides.pushDevices ?? new D1PushDeviceRepo(env.DB);
   const channelSender =
-    overrides.channelSender ?? buildChannelSender(config, emailSender);
+    overrides.channelSender ??
+    buildChannelSender(config, emailSender, fetch, {
+      devices: pushDevices,
+      appUrl: config.appUrl,
+      accessToken: config.expoPushAccessToken,
+      clock,
+    });
   const browserTests =
     overrides.browserTests ?? new D1BrowserTestRepo(env.DB);
   const runs = overrides.runs ?? new D1RunRepo(env.DB);
@@ -250,6 +262,15 @@ export function buildApp(
   const defaultChannel = new EnsureDefaultEmailChannel(
     channels,
     alerts,
+    config.encryptionKey,
+    clock,
+    overrides.ids ?? realIds,
+  );
+  const defaultPushChannel = new EnsureDefaultPushChannel(
+    channels,
+    alerts,
+    browserTests,
+    monitors,
     config.encryptionKey,
     clock,
     overrides.ids ?? realIds,
@@ -403,6 +424,18 @@ export function buildApp(
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));
   app.route("/api/app", appVersionRoutes(config));
   app.route(
+    "/api/me",
+    pushDeviceRoutes({
+      users,
+      workspaces,
+      pushDevices,
+      defaultPushChannel,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
     "/api/runner",
     runnerRoutes({ token: config.runnerApiToken, runner: externalRunner }),
   );
@@ -540,6 +573,7 @@ export function buildApp(
       subscriptions,
       alerts,
       charger,
+      pushDevices,
       channels,
       deliveries,
       sender: channelSender,

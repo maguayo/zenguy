@@ -137,7 +137,7 @@ export class SendQueuedNotification {
         }
       }
       sent = await this.sender.send(
-        { type: channel.type, config: parsedConfig },
+        { type: channel.type, config: parsedConfig, workspaceId: input.workspaceId },
         input.message,
       );
     } catch (error) {

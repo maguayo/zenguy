@@ -161,7 +161,7 @@ export class TestChannel {
         };
       }
       const sent = await this.sender.send(
-        { type: channel.type, config: parsedConfig },
+        { type: channel.type, config: parsedConfig, workspaceId: input.workspaceId },
         message,
       );
       result = {

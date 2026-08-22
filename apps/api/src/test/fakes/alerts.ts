@@ -51,6 +51,9 @@ export class FakeAlertRepo implements AlertRepo {
       ...(changes.defaultEmailChannelCreatedAt === undefined
         ? {}
         : { defaultEmailChannelCreatedAt: changes.defaultEmailChannelCreatedAt }),
+      ...(changes.defaultPushChannelCreatedAt === undefined
+        ? {}
+        : { defaultPushChannelCreatedAt: changes.defaultPushChannelCreatedAt }),
       ...(changes.lowBalanceNotifiedAt === undefined
         ? {}
         : { lowBalanceNotifiedAt: changes.lowBalanceNotifiedAt }),

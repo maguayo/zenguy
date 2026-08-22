@@ -11,6 +11,7 @@ import {
   lastDeliveryText,
   openChannelPanel,
   pausedLabel,
+  reachLabel,
   testDeliveryResult,
 } from "./ChannelsPage";
 
@@ -24,6 +25,7 @@ const baseChannel: Channel = {
   name: "Engineering inbox",
   paused: null,
   price: null,
+  reach: null,
   type: "EMAIL",
   verifiedAt: "2026-08-19T10:01:00.000Z",
 };
@@ -112,6 +114,27 @@ describe("notification channels list", () => {
     expect(failed).toContain("Disabled");
     expect(failed).toContain("Failed");
     expect(lastDeliveryText(null)).toBe("Never used");
+  });
+
+  it("describes mobile push channels by reach", () => {
+    const push: Channel = {
+      ...baseChannel,
+      configPreview: { recipients: "WORKSPACE_MEMBERS" },
+      reach: { devices: 3, members: 2 },
+      type: "PUSH",
+    };
+    expect(channelTarget(push)).toBe("Everyone in this workspace who uses the Zenguy app");
+    expect(reachLabel(push)).toBe("3 devices · 2 members · free");
+    expect(reachLabel({ ...push, reach: { devices: 1, members: 1 } })).toBe(
+      "1 device · 1 member · free",
+    );
+    expect(reachLabel({ ...push, reach: { devices: 0, members: 0 } })).toBe(
+      "No devices yet · install the app and allow notifications",
+    );
+    expect(reachLabel(baseChannel)).toBeNull();
+    const html = renderToStaticMarkup(<ChannelSummary channel={push} />);
+    expect(html).toContain("Mobile push");
+    expect(html).toContain("3 devices · 2 members · free");
   });
 
   it("uses the delivery outcome for the exact test toast", () => {

@@ -16,6 +16,7 @@ import {
   channelConfigSchema,
   configPreview,
 } from "../../domain/channels/types";
+import type { PushReach } from "../../domain/push/repo";
 import { decryptSecret } from "../../shared/crypto";
 import { phoneNumberOf } from "../alerts/charge_paid_delivery";
 import type { PaidChannelContext } from "../alerts/settings";
@@ -37,6 +38,8 @@ export interface ChannelOutput {
   price: ChannelPrice | null;
   /** Why a pay-as-you-go channel currently cannot deliver; null when it can. */
   paused: { reason: PaidAlertsPauseReason } | null;
+  /** Devices and members a mobile push channel currently reaches. */
+  reach: PushReach | null;
   verifiedAt: number | null;
   lastDeliveryStatus: "SENT" | "FAILED" | null;
   createdAt: number;
@@ -83,6 +86,7 @@ export async function channelOutput(
   channel: NotificationChannel,
   encryptionKey: Uint8Array,
   paid: PaidChannelContext,
+  reach: PushReach | null = null,
 ): Promise<ChannelOutput> {
   const plaintext = await decryptSecret(channel.encryptedConfig, encryptionKey);
   const config = channelConfigSchema(channel.type).parse(JSON.parse(plaintext));
@@ -96,6 +100,7 @@ export async function channelOutput(
     configPreview: configPreview(channel.type, config),
     price,
     paused: channelPause(price, paid),
+    reach: channel.type === "PUSH" ? reach : null,
     verifiedAt: channel.verifiedAt,
     lastDeliveryStatus:
       channel.lastDeliveryStatus === "SENT" ||

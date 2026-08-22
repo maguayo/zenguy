@@ -114,16 +114,18 @@ export interface Secret {
   updatedAt: string;
 }
 
-export type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD";
+export type ChannelType = "EMAIL" | "SMS" | "WHATSAPP" | "CALL" | "SLACK" | "DISCORD" | "PUSH";
 export type ChannelConfigInput =
   | { emails: string[] }
   | { consent: true; phoneNumber: string }
   | { phoneNumber: string }
-  | { webhookUrl: string };
+  | { webhookUrl: string }
+  | { recipients: "WORKSPACE_MEMBERS" };
 
 export interface ChannelPreview {
   emails?: string[];
   phoneNumber?: string;
+  recipients?: "WORKSPACE_MEMBERS";
   webhookUrlMasked?: string;
 }
 
@@ -148,6 +150,8 @@ export interface Channel {
   paused: { reason: PaidAlertsPauseReason } | null;
   /** Price per alert for SMS, call, and WhatsApp channels; null for free ones. */
   price: ChannelPrice | null;
+  /** Devices and members a mobile push channel reaches; null for other types. */
+  reach: { devices: number; members: number } | null;
   type: ChannelType;
   verifiedAt: string | null;
 }

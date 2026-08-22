@@ -18,6 +18,7 @@ const DELETE_STATEMENTS = [
   "DELETE FROM test_runs",
   "DELETE FROM browser_test_channels",
   "DELETE FROM browser_tests",
+  "DELETE FROM user_push_devices",
   "DELETE FROM alert_credit_entries",
   "DELETE FROM alert_credit_balances",
   "DELETE FROM workspace_alert_settings",

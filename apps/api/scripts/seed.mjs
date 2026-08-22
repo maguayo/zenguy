@@ -260,6 +260,7 @@ const WIPE_STATEMENTS = [
   "DELETE FROM test_runs;",
   "DELETE FROM browser_test_channels;",
   "DELETE FROM browser_tests;",
+  "DELETE FROM user_push_devices;",
   "DELETE FROM alert_credit_entries;",
   "DELETE FROM alert_credit_balances;",
   "DELETE FROM workspace_alert_settings;",
@@ -786,14 +787,16 @@ async function generateSql(encryptionKey) {
     discord: "ch_seed_discord",
     whatsapp: "ch_seed_whatsapp",
     call: "ch_seed_call",
+    push: "ch_seed_push",
   };
-  const defaultChannelIds = [channelIds.email, channelIds.slack];
+  const defaultChannelIds = [channelIds.email, channelIds.push, channelIds.slack];
   const allAlertChannelIds = [
     channelIds.email,
     channelIds.sms,
     channelIds.slack,
     channelIds.discord,
     channelIds.whatsapp,
+    channelIds.push,
   ];
 
   const [
@@ -814,6 +817,7 @@ async function generateSql(encryptionKey) {
     encryptedDiscord,
     encryptedWhatsapp,
     encryptedCall,
+    encryptedPush,
     encryptedCheckoutHeaders,
     encryptedCheckoutBody,
     pendingInviteHash,
@@ -856,6 +860,7 @@ async function generateSql(encryptionKey) {
     ),
     encryptSecret(JSON.stringify({ phoneNumber: "+34600999888" }), encryptionKey),
     encryptSecret(JSON.stringify({ phoneNumber: "+34600111000" }), encryptionKey),
+    encryptSecret(JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }), encryptionKey),
     encryptSecret(
       JSON.stringify([{ key: "Authorization", value: "Bearer {{DEMO_TOKEN}}" }]),
       encryptionKey,
@@ -1180,6 +1185,16 @@ async function generateSql(encryptionKey) {
       lastDeliveryStatus: null,
       createdBy: IDS.admin,
     },
+    {
+      id: channelIds.push,
+      name: "Mobile push",
+      type: "PUSH",
+      config: encryptedPush,
+      enabled: 1,
+      verifiedAt: workspaceCreated + 9 * DAY_MS,
+      lastDeliveryStatus: "SENT",
+      createdBy: null,
+    },
   ];
   for (const [index, channel] of channels.entries()) {
     statements.push(
@@ -1190,7 +1205,8 @@ async function generateSql(encryptionKey) {
         type: channel.type,
         encrypted_config: channel.config,
         enabled: channel.enabled,
-        is_default: channel.id === channelIds.email ? 1 : 0,
+        is_default:
+          channel.id === channelIds.email || channel.id === channelIds.push ? 1 : 0,
         verified_at: channel.verifiedAt,
         last_delivery_status: channel.lastDeliveryStatus,
         created_by: channel.createdBy,
@@ -1208,6 +1224,7 @@ async function generateSql(encryptionKey) {
       paid_channels_enabled: 1,
       daily_paid_alert_limit: 20,
       default_email_channel_created_at: workspaceCreated + 2 * DAY_MS,
+      default_push_channel_created_at: workspaceCreated + 9 * DAY_MS,
       low_balance_notified_at: null,
       created_at: workspaceCreated + 2 * DAY_MS,
       updated_at: now - 3 * HOUR_MS,
@@ -1215,6 +1232,22 @@ async function generateSql(encryptionKey) {
   );
   // Running balances are computed chronologically once every entry exists,
   // because deliveries are generated per incident rather than in time order.
+  // The owner's iPhone: makes the "Mobile push" channel reach one device.
+  statements.push(
+    insertRow("user_push_devices", {
+      id: "pd_seed_owner_iphone",
+      user_id: IDS.owner,
+      token: "ExponentPushToken[seedowneriphone0000000001]",
+      platform: "ios",
+      device_name: "Marcos's iPhone",
+      app_version: "0.1.0",
+      enabled: 1,
+      disabled_reason: null,
+      last_seen_at: now - 2 * HOUR_MS,
+      created_at: workspaceCreated + 9 * DAY_MS,
+      updated_at: now - 2 * HOUR_MS,
+    }),
+  );
   const alertCredit = { balance: 0, sequence: 0, entries: [] };
   function addCreditEntry(kind, amountCents, description, at, extra = {}) {
     alertCredit.sequence += 1;

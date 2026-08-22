@@ -45,7 +45,7 @@ import { initPaddle, loadPaddle, openCheckout } from "../../lib/paddle";
 import { AlertsTabs } from "./AlertsTabs";
 
 export const paidAlertsDescription =
-  "Pay-as-you-go alerts to phones, charged from prepaid credit. Email, Slack and Discord alerts are always free.";
+  "Pay-as-you-go SMS and calls, charged from prepaid credit. Email, mobile push, Slack and Discord alerts are always free.";
 
 export function statusCopy(overview: AlertsOverview): {
   label: string;
@@ -57,7 +57,7 @@ export function statusCopy(overview: AlertsOverview): {
       label: "Off",
       tone: "neutral",
       detail:
-        "SMS, call and WhatsApp channels are paused and nothing is charged. Email, Slack and Discord keep working.",
+        "SMS, call and WhatsApp channels are paused and nothing is charged. Email, mobile push, Slack and Discord keep working.",
     };
   }
   if (overview.status.pauseReason === "NO_CREDIT") {

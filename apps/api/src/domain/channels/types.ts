@@ -6,7 +6,8 @@ export type ChannelType =
   | "WHATSAPP"
   | "CALL"
   | "SLACK"
-  | "DISCORD";
+  | "DISCORD"
+  | "PUSH";
 
 export type DeliveryEventType = "FAILURE" | "RECOVERY" | "TEST";
 export type DeliveryStatus = "PENDING" | "SENT" | "FAILED";
@@ -83,15 +84,22 @@ export const discordChannelConfigSchema = z
   })
   .strict();
 
+/** Mobile push reaches every workspace member's registered devices. */
+export const pushChannelConfigSchema = z
+  .object({ recipients: z.literal("WORKSPACE_MEMBERS") })
+  .strict();
+
 export type EmailChannelConfig = z.infer<typeof emailChannelConfigSchema>;
 export type PhoneChannelConfig = z.infer<typeof phoneChannelConfigSchema>;
 export type SmsChannelConfig = z.infer<typeof smsChannelConfigSchema>;
 export type WebhookChannelConfig = z.infer<typeof slackChannelConfigSchema>;
+export type PushChannelConfig = z.infer<typeof pushChannelConfigSchema>;
 export type ChannelConfig =
   | EmailChannelConfig
   | PhoneChannelConfig
   | SmsChannelConfig
-  | WebhookChannelConfig;
+  | WebhookChannelConfig
+  | PushChannelConfig;
 
 export function channelConfigSchema(type: ChannelType): z.ZodType<ChannelConfig> {
   switch (type) {
@@ -106,13 +114,16 @@ export function channelConfigSchema(type: ChannelType): z.ZodType<ChannelConfig>
       return slackChannelConfigSchema;
     case "DISCORD":
       return discordChannelConfigSchema;
+    case "PUSH":
+      return pushChannelConfigSchema;
   }
 }
 
 export type ChannelConfigPreview =
   | { emails: string[] }
   | { phoneNumber: string }
-  | { webhookUrlMasked: string };
+  | { webhookUrlMasked: string }
+  | { recipients: "WORKSPACE_MEMBERS" };
 
 export function configPreview(
   type: ChannelType,
@@ -146,6 +157,10 @@ export function configPreview(
       return {
         webhookUrlMasked: `${prefix}…${parsed.webhookUrl.slice(-4)}`,
       };
+    }
+    case "PUSH": {
+      const parsed = pushChannelConfigSchema.parse(config);
+      return { recipients: parsed.recipients };
     }
   }
 }

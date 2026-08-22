@@ -23,6 +23,7 @@ const slack: Channel = {
   name: "Slack alerts",
   paused: null,
   price: null,
+  reach: null,
   type: "SLACK",
   verifiedAt: null,
 };
@@ -81,6 +82,15 @@ describe("channel form", () => {
       }).success,
     ).toBe(false);
     expect(createSchema.safeParse(values).success).toBe(true);
+  });
+
+  it("builds a fixed config for mobile push channels", () => {
+    expect(createChannelInput({ ...values, name: "Phones", type: "PUSH" })).toEqual({
+      config: { recipients: "WORKSPACE_MEMBERS" },
+      name: "Phones",
+      type: "PUSH",
+    });
+    expect(channelFormSchema(false).safeParse({ ...values, type: "PUSH" }).success).toBe(true);
   });
 
   it("builds create config for email and phone channel types", () => {

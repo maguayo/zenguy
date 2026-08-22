@@ -13,6 +13,7 @@ import {
   Plus,
   Power,
   Send,
+  Smartphone,
   Star,
   StarOff,
   Trash2,
@@ -51,6 +52,7 @@ const channelIcons: Record<ChannelType, LucideIcon> = {
   CALL: Phone,
   DISCORD: Gamepad2,
   EMAIL: Mail,
+  PUSH: Smartphone,
   SLACK: Hash,
   SMS: MessageSquare,
   WHATSAPP: MessageCircle,
@@ -60,6 +62,7 @@ const channelTypeLabels: Record<ChannelType, string> = {
   CALL: "Phone call",
   DISCORD: "Discord",
   EMAIL: "Email",
+  PUSH: "Mobile push",
   SLACK: "Slack",
   SMS: "SMS",
   WHATSAPP: "WhatsApp",
@@ -76,7 +79,19 @@ export function channelTarget(channel: Channel): string {
     case "SLACK":
     case "DISCORD":
       return channel.configPreview.webhookUrlMasked ?? "—";
+    case "PUSH":
+      return "Everyone in this workspace who uses the Zenguy app";
   }
+}
+
+export function reachLabel(channel: Channel): string | null {
+  if (channel.type !== "PUSH") return null;
+  if (!channel.reach || channel.reach.devices === 0) {
+    return "No devices yet · install the app and allow notifications";
+  }
+  const devices = `${channel.reach.devices} ${channel.reach.devices === 1 ? "device" : "devices"}`;
+  const members = `${channel.reach.members} ${channel.reach.members === 1 ? "member" : "members"}`;
+  return `${devices} · ${members} · free`;
 }
 
 export function channelPriceLabel(channel: Channel): string | null {
@@ -163,6 +178,9 @@ export function ChannelSummary({
       </p>
       {channelPriceLabel(channel) ? (
         <p className="mt-1 text-xs text-zinc-500">{channelPriceLabel(channel)}</p>
+      ) : null}
+      {reachLabel(channel) ? (
+        <p className="mt-1 text-xs text-zinc-500">{reachLabel(channel)}</p>
       ) : null}
 
       <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2">

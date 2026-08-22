@@ -12,7 +12,7 @@ export interface NotificationMessage {
 
 export interface ChannelSender {
   send(
-    channel: { type: ChannelType; config: unknown },
+    channel: { type: ChannelType; config: unknown; workspaceId?: string },
     message: NotificationMessage,
   ): Promise<{ providerMessageId: string | null }>;
 }

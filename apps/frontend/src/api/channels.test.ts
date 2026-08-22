@@ -22,6 +22,7 @@ const channel: Channel = {
   name: "Engineering inbox",
   paused: null,
   price: null,
+  reach: null,
   type: "EMAIL",
   verifiedAt: "2026-08-19T10:01:00.000Z",
 };

@@ -19,6 +19,8 @@ import { channelOutput, type ChannelOutput } from "./types";
 
 export const PAID_CHANNELS_OFF_MESSAGE =
   "Turn on SMS & calls under Alerts before adding this channel";
+export const PUSH_CHANNEL_EXISTS_MESSAGE =
+  "This workspace already has a mobile push channel";
 
 export class CreateChannel {
   constructor(
@@ -48,6 +50,14 @@ export class CreateChannel {
     const paid = await loadPaidChannelContext(this.alerts, input.workspaceId);
     if (isPaidChannelType(input.type) && !paid.enabled) {
       throw validation([{ field: "type", message: PAID_CHANNELS_OFF_MESSAGE }]);
+    }
+    if (
+      input.type === "PUSH" &&
+      (await this.channels.list(input.workspaceId)).some(
+        (channel) => channel.type === "PUSH",
+      )
+    ) {
+      throw validation([{ field: "type", message: PUSH_CHANNEL_EXISTS_MESSAGE }]);
     }
     const now = this.clock.now();
     const channel = {

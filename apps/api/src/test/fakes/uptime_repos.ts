@@ -175,6 +175,13 @@ export class FakeMonitorRepo implements MonitorRepo {
     this.channelIds.set(monitorId, [...new Set(channelIds)].sort());
   }
 
+  async addChannelToAll(workspaceId: string, channelId: string): Promise<void> {
+    for (const monitor of this.monitors.values()) {
+      if (monitor.workspaceId !== workspaceId || monitor.deletedAt !== null) continue;
+      await this.setChannels(monitor.id, [...(this.channelIds.get(monitor.id) ?? []), channelId]);
+    }
+  }
+
   async getChannelIds(monitorId: string): Promise<string[]> {
     return [...(this.channelIds.get(monitorId) ?? [])];
   }

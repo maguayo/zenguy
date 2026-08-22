@@ -1,6 +1,8 @@
 import type { NotificationMessage } from "../../domain/channels/notifier";
 import { renderBasicEmail } from "../email/templates";
 import { RecordingEmailSender } from "../../test/fakes/email";
+import { FakePushDeviceRepo } from "../../test/fakes/push";
+import { FixedClock } from "../../shared/clock";
 import { buildChannelSender } from "./index";
 import type { TwilioFetch } from "./twilio";
 
@@ -15,6 +17,73 @@ const MESSAGE: NotificationMessage = {
 };
 
 describe("buildChannelSender", () => {
+  it("delivers PUSH through Expo only when push is configured", async () => {
+    const devices = new FakePushDeviceRepo();
+    devices.members.set("ws_1", ["usr_a"]);
+    devices.devices.set("pd_a", {
+      id: "pd_a",
+      userId: "usr_a",
+      token: "ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]",
+      platform: "ios",
+      deviceName: null,
+      appVersion: null,
+      enabled: true,
+      disabledReason: null,
+      lastSeenAt: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const urls: string[] = [];
+    const sender = buildChannelSender(
+      {
+        twilio: {
+          accountSid: "AC_account",
+          authToken: "token",
+          fromSms: "+15550000001",
+          fromWhatsapp: null,
+          fromCall: "+15550000003",
+        },
+      },
+      new RecordingEmailSender(),
+      async (url) => {
+        urls.push(url);
+        return Response.json({ data: [{ status: "ok", id: "ticket-1" }] });
+      },
+      {
+        devices,
+        appUrl: "https://app.zenguy.test",
+        accessToken: null,
+        clock: new FixedClock(1),
+      },
+    );
+    await expect(
+      sender.send(
+        { type: "PUSH", config: { recipients: "WORKSPACE_MEMBERS" }, workspaceId: "ws_1" },
+        MESSAGE,
+      ),
+    ).resolves.toEqual({ providerMessageId: "ticket-1" });
+    expect(urls).toEqual(["https://exp.host/--/api/v2/push/send"]);
+
+    const unconfigured = buildChannelSender(
+      {
+        twilio: {
+          accountSid: "AC_account",
+          authToken: "token",
+          fromSms: "+15550000001",
+          fromWhatsapp: null,
+          fromCall: "+15550000003",
+        },
+      },
+      new RecordingEmailSender(),
+    );
+    await expect(
+      unconfigured.send(
+        { type: "PUSH", config: { recipients: "WORKSPACE_MEMBERS" }, workspaceId: "ws_1" },
+        MESSAGE,
+      ),
+    ).rejects.toThrow("Push is not configured");
+  });
+
   it("renders email and dispatches every channel type", async () => {
     const email = new RecordingEmailSender();
     const requests: string[] = [];

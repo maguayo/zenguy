@@ -5,7 +5,12 @@ import {
   EnsureDefaultEmailChannel,
 } from "./application/alerts/ensure_default_email_channel";
 import { D1AlertRepo } from "./infrastructure/db/alert_repo";
+import { D1PushDeviceRepo } from "./infrastructure/db/push_device_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
+import {
+  BackfillDefaultPushChannels,
+  EnsureDefaultPushChannel,
+} from "./application/push/ensure_default_push_channel";
 import { CreateRun } from "./application/browser_tests/create_run";
 import { RecordRunUsage } from "./application/billing/record_run_usage";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
@@ -300,7 +305,12 @@ function notifyConsumer(env: Bindings): SendQueuedNotification {
   return new SendQueuedNotification(
     new D1DeliveryRepo(env.DB),
     new D1ChannelRepo(env.DB),
-    buildChannelSender(config, emailSender),
+    buildChannelSender(config, emailSender, fetch, {
+      devices: new D1PushDeviceRepo(env.DB),
+      appUrl: config.appUrl,
+      accessToken: config.expoPushAccessToken,
+      clock: systemClock,
+    }),
     new WriteIncidentNotificationEvent(
       incidents,
       incidentEvents,
@@ -539,6 +549,43 @@ export function buildDeadLetterConsumer(env: Bindings): RedriveDeadLetter {
   return new RedriveDeadLetter(durable, publisher, systemClock, realIds);
 }
 
+function buildDefaultChannelBackfill(
+  env: Bindings,
+  config: ReturnType<typeof loadConfig>,
+  alerts: D1AlertRepo,
+): { execute(): Promise<unknown> } {
+  const channels = new D1ChannelRepo(env.DB);
+  const pushDevices = new D1PushDeviceRepo(env.DB);
+  const email = new BackfillDefaultEmailChannels(
+    alerts,
+    new EnsureDefaultEmailChannel(
+      channels,
+      alerts,
+      config.encryptionKey,
+      systemClock,
+      realIds,
+    ),
+  );
+  const push = new BackfillDefaultPushChannels(
+    pushDevices,
+    new EnsureDefaultPushChannel(
+      channels,
+      alerts,
+      new D1BrowserTestRepo(env.DB),
+      new D1MonitorRepo(env.DB),
+      config.encryptionKey,
+      systemClock,
+      realIds,
+    ),
+  );
+  return {
+    async execute() {
+      await email.execute();
+      await push.execute();
+    },
+  };
+}
+
 export function buildHourlyJob(env: Bindings): HourlyMaintenance {
   const config = loadConfig(env);
   const subscriptions = new D1SubscriptionRepo(env.DB);
@@ -571,16 +618,7 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
     new D1MonitorRepo(env.DB),
     systemClock,
     platformAlert,
-    new BackfillDefaultEmailChannels(
-      alerts,
-      new EnsureDefaultEmailChannel(
-        new D1ChannelRepo(env.DB),
-        alerts,
-        config.encryptionKey,
-        systemClock,
-        realIds,
-      ),
-    ),
+    buildDefaultChannelBackfill(env, config, alerts),
   );
 }
 

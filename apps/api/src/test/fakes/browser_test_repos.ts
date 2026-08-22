@@ -105,6 +105,13 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
     this.channels.set(testId, [...new Set(channelIds)].sort());
   }
 
+  async addChannelToAll(workspaceId: string, channelId: string): Promise<void> {
+    for (const test of this.tests.values()) {
+      if (test.workspaceId !== workspaceId || test.deletedAt !== null) continue;
+      await this.setChannels(test.id, [...(this.channels.get(test.id) ?? []), channelId]);
+    }
+  }
+
   async getChannelIds(testId: string): Promise<string[]> {
     return [...(this.channels.get(testId) ?? [])];
   }

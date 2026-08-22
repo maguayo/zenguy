@@ -15,6 +15,7 @@ import type {
   DeliveryRepo,
 } from "../../domain/channels/repo";
 import type { ChannelSender } from "../../domain/channels/notifier";
+import type { PushDeviceRepo } from "../../domain/push/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   MemberRepo,
@@ -38,6 +39,7 @@ export interface ChannelRoutesDependencies {
   subscriptions: SubscriptionRepo;
   alerts: AlertRepo;
   charger: PaidDeliveryCharger;
+  pushDevices: Pick<PushDeviceRepo, "reachForWorkspace">;
   channels: ChannelRepo;
   deliveries: DeliveryRepo;
   sender: ChannelSender;
@@ -55,6 +57,7 @@ const channelTypeSchema = z.enum([
   "CALL",
   "SLACK",
   "DISCORD",
+  "PUSH",
 ]);
 const requiredConfig = z.unknown().refine((value) => value !== undefined, {
   message: "Required",
@@ -136,6 +139,7 @@ export function channelRoutes(
     dependencies.channels,
     dependencies.alerts,
     dependencies.config.encryptionKey,
+    dependencies.pushDevices,
   );
   const listDeliveries = new ListDeliveries(
     dependencies.channels,

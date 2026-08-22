@@ -7,6 +7,7 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
@@ -41,6 +42,7 @@ const channelTypes: Array<{
   type: ChannelType;
 }> = [
   { icon: Mail, label: "Email", type: "EMAIL" },
+  { icon: Smartphone, label: "Mobile push", type: "PUSH" },
   { icon: MessageSquare, label: "SMS", paid: true, type: "SMS" },
   { icon: Phone, label: "Phone call", paid: true, type: "CALL" },
   { icon: Hash, label: "Slack", type: "SLACK" },
@@ -69,7 +71,7 @@ const baseSchema = z.object({
     .max(80, "Name must be 80 characters or fewer."),
   phoneNumber: z.string(),
   smsConsent: z.boolean(),
-  type: z.enum(["EMAIL", "SMS", "WHATSAPP", "CALL", "SLACK", "DISCORD"]),
+  type: z.enum(["EMAIL", "SMS", "WHATSAPP", "CALL", "SLACK", "DISCORD", "PUSH"]),
   webhookUrl: z.string(),
 });
 
@@ -157,6 +159,8 @@ export function channelConfigFromValues(values: ChannelFormValues): ChannelConfi
     case "SLACK":
     case "DISCORD":
       return { webhookUrl: values.webhookUrl.trim() };
+    case "PUSH":
+      return { recipients: "WORKSPACE_MEMBERS" };
   }
 }
 
@@ -352,6 +356,14 @@ export function ChannelFormModal({
               {...form.register("name")}
             />
           </Field>
+
+          {selectedType === "PUSH" ? (
+            <p className="rounded-md bg-zinc-50 p-3 text-sm text-zinc-600">
+              Sends a push notification to every member of this workspace who has the Zenguy
+              iPhone app installed and allowed notifications. Free, no setup needed — Zenguy
+              usually creates this channel for you the first time someone installs the app.
+            </p>
+          ) : null}
 
           {selectedType === "EMAIL" ? (
             <Field
