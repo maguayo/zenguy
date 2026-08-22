@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppLockGate } from "@/components/AppLockGate";
 import { PrivacyShield } from "@/components/PrivacyShield";
+import { UpdateGate } from "@/components/UpdateGate";
 import { AppLockProvider } from "@/contexts/AppLockContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -88,6 +89,7 @@ export default function RootLayout() {
               <AppLockProvider>
                 <StatusBar style="dark" />
                 <RootNavigator />
+                <UpdateGate />
                 <AppLockGate />
                 <PrivacyShield />
               </AppLockProvider>

@@ -607,3 +607,17 @@ Latest local automated verification on 2026-08-19:
 - Root typecheck: PASS.
 - Unit suite: PASS — 81 files, 543 tests.
 - Integration suite: PASS — 36 files, 185 tests.
+
+## Minimum iOS app version (forced updates)
+
+`GET /api/app/version` is public and returns
+`{ "data": { "minVersion": "<semver>", "storeUrl": "<https://apps.apple.com/…>" | null } }`
+(cached for five minutes). The iOS app (`apps/app`) reads it on launch and when it
+returns to the foreground; a build older than `minVersion` shows a blocking
+"Update required" screen with an "Open the App Store" button.
+
+- To force every user onto a newer build, bump `MIN_APP_VERSION` in
+  `src/shared/constants.ts` and deploy the API.
+- `IOS_APP_STORE_URL` (optional var per environment) must be an
+  `https://apps.apple.com/…` link; set it once the app is published. Any other
+  value fails configuration loading on purpose.

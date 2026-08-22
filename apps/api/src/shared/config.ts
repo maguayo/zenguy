@@ -29,6 +29,7 @@ export interface Bindings {
   PADDLE_OVERAGE_PRICE_ID?: string;
   PADDLE_ALERT_CREDIT_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
+  IOS_APP_STORE_URL?: string;
 }
 
 export interface PaddleConfig {
@@ -61,6 +62,7 @@ export interface AppConfig {
   };
   paddle: PaddleConfig | null;
   complimentaryIssuerEmails: string[];
+  iosAppStoreUrl: string | null;
 }
 
 const requiredEnvKeys = [
@@ -133,6 +135,27 @@ export function parseComplimentaryIssuerEmails(value: unknown): string[] {
     if (email.includes("@")) emails.add(email);
   }
   return [...emails];
+}
+
+const APP_STORE_HOST = "apps.apple.com";
+
+/**
+ * The App Store link published to the iOS app. Only an https URL on
+ * apps.apple.com is accepted: the app opens it in response to a forced update,
+ * so it must never point anywhere else.
+ */
+export function parseIosAppStoreUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new Error("IOS_APP_STORE_URL must be a valid https://apps.apple.com URL");
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== APP_STORE_HOST) {
+    throw new Error("IOS_APP_STORE_URL must be a valid https://apps.apple.com URL");
+  }
+  return parsed.toString();
 }
 
 export function isComplimentaryIssuer(
@@ -219,5 +242,6 @@ export function loadConfig(env: Bindings): AppConfig {
     complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
       env.COMPLIMENTARY_ISSUER_EMAILS,
     ),
+    iosAppStoreUrl: parseIosAppStoreUrl(env.IOS_APP_STORE_URL),
   };
 }

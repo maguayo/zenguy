@@ -74,6 +74,15 @@ CI=1 pnpm exec expo export --platform ios --output-dir /tmp/zenguy-export   # Me
   navigate outside the app. No analytics or third-party SDKs. `console.*` is
   stripped from release bundles.
 
+- **Forced updates**: on launch and on every return to the foreground the app
+  reads `GET /api/app/version` (`minVersion`, `storeUrl`). A build older than
+  `minVersion` is covered by a blocking "Update required" screen with an
+  "Open the App Store" button (only `https://apps.apple.com` links are opened).
+  To force an update, bump `MIN_APP_VERSION` in
+  `apps/api/src/shared/constants.ts` and deploy the API; set the
+  `IOS_APP_STORE_URL` var per environment once the app is published. Network
+  failures never block the app.
+
 Not covered (documented decisions): certificate pinning, jailbreak detection,
 push notifications, universal links (needs an AASA file on `app.zenguy.com`;
 the `zenguy://` scheme works today, e.g. `zenguy://verify-email?token=…`).

@@ -1,0 +1,10 @@
+# Verifies the forced-update screen. Bump MIN_APP_VERSION in the API above the
+# installed build before running; revert it afterwards.
+appId: com.zenguy.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Update required"
+    timeout: 60000
+- assertVisible: ".*required 0.2.0.*"
+- takeScreenshot: update-required

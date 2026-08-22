@@ -1,4 +1,8 @@
 export const RUNNER_VERSION = "zenguy-local-runner/1.0.0";
+// Oldest iOS app build allowed to use the API (apps/app). Bump it to force an
+// update: older apps compare their version against GET /api/app/version and
+// show a blocking "update required" screen with the App Store link.
+export const MIN_APP_VERSION = "0.1.0";
 export const ACCESS_TOKEN_TTL_SECONDS = 1800;
 export const REFRESH_TOKEN_TTL_DAYS = 30;
 export const EMAIL_VERIFY_TTL_HOURS = 24;

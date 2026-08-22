@@ -104,6 +104,7 @@ import { channelRoutes } from "./http/routes/channels";
 import { incidentRoutes } from "./http/routes/incidents";
 import { browserTestRoutes } from "./http/routes/browser_tests";
 import { artifactRoutes } from "./http/routes/artifacts";
+import { appVersionRoutes } from "./http/routes/app_version";
 import { runEventRoutes } from "./http/routes/run_events";
 import { uptimeRoutes } from "./http/routes/uptime";
 import { overviewRoutes } from "./http/routes/overview";
@@ -400,6 +401,7 @@ export function buildApp(
   app.onError(errorHandler);
 
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));
+  app.route("/api/app", appVersionRoutes(config));
   app.route(
     "/api/runner",
     runnerRoutes({ token: config.runnerApiToken, runner: externalRunner }),
