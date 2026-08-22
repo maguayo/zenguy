@@ -1,7 +1,7 @@
 # Plan B: worker de respaldo (fallback runner)
 
 **Fecha:** 20 de agosto de 2026
-**Estado (actualizado 21-08-2026):** **activo en staging.** La API con `claim-stale` está commiteada y desplegada (migración `0017` aplicada) y el worker de respaldo corre como unidad systemd `zenguy-fallback` en el servidor dedicado (`142.132.220.44`, repo en `/opt/projects/zenguy`, credenciales en `/etc/zenguy/fallback.env`, modo `--fallback --staging`, Google Chrome headless, Python 3.12). Validado extremo a extremo con runs reales de gpt-5-mini: un fallo funcional legítimo con retry y un `PASSED` limpio, ambos con `runnerVersion zenguy-fallback-runner/2.0.0`. Los errores del proveedor LLM (cuota/auth/conexión) se reportan ahora como `SYSTEM_ERROR/LLM_UNAVAILABLE`, no como `FAILED`. Los tests seed de staging se siembran aparcados (`next_run_at` 2030) para que el daemon no ejecute basura tras cada reseed; para un run real, adelanta `next_run_at` de `bt_seed_homepage`. Producción sigue pendiente de sus gates de release.
+**Estado (actualizado 23-08-2026):** **activo en producción y en staging.** El servidor dedicado (`142.132.220.44`, repo en `/opt/projects/zenguy` siguiendo `main`, Google Chrome headless, Python 3.12) corre dos unidades systemd con el mismo runner: `zenguy-fallback` (producción: `--fallback`, credenciales en `/etc/zenguy/fallback.env` con el `RUNNER_API_TOKEN` de producción) y `zenguy-fallback-staging` (`--fallback --staging`, `/etc/zenguy/fallback-staging.env`). Hasta el 23-08 solo existía la unidad de staging, así que un run de producción creado con el worker local apagado se quedaba en `QUEUED` indefinidamente (la cola `zenguy-runs` de producción no tiene consumidor push; solo la drena el worker local por pull). El primer run de producción ejecutado por el plan B fue `run_01m0nqgdbh8s1kf3kww9819pkh` (`PASSED`, 64 s, gpt-5-mini, `runnerVersion zenguy-fallback-runner/2.0.0`). En staging quedó validado extremo a extremo el 21-08 con runs reales de gpt-5-mini: un fallo funcional legítimo con retry y un `PASSED` limpio. Los errores del proveedor LLM (cuota/auth/conexión) se reportan como `SYSTEM_ERROR/LLM_UNAVAILABLE`, no como `FAILED`. Los tests seed de staging se siembran aparcados (`next_run_at` 2030) para que el daemon no ejecute basura tras cada reseed; para un run real en staging, adelanta `next_run_at` de `bt_seed_homepage`. Actualizar el VPS: `git -C /opt/projects/zenguy pull --ff-only && systemctl restart zenguy-fallback zenguy-fallback-staging`.
 
 ## Qué pediste
 
@@ -107,6 +107,8 @@ journalctl -u zenguy-fallback -f   # logs JSON del worker
 ```
 
 ### Producción
+
+**Hecho el 23-08-2026**: migraciones aplicadas, `RUNNER_API_TOKEN` configurado en producción y la unidad `zenguy-fallback` del VPS apuntando a `app.zenguy.com` (la de staging pasó a `zenguy-fallback-staging`). El texto siguiente describe el plan original.
 
 Los mismos tres pasos de staging, **después** de completar los gates de release ya documentados en `BIONIC.md` (producción sigue con las migraciones 0009-0017 pendientes y sin consumidor HTTP en la cola). Ojo: el fallback de producción funciona aunque la cola de producción siga sin consumidor HTTP — le basta con que la API esté desplegada con `claim-stale` y las migraciones aplicadas; de hecho serviría como primer ejecutor de producción si algún día lo quieres así.
 
