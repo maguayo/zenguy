@@ -295,6 +295,10 @@ IDs into production, or commit any secret. The full secret, migration, route,
 and webhook procedure is in `apps/api/README.md`; the exact Pages settings are
 in `apps/frontend/README.md`.
 
+The iOS app is released separately through EAS and TestFlight after the API is
+live: see `apps/app/README.md` → *Deploy to App Store* (identity, credentials,
+build, submission and OTA updates).
+
 ## Browser smoke test
 
 After starting and seeding the services, use a clean browser session and check

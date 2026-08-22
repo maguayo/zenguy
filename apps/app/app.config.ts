@@ -6,7 +6,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "Zenguy",
   slug: "zenguy",
+  // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
+  owner: "maguayo",
   version: "0.1.0",
+  // EAS Update: one runtime per app version. Any native change (dependency with
+  // native code, config plugin, permission, entitlement, icon, splash) must
+  // bump `version`, so an OTA update can never reach an incompatible binary.
+  // This also matches the forced-update check (MIN_APP_VERSION) on the API.
+  runtimeVersion: { policy: "appVersion" },
+  updates: {
+    url: "https://u.expo.dev/dbac86d4-6e5f-4cb1-b465-4182ccb5cac7",
+    // Check on launch; a pending update is applied on the next cold start.
+    checkAutomatically: "ON_LOAD",
+    fallbackToCacheTimeout: 0,
+  },
   orientation: "portrait",
   scheme: "zenguy",
   platforms: ["ios"],
@@ -14,6 +27,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: "./assets/icon.png",
   ios: {
     bundleIdentifier: "com.zenguy.app",
+    // Apple Developer organisation "Niesayo Group SL" (Team ID from
+    // developer.apple.com → Membership details). Signing is managed by EAS.
+    appleTeamId: "HT84Q65URB",
     supportsTablet: false,
     buildNumber: "1",
     infoPlist: {
@@ -71,8 +87,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     router: {},
     eas: {
-      // Set after `eas init` links the project to an Expo account.
-      // projectId: "",
+      projectId: "dbac86d4-6e5f-4cb1-b465-4182ccb5cac7",
     },
   },
 });

@@ -9,7 +9,12 @@ android/
 *.p8
 *.p12
 *.key
+*.pem
+*.cer
+*.certSigningRequest
 *.mobileprovision
+credentials.json
+credentials/
 *.orig.*
 .env
 .env.*

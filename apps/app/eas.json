@@ -5,21 +5,39 @@
   },
   "build": {
     "development": {
+      "environment": "development",
+      "channel": "development",
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true },
-      "env": { "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com" }
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com"
+      }
     },
     "preview": {
+      "environment": "preview",
+      "channel": "preview",
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com" }
+      "env": {
+        "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com"
+      }
     },
     "production": {
+      "environment": "production",
+      "channel": "production",
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_API_ORIGIN": "https://api.zenguy.com" }
+      "env": {
+        "EXPO_PUBLIC_API_ORIGIN": "https://api.zenguy.com"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6804201911"
+      }
+    }
   }
 }

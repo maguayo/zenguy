@@ -136,9 +136,9 @@ while the add-on is off returns `400 VALIDATION_ERROR` on field `type` /
   reports as `DeviceNotRegistered` are disabled automatically. A workspace
   without enabled devices fails the delivery with "No mobile devices are
   registered for this workspace".
-- Prerequisites owned by Marcos: link the app to an Expo account (`eas init`
-  → `projectId`), let EAS manage APNs on the first build, test on a physical
-  iPhone. Optional `EXPO_PUSH_ACCESS_TOKEN` for Expo's enhanced push security.
+- Shipping the app (EAS project, APNs key managed by EAS, TestFlight) is
+  documented in `apps/app/README.md` → *Deploy to App Store*. Optional
+  `EXPO_PUSH_ACCESS_TOKEN` enables Expo's enhanced push security.
 
 | Method | Route | Permission |
 |---|---|---|
