@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { login, logout, me, refresh } from "@/api/auth";
+import { login, logout, me, refresh, type AuthSession } from "@/api/auth";
 import type { User } from "@/api/types";
 import { authEvents, clearSession, hasStoredSession, isAuthRejection } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
@@ -22,6 +22,8 @@ import { runBeforeSignOut } from "@/lib/session-hooks";
 export type AuthStatus = "loading" | "signedIn" | "signedOut" | "unavailable";
 
 export interface AuthContextValue {
+  /** Adopts a session already kept by the API layer (sign-up, email verification). */
+  adoptSession: (session: Pick<AuthSession, "user">) => void;
   refreshUser: () => Promise<User>;
   retry: () => void;
   signIn: (email: string, password: string) => Promise<User>;
@@ -72,12 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => authEvents.onSignedOut(becomeSignedOut), [becomeSignedOut]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const session = await login(email, password);
+  const adoptSession = useCallback((session: Pick<AuthSession, "user">) => {
     setUser(session.user);
     setStatus("signedIn");
-    return session.user;
   }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const session = await login(email, password);
+      adoptSession(session);
+      return session.user;
+    },
+    [adoptSession],
+  );
 
   const signOut = useCallback(async () => {
     // Device-level cleanup (push unregistration) needs the session to still be valid.
@@ -102,8 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ refreshUser, retry, signIn, signOut, status, user }),
-    [refreshUser, retry, signIn, signOut, status, user],
+    () => ({ adoptSession, refreshUser, retry, signIn, signOut, status, user }),
+    [adoptSession, refreshUser, retry, signIn, signOut, status, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

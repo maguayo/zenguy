@@ -129,8 +129,7 @@ apunten al mismo sitio:
 | --- | --- | --- |
 | `/` | RootResolver | signedOut → sign-in; sin workspaces → onboarding; si no, último workspace (SecureStore) |
 | `/(auth)/sign-in` | Sign in | email+password; errores `INVALID_CREDENTIALS`/`RATE_LIMITED` inline |
-| `/(auth)/sign-up` | Sign up | name/email/password/confirm; → check-email |
-| `/(auth)/check-email` | Check inbox | reenvío con cuenta atrás |
+| `/(auth)/sign-up` | Sign up | name/email/password/confirm; la cuenta queda logueada y va a `/verify-pending` (desde 2026-08-23; antes → check-email) |
 | `/(auth)/forgot-password`, `/(auth)/reset-password` | Recuperación | token por deep link o pegado manual |
 | `/verify-email` | Verificación | token por deep link; si falta, formulario de reenvío |
 | `/verify-pending` | Pendiente de verificar | poll `/me` cada 10 s; reenviar; sign out |

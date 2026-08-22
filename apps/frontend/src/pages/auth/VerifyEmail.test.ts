@@ -13,6 +13,14 @@ describe("email verification single-flight", () => {
     expect(verify).toHaveBeenCalledWith("token");
   });
 
+  it("hands the verification result to every caller", async () => {
+    const session = { accessToken: "verify-token", verified: true };
+    const verifyOnce = createTokenVerifier(vi.fn(async () => session));
+
+    await expect(verifyOnce("token")).resolves.toEqual(session);
+    await expect(verifyOnce("token")).resolves.toEqual(session);
+  });
+
   it("allows a retry after a failed request", async () => {
     const verify = vi
       .fn<(token: string) => Promise<unknown>>()
@@ -21,7 +29,18 @@ describe("email verification single-flight", () => {
     const verifyOnce = createTokenVerifier(verify);
 
     await expect(verifyOnce("token")).rejects.toThrow("offline");
-    await expect(verifyOnce("token")).resolves.toBeUndefined();
+    await expect(verifyOnce("token")).resolves.toEqual({ verified: true });
+
+    expect(verify).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a successful result so a re-mount never resends a used token", async () => {
+    const verify = vi.fn(async () => ({ verified: true }));
+    const verifyOnce = createTokenVerifier(verify);
+
+    await verifyOnce("token");
+    await verifyOnce("token");
+    await verifyOnce("other");
 
     expect(verify).toHaveBeenCalledTimes(2);
   });

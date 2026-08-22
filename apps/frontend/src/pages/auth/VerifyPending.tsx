@@ -6,6 +6,9 @@ import { Button } from "../../components/ui/Button";
 import { useAuth } from "../../contexts/AuthContext";
 import { useResendVerification } from "./useResendVerification";
 
+const POLL_INTERVAL_MS = 10_000;
+
+/** Signed in but not yet verified: waits for the link in the inbox to be used. */
 export default function VerifyPending() {
   const { refreshUser, signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -13,7 +16,7 @@ export default function VerifyPending() {
 
   useEffect(() => {
     let polling = false;
-    const timer = window.setInterval(() => {
+    const check = () => {
       if (polling) return;
       polling = true;
       void refreshUser()
@@ -24,8 +27,19 @@ export default function VerifyPending() {
         .finally(() => {
           polling = false;
         });
-    }, 10_000);
-    return () => window.clearInterval(timer);
+    };
+    const timer = window.setInterval(check, POLL_INTERVAL_MS);
+    // Coming back from the mail client is when the link was most likely used.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+    };
   }, [navigate, refreshUser]);
 
   if (!user) return null;

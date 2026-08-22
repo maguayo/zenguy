@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
 
-import { verifyEmail as verifyEmailRequest } from "@/api/auth";
+import { SessionStorageError, verifyEmail as verifyEmailRequest } from "@/api/auth";
 import { isExpiredLink } from "@/components/auth/link-errors";
 import {
   createTokenVerifier,
@@ -14,6 +14,7 @@ import {
 } from "@/components/auth/verify-email";
 import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import { useResendVerification } from "@/hooks/useResendVerification";
 import { parseLinkToken } from "@/lib/links";
 import { spacing } from "@/theme";
@@ -21,12 +22,13 @@ import { Button, ErrorState, Field, Input, Spinner } from "@/ui";
 
 const verifyEmailOnce = createTokenVerifier(verifyEmailRequest);
 
-/** Reachable signed in or signed out: the link in the email has no session. */
+/** Reachable signed in or signed out: the link in the email carries no session. */
 export default function VerifyEmail() {
   const params = useLocalSearchParams<{ token?: string }>();
   const token = parseLinkToken(params.token);
   const router = useRouter();
-  const { refreshUser, status, user } = useAuth();
+  const toast = useToast();
+  const { adoptSession, refreshUser, status, user } = useAuth();
   const [state, setState] = useState<VerificationState>(token ? "loading" : "gone");
   const [attempt, setAttempt] = useState(0);
   const [continuing, setContinuing] = useState(false);
@@ -47,17 +49,28 @@ export default function VerifyEmail() {
     }
     setState("loading");
     void verifyEmailOnce(token)
-      .then(() => {
-        if (active) setState("success");
+      .then((session) => {
+        if (!active) return;
+        // Using the link proves control of the inbox: this device is signed in
+        // and continues into the app instead of the password form.
+        adoptSession(session);
+        toast.success("Email verified");
+        router.replace("/");
       })
       .catch((error: unknown) => {
         if (!active) return;
+        // The address is verified even when the Keychain refused the session;
+        // the user can still continue and sign in by hand.
+        if (error instanceof SessionStorageError) {
+          setState("success");
+          return;
+        }
         setState(isExpiredLink(error) ? "gone" : "error");
       });
     return () => {
       active = false;
     };
-  }, [attempt, token]);
+  }, [adoptSession, attempt, router, toast, token]);
 
   const continueToApp = async () => {
     setContinuing(true);

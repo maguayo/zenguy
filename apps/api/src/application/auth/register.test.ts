@@ -1,3 +1,4 @@
+import { verifyAccessToken } from "../../infrastructure/auth/jwt";
 import { EMAIL_VERIFY_TTL_HOURS } from "../../shared/constants";
 import { sha256Hex, verifyPassword } from "../../shared/crypto";
 import { authTestDependencies } from "../../test/fakes/auth";
@@ -9,7 +10,7 @@ describe("Register", () => {
     const dependencies = authTestDependencies();
     const useCase = new Register(dependencies);
 
-    const user = await useCase.execute({
+    const { user } = await useCase.execute({
       name: "  Alice  ",
       email: "  Alice@Example.COM ",
       password: "strong-password",
@@ -52,6 +53,27 @@ describe("Register", () => {
     expect(storedToken?.tokenHash).not.toBe(tokenPlain);
   });
 
+  it("signs the new user in right away, before the email is verified", async () => {
+    const dependencies = authTestDependencies();
+
+    const session = await new Register(dependencies).execute({
+      name: "Alice",
+      email: "alice@example.com",
+      password: "strong-password",
+    });
+
+    expect(session.user.emailVerifiedAt).toBeNull();
+    expect(session.expiresIn).toBe(1_800);
+    await expect(
+      verifyAccessToken(dependencies.config, session.accessToken),
+    ).resolves.toMatchObject({ sub: session.user.id });
+    await expect(
+      dependencies.refreshTokens.findByHash(
+        await sha256Hex(session.refreshTokenPlain),
+      ),
+    ).resolves.toMatchObject({ userId: session.user.id, revokedAt: null });
+  });
+
   it("rejects a duplicate email without creating a token or sending", async () => {
     const dependencies = authTestDependencies();
     const useCase = new Register(dependencies);
@@ -87,7 +109,7 @@ describe("Register", () => {
         email: "alice@example.com",
         password: "password-one",
       }),
-    ).resolves.toMatchObject({ email: "alice@example.com" });
+    ).resolves.toMatchObject({ user: { email: "alice@example.com" } });
   });
 
   it("validates trimmed name and password boundaries", async () => {

@@ -1,26 +1,15 @@
-import type {
-  RefreshTokenRepo,
-  UserRepo,
-} from "../../domain/users/repo";
-import { issueAccessToken } from "../../infrastructure/auth/jwt";
-import type { Clock } from "../../shared/clock";
-import type { AppConfig } from "../../shared/config";
-import {
-  ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_DAYS,
-} from "../../shared/constants";
-import { randomToken, sha256Hex } from "../../shared/crypto";
+import type { UserRepo } from "../../domain/users/repo";
+import { sha256Hex } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
-import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
-import type { AuthSession } from "./login";
+import {
+  createSession,
+  type AuthSession,
+  type SessionDependencies,
+} from "./session";
 
-export interface RefreshDependencies {
+export interface RefreshDependencies extends SessionDependencies {
   users: UserRepo;
-  refreshTokens: RefreshTokenRepo;
-  clock: Clock;
-  ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret">;
 }
 
 function unauthorized(): AppError {
@@ -50,32 +39,15 @@ export class Refresh {
     const user = await this.dependencies.users.findById(current.userId);
     if (user === null) throw unauthorized();
 
-    const refreshTokenPlain = randomToken();
     const replacementId = this.dependencies.ids.newId("rt");
-    await this.dependencies.refreshTokens.insert({
-      id: replacementId,
-      userId: user.id,
-      tokenHash: await sha256Hex(refreshTokenPlain),
-      expiresAt: now + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1_000,
-      revokedAt: null,
-      replacedById: null,
-      createdAt: now,
+    const session = await createSession(this.dependencies, user, {
+      refreshTokenId: replacementId,
     });
     await this.dependencies.refreshTokens.revoke(
       current.id,
       now,
       replacementId,
     );
-
-    return {
-      user,
-      accessToken: await issueAccessToken(
-        this.dependencies.config,
-        user,
-        this.dependencies.clock,
-      ),
-      refreshTokenPlain,
-      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-    };
+    return session;
   }
 }

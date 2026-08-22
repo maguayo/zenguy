@@ -8,19 +8,22 @@ export interface AuthSession {
   user: User;
 }
 
-export async function register(name: string, email: string, password: string): Promise<User> {
-  const result = await apiPost<{ user: User }>("/api/auth/register", {
-    email,
-    name,
-    password,
-  });
-  return result.user;
+export interface VerifiedSession extends AuthSession {
+  verified: true;
+}
+
+function keepSession<T extends AuthSession>(session: T): T {
+  setToken(session.accessToken, session.expiresIn);
+  return session;
+}
+
+/** Registration signs the new account in; it stays on the verification screen until the emailed link is used. */
+export async function register(name: string, email: string, password: string): Promise<AuthSession> {
+  return keepSession(await apiPost<AuthSession>("/api/auth/register", { email, name, password }));
 }
 
 export async function login(email: string, password: string): Promise<AuthSession> {
-  const session = await apiPost<AuthSession>("/api/auth/login", { email, password });
-  setToken(session.accessToken, session.expiresIn);
-  return session;
+  return keepSession(await apiPost<AuthSession>("/api/auth/login", { email, password }));
 }
 
 export async function logout(): Promise<void> {
@@ -41,8 +44,9 @@ export async function me(): Promise<User> {
   return result.user;
 }
 
-export function verifyEmail(token: string): Promise<{ verified: true }> {
-  return apiPost("/api/auth/verify-email", { token });
+/** Using the emailed link proves control of the inbox, so it also signs this browser in. */
+export async function verifyEmail(token: string): Promise<VerifiedSession> {
+  return keepSession(await apiPost<VerifiedSession>("/api/auth/verify-email", { token }));
 }
 
 export function resendVerification(email: string): Promise<{ sent: true }> {

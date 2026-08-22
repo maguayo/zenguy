@@ -11,21 +11,20 @@ export type VerificationState = "error" | "gone" | "loading" | "success";
 /**
  * Verification tokens are single-use: the same token is only ever sent once,
  * even when the screen mounts twice (Strict Mode, re-render after a deep link).
- * A failed request is forgotten so the user can retry.
+ * A failed request is forgotten so the user can retry; a successful result
+ * (the session the API hands out) is kept for every caller.
  */
-export function createTokenVerifier(
-  verify: (token: string) => Promise<unknown>,
-): (token: string) => Promise<void> {
-  const requests = new Map<string, Promise<void>>();
+export function createTokenVerifier<T>(
+  verify: (token: string) => Promise<T>,
+): (token: string) => Promise<T> {
+  const requests = new Map<string, Promise<T>>();
   return (token) => {
     const existing = requests.get(token);
     if (existing) return existing;
-    const request = verify(token)
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        requests.delete(token);
-        throw error;
-      });
+    const request = verify(token).catch((error: unknown) => {
+      requests.delete(token);
+      throw error;
+    });
     requests.set(token, request);
     return request;
   };

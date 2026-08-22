@@ -36,7 +36,6 @@ const stub = (title: string) =>
 
 const SignIn = lazy(() => import("./pages/auth/SignIn"));
 const SignUp = lazy(() => import("./pages/auth/SignUp"));
-const CheckEmail = lazy(() => import("./pages/auth/CheckEmail"));
 const VerifyEmail = lazy(() => import("./pages/auth/VerifyEmail"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
@@ -123,14 +122,16 @@ function WorkspaceShell() {
 }
 
 function RootResolver() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
+  const verified = status === "signedIn" && Boolean(user?.emailVerified);
   const workspaces = useQuery({
-    enabled: status === "signedIn",
+    enabled: verified,
     queryFn: () => apiGet<Workspace[]>("/api/workspaces"),
     queryKey: ["workspaces"],
   });
 
   if (status === "signedOut") return <Navigate replace to="/signin" />;
+  if (!verified) return <Navigate replace to="/verify-pending" />;
   if (workspaces.isPending) return <RouteLoading />;
   if (workspaces.isError) {
     return (
@@ -156,7 +157,6 @@ function AppRoutes() {
         <Route element={<PublicOnly />}>
           <Route element={<SignIn />} path="/signin" />
           <Route element={<SignUp />} path="/signup" />
-          <Route element={<CheckEmail />} path="/check-email" />
           <Route element={<ForgotPassword />} path="/forgot-password" />
           <Route element={<ResetPassword />} path="/reset-password" />
         </Route>

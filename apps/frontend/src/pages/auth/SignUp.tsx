@@ -11,6 +11,7 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
+import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
@@ -31,6 +32,7 @@ export const signUpSchema = z
 type SignUpValues = z.infer<typeof signUpSchema>;
 
 export default function SignUp() {
+  const { adoptSession } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const form = useForm<SignUpValues>({
@@ -47,8 +49,10 @@ export default function SignUp() {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
-      await registerAccount(values.name, values.email, values.password);
-      navigate("/check-email", { replace: true, state: { email: values.email } });
+      // The new account is signed in right away; the root resolver parks it on
+      // the verification screen until the emailed link is used.
+      adoptSession(await registerAccount(values.name, values.email, values.password));
+      navigate("/", { replace: true });
     } catch (error) {
       if (error instanceof ApiError && error.code === "CONFLICT") {
         form.setError("root", { message: "An account with this email already exists." });

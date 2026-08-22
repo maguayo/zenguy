@@ -2,12 +2,13 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ForgotPassword } from "../../application/auth/forgot_password";
-import { Login, type AuthSession } from "../../application/auth/login";
+import { Login } from "../../application/auth/login";
 import { Logout } from "../../application/auth/logout";
 import { Refresh } from "../../application/auth/refresh";
 import { Register } from "../../application/auth/register";
 import { ResendVerification } from "../../application/auth/resend_verification";
 import { ResetPassword } from "../../application/auth/reset_password";
+import type { AuthSession } from "../../application/auth/session";
 import { VerifyEmail } from "../../application/auth/verify_email";
 import type { EmailSender } from "../../domain/email/sender";
 import type {
@@ -162,19 +163,38 @@ export function authRoutes(
   const secureCookies = dependencies.config.environment !== "development";
   const refreshMaxAge = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60;
 
+  // Hands a session to the calling client: browsers get the refresh token as
+  // an HttpOnly cookie, native apps get it in the JSON payload.
+  function sessionResponse(context: Context<AppEnv>, session: AuthSession) {
+    if (isNativeClient(context)) {
+      return nativeSessionPayload(session, refreshMaxAge);
+    }
+    context.header(
+      "Set-Cookie",
+      refreshCookieHeader(
+        session.refreshTokenPlain,
+        refreshMaxAge,
+        secureCookies,
+      ),
+    );
+    return sessionPayload(session);
+  }
+
   app.post("/register", zjson(registerSchema), async (context) => {
     await enforceRateLimit(
       dependencies.rateLimiter,
       `register:${clientIp(context)}`,
       RATE_LIMITS.register,
     );
-    const user = await register.execute(context.req.valid("json"));
-    return context.json({ data: { user: presentUser(user) } }, 201);
+    const session = await register.execute(context.req.valid("json"));
+    return context.json({ data: sessionResponse(context, session) }, 201);
   });
 
   app.post("/verify-email", zjson(tokenSchema), async (context) => {
-    const result = await verifyEmail.execute(context.req.valid("json"));
-    return context.json({ data: result });
+    const session = await verifyEmail.execute(context.req.valid("json"));
+    return context.json({
+      data: { verified: true, ...sessionResponse(context, session) },
+    });
   });
 
   app.post(
@@ -205,20 +225,7 @@ export function authRoutes(
       RATE_LIMITS.login,
     );
     const session = await login.execute(input);
-    if (isNativeClient(context)) {
-      return context.json({
-        data: nativeSessionPayload(session, refreshMaxAge),
-      });
-    }
-    context.header(
-      "Set-Cookie",
-      refreshCookieHeader(
-        session.refreshTokenPlain,
-        refreshMaxAge,
-        secureCookies,
-      ),
-    );
-    return context.json({ data: sessionPayload(session) });
+    return context.json({ data: sessionResponse(context, session) });
   });
 
   app.post("/refresh", async (context) => {
@@ -227,9 +234,7 @@ export function authRoutes(
       const session = await refresh.execute({
         refreshTokenPlain: input.refreshToken,
       });
-      return context.json({
-        data: nativeSessionPayload(session, refreshMaxAge),
-      });
+      return context.json({ data: sessionResponse(context, session) });
     }
     try {
       const refreshTokenPlain = readRefreshCookie(context);
@@ -240,15 +245,7 @@ export function authRoutes(
         );
       }
       const session = await refresh.execute({ refreshTokenPlain });
-      context.header(
-        "Set-Cookie",
-        refreshCookieHeader(
-          session.refreshTokenPlain,
-          refreshMaxAge,
-          secureCookies,
-        ),
-      );
-      return context.json({ data: sessionPayload(session) });
+      return context.json({ data: sessionResponse(context, session) });
     } catch (error) {
       context.header("Set-Cookie", clearRefreshCookieHeader(secureCookies));
       throw error;

@@ -21,9 +21,17 @@ describe("email verification single-flight", () => {
     const verifyOnce = createTokenVerifier(verify);
 
     await expect(verifyOnce("token")).rejects.toThrow("offline");
-    await expect(verifyOnce("token")).resolves.toBeUndefined();
+    await expect(verifyOnce("token")).resolves.toEqual({ verified: true });
 
     expect(verify).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands the verification result to every caller", async () => {
+    const session = { accessToken: "verify-token", verified: true };
+    const verifyOnce = createTokenVerifier(jest.fn(async () => session));
+
+    await expect(verifyOnce("token")).resolves.toEqual(session);
+    await expect(verifyOnce("token")).resolves.toEqual(session);
   });
 
   it("keeps a successful result so a re-mount never resends a used token", async () => {

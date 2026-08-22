@@ -36,12 +36,25 @@ describe("auth API", () => {
     vi.unstubAllGlobals();
   });
 
-  it("registers and returns the user", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ user }, 201));
+  it("registers, stores the access token and returns the new session", async () => {
+    const unverified = { ...user, emailVerified: false };
+    const session = { accessToken: "register-token", expiresIn: 1_800, user: unverified };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(session, 201));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(register("María", user.email, "Password123!")).resolves.toEqual(user);
+    await expect(register("María", user.email, "Password123!")).resolves.toEqual(session);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/register");
+    expect(getToken().accessToken).toBe("register-token");
+  });
+
+  it("stores the access token handed out with email verification", async () => {
+    const session = { accessToken: "verify-token", expiresIn: 1_800, user, verified: true };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(session));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyEmail("token")).resolves.toEqual(session);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/verify-email");
+    expect(getToken().accessToken).toBe("verify-token");
   });
 
   it("stores access tokens after login and refresh", async () => {
@@ -76,14 +89,12 @@ describe("auth API", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ user }))
-      .mockResolvedValueOnce(jsonResponse({ verified: true }))
       .mockResolvedValueOnce(jsonResponse({ sent: true }))
       .mockResolvedValueOnce(jsonResponse({ sent: true }))
       .mockResolvedValueOnce(jsonResponse({ reset: true }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(me()).resolves.toEqual(user);
-    await expect(verifyEmail("token")).resolves.toEqual({ verified: true });
     await expect(resendVerification(user.email)).resolves.toEqual({ sent: true });
     await expect(forgotPassword(user.email)).resolves.toEqual({ sent: true });
     await expect(resetPassword("token", "Password123!")).resolves.toEqual({ reset: true });

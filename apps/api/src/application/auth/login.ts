@@ -1,32 +1,16 @@
-import type {
-  RefreshTokenRepo,
-  UserRepo,
-} from "../../domain/users/repo";
-import type { User } from "../../domain/users/types";
-import { issueAccessToken } from "../../infrastructure/auth/jwt";
-import type { Clock } from "../../shared/clock";
-import type { AppConfig } from "../../shared/config";
-import {
-  ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_DAYS,
-} from "../../shared/constants";
-import { randomToken, sha256Hex, verifyPassword } from "../../shared/crypto";
+import type { UserRepo } from "../../domain/users/repo";
+import { verifyPassword } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
-import type { IdGenerator } from "../../shared/ids";
+import {
+  createSession,
+  type AuthSession,
+  type SessionDependencies,
+} from "./session";
 
-export interface AuthSession {
-  user: User;
-  accessToken: string;
-  refreshTokenPlain: string;
-  expiresIn: number;
-}
+export type { AuthSession } from "./session";
 
-export interface LoginDependencies {
+export interface LoginDependencies extends SessionDependencies {
   users: UserRepo;
-  refreshTokens: RefreshTokenRepo;
-  clock: Clock;
-  ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret">;
 }
 
 export class Login {
@@ -49,27 +33,6 @@ export class Login {
       );
     }
 
-    const now = this.dependencies.clock.now();
-    const refreshTokenPlain = randomToken();
-    await this.dependencies.refreshTokens.insert({
-      id: this.dependencies.ids.newId("rt"),
-      userId: user.id,
-      tokenHash: await sha256Hex(refreshTokenPlain),
-      expiresAt: now + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1_000,
-      revokedAt: null,
-      replacedById: null,
-      createdAt: now,
-    });
-
-    return {
-      user,
-      accessToken: await issueAccessToken(
-        this.dependencies.config,
-        user,
-        this.dependencies.clock,
-      ),
-      refreshTokenPlain,
-      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-    };
+    return createSession(this.dependencies, user);
   }
 }

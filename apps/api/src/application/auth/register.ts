@@ -5,13 +5,16 @@ import type {
 } from "../../domain/users/repo";
 import type { User } from "../../domain/users/types";
 import { renderWelcomeEmail } from "../../infrastructure/email/templates";
-import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import { EMAIL_VERIFY_TTL_HOURS } from "../../shared/constants";
 import { hashPassword, randomToken, sha256Hex } from "../../shared/crypto";
 import { conflict, validation } from "../../shared/errors";
-import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
+import {
+  createSession,
+  type AuthSession,
+  type SessionDependencies,
+} from "./session";
 
 export interface RegisterInput {
   name: string;
@@ -19,13 +22,11 @@ export interface RegisterInput {
   password: string;
 }
 
-export interface RegisterDependencies {
+export interface RegisterDependencies extends SessionDependencies {
   users: UserRepo;
   emailTokens: EmailTokenRepo;
   emailSender: EmailSender;
-  clock: Clock;
-  ids: IdGenerator;
-  config: Pick<AppConfig, "appUrl">;
+  config: Pick<AppConfig, "appUrl" | "jwtSecret">;
 }
 
 function normalizeInput(input: RegisterInput): RegisterInput {
@@ -48,7 +49,11 @@ function normalizeInput(input: RegisterInput): RegisterInput {
 export class Register {
   constructor(private readonly dependencies: RegisterDependencies) {}
 
-  async execute(rawInput: RegisterInput): Promise<User> {
+  /**
+   * The new account is signed in straight away: the verified-email gate keeps
+   * that session on the verification screen until the emailed link is used.
+   */
+  async execute(rawInput: RegisterInput): Promise<AuthSession> {
     const input = normalizeInput(rawInput);
     if ((await this.dependencies.users.findByEmail(input.email)) !== null) {
       throw conflict("An account with this email already exists");
@@ -91,6 +96,6 @@ export class Register {
       logEvent("email_send_failed", { type: "VERIFY_EMAIL" });
     }
 
-    return user;
+    return createSession(this.dependencies, user);
   }
 }

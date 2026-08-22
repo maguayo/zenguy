@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import { verifyEmail as verifyEmailRequest } from "../../api/auth";
@@ -12,6 +12,8 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { Spinner } from "../../components/ui/Spinner";
 import { fieldError } from "../../components/ui/form";
+import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { useResendVerification } from "./useResendVerification";
 
@@ -20,21 +22,24 @@ export const verificationEmailSchema = z.object({
 });
 
 type VerificationEmailValues = z.infer<typeof verificationEmailSchema>;
-type VerificationState = "loading" | "success" | "gone" | "error";
+type VerificationState = "loading" | "gone" | "error";
 
-export function createTokenVerifier(
-  verify: (token: string) => Promise<unknown>,
-): (token: string) => Promise<void> {
-  const requests = new Map<string, Promise<void>>();
+/**
+ * Verification tokens are single-use: the same token is only ever sent once,
+ * even when the effect runs twice (Strict Mode). A failed request is
+ * forgotten so the user can retry; a successful result is kept.
+ */
+export function createTokenVerifier<T>(
+  verify: (token: string) => Promise<T>,
+): (token: string) => Promise<T> {
+  const requests = new Map<string, Promise<T>>();
   return (token) => {
     const existing = requests.get(token);
     if (existing) return existing;
-    const request = verify(token)
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        requests.delete(token);
-        throw error;
-      });
+    const request = verify(token).catch((error: unknown) => {
+      requests.delete(token);
+      throw error;
+    });
     requests.set(token, request);
     return request;
   };
@@ -42,9 +47,13 @@ export function createTokenVerifier(
 
 const verifyEmailOnce = createTokenVerifier(verifyEmailRequest);
 
+/** Reachable signed in or signed out: the link in the email carries no session. */
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
+  const { adoptSession } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [state, setState] = useState<VerificationState>("loading");
   const [attempt, setAttempt] = useState(0);
   const form = useForm<VerificationEmailValues>({
@@ -64,8 +73,13 @@ export default function VerifyEmail() {
     }
     setState("loading");
     void verifyEmailOnce(token)
-      .then(() => {
-        if (active) setState("success");
+      .then((session) => {
+        if (!active) return;
+        // Using the link proves control of the inbox: sign this browser in
+        // and continue instead of asking for the password again.
+        adoptSession(session);
+        toast.success("Email verified");
+        navigate("/", { replace: true });
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -74,7 +88,7 @@ export default function VerifyEmail() {
     return () => {
       active = false;
     };
-  }, [attempt, token]);
+  }, [adoptSession, attempt, navigate, toast, token]);
 
   if (state === "loading") {
     return (
@@ -90,19 +104,6 @@ export default function VerifyEmail() {
     return (
       <AuthShell title="Verify your email">
         <ErrorState onRetry={() => setAttempt((current) => current + 1)} />
-      </AuthShell>
-    );
-  }
-
-  if (state === "success") {
-    return (
-      <AuthShell description="Your email address is ready to use." title="Email verified">
-        <Link
-          className="inline-flex h-9 w-full items-center justify-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
-          to="/signin"
-        >
-          Sign in
-        </Link>
       </AuthShell>
     );
   }

@@ -16,13 +16,8 @@ export interface AuthSession {
   user: User;
 }
 
-export async function register(name: string, email: string, password: string): Promise<User> {
-  const result = await apiPost<{ user: User }>("/api/auth/register", {
-    email,
-    name,
-    password,
-  });
-  return result.user;
+export interface VerifiedSession extends AuthSession {
+  verified: true;
 }
 
 export class SessionStorageError extends Error {
@@ -32,8 +27,8 @@ export class SessionStorageError extends Error {
   }
 }
 
-export async function login(email: string, password: string): Promise<AuthSession> {
-  const session = await apiPost<AuthSession>("/api/auth/login", { email, password });
+/** Keeps a freshly issued session (memory + Keychain); a Keychain failure leaves nothing behind. */
+async function keepSession<T extends AuthSession>(session: T): Promise<T> {
   try {
     await storeSession(session);
   } catch {
@@ -43,6 +38,17 @@ export async function login(email: string, password: string): Promise<AuthSessio
     throw new SessionStorageError();
   }
   return session;
+}
+
+/** Registration signs the new account in; it stays on the verification screen until the emailed link is used. */
+export async function register(name: string, email: string, password: string): Promise<AuthSession> {
+  return keepSession(
+    await apiPost<AuthSession>("/api/auth/register", { email, name, password }),
+  );
+}
+
+export async function login(email: string, password: string): Promise<AuthSession> {
+  return keepSession(await apiPost<AuthSession>("/api/auth/login", { email, password }));
 }
 
 /**
@@ -70,8 +76,9 @@ export async function me(): Promise<User> {
   return result.user;
 }
 
-export function verifyEmail(token: string): Promise<{ verified: true }> {
-  return apiPost("/api/auth/verify-email", { token });
+/** Using the emailed link proves control of the inbox, so it also signs this device in. */
+export async function verifyEmail(token: string): Promise<VerifiedSession> {
+  return keepSession(await apiPost<VerifiedSession>("/api/auth/verify-email", { token }));
 }
 
 export function resendVerification(email: string): Promise<{ sent: true }> {

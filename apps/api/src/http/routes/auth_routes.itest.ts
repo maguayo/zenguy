@@ -79,9 +79,7 @@ describe("auth routes", () => {
   it("completes register, verify, login, me, refresh, and logout", async () => {
     const registerResponse = await registerUser(app, "198.51.100.10");
     expect(registerResponse.status).toBe(201);
-    const registered = (await registerResponse.json()) as {
-      data: { user: Record<string, unknown> };
-    };
+    const registered = (await registerResponse.json()) as SessionResponse;
     expect(registered.data.user).toMatchObject({
       name: "Alice",
       email: "alice@example.com",
@@ -90,6 +88,19 @@ describe("auth routes", () => {
     expect(registered.data.user.createdAt).toEqual(expect.any(String));
     expect(registered.data.user).not.toHaveProperty("passwordHash");
     expect(registered.data.user).not.toHaveProperty("password_hash");
+    // Registration signs the new user in straight away; the verified-email
+    // gate keeps that session on the verification screen until the link is used.
+    expect(registered.data.expiresIn).toBe(1_800);
+    expect(registerResponse.headers.get("Set-Cookie")).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
+    );
+    const unverifiedMe = await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${registered.data.accessToken}` },
+    });
+    expect(unverifiedMe.status).toBe(200);
+    await expect(unverifiedMe.json()).resolves.toMatchObject({
+      data: { user: { email: "alice@example.com", emailVerified: false } },
+    });
 
     const verificationToken = tokenFromMessage(emails.messages[0]?.text);
     const verifyResponse = await app.request(
@@ -97,8 +108,28 @@ describe("auth routes", () => {
       jsonRequest({ token: verificationToken }),
     );
     expect(verifyResponse.status).toBe(200);
-    await expect(verifyResponse.json()).resolves.toEqual({
-      data: { verified: true },
+    // Using the link proves control of the inbox: the device that opened it
+    // gets a session instead of the password form.
+    const verified = (await verifyResponse.json()) as SessionResponse & {
+      data: { verified: boolean };
+    };
+    expect(verified.data).toMatchObject({
+      verified: true,
+      expiresIn: 1_800,
+      user: { email: "alice@example.com", emailVerified: true },
+    });
+    expect(verifyResponse.headers.get("Set-Cookie")).toMatch(
+      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
+    );
+    expect(cookiePair(verifyResponse.headers.get("Set-Cookie"))).not.toBe(
+      cookiePair(registerResponse.headers.get("Set-Cookie")),
+    );
+    const verifiedMe = await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${verified.data.accessToken}` },
+    });
+    expect(verifiedMe.status).toBe(200);
+    await expect(verifiedMe.json()).resolves.toMatchObject({
+      data: { user: { email: "alice@example.com", emailVerified: true } },
     });
 
     const loginResponse = await app.request(
@@ -441,17 +472,36 @@ describe("auth routes", () => {
   });
 
   it("serves native clients with body refresh tokens and no cookies", async () => {
-    await registerUser(app, "198.51.100.40");
-    const verifyResponse = await app.request(
-      "/api/auth/verify-email",
-      jsonRequest({ token: tokenFromMessage(emails.messages[0]?.text) }),
-    );
-    expect(verifyResponse.status).toBe(200);
-
     const native = {
       "X-Zenguy-Client": "native",
       "CF-Connecting-IP": "198.51.100.41",
     };
+    const registerResponse = await app.request(
+      "/api/auth/register",
+      jsonRequest(
+        { name: "Alice", email: "alice@example.com", password: "initial-password" },
+        { ...native, "CF-Connecting-IP": "198.51.100.40" },
+      ),
+    );
+    expect(registerResponse.status).toBe(201);
+    expect(registerResponse.headers.get("Set-Cookie")).toBeNull();
+    const registered = (await registerResponse.json()) as NativeSessionResponse;
+    expect(registered.data.user.emailVerified).toBe(false);
+    expect(registered.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
+    expect(registered.data.refreshExpiresIn).toBe(2_592_000);
+
+    const verifyResponse = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest({ token: tokenFromMessage(emails.messages[0]?.text) }, native),
+    );
+    expect(verifyResponse.status).toBe(200);
+    expect(verifyResponse.headers.get("Set-Cookie")).toBeNull();
+    const verified = (await verifyResponse.json()) as NativeSessionResponse;
+    expect(verified.data.user.emailVerified).toBe(true);
+    expect(verified.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
+    expect(verified.data.refreshToken).not.toBe(registered.data.refreshToken);
+    expect(verified.data.refreshExpiresIn).toBe(2_592_000);
+
     const loginResponse = await app.request(
       "/api/auth/login",
       jsonRequest(

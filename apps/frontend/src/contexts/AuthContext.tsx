@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { login, logout, me, refresh } from "../api/auth";
+import { login, logout, me, refresh, type AuthSession } from "../api/auth";
 import type { User } from "../api/types";
 import { Spinner } from "../components/ui/Spinner";
 import { authEvents } from "../lib/api";
@@ -18,6 +18,8 @@ import { clearToken } from "../lib/auth-token";
 export type AuthStatus = "loading" | "signedOut" | "signedIn";
 
 export interface AuthContextValue {
+  /** Adopts a session obtained outside the password form (sign-up, email verification). */
+  adoptSession: (session: AuthSession) => void;
   refreshUser: () => Promise<User>;
   signIn: (email: string, password: string) => Promise<User>;
   signOut: () => Promise<void>;
@@ -63,12 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [becomeSignedOut, navigate],
   );
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const session = await login(email, password);
+  const adoptSession = useCallback((session: AuthSession) => {
     setUser(session.user);
     setStatus("signedIn");
-    return session.user;
   }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const session = await login(email, password);
+      adoptSession(session);
+      return session.user;
+    },
+    [adoptSession],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -87,8 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ refreshUser, signIn, signOut, status, user }),
-    [refreshUser, signIn, signOut, status, user],
+    () => ({ adoptSession, refreshUser, signIn, signOut, status, user }),
+    [adoptSession, refreshUser, signIn, signOut, status, user],
   );
 
   if (status === "loading") {
