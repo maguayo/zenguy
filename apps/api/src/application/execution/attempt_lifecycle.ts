@@ -438,7 +438,10 @@ export class AttemptLifecycle {
     const finalChanges = {
       status: action.runStatus,
       finishedAt,
-      durationMs: computeRunDuration(currentRun.queuedAt, finishedAt),
+      durationMs: computeRunDuration(
+        currentRun.startedAt ?? currentRun.queuedAt,
+        finishedAt,
+      ),
       attemptCount,
       passedAfterRetry: action.passedAfterRetry,
       billable: !action.reverseUsage,
@@ -646,7 +649,7 @@ export class AttemptLifecycle {
       changes: {
       status: "SYSTEM_ERROR",
       finishedAt,
-      durationMs: computeRunDuration(run.queuedAt, finishedAt),
+      durationMs: computeRunDuration(run.startedAt ?? run.queuedAt, finishedAt),
       attemptCount,
       passedAfterRetry: false,
       billable: false,

@@ -73,11 +73,16 @@ export function runStatusOnStart(): "RUNNING" {
   return "RUNNING";
 }
 
+/**
+ * Wall-clock duration of a run from the moment its first attempt started
+ * (retry delays included, the initial queue wait excluded). Callers fall back
+ * to `queuedAt` only for runs that never started.
+ */
 export function computeRunDuration(
-  queuedAt: number,
+  startedAt: number,
   finishedAt: number,
 ): number {
-  return Math.max(0, finishedAt - queuedAt);
+  return Math.max(0, finishedAt - startedAt);
 }
 
 export function shouldGenerateReport(status: RunStatus): boolean {

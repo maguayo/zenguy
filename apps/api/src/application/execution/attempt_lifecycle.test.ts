@@ -320,6 +320,34 @@ describe("AttemptLifecycle", () => {
     });
   });
 
+  it("measures the run duration from the first attempt start, not from queueing", async () => {
+    const value = await fixture();
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    // Nobody claimed the attempt for twelve minutes (local worker offline).
+    value.clock.advance(12 * 60_000);
+    await expect(value.lifecycle.claim(message)).resolves.toBe("execute");
+    await value.lifecycle.markRunning(
+      RUN.id,
+      ATTEMPT.id,
+      0,
+      message.executionGeneration,
+    );
+    value.clock.advance(64_000);
+    const state = await current(value, ATTEMPT.id);
+    await value.lifecycle.onAttemptFinished(state.run, state.attempt, PASSED);
+
+    await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
+      status: "PASSED",
+      durationMs: 64_000,
+    });
+  });
+
   it("runs the full 26.2 flow with delays and records usage once", async () => {
     const value = await fixture();
     const firstMessage: AttemptMessage = {
