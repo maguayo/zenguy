@@ -1,10 +1,13 @@
 import { buildApp } from "./app";
+import { TrackEvent } from "./application/activity/track_event";
 import { ChargePaidDelivery } from "./application/alerts/charge_paid_delivery";
 import {
   BackfillDefaultEmailChannels,
   EnsureDefaultEmailChannel,
 } from "./application/alerts/ensure_default_email_channel";
+import { D1ActivityEventRepo } from "./infrastructure/db/activity_event_repo";
 import { D1AlertRepo } from "./infrastructure/db/alert_repo";
+import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1PushDeviceRepo } from "./infrastructure/db/push_device_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
 import {
@@ -16,6 +19,8 @@ import { RecordRunUsage } from "./application/billing/record_run_usage";
 import { ReportOverageForPeriod } from "./application/billing/report_overage_for_period";
 import { ReverseRunUsage } from "./application/billing/reverse_run_usage";
 import { SweepOverages } from "./application/billing/sweep_overages";
+import { ReconcilePaddleCredits } from "./application/billing/reconcile_paddle_credits";
+import { WriteAudit } from "./application/audit/write_audit";
 import { DispatchNotifications } from "./application/channels/dispatch_notifications";
 import { PublishQueueOutbox } from "./application/durability/publish_outbox";
 import { DurableWorkflowMaintenance } from "./application/durability/maintenance";
@@ -27,6 +32,7 @@ import {
 import { AttemptLifecycle } from "./application/execution/attempt_lifecycle";
 import { HandleRunFinalized } from "./application/incidents/handle_run_finalized";
 import { HourlyMaintenance } from "./application/maintenance/hourly";
+import { WorkspaceDeletionSaga } from "./application/workspaces/workspace_deletion_saga";
 import { PurgeExpired } from "./application/maintenance/purge_expired";
 import { SweepDueMonitors } from "./application/maintenance/sweep_due_monitors";
 import { SweepDueTests } from "./application/maintenance/sweep_due_tests";
@@ -63,14 +69,25 @@ import { D1StepRepo } from "./infrastructure/db/step_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
+import { D1WorkspaceDeletionRepo } from "./infrastructure/db/workspace_deletion_repo";
 import { buildEmailSender } from "./infrastructure/email";
 import { buildChannelSender } from "./infrastructure/notify";
 import { HttpPaddleClient } from "./infrastructure/paddle/client";
+import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
+import { NoopBillingCanceller } from "./infrastructure/billing/noop";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
 import { realIds } from "./shared/ids";
-import { platformAlert } from "./shared/log";
+import { logEvent, platformAlert } from "./shared/log";
+import {
+  enforceStagingAccess,
+  type StagingAccessVerificationOptions,
+} from "./http/middleware/staging_access";
+import {
+  enforceProductionRunnerAccess,
+  type RunnerAccessVerificationOptions,
+} from "./http/middleware/runner_access";
 
 function buildCharger(
   env: Bindings,
@@ -86,6 +103,14 @@ function buildCharger(
     systemClock,
     realIds,
   );
+}
+
+function buildTracker(env: Bindings): TrackEvent {
+  return new TrackEvent({
+    activity: new D1ActivityEventRepo(env.DB),
+    clock: systemClock,
+    ids: realIds,
+  });
 }
 
 type NotifyConsumer = Pick<SendQueuedNotification, "execute">;
@@ -107,6 +132,7 @@ export interface ScheduledJobs {
   tests: ScheduledJob;
   monitors: ScheduledJob;
   durability?: ScheduledJob;
+  deletions?: ScheduledJob;
   retention: ScheduledJob;
   hourly: ScheduledJob;
 }
@@ -210,14 +236,6 @@ export async function processCheckBatch(
   }
 }
 
-function queueBodyPreview(body: unknown): string {
-  try {
-    return JSON.stringify(body).slice(0, 200);
-  } catch {
-    return "<unserializable>";
-  }
-}
-
 export async function processDeadLetterBatch(
   batch: MessageBatch<unknown>,
   consumer?: Pick<RedriveDeadLetter, "execute">,
@@ -225,10 +243,16 @@ export async function processDeadLetterBatch(
   for (const queueMessage of batch.messages) {
     platformAlert("dlq_message", {
       queue: batch.queue,
-      body: queueBodyPreview(queueMessage.body),
+      messageId: queueMessage.id,
     });
     if (consumer === undefined) {
-      queueMessage.ack();
+      platformAlert("dlq_consumer_unavailable", {
+        queue: batch.queue,
+        messageId: queueMessage.id,
+      });
+      queueMessage.retry({
+        delaySeconds: queueRetryDelay(queueMessage.attempts),
+      });
       continue;
     }
     try {
@@ -281,6 +305,7 @@ export async function processScheduledCron(
           jobs.tests.execute(),
           jobs.monitors.execute(),
           jobs.durability?.execute() ?? Promise.resolve(),
+          jobs.deletions?.execute() ?? Promise.resolve(),
         ]);
         return;
       case "0 3 * * *":
@@ -317,9 +342,11 @@ function notifyConsumer(env: Bindings): SendQueuedNotification {
       systemClock,
       realIds,
     ),
-    config.encryptionKey,
+    config.encryptionKeys,
     systemClock,
     buildCharger(env, config, emailSender),
+    new D1WorkspaceDeletionRepo(env.DB),
+    buildTracker(env),
   );
 }
 
@@ -349,7 +376,7 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
   );
   const secretResolver = new ResolveSecrets(
     new D1SecretRepo(env.DB),
-    config.encryptionKey,
+    config.encryptionKeys,
   );
   const dispatchNotifications = new DispatchNotifications(
     channels,
@@ -358,6 +385,7 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
     systemClock,
     realIds,
   );
+  const track = buildTracker(env);
   return new AttemptLifecycle({
     runs,
     attempts,
@@ -370,6 +398,7 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
     reverseUsage: new ReverseRunUsage(usageEvents, systemClock),
     durable,
     outboxPublisher,
+    track,
     clock: systemClock,
     ids: realIds,
     runFinalizedHandler: new HandleRunFinalized({
@@ -391,6 +420,7 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
         ids: realIds,
       }),
       appUrl: config.appUrl,
+      track,
       clock: systemClock,
       ids: realIds,
     }),
@@ -418,7 +448,7 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
   const workspaces = new D1WorkspaceRepo(env.DB);
   const resolveSecrets = new ResolveSecrets(
     new D1SecretRepo(env.DB),
-    config.encryptionKey,
+    config.encryptionKeys,
   );
   const dispatchNotifications = new DispatchNotifications(
     channels,
@@ -437,7 +467,7 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
     dispatchNotifications,
     durable: durableWorkflows,
     outboxPublisher,
-    executeCheck: (monitorConfig, workspaceId) =>
+    executeCheck: (monitorConfig, workspaceId, execution) =>
       executeCheck(
         {
           fetchFn: (input, init) => globalThis.fetch(input, init),
@@ -446,9 +476,11 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
         },
         monitorConfig,
         workspaceId,
+        execution,
       ),
-    encryptionKey: config.encryptionKey,
+    encryptionKeys: config.encryptionKeys,
     appUrl: config.appUrl,
+    track: buildTracker(env),
     clock: systemClock,
     ids: realIds,
   });
@@ -511,6 +543,8 @@ export function buildRetentionJob(env: Bindings): PurgeExpired {
     new D1CheckRepo(env.DB),
     new ArtifactStorage(env.ARTIFACTS),
     systemClock,
+    logEvent,
+    new D1ActivityEventRepo(env.DB),
   );
 }
 
@@ -531,6 +565,27 @@ export function buildDurabilityJob(env: Bindings): DurableWorkflowMaintenance {
     publisher,
     durable,
     durable,
+    systemClock,
+  );
+}
+
+export function buildWorkspaceDeletionJob(
+  env: Bindings,
+): WorkspaceDeletionSaga {
+  const config = loadConfig(env);
+  const subscriptions = new D1SubscriptionRepo(env.DB);
+  const billing =
+    config.paddle === null
+      ? new NoopBillingCanceller()
+      : new PaddleBillingCanceller(
+          subscriptions,
+          new HttpPaddleClient(config.paddle),
+          systemClock,
+        );
+  return new WorkspaceDeletionSaga(
+    new D1WorkspaceDeletionRepo(env.DB),
+    billing,
+    new ArtifactStorage(env.ARTIFACTS),
     systemClock,
   );
 }
@@ -560,7 +615,7 @@ function buildDefaultChannelBackfill(
     new EnsureDefaultEmailChannel(
       channels,
       alerts,
-      config.encryptionKey,
+      config.encryptionKeys,
       systemClock,
       realIds,
     ),
@@ -572,7 +627,7 @@ function buildDefaultChannelBackfill(
       alerts,
       new D1BrowserTestRepo(env.DB),
       new D1MonitorRepo(env.DB),
-      config.encryptionKey,
+      config.encryptionKeys,
       systemClock,
       realIds,
     ),
@@ -609,6 +664,21 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
           systemClock,
         );
   const alerts = new D1AlertRepo(env.DB);
+  const paddleCredits =
+    config.paddle === null
+      ? null
+      : new ReconcilePaddleCredits(
+          alerts,
+          new HttpPaddleClient(config.paddle),
+          new WriteAudit({
+            audits: new D1AuditRepo(env.DB),
+            activity: buildTracker(env),
+            clock: systemClock,
+            ids: realIds,
+          }),
+          systemClock,
+          realIds,
+        );
   return new HourlyMaintenance(
     overages,
     new D1AttemptRepo(env.DB),
@@ -618,6 +688,7 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
     systemClock,
     platformAlert,
     buildDefaultChannelBackfill(env, config, alerts),
+    paddleCredits,
   );
 }
 
@@ -629,6 +700,7 @@ export async function scheduled(
   await processScheduledCron(controller.cron, {
     ...buildSchedulerJobs(env),
     durability: buildDurabilityJob(env),
+    deletions: buildWorkspaceDeletionJob(env),
     retention: buildRetentionJob(env),
     hourly: buildHourlyJob(env),
   });
@@ -659,9 +731,31 @@ export async function queue(
   }
 }
 
+export async function handleHttpRequest(
+  request: Request,
+  env: Bindings,
+  context: ExecutionContext,
+  accessVerification: StagingAccessVerificationOptions = {},
+  runnerAccessVerification: RunnerAccessVerificationOptions = {},
+): Promise<Response> {
+  const accessDenial = await enforceStagingAccess(
+    request,
+    env,
+    accessVerification,
+  );
+  if (accessDenial !== null) return accessDenial;
+  const runnerAccessDenial = await enforceProductionRunnerAccess(
+    request,
+    env,
+    runnerAccessVerification,
+  );
+  if (runnerAccessDenial !== null) return runnerAccessDenial;
+  return buildApp(env).fetch(request, env, context);
+}
+
 export default {
   fetch(request, env, context) {
-    return buildApp(env).fetch(request, env, context);
+    return handleHttpRequest(request, env, context);
   },
   queue,
   scheduled,

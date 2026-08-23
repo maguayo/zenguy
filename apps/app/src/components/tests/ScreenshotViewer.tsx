@@ -97,6 +97,7 @@ export function ScreenshotViewer({
           {screenshot && !expired ? (
             <Image
               accessibilityLabel={`Screenshot ${index + 1}`}
+              cachePolicy="memory"
               contentFit="contain"
               source={{ uri: absoluteArtifactUrl(screenshot.url) }}
               style={styles.image}

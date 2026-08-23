@@ -1,0 +1,4 @@
+# Wrangler's generated declarations and embedded unified patches contain
+# semantically required whitespace that should not fail `git diff --check`.
+apps/admin/worker-configuration.d.ts whitespace=-blank-at-eol
+patches/*.patch whitespace=-blank-at-eol

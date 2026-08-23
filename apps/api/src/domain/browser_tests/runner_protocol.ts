@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { attemptMessageSchema } from "../queues";
 import type { RunnerKind } from "./types";
+import { irreversibleActionRequestSchema } from "./rules";
 
 export const MAX_RUNNER_SCREENSHOT_BASE64_LENGTH = 3_000_000;
 
@@ -27,19 +28,26 @@ export const runnerClaimSchema = z
   .object({
     deliveryId: runnerDeliveryIdSchema,
     message: attemptMessageSchema,
-    workerId: runnerWorkerIdSchema.optional(),
+    workerId: runnerWorkerIdSchema,
   })
   .strict();
 
 export const runnerStaleClaimSchema = z
   .object({
     deliveryId: runnerDeliveryIdSchema,
-    workerId: runnerWorkerIdSchema.optional(),
+    workerId: runnerWorkerIdSchema,
   })
   .strict();
 
 export const runnerStartSchema = z
   .object({ reference: runnerAttemptReferenceSchema })
+  .strict();
+
+export const runnerAuthorizeActionSchema = z
+  .object({
+    reference: runnerAttemptReferenceSchema,
+    action: irreversibleActionRequestSchema,
+  })
   .strict();
 
 const base64JpegSchema = z

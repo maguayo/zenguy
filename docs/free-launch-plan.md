@@ -21,6 +21,8 @@ configured in production.
   - unlimited team members
   - 30-day run history and evidence
 - Runs beyond 300 remain available and are not billed during the free launch.
+- The 300 included runs and monthly usage meter are independent for every
+  workspace; they are never pooled across workspaces that share an owner.
 - The Plan & Usage page shows the monthly usage cycle and never shows invoices,
   payment-method controls, or cancellation controls for a free workspace.
 
@@ -36,6 +38,10 @@ configured in production.
 - Migration `0018_free_launch_plan.sql` gives the free plan to any existing,
   non-deleted workspace that has no subscription. Existing Paddle and grant
   records are deliberately preserved.
+- Migration `0043_workspace_run_allowance_scope.sql` removes a historical
+  owner-wide 300-run hard stop. Atomic active/daily/monthly safety ceilings for
+  workspace, user, owner, and global scopes remain independent anti-abuse
+  circuit breakers; they do not reduce or share a workspace's allowance.
 
 ## Re-enabling Paddle later
 

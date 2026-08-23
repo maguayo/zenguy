@@ -3,6 +3,7 @@ import { ensureActiveSubscription } from "../billing/ensure_active_subscription"
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { SecretRepo } from "../../domain/secrets/repo";
+import type { WorkspaceSecret } from "../../domain/secrets/types";
 import {
   SECRET_KEY_REGEX,
   validateAllowedDomains,
@@ -11,9 +12,19 @@ import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
-import { conflict, forbidden, validation } from "../../shared/errors";
+import {
+  CURRENT_ENCRYPTION_VERSION,
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
+import {
+  conflict,
+  forbidden,
+  throwIfCollectionCap,
+  validation,
+} from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { secretOutput, type SecretOutput } from "./types";
 
 export class CreateSecret {
@@ -21,7 +32,7 @@ export class CreateSecret {
     private readonly secrets: SecretRepo,
     private readonly subscriptions: SubscriptionRepo,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -37,7 +48,11 @@ export class CreateSecret {
     ip?: string;
   }): Promise<SecretOutput> {
     if (!can(input.actorRole, "secrets.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     if (!SECRET_KEY_REGEX.test(input.key)) {
       throw validation([
         { field: "key", message: "Use 2–64 uppercase letters, numbers, or underscores" },
@@ -54,21 +69,30 @@ export class CreateSecret {
     }
 
     const now = this.clock.now();
-    const secret = {
-      id: this.ids.newId("sec"),
-      workspaceId: input.workspaceId,
-      key: input.key,
-      encryptedValue: await encryptSecret(input.value, this.encryptionKey),
-      encryptionVersion: 1,
-      allowedDomains: [...input.allowedDomains],
-      description: input.description ?? null,
-      createdBy: input.actor.id,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const secretId = this.ids.newId("sec");
+    let secret: WorkspaceSecret;
     try {
-      await this.secrets.insert(secret);
+      secret = await writeWithActiveDataKeyRetry(
+        async () => ({
+          id: secretId,
+          workspaceId: input.workspaceId,
+          key: input.key,
+          encryptedValue: await encryptSecret(input.value, this.encryptionKeys, {
+            type: "workspace_secret",
+            workspaceId: input.workspaceId,
+            recordId: secretId,
+          }),
+          encryptionVersion: CURRENT_ENCRYPTION_VERSION,
+          allowedDomains: [...input.allowedDomains],
+          description: input.description ?? null,
+          createdBy: input.actor.id,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        (candidate) => this.secrets.insert(candidate),
+      );
     } catch (error) {
+      throwIfCollectionCap(error);
       if (
         (await this.secrets.findByKey(input.workspaceId, input.key)) !== null
       ) {

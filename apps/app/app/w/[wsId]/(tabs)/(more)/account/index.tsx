@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
+import * as Updates from "expo-updates";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -7,6 +8,7 @@ import {
   appLockDescription,
   appLockFailedMessage,
   appLockUnavailableHint,
+  appUpdateTraceLabel,
   appVersionLabel,
   lockAfterOptions,
   sessionStorageNote,
@@ -41,6 +43,7 @@ export default function AccountScreen() {
   const { signOut, user } = useAuth();
   const { biometricsAvailable, preferences, setEnabled, setThreshold } = useAppLock();
   const [signingOut, setSigningOut] = useState(false);
+  const updateTrace = appUpdateTraceLabel(Updates.channel, Updates.updateId);
 
   const toggleLock = async (enabled: boolean) => {
     try {
@@ -147,6 +150,7 @@ export default function AccountScreen() {
           <MonoSmall style={styles.version}>
             {appVersionLabel(Constants.expoConfig?.version, Constants.expoConfig?.ios?.buildNumber)}
           </MonoSmall>
+          {updateTrace ? <MonoSmall style={styles.version}>{updateTrace}</MonoSmall> : null}
         </View>
       </Screen>
     </>

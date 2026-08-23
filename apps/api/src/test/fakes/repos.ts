@@ -1,6 +1,8 @@
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
+  SessionRevocationReason,
+  SessionSecurityRepo,
   UserRepo,
 } from "../../domain/users/repo";
 import type {
@@ -27,6 +29,7 @@ import type { Cursor } from "../../shared/pagination";
 import type {
   ChannelRepo,
   ChannelUpdate,
+  DeliveryDispatchClaim,
   DeliveryRepo,
   DeliveryUpdate,
 } from "../../domain/channels/repo";
@@ -78,6 +81,13 @@ export class FakeUserRepo implements UserRepo {
     return user === undefined ? null : clone(user);
   }
 
+  async findByIds(ids: string[]): Promise<User[]> {
+    return [...new Set(ids)]
+      .map((id) => this.users.get(id))
+      .filter((user): user is User => user !== undefined)
+      .map(clone);
+  }
+
   async insert(user: User): Promise<void> {
     if (
       this.users.has(user.id) ||
@@ -86,6 +96,17 @@ export class FakeUserRepo implements UserRepo {
       throw new Error("user constraint violation");
     }
     this.users.set(user.id, clone(user));
+  }
+
+  async insertIfAbsent(user: User): Promise<boolean> {
+    if (
+      this.users.has(user.id) ||
+      (await this.findByEmail(user.email)) !== null
+    ) {
+      return false;
+    }
+    this.users.set(user.id, clone(user));
+    return true;
   }
 
   async setEmailVerified(id: string, at: number): Promise<void> {
@@ -104,6 +125,24 @@ export class FakeUserRepo implements UserRepo {
     if (user !== undefined) {
       this.users.set(id, { ...user, passwordHash, updatedAt: at });
     }
+  }
+
+  async rehashPasswordIfUnchanged(
+    id: string,
+    expectedPasswordHash: string,
+    replacementPasswordHash: string,
+    at: number,
+  ): Promise<boolean> {
+    const user = this.users.get(id);
+    if (user === undefined || user.passwordHash !== expectedPasswordHash) {
+      return false;
+    }
+    this.users.set(id, {
+      ...user,
+      passwordHash: replacementPasswordHash,
+      updatedAt: at,
+    });
+    return true;
   }
 
   async updateName(id: string, name: string, at: number): Promise<void> {
@@ -154,6 +193,19 @@ export class FakeEmailTokenRepo implements EmailTokenRepo {
     }
   }
 
+  async consumeValidByHash(
+    hash: string,
+    type: EmailToken["type"],
+    now: number,
+  ): Promise<EmailToken | null> {
+    const token = await this.findValidByHash(hash, type, now);
+    if (token === null) return null;
+    const current = this.tokens.get(token.id);
+    if (current === undefined || current.usedAt !== null) return null;
+    this.tokens.set(token.id, { ...current, usedAt: now });
+    return clone(token);
+  }
+
   async deleteAllForUser(
     userId: string,
     type: EmailToken["type"],
@@ -188,6 +240,33 @@ export class FakeRefreshTokenRepo implements RefreshTokenRepo {
     return null;
   }
 
+  async rotate(
+    currentId: string,
+    replacement: RefreshToken,
+    at: number,
+  ): Promise<boolean> {
+    const current = this.tokens.get(currentId);
+    if (
+      current === undefined ||
+      current.userId !== replacement.userId ||
+      current.revokedAt !== null ||
+      current.expiresAt <= at ||
+      this.tokens.has(replacement.id) ||
+      [...this.tokens.values()].some(
+        (candidate) => candidate.tokenHash === replacement.tokenHash,
+      )
+    ) {
+      return false;
+    }
+    this.tokens.set(current.id, {
+      ...current,
+      revokedAt: at,
+      replacedById: replacement.id,
+    });
+    this.tokens.set(replacement.id, clone(replacement));
+    return true;
+  }
+
   async revoke(
     id: string,
     at: number,
@@ -220,6 +299,68 @@ export class FakeRefreshTokenRepo implements RefreshTokenRepo {
       }
     }
     return deleted;
+  }
+}
+
+export class FakeSessionSecurityRepo implements SessionSecurityRepo {
+  readonly revocations: {
+    userId: string;
+    at: number;
+    reason: SessionRevocationReason;
+  }[] = [];
+  readonly revokedAdminUsers = new Set<string>();
+  readonly disabledPushUsers = new Set<string>();
+
+  constructor(
+    private readonly users: FakeUserRepo,
+    private readonly refreshTokens: FakeRefreshTokenRepo,
+  ) {}
+
+  private async revoke(
+    userId: string,
+    at: number,
+    reason: SessionRevocationReason,
+  ): Promise<void> {
+    const user = this.users.users.get(userId);
+    if (user !== undefined) {
+      this.users.users.set(userId, {
+        ...user,
+        authVersion: user.authVersion + 1,
+        updatedAt: at,
+      });
+    }
+    for (const [id, token] of this.refreshTokens.tokens) {
+      if (token.userId === userId) {
+        this.refreshTokens.tokens.set(id, {
+          ...token,
+          tokenHash: `invalidated:${id}:${at}`,
+          revokedAt: token.revokedAt ?? at,
+        });
+      }
+    }
+    this.revokedAdminUsers.add(userId);
+    this.disabledPushUsers.add(userId);
+    this.revocations.push({ userId, at, reason });
+  }
+
+  async revokeAllForUser(
+    userId: string,
+    at: number,
+    reason: SessionRevocationReason,
+  ): Promise<void> {
+    await this.revoke(userId, at, reason);
+  }
+
+  async resetPasswordAndRevokeAll(
+    userId: string,
+    passwordHash: string,
+    at: number,
+  ): Promise<void> {
+    const user = this.users.users.get(userId);
+    if (user !== undefined) {
+      this.users.users.set(userId, { ...user, passwordHash });
+    }
+    await this.revoke(userId, at, "password_reset");
   }
 }
 
@@ -292,9 +433,15 @@ export class FakeWorkspaceRepo implements WorkspaceRepo {
     oldOwnerUserId: string,
     newOwnerUserId: string,
     at: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const workspace = this.workspaces.get(id);
-    if (workspace === undefined || workspace.deletedAt !== null) return;
+    if (
+      workspace === undefined ||
+      workspace.deletedAt !== null ||
+      workspace.ownerUserId !== oldOwnerUserId
+    ) {
+      return false;
+    }
     const newOwner = [...this.state.members.entries()].find(
       ([, member]) =>
         member.workspaceId === id && member.userId === newOwnerUserId,
@@ -313,6 +460,7 @@ export class FakeWorkspaceRepo implements WorkspaceRepo {
     });
     this.state.members.set(newOwner[0], { ...newOwner[1], role: "OWNER" });
     this.state.members.set(oldOwner[0], { ...oldOwner[1], role: "ADMIN" });
+    return true;
   }
 
   async listForUser(
@@ -393,6 +541,7 @@ export class FakeMemberRepo implements MemberRepo {
     workspaceId: string,
     userId: string,
     role: Role,
+    _at?: number,
   ): Promise<void> {
     for (const [id, member] of this.members) {
       if (member.workspaceId === workspaceId && member.userId === userId) {
@@ -401,7 +550,11 @@ export class FakeMemberRepo implements MemberRepo {
     }
   }
 
-  async remove(workspaceId: string, userId: string): Promise<void> {
+  async remove(
+    workspaceId: string,
+    userId: string,
+    _at?: number,
+  ): Promise<void> {
     for (const [id, member] of this.members) {
       if (member.workspaceId === workspaceId && member.userId === userId) {
         this.members.delete(id);
@@ -490,6 +643,52 @@ export class FakeInvitationRepo implements InvitationRepo {
     return matches[0] === undefined ? null : clone(matches[0]);
   }
 
+  async acceptByHash(input: {
+    hash: string;
+    email: string;
+    userId: string;
+    memberId: string;
+    now: number;
+  }): Promise<WorkspaceInvitation | null> {
+    const invitation = await this.findValidByHash(input.hash, input.now);
+    if (
+      invitation === null ||
+      invitation.email.toLowerCase() !== input.email.toLowerCase()
+    ) {
+      return null;
+    }
+    const inviter = [...this.state.members.values()].find(
+      (member) =>
+        member.workspaceId === invitation.workspaceId &&
+        member.userId === invitation.invitedBy,
+    );
+    const authorized =
+      inviter?.role === "OWNER" ||
+      (inviter?.role === "ADMIN" && invitation.role === "MEMBER");
+    if (!authorized) return null;
+
+    const existing = [...this.state.members.values()].find(
+      (member) =>
+        member.workspaceId === invitation.workspaceId &&
+        member.userId === input.userId,
+    );
+    if (existing === undefined) {
+      this.state.members.set(input.memberId, {
+        id: input.memberId,
+        workspaceId: invitation.workspaceId,
+        userId: input.userId,
+        role: invitation.role,
+        invitedBy: invitation.invitedBy,
+        joinedAt: input.now,
+      });
+    }
+    this.invitations.set(invitation.id, {
+      ...invitation,
+      acceptedAt: input.now,
+    });
+    return clone(invitation);
+  }
+
   async markAccepted(id: string, at: number): Promise<void> {
     const invitation = this.invitations.get(id);
     if (
@@ -501,7 +700,7 @@ export class FakeInvitationRepo implements InvitationRepo {
     }
   }
 
-  async revoke(id: string, at: number): Promise<void> {
+  async revoke(id: string, at: number): Promise<boolean> {
     const invitation = this.invitations.get(id);
     if (
       invitation !== undefined &&
@@ -509,7 +708,32 @@ export class FakeInvitationRepo implements InvitationRepo {
       invitation.revokedAt === null
     ) {
       this.invitations.set(id, { ...invitation, revokedAt: at });
+      return true;
     }
+    return false;
+  }
+
+  async revokeUnauthorizedByInviter(
+    workspaceId: string,
+    inviterUserId: string,
+    currentRole: Role | null,
+    at: number,
+  ): Promise<number> {
+    if (currentRole === "OWNER") return 0;
+    let revoked = 0;
+    for (const [id, invitation] of this.invitations) {
+      const shouldRevoke =
+        invitation.workspaceId === workspaceId &&
+        invitation.invitedBy === inviterUserId &&
+        invitation.acceptedAt === null &&
+        invitation.revokedAt === null &&
+        (currentRole !== "ADMIN" || invitation.role === "ADMIN");
+      if (shouldRevoke) {
+        this.invitations.set(id, { ...invitation, revokedAt: at });
+        revoked += 1;
+      }
+    }
+    return revoked;
   }
 
   async revokeAllForWorkspace(workspaceId: string, at: number): Promise<void> {
@@ -563,6 +787,14 @@ export class FakeSubscriptionRepo implements SubscriptionRepo {
 
   async upsertByWorkspace(subscription: Subscription): Promise<void> {
     const existing = this.subscriptions.get(subscription.workspaceId);
+    if (
+      existing !== undefined &&
+      existing.providerSubscriptionId !== null &&
+      subscription.providerSubscriptionId !== null &&
+      existing.providerSubscriptionId !== subscription.providerSubscriptionId
+    ) {
+      throw new Error("Workspace already has a different provider subscription");
+    }
     if (
       existing?.lastProviderEventAt !== null &&
       existing?.lastProviderEventAt !== undefined &&
@@ -869,14 +1101,36 @@ export class FakeSecretRepo implements SecretRepo {
       }));
   }
 
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<WorkspaceSecret[]> {
+    return (await this.list(workspaceId))
+      .filter(
+        (secret) =>
+          cursor === null ||
+          cursor === undefined ||
+          secret.createdAt < cursor.createdAt ||
+          (secret.createdAt === cursor.createdAt && secret.id < cursor.id),
+      )
+      .slice(0, limit);
+  }
+
   async updateValue(
     id: string,
     encryptedValue: string,
+    encryptionVersion: number,
     at: number,
   ): Promise<void> {
     const secret = this.secrets.get(id);
     if (secret !== undefined) {
-      this.secrets.set(id, { ...secret, encryptedValue, updatedAt: at });
+      this.secrets.set(id, {
+        ...secret,
+        encryptedValue,
+        encryptionVersion,
+        updatedAt: at,
+      });
     }
   }
 
@@ -952,6 +1206,22 @@ export class FakeChannelRepo implements ChannelRepo {
       .map(clone);
   }
 
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<NotificationChannel[]> {
+    return (await this.list(workspaceId))
+      .filter(
+        (channel) =>
+          cursor === null ||
+          cursor === undefined ||
+          channel.createdAt < cursor.createdAt ||
+          (channel.createdAt === cursor.createdAt && channel.id < cursor.id),
+      )
+      .slice(0, limit);
+  }
+
   async listByIds(
     workspaceId: string,
     ids: string[],
@@ -995,6 +1265,7 @@ export class FakeChannelRepo implements ChannelRepo {
 export class FakeDeliveryRepo implements DeliveryRepo {
   readonly deliveries = new Map<string, NotificationDelivery>();
   readonly processingAt = new Map<string, number>();
+  readonly dispatchTokens = new Map<string, string>();
   readonly incidentChannelDetails = new Map<
     string,
     { name: string; type: ChannelType }
@@ -1011,7 +1282,13 @@ export class FakeDeliveryRepo implements DeliveryRepo {
     if (this.deliveries.has(delivery.id)) {
       throw new Error("delivery constraint violation");
     }
-    this.deliveries.set(delivery.id, clone(delivery));
+    this.deliveries.set(delivery.id, {
+      ...clone(delivery),
+      dispatchState: delivery.dispatchState ?? "READY",
+      providerIdempotencyKey:
+        delivery.providerIdempotencyKey ?? delivery.id,
+      dispatchGeneration: delivery.dispatchGeneration ?? 0,
+    });
   }
 
   async findById(
@@ -1027,16 +1304,103 @@ export class FakeDeliveryRepo implements DeliveryRepo {
   async update(id: string, changes: DeliveryUpdate): Promise<void> {
     const delivery = this.deliveries.get(id);
     if (delivery !== undefined) {
-      this.deliveries.set(id, { ...delivery, ...changes });
+      this.deliveries.set(id, {
+        ...delivery,
+        ...changes,
+        dispatchState: changes.status === "PENDING" ? "READY" : "CONFIRMED",
+      });
       this.processingAt.delete(id);
+      this.dispatchTokens.delete(id);
     }
   }
 
-  async claimPending(
+  async beginDispatch(
     workspaceId: string,
     id: string,
+    dispatchToken: string,
     claimedAt: number,
     staleBefore: number,
+  ): Promise<DeliveryDispatchClaim | null> {
+    const delivery = this.deliveries.get(id);
+    const lease = this.processingAt.get(id);
+    if (
+      delivery === undefined ||
+      delivery.workspaceId !== workspaceId ||
+      delivery.status !== "PENDING" ||
+      (delivery.dispatchState ?? "READY") !== "READY" ||
+      (lease !== undefined && lease > staleBefore)
+    ) {
+      return null;
+    }
+    this.processingAt.set(id, claimedAt);
+    this.dispatchTokens.set(id, dispatchToken);
+    const claimed: NotificationDelivery = {
+      ...delivery,
+      attemptCount: delivery.attemptCount + 1,
+      dispatchState: "DISPATCHING",
+      providerIdempotencyKey: delivery.providerIdempotencyKey ?? delivery.id,
+      dispatchGeneration: (delivery.dispatchGeneration ?? 0) + 1,
+    };
+    this.deliveries.set(id, claimed);
+    return { delivery: clone(claimed), dispatchToken };
+  }
+
+  async finishDispatch(
+    id: string,
+    dispatchToken: string,
+    changes: DeliveryUpdate,
+  ): Promise<boolean> {
+    const delivery = this.deliveries.get(id);
+    if (
+      delivery === undefined ||
+      delivery.status !== "PENDING" ||
+      delivery.dispatchState !== "DISPATCHING" ||
+      this.dispatchTokens.get(id) !== dispatchToken
+    ) {
+      return false;
+    }
+    this.deliveries.set(id, {
+      ...delivery,
+      ...changes,
+      dispatchState: changes.status === "PENDING" ? "READY" : "CONFIRMED",
+    });
+    this.processingAt.delete(id);
+    this.dispatchTokens.delete(id);
+    return true;
+  }
+
+  async markDispatchAmbiguous(
+    id: string,
+    dispatchToken: string,
+    attemptCount: number,
+    errorSanitized: string,
+  ): Promise<NotificationDelivery | null> {
+    const delivery = this.deliveries.get(id);
+    if (
+      delivery === undefined ||
+      delivery.status !== "PENDING" ||
+      delivery.dispatchState !== "DISPATCHING" ||
+      this.dispatchTokens.get(id) !== dispatchToken
+    ) {
+      return null;
+    }
+    const ambiguous: NotificationDelivery = {
+      ...delivery,
+      dispatchState: "AMBIGUOUS",
+      attemptCount,
+      errorSanitized,
+    };
+    this.deliveries.set(id, ambiguous);
+    this.processingAt.delete(id);
+    this.dispatchTokens.delete(id);
+    return clone(ambiguous);
+  }
+
+  async markStaleDispatchAmbiguous(
+    workspaceId: string,
+    id: string,
+    staleBefore: number,
+    errorSanitized: string,
   ): Promise<NotificationDelivery | null> {
     const delivery = this.deliveries.get(id);
     const lease = this.processingAt.get(id);
@@ -1044,12 +1408,47 @@ export class FakeDeliveryRepo implements DeliveryRepo {
       delivery === undefined ||
       delivery.workspaceId !== workspaceId ||
       delivery.status !== "PENDING" ||
-      (lease !== undefined && lease > staleBefore)
+      delivery.dispatchState !== "DISPATCHING" ||
+      lease === undefined ||
+      lease > staleBefore
     ) {
       return null;
     }
-    this.processingAt.set(id, claimedAt);
-    return clone(delivery);
+    const ambiguous: NotificationDelivery = {
+      ...delivery,
+      dispatchState: "AMBIGUOUS",
+      errorSanitized,
+    };
+    this.deliveries.set(id, ambiguous);
+    this.processingAt.delete(id);
+    this.dispatchTokens.delete(id);
+    return clone(ambiguous);
+  }
+
+  async recordProviderAcceptance(
+    id: string,
+    providerIdempotencyKey: string,
+    providerMessageId: string | null,
+    sentAt: number,
+  ): Promise<boolean> {
+    const delivery = this.deliveries.get(id);
+    if (
+      delivery === undefined ||
+      delivery.status !== "PENDING" ||
+      delivery.dispatchState !== "AMBIGUOUS" ||
+      delivery.providerIdempotencyKey !== providerIdempotencyKey
+    ) {
+      return false;
+    }
+    this.deliveries.set(id, {
+      ...delivery,
+      status: "SENT",
+      dispatchState: "CONFIRMED",
+      providerMessageId,
+      errorSanitized: null,
+      sentAt,
+    });
+    return true;
   }
 
   async listForChannel(
@@ -1143,10 +1542,12 @@ export class FakeApiKeyRepo implements ApiKeyRepo {
       .map(clone);
   }
 
-  async countActive(workspaceId: string): Promise<number> {
+  async countActive(workspaceId: string, now: number): Promise<number> {
     return [...this.apiKeys.values()].filter(
       (apiKey) =>
-        apiKey.workspaceId === workspaceId && apiKey.revokedAt === null,
+        apiKey.workspaceId === workspaceId &&
+        apiKey.revokedAt === null &&
+        apiKey.expiresAt > now,
     ).length;
   }
 
@@ -1155,6 +1556,25 @@ export class FakeApiKeyRepo implements ApiKeyRepo {
     if (apiKey !== undefined && apiKey.revokedAt === null) {
       this.apiKeys.set(id, { ...apiKey, revokedAt: at });
     }
+  }
+
+  async revokeAllCreatedBy(
+    workspaceId: string,
+    creatorUserId: string,
+    at: number,
+  ): Promise<number> {
+    let revoked = 0;
+    for (const [id, apiKey] of this.apiKeys) {
+      if (
+        apiKey.workspaceId === workspaceId &&
+        apiKey.createdBy === creatorUserId &&
+        apiKey.revokedAt === null
+      ) {
+        this.apiKeys.set(id, { ...apiKey, revokedAt: at });
+        revoked += 1;
+      }
+    }
+    return revoked;
   }
 
   async touchLastUsed(id: string, at: number): Promise<void> {

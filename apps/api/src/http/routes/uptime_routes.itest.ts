@@ -38,6 +38,7 @@ const USERS: Record<Actor, User> = {
     email: "uptime-owner@zenguy.test",
     passwordHash: "unused",
     emailVerifiedAt: NOW,
+    authVersion: 1,
     createdAt: NOW,
     updatedAt: NOW,
   },
@@ -47,6 +48,7 @@ const USERS: Record<Actor, User> = {
     email: "uptime-admin@zenguy.test",
     passwordHash: "unused",
     emailVerifiedAt: NOW,
+    authVersion: 1,
     createdAt: NOW,
     updatedAt: NOW,
   },
@@ -56,6 +58,7 @@ const USERS: Record<Actor, User> = {
     email: "uptime-member@zenguy.test",
     passwordHash: "unused",
     emailVerifiedAt: NOW,
+    authVersion: 1,
     createdAt: NOW,
     updatedAt: NOW,
   },
@@ -168,7 +171,12 @@ describe("uptime monitor routes", () => {
     await new D1SubscriptionRepo(bindings.DB).upsertByWorkspace(SUBSCRIPTION);
     const encryptedEmail = await encryptSecret(
       JSON.stringify({ emails: ["ops@example.com"] }),
-      config.encryptionKey,
+      config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "ch_uptime_routes",
+      },
     );
     await new D1ChannelRepo(bindings.DB).insert(channel(encryptedEmail));
     monitors = new D1MonitorRepo(bindings.DB);
@@ -409,6 +417,37 @@ describe("uptime monitor routes", () => {
       )
       .first<{ monitors: number; checks: number }>();
     expect(counts).toEqual({ monitors: 0, checks: 0 });
+  });
+
+  it("keeps one-off test requests read-only because they have no durable cycle key", async () => {
+    const response = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/uptime-monitors/test-request`,
+      {
+        method: "POST",
+        headers: headers("admin"),
+        body: JSON.stringify({
+          url: "https://example.com/mutate",
+          method: "DELETE",
+          expectedStatus: 204,
+          frequencySeconds: 300,
+          timeoutSeconds: 10,
+          maxRetries: 0,
+          notifyOnRecovery: true,
+          channelIds: [],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: [
+          { field: "method", message: "Test requests only allow GET or HEAD" },
+        ],
+      },
+    });
+    expect(executorCalls).toEqual([]);
   });
 
   it("rate limits monitor creation and test requests independently", async () => {

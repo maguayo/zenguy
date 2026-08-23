@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -70,6 +71,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
   const [promptDismissed, setPromptDismissed] = useState(false);
   const deviceRef = useRef<PushDevice | null>(null);
   const eligible = status === "signedIn" && Boolean(user?.emailVerified);
+  const principalId = eligible ? (user?.id ?? null) : null;
 
   const register = useCallback(async () => {
     const projectId = easProjectId();
@@ -114,7 +116,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
 
   // On every start with a session (and when the token changes) re-register.
   useEffect(() => {
-    if (!eligible) return undefined;
+    if (!principalId) return undefined;
     let active = true;
     void readPermission().then((resolved) => {
       if (!active) return;
@@ -129,7 +131,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
       active = false;
       subscription.remove();
     };
-  }, [eligible, readPermission, register]);
+  }, [principalId, readPermission, register]);
 
   // Tapping a notification opens the incident it points to.
   useEffect(() => {
@@ -146,19 +148,28 @@ export function PushProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, [router]);
 
-  // Unregister before the session is revoked; forget the id locally either way.
+  // Unregister before the session is revoked. A failed DELETE deliberately
+  // keeps the id so an A→B adoption can fail closed instead of forgetting that
+  // A is still associated with this device.
   const unregister = useCallback(async () => {
     const id = deviceRef.current?.id ?? (await secureStorage.getItem(storageKeys.pushDevice));
-    try {
-      if (id) await removePushDevice(id);
-    } finally {
-      await secureStorage.deleteItem(storageKeys.pushDevice);
-      deviceRef.current = null;
-      setDevice(null);
-    }
+    if (id) await removePushDevice(id);
+    await secureStorage.deleteItem(storageKeys.pushDevice);
+    deviceRef.current = null;
+    setDevice(null);
   }, []);
 
-  useEffect(() => onBeforeSignOut(unregister), [unregister]);
+  // Register before descendant verification effects can adopt another
+  // principal in the same commit.
+  useLayoutEffect(() => onBeforeSignOut(unregister), [unregister]);
+
+  // A rejected/revoked session cannot authenticate the DELETE anymore, but it
+  // must still stop exposing the previous principal's device state locally.
+  useEffect(() => {
+    if (status !== "signedOut") return;
+    deviceRef.current = null;
+    void secureStorage.deleteItem(storageKeys.pushDevice);
+  }, [status]);
 
   const requestPermission = useCallback(async () => {
     const result = await Notifications.requestPermissionsAsync({
@@ -182,7 +193,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PushContextValue>(
     () => ({
-      device,
+      device: principalId ? device : null,
       dismissPrompt: () => setPromptDismissed(true),
       openSettings: () => void Linking.openSettings(),
       permission,
@@ -194,7 +205,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
       retryRegistration: register,
       setDeviceEnabled,
     }),
-    [device, permission, promptDismissed, reason, register, registerError, registering, requestPermission, setDeviceEnabled],
+    [device, permission, principalId, promptDismissed, reason, register, registerError, registering, requestPermission, setDeviceEnabled],
   );
 
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;

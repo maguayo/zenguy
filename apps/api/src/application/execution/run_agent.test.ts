@@ -426,7 +426,7 @@ describe("runAgentAttempt", () => {
     expect(test.session.selections).toEqual([[8, choiceValue]]);
     expect(result.steps[0]?.description).toContain("{{API_TOKEN}}");
     expect(result.steps[0]?.urlSanitized).toBe(
-      "https://api.example.com/check?token=redacted",
+      "https://api.example.com",
     );
     expect(result.steps[1]?.description).toContain("{{CHOICE}}");
     expect(JSON.stringify(result)).not.toContain(secretValue);

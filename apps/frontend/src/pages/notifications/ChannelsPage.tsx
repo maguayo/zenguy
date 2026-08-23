@@ -45,7 +45,7 @@ import { apiErrorMessage } from "../../lib/errors";
 import { formatEuros, formatRelative } from "../../lib/format";
 import { alertsQueryKey, getAlertsOverview } from "../../api/alerts";
 import { AlertsTabs } from "../alerts/AlertsTabs";
-import { ChannelFormModal } from "./ChannelFormModal";
+import { ChannelFormModal, isPaidChannelType } from "./ChannelFormModal";
 import { DeliveriesDrawer } from "./DeliveriesDrawer";
 
 const channelIcons: Record<ChannelType, LucideIcon> = {
@@ -116,7 +116,12 @@ export function lastDeliveryText(
   delivery?: Delivery,
 ): string {
   if (!status) return "Never used";
-  const label = status === "SENT" ? "Delivered" : "Failed";
+  const label =
+    status === "SENT"
+      ? "Delivered"
+      : status === "AMBIGUOUS"
+        ? "Needs reconciliation"
+        : "Failed";
   return delivery ? `${label} ${formatRelative(delivery.createdAt)}` : label;
 }
 
@@ -127,7 +132,10 @@ export function testDeliveryResult(delivery: Delivery): {
   return delivery.status === "SENT"
     ? { message: "Test sent", tone: "success" }
     : {
-        message: `Test failed: ${delivery.errorSanitized ?? "Unknown error"}`,
+        message:
+          delivery.status === "AMBIGUOUS"
+            ? `Test outcome needs reconciliation: ${delivery.errorSanitized ?? "Provider acknowledgement was not confirmed"}`
+            : `Test failed: ${delivery.errorSanitized ?? "Unknown error"}`,
         tone: "error",
       };
 }
@@ -163,7 +171,12 @@ export function ChannelSummary({
 }) {
   const Icon = channelIcons[channel.type];
   const deliveryLabel = lastDeliveryText(channel.lastDeliveryStatus, lastDelivery);
-  const deliveryTone = channel.lastDeliveryStatus === "SENT" ? "bg-ok-600" : "bg-danger-600";
+  const deliveryTone =
+    channel.lastDeliveryStatus === "SENT"
+      ? "bg-ok-600"
+      : channel.lastDeliveryStatus === "AMBIGUOUS"
+        ? "bg-amber-500"
+        : "bg-danger-600";
 
   return (
     <div className="min-w-0 flex-1">
@@ -217,6 +230,9 @@ function ChannelActions({ channel }: { channel: Channel }) {
   const handleMutationError = useMutationError();
   const [testOpen, setTestOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canOperate =
+    can("channels.manage") &&
+    (!isPaidChannelType(channel.type) || can("paid_alerts.manage"));
   const test = useMutation({ mutationFn: () => testChannel(current.id, channel.id) });
   const remove = useMutation({ mutationFn: () => deleteChannel(current.id, channel.id) });
   const toggle = useMutation({
@@ -283,7 +299,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
   };
 
   const items: DropdownItem[] = [
-    ...(can("channels.manage")
+    ...(canOperate
       ? [
           {
             disabled: test.isPending,
@@ -299,7 +315,7 @@ function ChannelActions({ channel }: { channel: Channel }) {
       onSelect: () =>
         setSearchParams(openChannelPanel(searchParams, "deliveries", channel.id)),
     },
-    ...(can("channels.manage")
+    ...(canOperate
       ? [
           {
             icon: <Pencil className="size-4" />,
@@ -439,6 +455,9 @@ export default function ChannelsPage() {
       : undefined;
   const formOpen =
     can("channels.manage") &&
+    (!editingChannel ||
+      !isPaidChannelType(editingChannel.type) ||
+      can("paid_alerts.manage")) &&
     (channelParam === "new" || Boolean(editingChannel));
   const closeForm = () =>
     setSearchParams(closeChannelPanel(searchParams, "channel"), { replace: true });

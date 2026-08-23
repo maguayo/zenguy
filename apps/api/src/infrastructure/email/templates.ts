@@ -124,7 +124,9 @@ export function renderBasicEmail(input: BasicEmailInput): {
 }
 
 function authUrl(appUrl: string, path: string, token: string): string {
-  return `${appUrl.replace(/\/$/, "")}/${path}?token=${encodeURIComponent(token)}`;
+  // Fragments reach the SPA / Universal Link handler but are never sent in an
+  // HTTP request or Referer. The client removes the fragment before use.
+  return `${appUrl.replace(/\/$/, "")}/${path}#${encodeURIComponent(token)}`;
 }
 
 export function renderWelcomeEmail(
@@ -143,13 +145,13 @@ export function renderWelcomeEmail(
 </table>
 <p style="margin:18px 0 0;padding:12px 14px;background:#eef2ff;border-left:3px solid #4f46e5;border-radius:4px;color:#3730a3;font-size:13px;line-height:20px"><strong>No card required.</strong> Your complete Zenguy plan is free during launch.</p>`;
   const html = renderEmailFrame({
-    preheader: "Your Zenguy account is ready. One click to verify your email.",
+    preheader: "Open the link and enter your registration password to verify your email.",
     eyebrow: "Welcome to Zenguy",
     title: `Welcome, ${name}.`,
     trustedContentHtml: contentHtml,
     ctaLabel: "Verify my email",
     ctaNote:
-      "This secure link expires in 24 hours. If you didn't create this account, you can safely ignore this email.",
+      "You will be asked for the password chosen during registration. This secure link expires in 24 hours. If you didn't create this account, do not continue; you can safely ignore this email.",
     ctaUrl: verifyUrl,
   });
   const text = [
@@ -167,7 +169,7 @@ export function renderWelcomeEmail(
     "Verify my email:",
     verifyUrl,
     "",
-    "This secure link expires in 24 hours. If you didn't create this account, you can safely ignore this email.",
+    "You will be asked for the password chosen during registration. This secure link expires in 24 hours. If you didn't create this account, do not continue; you can safely ignore this email.",
     "",
     "Zenguy — Automated browser tests and uptime monitoring",
   ].join("\n");
@@ -185,7 +187,7 @@ export function renderVerifyEmail(
     title: "Verify your email",
     bodyLines: [
       `Hi ${name}, confirm your email address to start using your Zenguy account.`,
-      "This link expires in 24 hours. If you didn't create an account, ignore this email.",
+      "You will be asked for the password chosen during registration. This link expires in 24 hours. If you didn't create an account, do not continue; ignore this email.",
     ],
     ctaLabel: "Verify email",
     ctaUrl: authUrl(appUrl, "verify-email", token),
@@ -210,6 +212,23 @@ export function renderResetPasswordEmail(
   return { subject, ...rendered };
 }
 
+export function renderRegistrationAttemptEmail(
+  appUrl: string,
+  name: string,
+): Omit<EmailMessage, "to"> {
+  const subject = "A registration attempt used your email — Zenguy";
+  const rendered = renderBasicEmail({
+    title: "Your Zenguy account already exists",
+    bodyLines: [
+      `Hi ${name}, someone tried to register a new Zenguy account with this email address.`,
+      "Your account was not changed. If this was you, sign in or reset your password; otherwise you can ignore this message.",
+    ],
+    ctaLabel: "Open Zenguy",
+    ctaUrl: appUrl.replace(/\/$/u, ""),
+  });
+  return { subject, ...rendered };
+}
+
 export function renderInvitationEmail(
   appUrl: string,
   token: string,
@@ -225,7 +244,7 @@ export function renderInvitationEmail(
       "This invitation expires in 7 days.",
     ],
     ctaLabel: "Accept invitation",
-    ctaUrl: `${appUrl.replace(/\/$/, "")}/invitations/${encodeURIComponent(token)}`,
+    ctaUrl: `${appUrl.replace(/\/$/, "")}/invitations/accept#${encodeURIComponent(token)}`,
   });
   return { subject, ...rendered };
 }

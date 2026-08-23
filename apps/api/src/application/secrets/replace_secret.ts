@@ -9,8 +9,13 @@ import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { UserRepo } from "../../domain/users/repo";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import {
+  CURRENT_ENCRYPTION_VERSION,
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
 import { forbidden, notFound, validation } from "../../shared/errors";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { secretOutput, type SecretOutput } from "./types";
 
 export class ReplaceSecret {
@@ -19,7 +24,7 @@ export class ReplaceSecret {
     private readonly subscriptions: SubscriptionRepo,
     private readonly users: UserRepo,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
   ) {}
 
@@ -34,7 +39,11 @@ export class ReplaceSecret {
     ip?: string;
   }): Promise<SecretOutput> {
     if (!can(input.actorRole, "secrets.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     if (
       input.value === undefined &&
       input.allowedDomains === undefined &&
@@ -65,8 +74,21 @@ export class ReplaceSecret {
     const changedFields: string[] = [];
     let encryptedValue = secret.encryptedValue;
     if (input.value !== undefined) {
-      encryptedValue = await encryptSecret(input.value, this.encryptionKey);
-      await this.secrets.updateValue(secret.id, encryptedValue, now);
+      encryptedValue = await writeWithActiveDataKeyRetry(
+        () =>
+          encryptSecret(input.value as string, this.encryptionKeys, {
+            type: "workspace_secret",
+            workspaceId: secret.workspaceId,
+            recordId: secret.id,
+          }),
+        (candidate) =>
+          this.secrets.updateValue(
+            secret.id,
+            candidate,
+            CURRENT_ENCRYPTION_VERSION,
+            now,
+          ),
+      );
       changedFields.push("value");
     }
     if (
@@ -91,6 +113,9 @@ export class ReplaceSecret {
     const updated = {
       ...secret,
       encryptedValue,
+      ...(input.value === undefined
+        ? {}
+        : { encryptionVersion: CURRENT_ENCRYPTION_VERSION }),
       ...(input.allowedDomains === undefined
         ? {}
         : { allowedDomains: [...input.allowedDomains] }),

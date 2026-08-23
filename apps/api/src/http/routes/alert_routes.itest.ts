@@ -26,6 +26,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@alerts.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -35,6 +36,7 @@ const USERS: Record<Actor, User> = {
     email: "admin@alerts.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -44,6 +46,7 @@ const USERS: Record<Actor, User> = {
     email: "member@alerts.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -184,7 +187,7 @@ describe("alert routes", () => {
     expect(invalid.status).toBe(400);
   });
 
-  it("lets admins change settings, audits it, and forbids members", async () => {
+  it("lets owners change paid settings, audits it, and forbids lower roles", async () => {
     const forbidden = await app.request(`${base()}/settings`, {
       method: "PATCH",
       headers: headers("member"),
@@ -192,9 +195,16 @@ describe("alert routes", () => {
     });
     expect(forbidden.status).toBe(403);
 
-    const updated = await app.request(`${base()}/settings`, {
+    const adminForbidden = await app.request(`${base()}/settings`, {
       method: "PATCH",
       headers: headers("admin"),
+      body: JSON.stringify({ paidChannelsEnabled: true }),
+    });
+    expect(adminForbidden.status).toBe(403);
+
+    const updated = await app.request(`${base()}/settings`, {
+      method: "PATCH",
+      headers: headers("owner"),
       body: JSON.stringify({ paidChannelsEnabled: true, dailyPaidAlertLimit: 5 }),
     });
     expect(updated.status).toBe(200);
@@ -283,16 +293,21 @@ describe("alert routes", () => {
       body: JSON.stringify({ packs: 2 }),
     });
     expect(owner.status).toBe(201);
-    await expect(owner.json()).resolves.toEqual({
+    await expect(owner.json()).resolves.toMatchObject({
       data: {
         priceId: bindings.PADDLE_ALERT_CREDIT_PRICE_ID,
         quantity: 2,
         amountCents: 2_000,
-        customData: { workspace_id: WORKSPACE.id, purpose: "alert_credit" },
+        currencyCode: "EUR",
+        customData: {
+          checkout_intent_id: expect.stringMatching(/^pci_/u),
+          checkout_intent_sig: expect.any(String),
+        },
       },
     });
 
     const freeBindings = { ...bindings };
+    delete freeBindings.PADDLE_ALERT_CREDIT_PRODUCT_ID;
     delete freeBindings.PADDLE_ALERT_CREDIT_PRICE_ID;
     const freeApp = buildApp(freeBindings);
     const unavailable = await freeApp.request(`${base()}/credit/topups`, {
@@ -332,7 +347,12 @@ describe("alert routes", () => {
       type: "SMS",
       encryptedConfig: await encryptSecret(
         JSON.stringify({ phoneNumber: "+34600123456", consent: true }),
-        config.encryptionKey,
+        config.encryptionKeys,
+        {
+          type: "notification_channel",
+          workspaceId: WORKSPACE.id,
+          recordId: "ch_alerts_sms",
+        },
       ),
       enabled: true,
       verifiedAt: null,

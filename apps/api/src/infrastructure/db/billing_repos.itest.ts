@@ -84,6 +84,19 @@ describe("D1 billing repositories", () => {
       status: "PAST_DUE",
       cancelAtPeriodEnd: true,
       updatedAt: 500,
+      pastDueSince: 500,
+    });
+
+    await repo.upsertByWorkspace({
+      ...ended,
+      status: "PAST_DUE",
+      updatedAt: 900,
+      pastDueSince: 900,
+    });
+    await expect(repo.findByWorkspace("ws_ended")).resolves.toMatchObject({
+      status: "PAST_DUE",
+      updatedAt: 900,
+      pastDueSince: 500,
     });
   });
 

@@ -98,10 +98,10 @@ export function channelFormSchema(editing = false) {
       });
     }
 
-    if (values.type === "SMS" && !values.smsConsent) {
+    if (isPaidChannelType(values.type) && !values.smsConsent) {
       context.addIssue({
         code: "custom",
-        message: "Confirm the recipient's SMS consent.",
+        message: "Confirm the recipient's explicit consent.",
         path: ["smsConsent"],
       });
     }
@@ -139,7 +139,8 @@ export function channelFormDefaults(channel?: Channel): ChannelFormValues {
     emails: channel.configPreview.emails ?? [],
     name: channel.name,
     phoneNumber: channel.configPreview.phoneNumber ?? "",
-    smsConsent: channel.type === "SMS",
+    // Consent is deliberately write-only and must be reconfirmed on edits.
+    smsConsent: false,
     type: channel.type,
     webhookUrl: "",
   };
@@ -149,13 +150,12 @@ export function channelConfigFromValues(values: ChannelFormValues): ChannelConfi
   switch (values.type) {
     case "EMAIL":
       return { emails: values.emails };
-    case "SMS": {
-      if (!values.smsConsent) throw new Error("SMS consent is required");
+    case "SMS":
+    case "WHATSAPP":
+    case "CALL": {
+      if (!values.smsConsent) throw new Error("Recipient consent is required");
       return { consent: true, phoneNumber: values.phoneNumber.trim() };
     }
-    case "WHATSAPP":
-    case "CALL":
-      return { phoneNumber: values.phoneNumber.trim() };
     case "SLACK":
     case "DISCORD":
       return { webhookUrl: values.webhookUrl.trim() };
@@ -182,12 +182,20 @@ export function updateChannelInput(values: ChannelFormValues): UpdateChannelInpu
   return input;
 }
 
-function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
+function TypePicker({
+  canManagePaidAlerts,
+  onSelect,
+}: {
+  canManagePaidAlerts: boolean;
+  onSelect: (type: ChannelType) => void;
+}) {
   return (
     <div>
       <p className="mb-3 text-sm text-zinc-600">Choose how Zenguy should notify your team.</p>
       <div className="grid gap-3 sm:grid-cols-3">
-        {channelTypes.map(({ icon: Icon, label, paid, type }) => (
+        {channelTypes
+          .filter(({ paid }) => paid !== true || canManagePaidAlerts)
+          .map(({ icon: Icon, label, paid, type }) => (
           <button
             key={type}
             className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white p-3 text-sm font-medium text-zinc-800 hover:border-accent-600 hover:bg-accent-50 hover:text-accent-700"
@@ -202,7 +210,7 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
               <span className="text-[11px] font-normal text-zinc-500">Free</span>
             )}
           </button>
-        ))}
+          ))}
       </div>
     </div>
   );
@@ -223,7 +231,7 @@ export function ChannelFormModal({
   paidChannelsEnabled,
 }: ChannelFormModalProps) {
   const editing = Boolean(channel);
-  const { current } = useWorkspace();
+  const { can, current } = useWorkspace();
   const queryClient = useQueryClient();
   const toast = useToast();
   const handleMutationError = useMutationError();
@@ -324,7 +332,10 @@ export function ChannelFormModal({
       title={editing ? `Edit ${channel?.name ?? "channel"}` : "Add notification channel"}
     >
       {!selectedType ? (
-        <TypePicker onSelect={selectType} />
+        <TypePicker
+          canManagePaidAlerts={can("paid_alerts.manage")}
+          onSelect={selectType}
+        />
       ) : gated ? (
         <div className="rounded-md border border-info-600/20 bg-info-50 p-4 text-sm text-zinc-700">
           <p className="font-medium text-zinc-900">
@@ -410,7 +421,7 @@ export function ChannelFormModal({
             </Field>
           ) : null}
 
-          {selectedType === "SMS" ? (
+          {isPaidChannelType(selectedType) ? (
             <div>
               <label
                 className="flex items-start gap-2 text-sm text-zinc-600"
@@ -424,8 +435,9 @@ export function ChannelFormModal({
                 />
                 <span>
                   I confirm that this recipient explicitly agreed to receive recurring
-                  operational SMS alerts from Zenguy. Frequency varies. Message and data rates
-                  may apply. Reply STOP to opt out or HELP for help. See the{
+                  operational alerts through this channel from Zenguy. Frequency varies.
+                  Carrier charges may apply. For SMS, reply STOP to opt out or HELP for help.
+                  See the{
                   " "}
                   <a className="font-medium text-accent-700 hover:underline" href="/terms/">
                     Terms

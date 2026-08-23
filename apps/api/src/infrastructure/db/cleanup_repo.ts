@@ -114,13 +114,32 @@ export class D1CleanupRepo implements CleanupRepo {
     return result.meta.changes;
   }
 
+  async deleteExpiredRateLimits(
+    before: number,
+    limit: number,
+  ): Promise<number> {
+    const result = await run(
+      this.database
+        .prepare(
+          `DELETE FROM rate_limit_windows WHERE (rate_key, window_start) IN (
+             SELECT rate_key, window_start FROM rate_limit_windows
+             WHERE expires_at <= ?
+             ORDER BY expires_at ASC, rate_key ASC, window_start ASC LIMIT ?
+           )`,
+        )
+        .bind(before, limit),
+    );
+    return result.meta.changes;
+  }
+
   async deleteAuthDebris(input: {
     emailBefore: number;
     refreshBefore: number;
     invitationBefore: number;
+    adminSessionBefore: number;
     limit: number;
   }): Promise<AuthDebrisCounts> {
-    const [emailTokens, refreshTokens, invitations] = await batch(
+    const [emailTokens, refreshTokens, invitations, adminSessions] = await batch(
       this.database,
       [
         this.database
@@ -149,12 +168,27 @@ export class D1CleanupRepo implements CleanupRepo {
              )`,
           )
           .bind(input.invitationBefore, input.limit),
+        this.database
+          .prepare(
+            `DELETE FROM admin_sessions WHERE id_hash IN (
+               SELECT id_hash FROM admin_sessions
+               WHERE expires_at <= ?
+                  OR (revoked_at IS NOT NULL AND revoked_at <= ?)
+               ORDER BY COALESCE(revoked_at, expires_at) ASC, id_hash ASC LIMIT ?
+             )`,
+          )
+          .bind(
+            input.adminSessionBefore,
+            input.adminSessionBefore,
+            input.limit,
+          ),
       ],
     );
     return {
       emailTokens: emailTokens?.meta.changes ?? 0,
       refreshTokens: refreshTokens?.meta.changes ?? 0,
       invitations: invitations?.meta.changes ?? 0,
+      adminSessions: adminSessions?.meta.changes ?? 0,
     };
   }
 
@@ -167,8 +201,13 @@ export class D1CleanupRepo implements CleanupRepo {
         .prepare(
           `SELECT w.id FROM workspaces w
            WHERE w.deleted_at IS NOT NULL AND w.deleted_at < ?
+             AND w.deletion_state = 'COMPLETED'
              AND (
                EXISTS (SELECT 1 FROM workspace_secrets s WHERE s.workspace_id = w.id)
+               OR EXISTS (
+                 SELECT 1 FROM workspace_data_encryption_keys k
+                 WHERE k.workspace_id = w.id
+               )
                OR EXISTS (SELECT 1 FROM notification_channels c WHERE c.workspace_id = w.id)
                OR EXISTS (SELECT 1 FROM browser_tests b WHERE b.workspace_id = w.id)
                OR EXISTS (SELECT 1 FROM uptime_monitors u WHERE u.workspace_id = w.id)
@@ -215,6 +254,12 @@ export class D1CleanupRepo implements CleanupRepo {
         .bind(...workspaceIds, ...workspaceIds),
       this.database
         .prepare(`DELETE FROM workspace_secrets WHERE workspace_id IN (${inWorkspaces})`)
+        .bind(...workspaceIds),
+      this.database
+        .prepare(
+          `DELETE FROM workspace_data_encryption_keys
+           WHERE workspace_id IN (${inWorkspaces})`,
+        )
         .bind(...workspaceIds),
       this.database
         .prepare(`DELETE FROM notification_channels WHERE workspace_id IN (${inWorkspaces})`)

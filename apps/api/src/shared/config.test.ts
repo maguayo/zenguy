@@ -1,7 +1,24 @@
 import { loadConfig, type Bindings } from "./config";
 
+import { D1WorkspaceDataKeyStore } from "../infrastructure/db/workspace_data_key_store";
+import {
+  CloudflareKeyWrappingProvider,
+  type KeyWrappingServiceBinding,
+} from "../infrastructure/crypto/cloudflare_key_wrapping";
+
 function encryptionKey(byte = 1, length = 32): string {
   return btoa(String.fromCharCode(...new Uint8Array(length).fill(byte)));
+}
+
+function keyWrappingService(): KeyWrappingServiceBinding {
+  return {
+    wrapDataKey: async () => {
+      throw new Error("not called while loading config");
+    },
+    unwrapDataKey: async () => {
+      throw new Error("not called while loading config");
+    },
+  };
 }
 
 function completeBindings(): Bindings {
@@ -17,8 +34,13 @@ function completeBindings(): Bindings {
     APP_URL: "http://localhost:5173",
     JWT_SECRET: "j".repeat(32),
     ENCRYPTION_KEY: encryptionKey(),
+    ENCRYPTION_KEY_ID: "key-current",
+    KEY_WRAPPING: keyWrappingService(),
+    KEY_WRAPPING_KEY_ID: "wrapping-current",
     ARTIFACT_URL_SECRET: "a".repeat(32),
     RUNNER_API_TOKEN: "r".repeat(32),
+    RUNNER_FALLBACK_API_TOKEN: "f".repeat(32),
+    RUNNER_CAPABILITY_SECRET: "c".repeat(32),
     EMAIL_FROM: "Zenguy <notifications@example.com>",
     LLM_MODEL: "gpt-5-mini",
     TWILIO_ACCOUNT_SID: "twilio-sid",
@@ -30,6 +52,7 @@ function completeBindings(): Bindings {
     PADDLE_WEBHOOK_SECRET: "paddle-webhook",
     PADDLE_CLIENT_TOKEN: "paddle-client",
     PADDLE_ENVIRONMENT: "sandbox",
+    PADDLE_PRODUCT_ID: "pro_monthly",
     PADDLE_PRICE_ID: "pri_monthly",
     PADDLE_OVERAGE_PRICE_ID: "pri_overage",
   };
@@ -53,8 +76,11 @@ describe("loadConfig", () => {
       "ENVIRONMENT",
       "JWT_SECRET",
       "ENCRYPTION_KEY",
+      "ENCRYPTION_KEY_ID",
       "ARTIFACT_URL_SECRET",
       "RUNNER_API_TOKEN",
+      "RUNNER_FALLBACK_API_TOKEN",
+      "RUNNER_CAPABILITY_SECRET",
       "EMAIL_FROM",
       "LLM_MODEL",
       "TWILIO_ACCOUNT_SID",
@@ -72,12 +98,21 @@ describe("loadConfig", () => {
     const config = loadConfig(completeBindings());
 
     expect(config.environment).toBe("development");
-    expect(config.encryptionKey).toEqual(new Uint8Array(32).fill(1));
+    expect(config.encryptionKeys).toMatchObject({
+      active: { id: "key-current", key: new Uint8Array(32).fill(1) },
+      previous: [],
+    });
+    expect(config.encryptionKeys.workspaceDataKeys).toBeInstanceOf(
+      D1WorkspaceDataKeyStore,
+    );
     expect(config.runnerApiToken).toBe("r".repeat(32));
+    expect(config.runnerFallbackApiToken).toBe("f".repeat(32));
+    expect(config.runnerCapabilitySecret).toBe("c".repeat(32));
     expect(config.llmModel).toBe("gpt-5-mini");
     expect(config.paddle).toMatchObject({
       environment: "sandbox",
       apiBase: "https://sandbox-api.paddle.com",
+      productId: "pro_monthly",
       priceId: "pri_monthly",
       overagePriceId: "pri_overage",
     });
@@ -90,6 +125,7 @@ describe("loadConfig", () => {
     delete env.PADDLE_API_KEY;
     delete env.PADDLE_WEBHOOK_SECRET;
     delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRODUCT_ID;
     delete env.PADDLE_PRICE_ID;
     delete env.PADDLE_OVERAGE_PRICE_ID;
     // Wrangler may still provide this non-secret variable. It must not enable
@@ -106,11 +142,26 @@ describe("loadConfig", () => {
     const env = completeBindings();
     delete env.PADDLE_WEBHOOK_SECRET;
     delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRODUCT_ID;
     delete env.PADDLE_PRICE_ID;
     delete env.PADDLE_OVERAGE_PRICE_ID;
 
     expect(() => loadConfig(env)).toThrowError(
-      "Missing Paddle env: PADDLE_WEBHOOK_SECRET, PADDLE_CLIENT_TOKEN, PADDLE_PRICE_ID, PADDLE_OVERAGE_PRICE_ID",
+      "Missing Paddle env: PADDLE_WEBHOOK_SECRET, PADDLE_CLIENT_TOKEN, PADDLE_PRODUCT_ID, PADDLE_PRICE_ID, PADDLE_OVERAGE_PRICE_ID",
+    );
+  });
+
+  it("requires alert-credit product and price IDs as a pair", () => {
+    const missingProduct = completeBindings();
+    missingProduct.PADDLE_ALERT_CREDIT_PRICE_ID = "pri_alert_credit";
+    expect(() => loadConfig(missingProduct)).toThrow(
+      "PADDLE_ALERT_CREDIT_PRODUCT_ID and PADDLE_ALERT_CREDIT_PRICE_ID must be configured together",
+    );
+
+    const missingPrice = completeBindings();
+    missingPrice.PADDLE_ALERT_CREDIT_PRODUCT_ID = "pro_alert_credit";
+    expect(() => loadConfig(missingPrice)).toThrow(
+      "PADDLE_ALERT_CREDIT_PRODUCT_ID and PADDLE_ALERT_CREDIT_PRICE_ID must be configured together",
     );
   });
 
@@ -133,7 +184,30 @@ describe("loadConfig", () => {
 
     expect(config.environment).toBe("staging");
     expect(config.appUrl).toBe("https://staging-app.zenguy.com");
+    expect(config.encryptionKeys.keyEncryption).toBeInstanceOf(
+      CloudflareKeyWrappingProvider,
+    );
+    expect(config.encryptionKeys.keyEncryption.activeKeyId).toBe(
+      "wrapping-current",
+    );
     expect(env).not.toHaveProperty("ASSETS");
+  });
+
+  it("fails closed in named environments without the KMS capability and key ID", () => {
+    const missingBoth = completeBindings();
+    missingBoth.ENVIRONMENT = "production";
+    delete missingBoth.KEY_WRAPPING;
+    delete missingBoth.KEY_WRAPPING_KEY_ID;
+    expect(() => loadConfig(missingBoth)).toThrow(
+      "Missing key-wrapping bindings: KEY_WRAPPING_KEY_ID, KEY_WRAPPING",
+    );
+
+    const malformedCapability = completeBindings();
+    malformedCapability.ENVIRONMENT = "staging";
+    malformedCapability.KEY_WRAPPING = {} as KeyWrappingServiceBinding;
+    expect(() => loadConfig(malformedCapability)).toThrow(
+      "Missing key-wrapping Service Binding",
+    );
   });
 
   it("rejects an encryption key that does not decode to 32 bytes", () => {
@@ -143,5 +217,39 @@ describe("loadConfig", () => {
     expect(() => loadConfig(env)).toThrowError(
       "ENCRYPTION_KEY must decode to exactly 32 bytes",
     );
+  });
+
+  it("parses previous encryption keys for dual-read without making them required", () => {
+    const env = completeBindings();
+    env.ENCRYPTION_PREVIOUS_KEYS = JSON.stringify({
+      "key-previous-2": encryptionKey(2),
+      "key-previous-3": encryptionKey(3),
+    });
+
+    expect(loadConfig(env).encryptionKeys).toMatchObject({
+      active: { id: "key-current", key: new Uint8Array(32).fill(1) },
+      previous: [
+        { id: "key-previous-2", key: new Uint8Array(32).fill(2) },
+        { id: "key-previous-3", key: new Uint8Array(32).fill(3) },
+      ],
+    });
+  });
+
+  it("rejects malformed, duplicate, or invalid previous encryption keys", () => {
+    const malformed = completeBindings();
+    malformed.ENCRYPTION_PREVIOUS_KEYS = "not-json";
+    expect(() => loadConfig(malformed)).toThrow("ENCRYPTION_PREVIOUS_KEYS");
+
+    const duplicate = completeBindings();
+    duplicate.ENCRYPTION_PREVIOUS_KEYS = JSON.stringify({
+      "key-current": encryptionKey(2),
+    });
+    expect(() => loadConfig(duplicate)).toThrow("Duplicate encryption key id");
+
+    const short = completeBindings();
+    short.ENCRYPTION_PREVIOUS_KEYS = JSON.stringify({
+      "key-previous": encryptionKey(2, 31),
+    });
+    expect(() => loadConfig(short)).toThrow("must decode to exactly 32 bytes");
   });
 });

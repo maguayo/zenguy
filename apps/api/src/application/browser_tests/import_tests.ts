@@ -1,23 +1,29 @@
+import type { TrackEvent } from "../activity/track_event";
 import { ensureActiveSubscription } from "../billing/ensure_active_subscription";
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { BrowserTestRepo } from "../../domain/browser_tests/repo";
 import type { BrowserTestConfig } from "../../domain/browser_tests/rules";
 import {
   parseTestsFile,
-  type BrowserTestTransferEntry,
+  type ParsedBrowserTestTransferEntry,
 } from "../../domain/browser_tests/transfer";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import { RATE_LIMITS } from "../../shared/constants";
+import { sha256Hex } from "../../shared/crypto";
 import {
-  AppError,
   forbidden,
   validation,
   type ValidationDetail,
 } from "../../shared/errors";
-import type { RateLimiter } from "../../shared/ratelimit";
+import {
+  enforceRateLimitScopes,
+  normalizeRateLimitAddress,
+  type RateLimiter,
+} from "../../shared/ratelimit";
 import type { CreateBrowserTest } from "./create_browser_test";
 import type { BrowserTestOutput } from "./types";
 import type { UpdateBrowserTest } from "./update_browser_test";
@@ -33,9 +39,16 @@ interface ImportStep {
   existingId: string | null;
 }
 
-function entryConfig(entry: BrowserTestTransferEntry): BrowserTestConfig {
+function entryConfig(entry: ParsedBrowserTestTransferEntry): BrowserTestConfig {
   return {
     name: entry.name,
+    allowedDomains: [...entry.allowedDomains],
+    writableDomains: [...entry.writableDomains],
+    testDataAttested: entry.testDataAttested,
+    irreversibleActionScopes: structuredClone(
+      entry.irreversibleActionScopes,
+    ),
+    allowReversibleWrites: entry.allowReversibleWrites,
     startUrl: entry.startUrl,
     instructions: entry.instructions,
     device: entry.device,
@@ -54,6 +67,7 @@ export class ImportBrowserTests {
     private readonly channels: ChannelRepo,
     private readonly subscriptions: SubscriptionRepo,
     private readonly rateLimiter: RateLimiter,
+    private readonly track?: Pick<TrackEvent, "execute">,
   ) {}
 
   async execute(input: {
@@ -65,9 +79,9 @@ export class ImportBrowserTests {
   }): Promise<ImportSummary> {
     if (!can(input.actorRole, "tests.manage")) throw forbidden();
     await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await this.enforceRate(input);
     const file = parseTestsFile(input.fileText);
     const steps = await this.resolveSteps(input.workspaceId, file.tests);
-    await this.enforceRate(input.workspaceId);
     let created = 0;
     let updated = 0;
     const results: BrowserTestOutput[] = [];
@@ -97,6 +111,13 @@ export class ImportBrowserTests {
         updated += 1;
       }
     }
+    await this.track?.execute({
+      type: ACTIVITY_EVENTS.browserTestImported,
+      userId: input.actor.id,
+      workspaceId: input.workspaceId,
+      source: "server",
+      properties: { created, updated },
+    });
     return { created, updated, tests: results };
   }
 
@@ -105,7 +126,7 @@ export class ImportBrowserTests {
   // workspace; unknown or foreign ids fall back to creating a fresh test.
   private async resolveSteps(
     workspaceId: string,
-    entries: BrowserTestTransferEntry[],
+    entries: ParsedBrowserTestTransferEntry[],
   ): Promise<ImportStep[]> {
     const details: ValidationDetail[] = [];
     const referenced = [...new Set(entries.flatMap((entry) => entry.channelIds))];
@@ -132,19 +153,19 @@ export class ImportBrowserTests {
     return steps;
   }
 
-  private async enforceRate(workspaceId: string): Promise<void> {
-    const result = await this.rateLimiter.hit(
-      `test_import:${workspaceId}`,
-      RATE_LIMITS.test_import.limit,
-      RATE_LIMITS.test_import.windowSeconds,
+  private async enforceRate(input: {
+    workspaceId: string;
+    actor: User;
+    ip?: string;
+  }): Promise<void> {
+    await enforceRateLimitScopes(
+      this.rateLimiter,
+      [
+        `test_import:workspace:${input.workspaceId}`,
+        `test_import:actor:${input.actor.id}`,
+        `test_import:ip:${await sha256Hex(normalizeRateLimitAddress(input.ip))}`,
+      ],
+      RATE_LIMITS.test_import,
     );
-    if (!result.allowed) {
-      throw new AppError(
-        "RATE_LIMITED",
-        "Too many requests",
-        undefined,
-        result.retryAfterSeconds,
-      );
-    }
   }
 }

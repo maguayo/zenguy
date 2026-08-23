@@ -35,6 +35,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@apikeys.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -44,6 +45,7 @@ const USERS: Record<Actor, User> = {
     email: "admin@apikeys.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -53,6 +55,7 @@ const USERS: Record<Actor, User> = {
     email: "member@apikeys.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -62,6 +65,7 @@ const USERS: Record<Actor, User> = {
     email: "owner-b@apikeys.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -288,19 +292,34 @@ async function createKey(
   token: string,
   workspaceId = WORKSPACE.id,
   name = "Status dashboard",
-): Promise<{ id: string; key: string }> {
+  options: {
+    scopes?: ("workspace:read" | "uptime:read" | "tests:read" | "runs:read")[];
+    expiresInDays?: number;
+  } = {},
+): Promise<{ id: string; key: string; scopes: string[]; expiresAt: string }> {
   const response = await app.request(`/api/workspaces/${workspaceId}/api-keys`, {
     method: "POST",
     headers: headers(token),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...options }),
   });
   expect(response.status).toBe(201);
   const body = (await response.json()) as {
-    data: { id: string; key: string; keyPrefix: string };
+    data: {
+      id: string;
+      key: string;
+      keyPrefix: string;
+      scopes: string[];
+      expiresAt: string;
+    };
   };
   expect(body.data.key).toMatch(/^zgk_[A-Za-z0-9_-]{43}$/);
   expect(body.data.keyPrefix).toBe(body.data.key.slice(0, 12));
-  return { id: body.data.id, key: body.data.key };
+  return {
+    id: body.data.id,
+    key: body.data.key,
+    scopes: body.data.scopes,
+    expiresAt: body.data.expiresAt,
+  };
 }
 
 describe("API key routes", () => {
@@ -323,6 +342,13 @@ describe("API key routes", () => {
 
   it("creates, lists, and revokes keys without ever storing or re-serving the plaintext", async () => {
     const created = await createKey(app, tokens.owner);
+    expect(created.scopes).toEqual([
+      "workspace:read",
+      "uptime:read",
+      "tests:read",
+      "runs:read",
+    ]);
+    expect(Date.parse(created.expiresAt)).toBeGreaterThan(Date.now());
 
     const stored = await apiKeys.findById(WORKSPACE.id, created.id);
     expect(stored?.keyHash).not.toBe(created.key);
@@ -375,6 +401,29 @@ describe("API key routes", () => {
       "api_key.created",
     ]);
     expect(JSON.stringify(entries)).not.toContain(created.key);
+  });
+
+  it("enforces explicit read scopes per public API resource", async () => {
+    const created = await createKey(
+      app,
+      tokens.owner,
+      WORKSPACE.id,
+      "Uptime only",
+      { scopes: ["uptime:read"], expiresInDays: 30 },
+    );
+    const keyHeaders = { Authorization: `Bearer ${created.key}` };
+
+    expect(created.scopes).toEqual(["uptime:read"]);
+    expect(
+      (await app.request("/api/v1/uptime-monitors", { headers: keyHeaders })).status,
+    ).toBe(200);
+    const forbidden = await app.request("/api/v1/workspace", {
+      headers: keyHeaders,
+    });
+    expect(forbidden.status).toBe(403);
+    await expect(forbidden.json()).resolves.toMatchObject({
+      error: { code: "FORBIDDEN" },
+    });
   });
 
   it("forbids members from creating and revoking but lets them list", async () => {
@@ -551,6 +600,28 @@ describe("API key routes", () => {
     });
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("does not write last_used_at when the public API limiter rejects", async () => {
+    const fixture = await seed();
+    const limitedApp = buildApp(fixture.bindings, {
+      rateLimiter: new BlockAfterRateLimiter(0),
+    });
+    const created = await createKey(limitedApp, fixture.tokens.owner);
+    const lookup = vi.spyOn(D1ApiKeyRepo.prototype, "findByHash");
+
+    const blocked = await limitedApp.request("/api/v1/workspace", {
+      headers: { Authorization: `Bearer ${created.key}` },
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(lookup).not.toHaveBeenCalled();
+    const stored = await new D1ApiKeyRepo(fixture.bindings.DB).findById(
+      WORKSPACE.id,
+      created.id,
+    );
+    expect(stored?.lastUsedAt).toBeNull();
+    lookup.mockRestore();
   });
 
   it("allows any origin on the public API but keeps the SPA policy elsewhere", async () => {

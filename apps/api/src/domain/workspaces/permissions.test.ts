@@ -12,6 +12,7 @@ describe("workspace permissions", () => {
     const denied: Action[] = [
       "admins.manage",
       "billing.manage",
+      "paid_alerts.manage",
       "workspace.transfer",
       "workspace.delete",
     ];

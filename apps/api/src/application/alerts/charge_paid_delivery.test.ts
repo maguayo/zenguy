@@ -24,6 +24,7 @@ const OWNER: User = {
   email: "owner@acme.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -240,5 +241,21 @@ describe("ChargePaidDelivery", () => {
       }),
     ).resolves.toBe(false);
     expect(await alerts.getBalanceCents("ws_1")).toBe(100);
+  });
+
+  it("releases the rolling-limit slot after a final provider refund", async () => {
+    const { charger } = fixture({ balance: 100, limit: 1 });
+    await expect(charger.charge(SPAIN_SMS)).resolves.toMatchObject({ ok: true });
+    await expect(
+      charger.charge({ ...SPAIN_SMS, deliveryId: "del_blocked" }),
+    ).resolves.toMatchObject({ ok: false, reason: "DAILY_LIMIT" });
+    await charger.refund({
+      workspaceId: "ws_1",
+      deliveryId: "del_1",
+      reason: "provider delivery failed",
+    });
+    await expect(
+      charger.charge({ ...SPAIN_SMS, deliveryId: "del_after_refund" }),
+    ).resolves.toMatchObject({ ok: true });
   });
 });

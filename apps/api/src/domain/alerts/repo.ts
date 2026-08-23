@@ -34,6 +34,19 @@ export interface CreditCreditInput {
   description: string;
   deliveryId: string | null;
   providerTransactionId: string | null;
+  /** Customer pinned from a verified Paddle transaction; null otherwise. */
+  providerCustomerId?: string | null;
+  at: number;
+}
+
+export interface CreditAdjustmentInput {
+  id: string;
+  workspaceId: string;
+  /** Signed amount. Negative values represent refunds/chargebacks of credit. */
+  amountCents: number;
+  idempotencyKey: string;
+  description: string;
+  providerTransactionId: string;
   at: number;
 }
 
@@ -43,10 +56,23 @@ export interface LedgerWrite {
   created: boolean;
 }
 
+export type LimitedDebitResult =
+  | { status: "written"; write: LedgerWrite }
+  | { status: "daily_limit" }
+  | { status: "insufficient_credit" };
+
 export interface WorkspaceNeedingDefaultChannel {
   workspaceId: string;
   ownerUserId: string;
   ownerEmail: string;
+}
+
+export interface PaddleTopupForReconciliation {
+  workspaceId: string;
+  providerTransactionId: string;
+  /** Null only for a legacy top-up that predates customer pinning. */
+  providerCustomerId: string | null;
+  amountCents: number;
 }
 
 export interface AlertRepo {
@@ -64,8 +90,31 @@ export interface AlertRepo {
    * the original entry without debiting again.
    */
   debit(input: CreditDebitInput): Promise<LedgerWrite | null>;
+  /**
+   * Atomically enforces both the prepaid balance and the rolling paid-alert
+   * limit while writing the charge. Refunded deliveries do not consume a
+   * daily-limit slot. Replays return the original ledger entry.
+   */
+  debitWithinDailyLimit(
+    input: CreditDebitInput,
+    dailyLimit: number,
+    since: number,
+  ): Promise<LimitedDebitResult>;
   credit(input: CreditCreditInput): Promise<LedgerWrite>;
+  /**
+   * Returns null when a debit exceeds its top-up or a reversal exceeds the
+   * outstanding provider debits for that transaction.
+   */
+  adjust(input: CreditAdjustmentInput): Promise<LedgerWrite | null>;
   findEntryByIdempotencyKey(key: string): Promise<AlertCreditEntry | null>;
+  findTopupByProviderTransactionId(
+    id: string,
+  ): Promise<PaddleTopupForReconciliation | null>;
+  listTopupsNeedingReconciliation(
+    reconciledBefore: number,
+    limit: number,
+  ): Promise<PaddleTopupForReconciliation[]>;
+  markTopupReconciled(providerTransactionId: string, at: number): Promise<void>;
   countCharges(workspaceId: string, since: number): Promise<number>;
   listEntries(
     workspaceId: string,

@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import type { TrackEvent } from "../../application/activity/track_event";
 import { GetBilling } from "../../application/billing/get_billing";
 import { GetCycleUsage } from "../../application/billing/get_cycle_usage";
 import { GetInvoiceUrl } from "../../application/billing/get_invoice_url";
 import type {
+  PaddleCheckoutIntentRepo,
   SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
@@ -13,6 +15,8 @@ import type {
 } from "../../domain/workspaces/repo";
 import type { PaddleClient } from "../../infrastructure/paddle/client";
 import type { Clock } from "../../shared/clock";
+import type { IdGenerator } from "../../shared/ids";
+import { IssuePaddleCheckoutIntent } from "../../application/billing/paddle_checkout_intent";
 import type { AppConfig } from "../../shared/config";
 import { unavailable } from "../../shared/errors";
 import type { AppEnv } from "../env";
@@ -26,8 +30,11 @@ export interface BillingRoutesDependencies {
   members: MemberRepo;
   subscriptions: SubscriptionRepo;
   usageEvents: UsageEventRepo;
+  checkoutIntents: PaddleCheckoutIntentRepo;
   paddle: PaddleClient;
+  track?: Pick<TrackEvent, "execute">;
   clock: Clock;
+  ids: IdGenerator;
   config: Pick<AppConfig, "jwtSecret" | "paddle" | "complimentaryIssuerEmails">;
 }
 
@@ -50,6 +57,14 @@ export function billingRoutes(
   const getInvoiceUrl = new GetInvoiceUrl(
     dependencies.subscriptions,
     dependencies.paddle,
+  );
+  const issueCheckout = new IssuePaddleCheckoutIntent(
+    dependencies.checkoutIntents,
+    dependencies.config.paddle,
+    dependencies.clock,
+    dependencies.ids,
+    dependencies.subscriptions,
+    dependencies.track,
   );
 
   app.get("/billing/config", auth, (context) => {
@@ -89,6 +104,23 @@ export function billingRoutes(
         role: context.get("role"),
       });
       return context.json({ data: presentBilling(result) });
+    },
+  );
+
+  app.post(
+    "/workspaces/:workspaceId/billing/checkout",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    requireAction("billing.manage"),
+    async (context) => {
+      const result = await issueCheckout.execute({
+        workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        purpose: "subscription",
+      });
+      return context.json({ data: result }, 201);
     },
   );
 

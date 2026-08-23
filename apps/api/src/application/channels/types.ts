@@ -17,7 +17,7 @@ import {
   configPreview,
 } from "../../domain/channels/types";
 import type { PushReach } from "../../domain/push/repo";
-import { decryptSecret } from "../../shared/crypto";
+import { decryptSecret, type EncryptionKeyring } from "../../shared/crypto";
 import { phoneNumberOf } from "../alerts/charge_paid_delivery";
 import type { PaidChannelContext } from "../alerts/settings";
 
@@ -41,14 +41,14 @@ export interface ChannelOutput {
   /** Devices and members a mobile push channel currently reaches. */
   reach: PushReach | null;
   verifiedAt: number | null;
-  lastDeliveryStatus: "SENT" | "FAILED" | null;
+  lastDeliveryStatus: "SENT" | "FAILED" | "AMBIGUOUS" | null;
   createdAt: number;
 }
 
 export interface DeliveryOutput {
   id: string;
   eventType: DeliveryEventType;
-  status: DeliveryStatus;
+  status: DeliveryStatus | "AMBIGUOUS";
   providerMessageId: string | null;
   attemptCount: number;
   errorSanitized: string | null;
@@ -84,11 +84,15 @@ export function channelPause(
 
 export async function channelOutput(
   channel: NotificationChannel,
-  encryptionKey: Uint8Array,
+  encryptionKeys: EncryptionKeyring,
   paid: PaidChannelContext,
   reach: PushReach | null = null,
 ): Promise<ChannelOutput> {
-  const plaintext = await decryptSecret(channel.encryptedConfig, encryptionKey);
+  const plaintext = await decryptSecret(channel.encryptedConfig, encryptionKeys, {
+    type: "notification_channel",
+    workspaceId: channel.workspaceId,
+    recordId: channel.id,
+  });
   const config = channelConfigSchema(channel.type).parse(JSON.parse(plaintext));
   const price = channelPrice(channel.type, config);
   return {
@@ -104,7 +108,8 @@ export async function channelOutput(
     verifiedAt: channel.verifiedAt,
     lastDeliveryStatus:
       channel.lastDeliveryStatus === "SENT" ||
-      channel.lastDeliveryStatus === "FAILED"
+      channel.lastDeliveryStatus === "FAILED" ||
+      channel.lastDeliveryStatus === "AMBIGUOUS"
         ? channel.lastDeliveryStatus
         : null,
     createdAt: channel.createdAt,
@@ -117,7 +122,10 @@ export function deliveryOutput(
   return {
     id: delivery.id,
     eventType: delivery.eventType,
-    status: delivery.status,
+    status:
+      delivery.dispatchState === "AMBIGUOUS"
+        ? "AMBIGUOUS"
+        : delivery.status,
     providerMessageId: delivery.providerMessageId,
     attemptCount: delivery.attemptCount,
     errorSanitized: delivery.errorSanitized,

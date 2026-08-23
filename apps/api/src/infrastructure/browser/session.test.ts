@@ -231,7 +231,7 @@ describe("browser collectors", () => {
       {
         level: "error",
         message: `${"x".repeat(499)}…`,
-        url: "https://example.com/app.js?token=redacted&line=4",
+        url: "https://example.com",
         timestamp: "2026-08-19T10:11:12.000Z",
       },
       {
@@ -276,7 +276,7 @@ describe("browser collectors", () => {
       {
         method: "POST",
         host: "api.example.com",
-        path: "/orders",
+        path: "/",
         statusCode: 503,
         errorType: null,
         durationMs: null,
@@ -284,7 +284,7 @@ describe("browser collectors", () => {
       {
         method: "GET",
         host: "cdn.example.com",
-        path: "/app.js",
+        path: "/",
         statusCode: null,
         errorType: "net::ERR_FAILED",
         durationMs: null,
@@ -303,7 +303,7 @@ describe("browser collectors", () => {
     }
 
     expect(evidence.networkErrors).toHaveLength(MAX_NETWORK_ENTRIES);
-    expect(evidence.networkErrors.at(-1)?.path).toBe("/49");
+    expect(evidence.networkErrors.at(-1)?.path).toBe("/");
   });
 
   it("records only main-frame navigations, sanitizes, deduplicates, and caps them", () => {
@@ -321,12 +321,7 @@ describe("browser collectors", () => {
       page.emit("framenavigated", next);
     }
 
-    expect(evidence.visitedUrls).toHaveLength(100);
-    expect(evidence.visitedUrls.slice(0, 2)).toEqual([
-      "https://example.com/a?session=redacted&safe=yes",
-      "https://example.com/1",
-    ]);
-    expect(evidence.visitedUrls.at(-1)).toBe("https://example.com/99");
+    expect(evidence.visitedUrls).toEqual(["https://example.com"]);
   });
 });
 

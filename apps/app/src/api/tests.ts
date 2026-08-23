@@ -22,8 +22,25 @@ function workspacePath(workspaceId: string): string {
   return `/api/workspaces/${encodeURIComponent(workspaceId)}`;
 }
 
-export function listTests(workspaceId: string): Promise<BrowserTest[]> {
-  return apiGet(`${workspacePath(workspaceId)}/browser-tests`);
+const TEST_PAGE_SIZE = 100;
+const MAX_TEST_PAGES = 2;
+
+export function testsPath(workspaceId: string, cursor?: string): string {
+  const search = new URLSearchParams({ limit: String(TEST_PAGE_SIZE) });
+  if (cursor !== undefined) search.set("cursor", cursor);
+  return `${workspacePath(workspaceId)}/browser-tests?${search}`;
+}
+
+export async function listTests(workspaceId: string): Promise<BrowserTest[]> {
+  const tests: BrowserTest[] = [];
+  let cursor: string | undefined;
+  for (let pageNumber = 0; pageNumber < MAX_TEST_PAGES; pageNumber += 1) {
+    const page = await apiGetPage<BrowserTest>(testsPath(workspaceId, cursor));
+    tests.push(...page.items);
+    if (page.nextCursor === null || page.nextCursor === cursor) break;
+    cursor = page.nextCursor;
+  }
+  return tests;
 }
 
 export function getTest(workspaceId: string, testId: string): Promise<BrowserTest> {
@@ -91,13 +108,22 @@ export function importTests(
 export function validateDraft(
   workspaceId: string,
   input: BrowserTestInput,
+  approveIrreversibleActions = false,
 ): Promise<{ runId: string }> {
-  return apiPost(`${workspacePath(workspaceId)}/browser-tests/validate`, input);
+  return apiPost(`${workspacePath(workspaceId)}/browser-tests/validate`, {
+    config: input,
+    ...(approveIrreversibleActions ? { approveIrreversibleActions: true } : {}),
+  });
 }
 
-export function runNow(workspaceId: string, testId: string): Promise<{ runId: string }> {
+export function runNow(
+  workspaceId: string,
+  testId: string,
+  approveIrreversibleActions = false,
+): Promise<{ runId: string }> {
   return apiPost(
     `${workspacePath(workspaceId)}/browser-tests/${encodeURIComponent(testId)}/run-now`,
+    approveIrreversibleActions ? { approveIrreversibleActions: true } : {},
   );
 }
 

@@ -12,6 +12,10 @@ function entry(
 ): BrowserTestTransferEntry {
   return {
     name: "Checkout",
+    allowedDomains: [],
+    writableDomains: [],
+    testDataAttested: false,
+    irreversibleActionScopes: [],
     startUrl: "https://shop.example.com/checkout",
     instructions: "Complete checkout and verify the confirmation",
     device: "DESKTOP",
@@ -87,9 +91,25 @@ describe("parseTestsFile", () => {
       version: 1,
       tests: [entry({ intervalHours: 99 }), entry({ startUrl: "not-a-url" })],
     });
-    const fields = detailsOf(text).map((detail) => detail.field);
-    expect(fields).toContain("tests.0.intervalHours");
-    expect(fields).toContain("tests.1.startUrl");
+    const details = detailsOf(text);
+    expect(details.filter((detail) => detail.field === "tests.0.intervalHours"))
+      .toEqual([{ field: "tests.0.intervalHours", message: expect.any(String) }]);
+    expect(details.filter((detail) => detail.field === "tests.1.startUrl"))
+      .toEqual([{ field: "tests.1.startUrl", message: expect.any(String) }]);
+  });
+
+  it("preserves cross-field writable-domain validation", () => {
+    const text = JSON.stringify({
+      version: 1,
+      tests: [entry({ writableDomains: ["other.example.com"] })],
+    });
+    expect(detailsOf(text)).toEqual([
+      {
+        field: "tests.0.writableDomains.0",
+        message:
+          "Writable host must be the starting host or an explicitly allowed domain",
+      },
+    ]);
   });
 
   it("rejects entries with unknown keys", () => {

@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Paddle } from "./paddle";
-import { checkoutOptions, configurePaddle } from "./paddle";
+import {
+  checkoutOptions,
+  configurePaddle,
+  PADDLE_SCRIPT_URL,
+  securePaddleScript,
+} from "./paddle";
 
 describe("Paddle integration", () => {
   it("builds the exact overlay checkout payload expected by the webhook", () => {
@@ -9,10 +14,16 @@ describe("Paddle integration", () => {
       checkoutOptions({
         email: "owner@example.com",
         priceId: "pri_test",
-        workspaceId: "ws_123",
+        customData: {
+          checkout_intent_id: "pci_123",
+          checkout_intent_sig: "signed",
+        },
       }),
     ).toEqual({
-      customData: { workspace_id: "ws_123" },
+      customData: {
+        checkout_intent_id: "pci_123",
+        checkout_intent_sig: "signed",
+      },
       customer: { email: "owner@example.com" },
       items: [{ priceId: "pri_test", quantity: 1 }],
       settings: { displayMode: "overlay" },
@@ -45,5 +56,24 @@ describe("Paddle integration", () => {
     expect(set.mock.invocationCallOrder[0]).toBeLessThan(
       initialize.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it("configures the loader with the sole CSP-approved Paddle URL", () => {
+    const script = {
+      async: false,
+      dataset: {},
+      referrerPolicy: "",
+      src: "",
+    } as unknown as HTMLScriptElement;
+
+    securePaddleScript(script);
+
+    expect(script).toMatchObject({
+      async: true,
+      dataset: { zenguyPaddle: "true" },
+      referrerPolicy: "no-referrer",
+      src: PADDLE_SCRIPT_URL,
+    });
+    expect(PADDLE_SCRIPT_URL).toBe("https://cdn.paddle.com/paddle/v2/paddle.js");
   });
 });

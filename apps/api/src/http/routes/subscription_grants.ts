@@ -46,7 +46,11 @@ const issueSchema = z.object({
   note: z.string().max(200).optional(),
 });
 
-const redeemSchema = z.object({
+const tokenSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{1,512}$/u),
+});
+
+const redeemSchema = tokenSchema.extend({
   workspaceId: z.string().min(1),
 });
 
@@ -120,21 +124,21 @@ export function subscriptionGrantRoutes(
     return context.json({ data: result.map(presentListedGrant) });
   });
 
-  app.get("/:token", async (context) => {
+  app.post("/preview", zjson(tokenSchema), async (context) => {
     const result = await getPublic.execute({
-      tokenPlain: context.req.param("token"),
+      tokenPlain: context.req.valid("json").token,
     });
     return context.json({ data: presentPublicGrant(result) });
   });
 
   app.post(
-    "/:token/redeem",
+    "/redeem",
     auth,
     requireVerifiedEmail,
     zjson(redeemSchema),
     async (context) => {
       const result = await redeemGrant.execute({
-        tokenPlain: context.req.param("token"),
+        tokenPlain: context.req.valid("json").token,
         workspaceId: context.req.valid("json").workspaceId,
         actor: context.get("user"),
         ip: requestIp(context),

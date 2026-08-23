@@ -42,6 +42,11 @@ export interface MonitorRepo {
   insert(monitor: UptimeMonitor): Promise<void>;
   findById(workspaceId: string, id: string): Promise<UptimeMonitor | null>;
   list(workspaceId: string): Promise<UptimeMonitor[]>;
+  listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<UptimeMonitor[]>;
   update(id: string, changes: MonitorUpdate, at: number): Promise<void>;
   softDelete(id: string, at: number): Promise<void>;
   claimDue(now: number, limit: number): Promise<ClaimedUptimeMonitor[]>;
@@ -57,11 +62,16 @@ export interface MonitorRepo {
   /** Links a channel to every live monitor of the workspace (idempotent). */
   addChannelToAll(workspaceId: string, channelId: string): Promise<void>;
   getChannelIds(monitorId: string): Promise<string[]>;
+  getChannelIdsForMonitors(
+    workspaceId: string,
+    monitorIds: string[],
+  ): Promise<Map<string, string[]>>;
   statusCounts(workspaceId: string): Promise<MonitorStatusCounts>;
   /** Last `limit` check results per monitor of the workspace (oldest first). */
   recentChecksPerMonitor(
     workspaceId: string,
     limit: number,
+    monitorIds?: string[],
   ): Promise<Map<string, CheckTick[]>>;
 }
 

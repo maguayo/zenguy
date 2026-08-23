@@ -15,6 +15,11 @@ const MESSAGE: NotificationMessage = {
   shortText: "Zenguy test notification.",
   color: "gray",
 };
+const CONTEXT = {
+  deliveryId: "del_test",
+  idempotencyKey: "del_test",
+  attemptCount: 1,
+};
 
 describe("buildChannelSender", () => {
   it("delivers PUSH through Expo only when push is configured", async () => {
@@ -60,6 +65,7 @@ describe("buildChannelSender", () => {
       sender.send(
         { type: "PUSH", config: { recipients: "WORKSPACE_MEMBERS" }, workspaceId: "ws_1" },
         MESSAGE,
+        CONTEXT,
       ),
     ).resolves.toEqual({ providerMessageId: "ticket-1" });
     expect(urls).toEqual(["https://exp.host/--/api/v2/push/send"]);
@@ -80,6 +86,7 @@ describe("buildChannelSender", () => {
       unconfigured.send(
         { type: "PUSH", config: { recipients: "WORKSPACE_MEMBERS" }, workspaceId: "ws_1" },
         MESSAGE,
+        CONTEXT,
       ),
     ).rejects.toThrow("Push is not configured");
   });
@@ -92,7 +99,7 @@ describe("buildChannelSender", () => {
       Response.json({ sid: "SM_whatsapp" }),
       Response.json({ sid: "CA_call" }),
       new Response("ok"),
-      new Response(null, { status: 204 }),
+      Response.json({ id: "discord-message-1" }),
     ];
     const fetchFn: TwilioFetch = async (url) => {
       requests.push(url);
@@ -118,18 +125,17 @@ describe("buildChannelSender", () => {
       sender.send(
         { type: "EMAIL", config: { emails: ["ops@example.com"] } },
         MESSAGE,
+        CONTEXT,
       ),
     ).resolves.toEqual({ providerMessageId: "recorded-1" });
     for (const type of ["SMS", "WHATSAPP", "CALL"] as const) {
       await sender.send(
         {
           type,
-          config:
-            type === "SMS"
-              ? { phoneNumber: "+34600123456", consent: true }
-              : { phoneNumber: "+34600123456" },
+          config: { phoneNumber: "+34600123456", consent: true },
         },
         MESSAGE,
+        CONTEXT,
       );
     }
     await sender.send(
@@ -141,6 +147,7 @@ describe("buildChannelSender", () => {
         },
       },
       MESSAGE,
+      CONTEXT,
     );
     await sender.send(
       {
@@ -150,6 +157,7 @@ describe("buildChannelSender", () => {
         },
       },
       MESSAGE,
+      CONTEXT,
     );
 
     const rendered = renderBasicEmail({
@@ -163,6 +171,7 @@ describe("buildChannelSender", () => {
         to: ["ops@example.com"],
         subject: MESSAGE.title,
         ...rendered,
+        headers: { "X-ZenGuy-Delivery-ID": "del_test" },
       },
     ]);
     expect(requests).toEqual([
@@ -170,7 +179,7 @@ describe("buildChannelSender", () => {
       "https://api.twilio.com/2010-04-01/Accounts/AC_account/Messages.json",
       "https://api.twilio.com/2010-04-01/Accounts/AC_account/Calls.json",
       "https://hooks.slack.com/services/T000/B000/private-token",
-      "https://discord.com/api/webhooks/123/private-token",
+      "https://discord.com/api/webhooks/123/private-token?wait=true",
     ]);
   });
 
@@ -195,6 +204,7 @@ describe("buildChannelSender", () => {
           config: { phoneNumber: "not-e164", consent: true },
         },
         MESSAGE,
+        CONTEXT,
       ),
     ).rejects.toThrow();
   });
@@ -228,23 +238,41 @@ describe("buildChannelSender", () => {
 
     await expect(
       sender.send(
+        { type: "CALL", config: { phoneNumber: "+34600123456" } },
+        MESSAGE,
+        CONTEXT,
+      ),
+    ).rejects.toThrow("Explicit recipient consent is required");
+    expect(requests).toEqual([]);
+
+    await expect(
+      sender.send(
         {
           type: "SMS",
           config: { phoneNumber: "+34600123456", consent: true },
         },
         MESSAGE,
+        CONTEXT,
       ),
     ).resolves.toEqual({ providerMessageId: "SM_sms" });
     await expect(
       sender.send(
-        { type: "CALL", config: { phoneNumber: "+34600123456" } },
+        {
+          type: "CALL",
+          config: { phoneNumber: "+34600123456", consent: true },
+        },
         MESSAGE,
+        CONTEXT,
       ),
     ).resolves.toEqual({ providerMessageId: "CA_call" });
     await expect(
       sender.send(
-        { type: "WHATSAPP", config: { phoneNumber: "+34600123456" } },
+        {
+          type: "WHATSAPP",
+          config: { phoneNumber: "+34600123456", consent: true },
+        },
         MESSAGE,
+        CONTEXT,
       ),
     ).rejects.toThrow("WhatsApp is not configured");
 

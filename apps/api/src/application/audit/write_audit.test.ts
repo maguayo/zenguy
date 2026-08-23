@@ -1,6 +1,7 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { AuditRepo } from "../../domain/audit/repo";
 import { FixedClock } from "../../shared/clock";
+import { FakeTrackEvent } from "../../test/fakes/activity";
 import { FakeIds } from "../../test/fakes/ids";
 import { FakeAuditRepo } from "../../test/fakes/repos";
 import { WriteAudit } from "./write_audit";
@@ -107,6 +108,7 @@ describe("WriteAudit", () => {
         "secret.created",
         "secret.updated",
         "secret.deleted",
+        "security.encryption_rotated",
         "channel.created",
         "channel.updated",
         "channel.deleted",
@@ -126,7 +128,91 @@ describe("WriteAudit", () => {
         "api_key.revoked",
         "alerts.settings_updated",
         "alerts.credit_topup",
+        "alerts.credit_adjusted",
       ].sort(),
     );
+  });
+
+  it("bridges every audited action into an activity event", async () => {
+    const audits = new FakeAuditRepo();
+    const activity = new FakeTrackEvent();
+    const writer = new WriteAudit({
+      audits,
+      activity,
+      clock: new FixedClock(1_700_000_000_000),
+      ids: new FakeIds(),
+    });
+
+    await writer.execute({
+      workspaceId: "ws_primary",
+      actorUserId: "usr_actor",
+      action: AUDIT_ACTIONS.testCreated,
+      resourceType: "browser_test",
+      resourceId: "bt_1",
+      metadata: { name: "Checkout", password: "hidden" },
+      ip: "203.0.113.5",
+    });
+
+    expect(activity.calls).toEqual([
+      {
+        type: "browser_test.created",
+        userId: "usr_actor",
+        workspaceId: "ws_primary",
+        source: "server",
+        resourceId: "bt_1",
+        properties: { name: "Checkout", password: "hidden" },
+      },
+    ]);
+    expect(audits.entries.size).toBe(1);
+  });
+
+  it("bridges system actions with a null actor and without metadata", async () => {
+    const activity = new FakeTrackEvent();
+    const writer = new WriteAudit({
+      audits: new FakeAuditRepo(),
+      activity,
+      clock: new FixedClock(1),
+      ids: new FakeIds(),
+    });
+    await writer.execute({
+      workspaceId: "ws_primary",
+      actorUserId: null,
+      action: AUDIT_ACTIONS.billingSubscriptionUpdated,
+    });
+    expect(activity.calls).toEqual([
+      {
+        type: "billing.subscription_updated",
+        userId: null,
+        workspaceId: "ws_primary",
+        source: "server",
+        resourceId: null,
+      },
+    ]);
+  });
+
+  it("still writes the audit entry when no activity tracker is configured", async () => {
+    const audits = new FakeAuditRepo();
+    const writer = new WriteAudit({ audits, clock: new FixedClock(1), ids: new FakeIds() });
+    await writer.execute({
+      workspaceId: "ws_primary",
+      actorUserId: "usr_actor",
+      action: AUDIT_ACTIONS.workspaceUpdated,
+    });
+    expect(audits.entries.size).toBe(1);
+  });
+
+  it("does not bridge when the audit insert failed", async () => {
+    const audits = new FakeAuditRepo();
+    audits.insert = async () => {
+      throw new Error("D1 down");
+    };
+    const activity = new FakeTrackEvent();
+    const writer = new WriteAudit({ audits, activity, clock: new FixedClock(1), ids: new FakeIds() });
+    await writer.execute({
+      workspaceId: "ws_primary",
+      actorUserId: "usr_actor",
+      action: AUDIT_ACTIONS.workspaceUpdated,
+    });
+    expect(activity.calls).toEqual([]);
   });
 });

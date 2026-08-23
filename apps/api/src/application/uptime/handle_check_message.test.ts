@@ -3,9 +3,15 @@ import type { NotificationChannel } from "../../domain/channels/types";
 import type { Incident } from "../../domain/incidents/types";
 import type { CheckMessage } from "../../domain/queues";
 import type { MonitorConfig } from "../../domain/uptime/rules";
-import type { MonitorStatus, UptimeMonitor } from "../../domain/uptime/types";
+import type {
+  MonitorMethod,
+  MonitorStatus,
+  UptimeMonitor,
+} from "../../domain/uptime/types";
 import type { Workspace } from "../../domain/workspaces/types";
 import { FixedClock } from "../../shared/clock";
+import { createEncryptionKeyring } from "../../shared/crypto";
+import { FakeTrackEvent } from "../../test/fakes/activity";
 import { FakeIds } from "../../test/fakes/ids";
 import {
   FakeIncidentEventRepo,
@@ -21,6 +27,7 @@ import { PublishQueueOutbox } from "../durability/publish_outbox";
 
 const NOW = Date.UTC(2026, 7, 19, 12, 0, 0);
 const KEY = new Uint8Array(32).fill(8);
+const KEYS = createEncryptionKeyring({ id: "test-check-message", key: KEY });
 const WORKSPACE: Workspace = {
   id: "ws_check_cycle",
   name: "Check Cycle Workspace",
@@ -122,12 +129,18 @@ class RecordingCheckQueue {
 
 class SequenceExecutor {
   readonly configs: MonitorConfig[] = [];
+  readonly contexts: Array<{ idempotencyKey?: string }> = [];
   calls = 0;
 
   constructor(private readonly outcomes: CheckOutcome[]) {}
 
-  async execute(config: MonitorConfig): Promise<CheckOutcome> {
+  async execute(
+    config: MonitorConfig,
+    _workspaceId?: string,
+    execution: { idempotencyKey?: string } = {},
+  ): Promise<CheckOutcome> {
     this.configs.push(structuredClone(config));
+    this.contexts.push(structuredClone(execution));
     const outcome = this.outcomes[this.calls];
     this.calls += 1;
     if (outcome === undefined) throw new Error("No check outcome configured");
@@ -160,6 +173,7 @@ async function fixture(input: {
   maxRetries?: number;
   notifyOnRecovery?: boolean;
   currentStatus?: MonitorStatus;
+  method?: MonitorMethod;
 }) {
   const monitors = new FakeMonitorRepo();
   const checks = new FakeCheckRepo();
@@ -175,14 +189,15 @@ async function fixture(input: {
       headers: [{ key: "Authorization", value: "Bearer decrypted-token" }],
       body: '{"probe":true}',
     },
-    KEY,
+    KEYS,
+    { workspaceId: WORKSPACE.id, monitorId: MESSAGE.monitorId },
   );
   const monitor: UptimeMonitor = {
     id: MESSAGE.monitorId,
     workspaceId: WORKSPACE.id,
     name: "API health",
     url: "https://api.example.com/health",
-    method: "POST",
+    method: input.method ?? "POST",
     ...encrypted,
     expectedStatus: 200,
     bodyCondition: null,
@@ -219,6 +234,7 @@ async function fixture(input: {
     { RUN: unusedQueue, CHECK: queue, NOTIFY: unusedQueue },
     clock,
   );
+  const track = new FakeTrackEvent();
   const handler = new HandleCheckMessage({
     monitors,
     checks,
@@ -229,11 +245,15 @@ async function fixture(input: {
     dispatchNotifications: dispatch,
     durable,
     outboxPublisher,
-    executeCheck: input.executeCheck ?? ((config) => executor.execute(config)),
-    encryptionKey: KEY,
+    executeCheck:
+      input.executeCheck ??
+      ((config, workspaceId, execution) =>
+        executor.execute(config, workspaceId, execution)),
+    encryptionKeys: KEYS,
     appUrl: "https://app.zenguy.test",
     clock,
     ids: new FakeIds(),
+    track,
   });
   return {
     monitors,
@@ -249,6 +269,7 @@ async function fixture(input: {
     outboxPublisher,
     executor,
     monitor,
+    track,
     handler,
   };
 }
@@ -337,10 +358,11 @@ describe("HandleCheckMessage", () => {
     expect(value.checks.checks.size).toBe(1);
   });
 
-  it("releases an HTTP check lease on failure so Queue retry can execute", async () => {
+  it("releases a read-only HTTP check lease on failure so Queue retry can execute", async () => {
     let calls = 0;
     const value = await fixture({
       outcomes: [],
+      method: "GET",
       executeCheck: async () => {
         calls += 1;
         if (calls === 1) throw new Error("request aborted");
@@ -357,8 +379,8 @@ describe("HandleCheckMessage", () => {
     expect(value.checks.checks.size).toBe(1);
   });
 
-  it("reclaims a check execution lease left by a crashed worker", async () => {
-    const value = await fixture({ outcomes: [pass()] });
+  it("turns a stale mutable execution lease into an ambiguous result without resending", async () => {
+    const value = await fixture({ outcomes: [pass()], maxRetries: 3 });
     await value.durable.claimCheckExecution({
       cycleId: MESSAGE.cycleId,
       attemptIndex: MESSAGE.attemptIndex,
@@ -372,6 +394,28 @@ describe("HandleCheckMessage", () => {
 
     value.clock.advance(15 * 60_000 + 1);
     await value.handler.execute(MESSAGE);
+    expect(value.executor.calls).toBe(0);
+    expect(value.checks.checks.size).toBe(1);
+    expect([...value.checks.checks.values()][0]).toMatchObject({
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+      attemptIndex: 0,
+    });
+    expect(value.queue.calls).toEqual([]);
+  });
+
+  it("reclaims and re-executes a stale GET lease", async () => {
+    const value = await fixture({ outcomes: [pass()], method: "GET" });
+    await value.durable.claimCheckExecution({
+      cycleId: MESSAGE.cycleId,
+      attemptIndex: MESSAGE.attemptIndex,
+      claimToken: "job_abandoned_get",
+      claimedAt: NOW,
+      staleBefore: NOW - 1,
+    });
+
+    value.clock.advance(15 * 60_000 + 1);
+    await value.handler.execute(MESSAGE);
+
     expect(value.executor.calls).toBe(1);
     expect(value.checks.checks.size).toBe(1);
   });
@@ -405,6 +449,11 @@ describe("HandleCheckMessage", () => {
     });
 
     await value.handler.execute({ ...MESSAGE, attemptIndex: 1 });
+
+    expect(value.executor.contexts).toEqual([
+      { idempotencyKey: `zenguy:${MESSAGE.cycleId}` },
+      { idempotencyKey: `zenguy:${MESSAGE.cycleId}` },
+    ]);
 
     await expect(
       value.monitors.findById(WORKSPACE.id, MESSAGE.monitorId),
@@ -456,6 +505,20 @@ describe("HandleCheckMessage", () => {
         ]),
       },
     });
+    expect(value.track.calls).toHaveLength(1);
+    expect(value.track.ofType("incident.opened")).toEqual([
+      expect.objectContaining({
+        userId: null,
+        workspaceId: WORKSPACE.id,
+        source: "server",
+        resourceId: incident.id,
+        properties: {
+          kind: "UPTIME_MONITOR",
+          uptimeMonitorId: value.monitor.id,
+          checkId: incident.openedByCheckId,
+        },
+      }),
+    ]);
   });
 
   it("recovers a retry Queue.send failure and preserves the remaining delay", async () => {
@@ -517,6 +580,21 @@ describe("HandleCheckMessage", () => {
       eventType: "RECOVERY",
       title: "✅ API health recovered",
     });
+    const resolved = await value.incidents.findById(WORKSPACE.id, incident.id);
+    expect(value.track.calls).toHaveLength(1);
+    expect(value.track.ofType("incident.resolved")).toEqual([
+      expect.objectContaining({
+        userId: null,
+        workspaceId: WORKSPACE.id,
+        source: "server",
+        resourceId: incident.id,
+        properties: {
+          kind: "UPTIME_MONITOR",
+          uptimeMonitorId: value.monitor.id,
+          checkId: resolved?.resolvedByCheckId,
+        },
+      }),
+    ]);
   });
 
   it("appends a failure without re-alerting when an incident is already open", async () => {
@@ -535,6 +613,7 @@ describe("HandleCheckMessage", () => {
       { type: "FAILURE_RECORDED", sourceId: expect.stringMatching(/^chk_/u) },
     ]);
     expect(value.dispatch.calls).toHaveLength(0);
+    expect(value.track.calls).toEqual([]);
   });
 
   it("resumes an opened incident after dispatch fails without reclassifying it", async () => {
@@ -560,6 +639,9 @@ describe("HandleCheckMessage", () => {
         (job) => job.kind === "CHECK_CONTINUATION",
       )?.status,
     ).toBe("COMPLETED");
+    // The replay completes the opened incident without opening it again.
+    expect(value.track.ofType("incident.opened")).toHaveLength(1);
+    expect(value.track.calls).toHaveLength(1);
   });
 
   it("resumes recovery after resolve+dispatch failure using the original incident", async () => {
@@ -579,6 +661,8 @@ describe("HandleCheckMessage", () => {
     });
     await expect(value.events.listForIncident(incident.id)).resolves.toHaveLength(1);
     expect(value.dispatch.calls).toHaveLength(2);
+    expect(value.track.ofType("incident.resolved")).toHaveLength(1);
+    expect(value.track.calls).toHaveLength(1);
   });
 
   it("does not let an old pass continuation resolve a newer incident", async () => {

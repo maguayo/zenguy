@@ -11,7 +11,13 @@ import type {
   RunTick,
   TestAttempt,
   TestRun,
+  IrreversibleActionRequest,
+  ActionAuthorizationState,
 } from "../../domain/browser_tests/types";
+import {
+  actionMatchesScope,
+  validActionAuthorizationState,
+} from "../../domain/browser_tests/irreversible_authorization";
 import type { Cursor } from "../../shared/pagination";
 import { all, batch, one, run } from "./d1";
 
@@ -22,6 +28,7 @@ interface RunRow {
   source: RunSource;
   status: RunStatus;
   snapshot_json: string;
+  action_authorizations_json: string;
   scheduled_for: number | null;
   queued_at: number;
   started_at: number | null;
@@ -37,6 +44,8 @@ interface RunRow {
   created_at: number;
 }
 
+const MAX_IDS_PER_QUERY = 90;
+
 function toRun(row: RunRow): TestRun {
   return {
     id: row.id,
@@ -45,6 +54,9 @@ function toRun(row: RunRow): TestRun {
     source: row.source,
     status: row.status,
     snapshot: JSON.parse(row.snapshot_json) as RunSnapshot,
+    actionAuthorizations: parseActionAuthorizations(
+      row.action_authorizations_json,
+    ),
     scheduledFor: row.scheduled_for,
     queuedAt: row.queued_at,
     startedAt: row.started_at,
@@ -61,6 +73,29 @@ function toRun(row: RunRow): TestRun {
   };
 }
 
+function parseActionAuthorizations(raw: string): ActionAuthorizationState[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length > 20) return [];
+    if (
+      !parsed.every(
+        (entry) =>
+          typeof entry === "object" &&
+          entry !== null &&
+          Number.isInteger((entry as { remainingUses?: unknown }).remainingUses) &&
+          Number((entry as { remainingUses: number }).remainingUses) >= 0 &&
+          typeof (entry as { scope?: unknown }).scope === "object" &&
+          (entry as { scope?: unknown }).scope !== null,
+      )
+    ) {
+      return [];
+    }
+    return parsed as ActionAuthorizationState[];
+  } catch {
+    return [];
+  }
+}
+
 export class D1RunRepo implements RunRepo {
   constructor(private readonly database: D1Database) {}
 
@@ -70,10 +105,11 @@ export class D1RunRepo implements RunRepo {
         .prepare(
           `INSERT INTO test_runs
             (id, workspace_id, browser_test_id, source, status, snapshot_json,
+             action_authorizations_json,
              scheduled_for, queued_at, started_at, finished_at, duration_ms,
              attempt_count, infra_attempts, passed_after_retry, billable,
              usage_event_id, triggered_by_user_id, incident_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           value.id,
@@ -82,6 +118,7 @@ export class D1RunRepo implements RunRepo {
           value.source,
           value.status,
           JSON.stringify(value.snapshot),
+          JSON.stringify(value.actionAuthorizations ?? []),
           value.scheduledFor,
           value.queuedAt,
           value.startedAt,
@@ -108,10 +145,11 @@ export class D1RunRepo implements RunRepo {
         .prepare(
           `INSERT INTO test_runs
             (id, workspace_id, browser_test_id, source, status, snapshot_json,
+             action_authorizations_json,
              scheduled_for, queued_at, started_at, finished_at, duration_ms,
              attempt_count, infra_attempts, passed_after_retry, billable,
              usage_event_id, triggered_by_user_id, incident_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           value.id,
@@ -120,6 +158,7 @@ export class D1RunRepo implements RunRepo {
           value.source,
           value.status,
           JSON.stringify(value.snapshot),
+          JSON.stringify(value.actionAuthorizations ?? []),
           value.scheduledFor,
           value.queuedAt,
           value.startedAt,
@@ -186,6 +225,62 @@ export class D1RunRepo implements RunRepo {
         .bind(workspaceId, runId),
     );
     return row === null ? null : toRun(row);
+  }
+
+  async consumeActionAuthorization(
+    runId: string,
+    action: IrreversibleActionRequest,
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const row = await one<{
+        status: RunStatus;
+        snapshot_json: string;
+        action_authorizations_json: string;
+      }>(
+        this.database
+          .prepare(
+            `SELECT status, snapshot_json, action_authorizations_json FROM test_runs
+             WHERE id = ?`,
+          )
+          .bind(runId),
+      );
+      if (row === null || row.status !== "RUNNING") return false;
+      const state = parseActionAuthorizations(row.action_authorizations_json);
+      let snapshot: RunSnapshot;
+      try {
+        snapshot = JSON.parse(row.snapshot_json) as RunSnapshot;
+      } catch {
+        return false;
+      }
+      if (!validActionAuthorizationState(snapshot, state)) return false;
+      const index = state.findIndex(
+        (entry) =>
+          entry.remainingUses > 0 && actionMatchesScope(action, entry.scope),
+      );
+      if (index < 0) return false;
+      const next = structuredClone(state);
+      const current = next[index];
+      if (current === undefined) return false;
+      next[index] = {
+        scope: current.scope,
+        remainingUses: current.remainingUses - 1,
+      };
+      const result = await run(
+        this.database
+          .prepare(
+            `UPDATE test_runs SET action_authorizations_json = ?
+             WHERE id = ? AND status = 'RUNNING'
+               AND action_authorizations_json = ?`,
+          )
+          .bind(
+            JSON.stringify(next),
+            runId,
+            row.action_authorizations_json,
+          ),
+      );
+      if (result.meta.changes === 1) return true;
+    }
+    return false;
   }
 
   async findByIdForExecution(runId: string): Promise<TestRun | null> {
@@ -335,25 +430,51 @@ export class D1RunRepo implements RunRepo {
   async recentRunsPerTest(
     workspaceId: string,
     limit: number,
+    testIds?: string[],
   ): Promise<Map<string, RunTick[]>> {
-    const rows = await all<
-      Pick<RunRow, "browser_test_id" | "id" | "status" | "finished_at">
-    >(
-      this.database
-        .prepare(
-          `SELECT browser_test_id, id, status, finished_at
-           FROM (
-             SELECT browser_test_id, id, status, finished_at,
-                    ROW_NUMBER() OVER (
-                      PARTITION BY browser_test_id ORDER BY created_at DESC, id DESC
-                    ) AS row_number
-             FROM test_runs
-             WHERE workspace_id = ? AND browser_test_id IS NOT NULL
-           ) WHERE row_number <= ?
-           ORDER BY browser_test_id, row_number DESC`,
-        )
-        .bind(workspaceId, limit),
-    );
+    const uniqueTestIds = testIds === undefined ? undefined : [...new Set(testIds)];
+    if (uniqueTestIds?.length === 0) return new Map();
+    const chunks: Array<string[] | undefined> =
+      uniqueTestIds === undefined
+        ? [undefined]
+        : Array.from(
+            { length: Math.ceil(uniqueTestIds.length / MAX_IDS_PER_QUERY) },
+            (_, index) =>
+              uniqueTestIds.slice(
+                index * MAX_IDS_PER_QUERY,
+                (index + 1) * MAX_IDS_PER_QUERY,
+              ),
+          );
+    const rows = (
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          const testFilter =
+            chunk === undefined
+              ? ""
+              : `AND browser_test_id IN (${chunk.map(() => "?").join(", ")})`;
+          return all<
+            Pick<RunRow, "browser_test_id" | "id" | "status" | "finished_at">
+          >(
+            this.database
+              .prepare(
+                `SELECT browser_test_id, id, status, finished_at
+                 FROM (
+                   SELECT browser_test_id, id, status, finished_at,
+                          ROW_NUMBER() OVER (
+                            PARTITION BY browser_test_id
+                            ORDER BY created_at DESC, id DESC
+                          ) AS row_number
+                   FROM test_runs
+                   WHERE workspace_id = ? AND browser_test_id IS NOT NULL
+                     ${testFilter}
+                 ) WHERE row_number <= ?
+                 ORDER BY browser_test_id, row_number DESC`,
+              )
+              .bind(workspaceId, ...(chunk ?? []), limit),
+          );
+        }),
+      )
+    ).flat();
     const ticks = new Map<string, RunTick[]>();
     for (const row of rows) {
       if (row.browser_test_id === null) continue;
@@ -366,39 +487,65 @@ export class D1RunRepo implements RunRepo {
 
   async lastRunSummaryPerTest(
     workspaceId: string,
+    testIds?: string[],
   ): Promise<Map<string, RunSummaryRow>> {
-    const rows = await all<
-      Pick<
-        RunRow,
-        | "browser_test_id"
-        | "id"
-        | "source"
-        | "status"
-        | "started_at"
-        | "finished_at"
-        | "duration_ms"
-        | "attempt_count"
-        | "passed_after_retry"
-        | "billable"
-        | "created_at"
-      >
-    >(
-      this.database
-        .prepare(
-          `SELECT browser_test_id, id, source, status, started_at, finished_at,
-                  duration_ms, attempt_count, passed_after_retry, billable,
-                  created_at
-           FROM (
-             SELECT *, ROW_NUMBER() OVER (
-               PARTITION BY browser_test_id ORDER BY created_at DESC, id DESC
-             ) AS row_number
-             FROM test_runs
-             WHERE workspace_id = ? AND browser_test_id IS NOT NULL
-               AND finished_at IS NOT NULL
-           ) WHERE row_number = 1`,
-        )
-        .bind(workspaceId),
-    );
+    const uniqueTestIds = testIds === undefined ? undefined : [...new Set(testIds)];
+    if (uniqueTestIds?.length === 0) return new Map();
+    const chunks: Array<string[] | undefined> =
+      uniqueTestIds === undefined
+        ? [undefined]
+        : Array.from(
+            { length: Math.ceil(uniqueTestIds.length / MAX_IDS_PER_QUERY) },
+            (_, index) =>
+              uniqueTestIds.slice(
+                index * MAX_IDS_PER_QUERY,
+                (index + 1) * MAX_IDS_PER_QUERY,
+              ),
+          );
+    const rows = (
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          const testFilter =
+            chunk === undefined
+              ? ""
+              : `AND browser_test_id IN (${chunk.map(() => "?").join(", ")})`;
+          return all<
+            Pick<
+              RunRow,
+              | "browser_test_id"
+              | "id"
+              | "source"
+              | "status"
+              | "started_at"
+              | "finished_at"
+              | "duration_ms"
+              | "attempt_count"
+              | "passed_after_retry"
+              | "billable"
+              | "created_at"
+            >
+          >(
+            this.database
+              .prepare(
+                `SELECT browser_test_id, id, source, status, started_at,
+                        finished_at, duration_ms, attempt_count,
+                        passed_after_retry, billable, created_at
+                 FROM (
+                   SELECT *, ROW_NUMBER() OVER (
+                     PARTITION BY browser_test_id
+                     ORDER BY created_at DESC, id DESC
+                   ) AS row_number
+                   FROM test_runs
+                   WHERE workspace_id = ? AND browser_test_id IS NOT NULL
+                     AND finished_at IS NOT NULL
+                     ${testFilter}
+                 ) WHERE row_number = 1`,
+              )
+              .bind(workspaceId, ...(chunk ?? [])),
+          );
+        }),
+      )
+    ).flat();
     const summaries = new Map<string, RunSummaryRow>();
     for (const row of rows) {
       if (row.browser_test_id === null) continue;

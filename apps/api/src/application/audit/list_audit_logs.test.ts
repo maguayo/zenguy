@@ -10,6 +10,7 @@ const ACTOR: User = {
   email: "actor@audit.test",
   passwordHash: "unused",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };

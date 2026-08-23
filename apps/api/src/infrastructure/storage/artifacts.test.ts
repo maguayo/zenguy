@@ -62,4 +62,38 @@ describe("ArtifactStorage", () => {
     expect(deletions.map((batch) => batch.length)).toEqual([1_000, 1_000, 5]);
     expect(deletions.flat()).toEqual(keys);
   });
+
+  it("deletes every paginated object below a workspace prefix", async () => {
+    const prefixes: { prefix?: string; cursor?: string }[] = [];
+    const deletions: string[][] = [];
+    const bucket = {
+      async list(options: { prefix?: string; cursor?: string }) {
+        prefixes.push(options);
+        return options.cursor === undefined
+          ? {
+              objects: [{ key: "ws/ws_1/first.jpg" }],
+              truncated: true,
+              cursor: "next-page",
+            }
+          : {
+              objects: [{ key: "ws/ws_1/orphan.jpg" }],
+              truncated: false,
+            };
+      },
+      async delete(keys: string | string[]) {
+        deletions.push(typeof keys === "string" ? [keys] : keys);
+      },
+    } as unknown as R2Bucket;
+
+    await new ArtifactStorage(bucket).deletePrefix("ws/ws_1/");
+
+    expect(prefixes).toEqual([
+      { prefix: "ws/ws_1/", cursor: undefined },
+      { prefix: "ws/ws_1/", cursor: "next-page" },
+    ]);
+    expect(deletions).toEqual([
+      ["ws/ws_1/first.jpg"],
+      ["ws/ws_1/orphan.jpg"],
+    ]);
+  });
 });

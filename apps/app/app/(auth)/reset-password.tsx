@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View, type TextInput } from "react-native";
 
@@ -16,19 +17,47 @@ import { AuthShell } from "@/components/AuthShell";
 import { useToast } from "@/contexts/ToastContext";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
-import { parseLinkToken } from "@/lib/links";
+import {
+  captureLinkCapability,
+  forgetLinkCapability,
+  linkCapability,
+} from "@/lib/link-capabilities";
+import { parseLinkFragment, parseLinkToken } from "@/lib/links";
 import { spacing } from "@/theme";
 import { Button, Field, Input, PasswordInput } from "@/ui";
 
 type ResetState = "form" | "gone" | "success";
 
 export default function ResetPassword() {
-  const params = useLocalSearchParams<{ token?: string }>();
+  const params = useLocalSearchParams<{ "#"?: string; token?: string }>();
+  const hasIncomingCapability = params.token !== undefined || params["#"] !== undefined;
+  if (hasIncomingCapability) {
+    return (
+      <ResetPasswordLink
+        value={params.token ?? parseLinkFragment(params["#"])}
+      />
+    );
+  }
+  return <ResetPasswordFlow linkToken={linkCapability("password-reset")} />;
+}
+
+function ResetPasswordLink({ value }: { value: unknown }) {
+  const router = useRouter();
+  const [linkToken] = useState(() => captureLinkCapability("password-reset", value));
+
+  useLayoutEffect(() => {
+    Linking.clearInitialURL();
+    router.replace("/(auth)/reset-password");
+  }, [router]);
+
+  return <ResetPasswordFlow linkToken={linkToken} />;
+}
+
+function ResetPasswordFlow({ linkToken }: { linkToken: string | null }) {
   const router = useRouter();
   const toast = useToast();
-  // The token only ever reaches the API through parseLinkToken: from the deep
-  // link when there is one, otherwise pasted by the user from the email link.
-  const linkToken = parseLinkToken(params.token);
+  // The token only ever reaches the API through parseLinkToken: from a
+  // Universal Link when there is one, otherwise pasted by the user.
   const [state, setState] = useState<ResetState>("form");
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
@@ -45,6 +74,7 @@ export default function ResetPassword() {
     }
     try {
       await resetPassword(safeToken, password);
+      forgetLinkCapability("password-reset");
       setState("success");
     } catch (error) {
       const passwordIssue =
@@ -52,7 +82,10 @@ export default function ResetPassword() {
           ? error.details?.find((detail) => detail.field === "password")
           : undefined;
       if (passwordIssue) form.setError("password", { message: passwordIssue.message });
-      else if (isResetLinkExpired(error)) setState("gone");
+      else if (isResetLinkExpired(error)) {
+        forgetLinkCapability("password-reset");
+        setState("gone");
+      }
       else toast.error(apiErrorMessage(error));
     }
   });

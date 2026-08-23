@@ -1,0 +1,39 @@
+diff --git a/dist/types/icns.js b/dist/types/icns.js
+--- a/dist/types/icns.js
++++ b/dist/types/icns.js
+@@ -82,6 +82,9 @@ exports.ICNS = {
+         let imageOffset = SIZE_HEADER;
+         let imageHeader = readImageHeader(input, imageOffset);
+         let imageSize = getImageSize(imageHeader[0]);
++        if (imageHeader[1] < SIZE_HEADER || imageHeader[1] > Math.min(fileLength, inputLength) - imageOffset) {
++            throw new TypeError('Invalid ICNS entry length');
++        }
+         imageOffset += imageHeader[1];
+         if (imageOffset === fileLength)
+             return imageSize;
+@@ -94,6 +97,9 @@ exports.ICNS = {
+         while (imageOffset < fileLength && imageOffset < inputLength) {
+             imageHeader = readImageHeader(input, imageOffset);
+             imageSize = getImageSize(imageHeader[0]);
++            if (imageHeader[1] < SIZE_HEADER || imageHeader[1] > Math.min(fileLength, inputLength) - imageOffset) {
++                throw new TypeError('Invalid ICNS entry length');
++            }
+             imageOffset += imageHeader[1];
+             result.images.push(imageSize);
+         }
+diff --git a/dist/types/utils.js b/dist/types/utils.js
+--- a/dist/types/utils.js
++++ b/dist/types/utils.js
+@@ -53,10 +53,10 @@ function readUInt(input, bits, offset, isBigEndian) {
+ }
+ exports.readUInt = readUInt;
+ function readBox(input, offset) {
+-    if (input.length - offset < 4)
++    if (input.length - offset < 8)
+         return;
+     const boxSize = (0, exports.readUInt32BE)(input, offset);
+-    if (input.length - offset < boxSize)
++    if (boxSize < 8 || input.length - offset < boxSize)
+         return;
+     return {
+         name: (0, exports.toUTF8String)(input, 4 + offset, 8 + offset),

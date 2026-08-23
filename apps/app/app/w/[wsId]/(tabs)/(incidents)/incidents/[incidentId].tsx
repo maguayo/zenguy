@@ -68,11 +68,21 @@ function IncidentDeliveryRow({
 
   return (
     <View style={[styles.deliveryRow, last && styles.lastRow]}>
-      <ChannelTile tone={status.tone === "danger" ? "danger" : "plain"} type={delivery.channelType} />
+      <ChannelTile
+        tone={
+          status.tone === "danger"
+            ? "danger"
+            : status.tone === "warn"
+              ? "warn"
+              : "plain"
+        }
+        type={delivery.channelType}
+      />
       <View style={styles.deliveryMain}>
         <Body style={styles.deliveryName}>{delivery.channelName}</Body>
         <MonoSmall>{details}</MonoSmall>
-        {delivery.status === "FAILED" && delivery.errorSanitized ? (
+        {(delivery.status === "FAILED" || delivery.status === "AMBIGUOUS") &&
+        delivery.errorSanitized ? (
           <Mono style={styles.deliveryError}>{delivery.errorSanitized}</Mono>
         ) : null}
       </View>

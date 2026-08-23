@@ -27,6 +27,7 @@ import { Tooltip } from "../../components/ui/Tooltip";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { apiErrorMessage } from "../../lib/errors";
+import { openTrustedBillingUrl } from "../../lib/billing-links";
 import { formatDateTime, formatEuros } from "../../lib/format";
 
 export interface SubscriptionPresentation {
@@ -264,7 +265,9 @@ function InvoicesCard({ billing }: { billing: Billing }) {
     setLoadingId(invoice.id);
     try {
       const url = await getInvoiceUrl(current.id, invoice.id);
-      window.open(url, "_blank");
+      if (!openTrustedBillingUrl(url)) {
+        throw new Error("The invoice provider returned an untrusted link.");
+      }
     } catch (error) {
       toast.error(apiErrorMessage(error));
     } finally {
@@ -308,7 +311,10 @@ function PaymentCard({ billing }: { billing: Billing }) {
 
   const finishCancellation = () => {
     if (!cancelUrl) return;
-    window.open(cancelUrl, "_blank");
+    if (!openTrustedBillingUrl(cancelUrl)) {
+      toast.error("The billing provider returned an untrusted link.");
+      return;
+    }
     toast.info("Finish cancelling in the Paddle page we just opened.");
   };
 
@@ -317,7 +323,15 @@ function PaymentCard({ billing }: { billing: Billing }) {
       {can("billing.manage") ? (
         <div className="flex flex-wrap gap-2">
           {updateUrl ? (
-            <Button onClick={() => window.open(updateUrl, "_blank")}>Update payment method</Button>
+            <Button
+              onClick={() => {
+                if (!openTrustedBillingUrl(updateUrl)) {
+                  toast.error("The billing provider returned an untrusted link.");
+                }
+              }}
+            >
+              Update payment method
+            </Button>
           ) : (
             <Tooltip content="Available after the first payment">
               <Button disabled>Update payment method</Button>

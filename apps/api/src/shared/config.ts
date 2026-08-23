@@ -1,47 +1,75 @@
 import { z } from "zod";
+import {
+  createEncryptionKeyring,
+  type EncryptionKeyVersion,
+  type EncryptionKeyring,
+} from "./crypto";
+import { D1WorkspaceDataKeyStore } from "../infrastructure/db/workspace_data_key_store";
+import {
+  CloudflareKeyWrappingProvider,
+  type KeyWrappingServiceBinding,
+} from "../infrastructure/crypto/cloudflare_key_wrapping";
 
-export interface Bindings {
-  DB: D1Database;
-  KV: KVNamespace;
-  ARTIFACTS: R2Bucket;
-  RUN_QUEUE: Queue;
-  CHECK_QUEUE: Queue;
-  NOTIFY_QUEUE: Queue;
-  ENVIRONMENT: string;
-  APP_URL: string;
-  JWT_SECRET: string;
-  ENCRYPTION_KEY: string;
-  ARTIFACT_URL_SECRET: string;
-  RUNNER_API_TOKEN: string;
-  EMAIL: SendEmail;
-  EMAIL_FROM: string;
-  LLM_MODEL: string;
-  TWILIO_ACCOUNT_SID: string;
-  TWILIO_AUTH_TOKEN: string;
-  TWILIO_FROM_SMS: string;
+interface OptionalBindings {
+  /** Required for staging and the production runner; exact Access team origin. */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** Required only in staging; audience tag of the Access app covering both API routes. */
+  CF_ACCESS_AUD?: string;
+  /** Required in production; audience of the service-only runner Access app. */
+  CF_RUNNER_ACCESS_AUD?: string;
+  ENCRYPTION_PREVIOUS_KEYS?: string;
+  /** Required in named environments; private RPC capability, not a URL/token. */
+  KEY_WRAPPING?: KeyWrappingServiceBinding;
+  /** Non-secret active KEK identifier expected from KEY_WRAPPING. */
+  KEY_WRAPPING_KEY_ID?: string;
   TWILIO_FROM_WHATSAPP?: string;
-  TWILIO_FROM_CALL: string;
   PADDLE_API_KEY?: string;
   PADDLE_WEBHOOK_SECRET?: string;
   PADDLE_CLIENT_TOKEN?: string;
   PADDLE_ENVIRONMENT?: string;
+  PADDLE_PRODUCT_ID?: string;
   PADDLE_PRICE_ID?: string;
   PADDLE_OVERAGE_PRICE_ID?: string;
+  PADDLE_ALERT_CREDIT_PRODUCT_ID?: string;
   PADDLE_ALERT_CREDIT_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
   IOS_APP_STORE_URL?: string;
   EXPO_PUSH_ACCESS_TOKEN?: string;
 }
 
+interface WidenedConfigBindings {
+  ENVIRONMENT: string;
+  APP_URL: string;
+  ENCRYPTION_KEY_ID: string;
+  LLM_MODEL: string;
+  EMAIL_FROM: string;
+}
+
+type BindingOverrides = OptionalBindings & WidenedConfigBindings;
+
+/**
+ * Binding names and platform types come from the committed Wrangler output.
+ * Runtime-optional feature groups stay optional so development can fail closed
+ * through `loadConfig` instead of requiring placeholder secrets.
+ */
+export type Bindings = Omit<
+  Env,
+  keyof BindingOverrides
+> &
+  BindingOverrides;
+
 export interface PaddleConfig {
   apiKey: string;
   webhookSecret: string;
   clientToken: string;
   environment: "sandbox" | "production";
+  productId: string;
   priceId: string;
   overagePriceId: string;
   /** One-time price for a €10 alert-credit pack; null disables top-ups. */
   alertCreditPriceId: string | null;
+  /** Product owning the alert-credit price; null disables top-ups. */
+  alertCreditProductId: string | null;
   apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
 }
 
@@ -49,9 +77,11 @@ export interface AppConfig {
   appUrl: string;
   environment: "development" | "staging" | "production";
   jwtSecret: string;
-  encryptionKey: Uint8Array;
+  encryptionKeys: EncryptionKeyring;
   artifactUrlSecret: string;
   runnerApiToken: string;
+  runnerFallbackApiToken: string;
+  runnerCapabilitySecret: string;
   emailFrom: string;
   llmModel: string;
   twilio: {
@@ -73,8 +103,11 @@ const requiredEnvKeys = [
   "ENVIRONMENT",
   "JWT_SECRET",
   "ENCRYPTION_KEY",
+  "ENCRYPTION_KEY_ID",
   "ARTIFACT_URL_SECRET",
   "RUNNER_API_TOKEN",
+  "RUNNER_FALLBACK_API_TOKEN",
+  "RUNNER_CAPABILITY_SECRET",
   "EMAIL_FROM",
   "LLM_MODEL",
   "TWILIO_ACCOUNT_SID",
@@ -87,6 +120,7 @@ const paddleSecretKeys = [
   "PADDLE_API_KEY",
   "PADDLE_WEBHOOK_SECRET",
   "PADDLE_CLIENT_TOKEN",
+  "PADDLE_PRODUCT_ID",
   "PADDLE_PRICE_ID",
   "PADDLE_OVERAGE_PRICE_ID",
 ] as const satisfies readonly (keyof Bindings)[];
@@ -109,8 +143,13 @@ const envSchema = z.object({
   ENVIRONMENT: z.enum(["development", "staging", "production"]),
   JWT_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(1),
+  ENCRYPTION_KEY_ID: z.string().min(1),
+  ENCRYPTION_PREVIOUS_KEYS: optionalNonEmptyString(),
+  KEY_WRAPPING_KEY_ID: optionalNonEmptyString(),
   ARTIFACT_URL_SECRET: z.string().min(32),
   RUNNER_API_TOKEN: z.string().min(32),
+  RUNNER_FALLBACK_API_TOKEN: z.string().min(32),
+  RUNNER_CAPABILITY_SECRET: z.string().min(32),
   EMAIL_FROM: z.string().min(1),
   LLM_MODEL: z.string().min(1),
   TWILIO_ACCOUNT_SID: z.string().min(1),
@@ -126,8 +165,10 @@ const paddleEnvSchema = z.object({
   PADDLE_WEBHOOK_SECRET: z.string().min(1),
   PADDLE_CLIENT_TOKEN: z.string().min(1),
   PADDLE_ENVIRONMENT: z.enum(["sandbox", "production"]),
+  PADDLE_PRODUCT_ID: z.string().min(1),
   PADDLE_PRICE_ID: z.string().min(1),
   PADDLE_OVERAGE_PRICE_ID: z.string().min(1),
+  PADDLE_ALERT_CREDIT_PRODUCT_ID: optionalNonEmptyString(),
   PADDLE_ALERT_CREDIT_PRICE_ID: optionalNonEmptyString(),
 });
 
@@ -169,19 +210,45 @@ export function isComplimentaryIssuer(
   return emails.includes(email.trim().toLowerCase());
 }
 
-function decodeEncryptionKey(encoded: string): Uint8Array {
+function decodeEncryptionKey(encoded: string, name: string): Uint8Array {
   let decoded: string;
   try {
     decoded = atob(encoded);
   } catch {
-    throw new Error("ENCRYPTION_KEY must be valid base64 encoding exactly 32 bytes");
+    throw new Error(`${name} must be valid base64 encoding exactly 32 bytes`);
   }
 
   const bytes = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
   if (bytes.byteLength !== 32) {
-    throw new Error("ENCRYPTION_KEY must decode to exactly 32 bytes");
+    throw new Error(`${name} must decode to exactly 32 bytes`);
   }
   return bytes;
+}
+
+function parsePreviousEncryptionKeys(value: string | undefined): EncryptionKeyVersion[] {
+  if (value === undefined) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("ENCRYPTION_PREVIOUS_KEYS must be a JSON object of key ids to base64 keys");
+  }
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error("ENCRYPTION_PREVIOUS_KEYS must be a JSON object of key ids to base64 keys");
+  }
+  const entries = Object.entries(parsed);
+  if (entries.length > 8) {
+    throw new Error("ENCRYPTION_PREVIOUS_KEYS supports at most 8 keys");
+  }
+  return entries.map(([id, encoded]) => {
+    if (typeof encoded !== "string") {
+      throw new Error("Every ENCRYPTION_PREVIOUS_KEYS value must be a base64 string");
+    }
+    return {
+      id,
+      key: decodeEncryptionKey(encoded, `Previous encryption key ${id}`),
+    };
+  });
 }
 
 export function loadConfig(env: Bindings): AppConfig {
@@ -197,6 +264,47 @@ export function loadConfig(env: Bindings): AppConfig {
   }
 
   const parsed = envSchema.parse(env);
+  let keyEncryption: CloudflareKeyWrappingProvider | undefined;
+  if (parsed.ENVIRONMENT !== "development") {
+    const missingKeyWrappingBindings = [];
+    if (parsed.KEY_WRAPPING_KEY_ID === undefined) {
+      missingKeyWrappingBindings.push("KEY_WRAPPING_KEY_ID");
+    }
+    if (env.KEY_WRAPPING === undefined) {
+      missingKeyWrappingBindings.push("KEY_WRAPPING");
+    }
+    if (missingKeyWrappingBindings.length > 0) {
+      throw new Error(
+        `Missing key-wrapping bindings: ${missingKeyWrappingBindings.join(", ")}`,
+      );
+    }
+    keyEncryption = new CloudflareKeyWrappingProvider(
+      parsed.KEY_WRAPPING_KEY_ID as string,
+      env.KEY_WRAPPING as KeyWrappingServiceBinding,
+    );
+  }
+  const encryptionKeys = createEncryptionKeyring(
+    {
+      id: parsed.ENCRYPTION_KEY_ID,
+      key: decodeEncryptionKey(parsed.ENCRYPTION_KEY, "ENCRYPTION_KEY"),
+    },
+    parsePreviousEncryptionKeys(parsed.ENCRYPTION_PREVIOUS_KEYS),
+    {
+      // Production writers must never fall back to an isolate-local key map:
+      // D1 makes the random workspace DEK durable across requests/regions.
+      workspaceDataKeys: new D1WorkspaceDataKeyStore(env.DB),
+      ...(keyEncryption === undefined ? {} : { keyEncryption }),
+    },
+  );
+  if (parsed.RUNNER_API_TOKEN === parsed.RUNNER_FALLBACK_API_TOKEN) {
+    throw new Error("Primary and fallback runner tokens must be independent");
+  }
+  if (
+    parsed.RUNNER_CAPABILITY_SECRET === parsed.RUNNER_API_TOKEN ||
+    parsed.RUNNER_CAPABILITY_SECRET === parsed.RUNNER_FALLBACK_API_TOKEN
+  ) {
+    throw new Error("Runner capability signing secret must be independent");
+  }
   const paddleEnabled = paddleSecretKeys.some((key) => {
     const value = env[key];
     return typeof value === "string" && value.trim().length > 0;
@@ -211,14 +319,25 @@ export function loadConfig(env: Bindings): AppConfig {
       throw new Error(`Missing Paddle env: ${missingPaddle.join(", ")}`);
     }
     const parsedPaddle = paddleEnvSchema.parse(env);
+    const alertCreditPriceId =
+      parsedPaddle.PADDLE_ALERT_CREDIT_PRICE_ID ?? null;
+    const alertCreditProductId =
+      parsedPaddle.PADDLE_ALERT_CREDIT_PRODUCT_ID ?? null;
+    if ((alertCreditPriceId === null) !== (alertCreditProductId === null)) {
+      throw new Error(
+        "PADDLE_ALERT_CREDIT_PRODUCT_ID and PADDLE_ALERT_CREDIT_PRICE_ID must be configured together",
+      );
+    }
     paddle = {
       apiKey: parsedPaddle.PADDLE_API_KEY,
       webhookSecret: parsedPaddle.PADDLE_WEBHOOK_SECRET,
       clientToken: parsedPaddle.PADDLE_CLIENT_TOKEN,
       environment: parsedPaddle.PADDLE_ENVIRONMENT,
+      productId: parsedPaddle.PADDLE_PRODUCT_ID,
       priceId: parsedPaddle.PADDLE_PRICE_ID,
       overagePriceId: parsedPaddle.PADDLE_OVERAGE_PRICE_ID,
-      alertCreditPriceId: parsedPaddle.PADDLE_ALERT_CREDIT_PRICE_ID ?? null,
+      alertCreditPriceId,
+      alertCreditProductId,
       apiBase:
         parsedPaddle.PADDLE_ENVIRONMENT === "sandbox"
           ? "https://sandbox-api.paddle.com"
@@ -230,9 +349,11 @@ export function loadConfig(env: Bindings): AppConfig {
     appUrl: parsed.APP_URL,
     environment: parsed.ENVIRONMENT,
     jwtSecret: parsed.JWT_SECRET,
-    encryptionKey: decodeEncryptionKey(parsed.ENCRYPTION_KEY),
+    encryptionKeys,
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
     runnerApiToken: parsed.RUNNER_API_TOKEN,
+    runnerFallbackApiToken: parsed.RUNNER_FALLBACK_API_TOKEN,
+    runnerCapabilitySecret: parsed.RUNNER_CAPABILITY_SECRET,
     emailFrom: parsed.EMAIL_FROM,
     llmModel: parsed.LLM_MODEL,
     twilio: {

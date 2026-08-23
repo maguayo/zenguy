@@ -23,6 +23,11 @@ export interface DeliveryUpdate {
   destinationCountry?: string | null;
 }
 
+export interface DeliveryDispatchClaim {
+  delivery: NotificationDelivery;
+  dispatchToken: string;
+}
+
 export interface ChannelRepo {
   insert(channel: NotificationChannel): Promise<void>;
   findById(
@@ -30,6 +35,11 @@ export interface ChannelRepo {
     id: string,
   ): Promise<NotificationChannel | null>;
   list(workspaceId: string): Promise<NotificationChannel[]>;
+  listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<NotificationChannel[]>;
   listByIds(
     workspaceId: string,
     ids: string[],
@@ -46,12 +56,36 @@ export interface DeliveryRepo {
     workspaceId: string,
     id: string,
   ): Promise<NotificationDelivery | null>;
-  claimPending(
+  beginDispatch(
     workspaceId: string,
     id: string,
+    dispatchToken: string,
     claimedAt: number,
     staleBefore: number,
+  ): Promise<DeliveryDispatchClaim | null>;
+  finishDispatch(
+    id: string,
+    dispatchToken: string,
+    changes: DeliveryUpdate,
+  ): Promise<boolean>;
+  markDispatchAmbiguous(
+    id: string,
+    dispatchToken: string,
+    attemptCount: number,
+    errorSanitized: string,
   ): Promise<NotificationDelivery | null>;
+  markStaleDispatchAmbiguous(
+    workspaceId: string,
+    id: string,
+    staleBefore: number,
+    errorSanitized: string,
+  ): Promise<NotificationDelivery | null>;
+  recordProviderAcceptance(
+    id: string,
+    providerIdempotencyKey: string,
+    providerMessageId: string | null,
+    sentAt: number,
+  ): Promise<boolean>;
   update(id: string, changes: DeliveryUpdate): Promise<void>;
   listForChannel(
     channelId: string,

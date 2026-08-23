@@ -5,11 +5,13 @@ import { GetWorkspace } from "../../application/workspaces/get_workspace";
 import { ListMyWorkspaces } from "../../application/workspaces/list_my_workspaces";
 import { UpdateWorkspace } from "../../application/workspaces/update_workspace";
 import { TransferOwnership } from "../../application/workspaces/transfer_ownership";
-import { DeleteWorkspace } from "../../application/workspaces/delete_workspace";
+import {
+  DeleteWorkspace,
+  type WorkspaceDeletionCoordinator,
+} from "../../application/workspaces/delete_workspace";
 import type { EnsureDefaultEmailChannel } from "../../application/alerts/ensure_default_email_channel";
 import type { EnsureDefaultPushChannel } from "../../application/push/ensure_default_push_channel";
 import type { WriteAudit } from "../../application/audit/write_audit";
-import type { BillingCanceller } from "../../domain/billing/canceller";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
@@ -31,7 +33,7 @@ export interface WorkspaceRoutesDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
   invitations: InvitationRepo;
-  billingCanceller: BillingCanceller;
+  workspaceDeletion: WorkspaceDeletionCoordinator;
   subscriptions: SubscriptionRepo;
   defaultEmailChannel: Pick<EnsureDefaultEmailChannel, "execute">;
   defaultPushChannel: Pick<EnsureDefaultPushChannel, "execute">;
@@ -79,13 +81,12 @@ export function workspaceRoutes(
   const transferOwnership = new TransferOwnership(
     dependencies.workspaces,
     dependencies.members,
+    dependencies.invitations,
     dependencies.audit,
     dependencies.clock,
   );
   const deleteWorkspace = new DeleteWorkspace(
-    dependencies.workspaces,
-    dependencies.invitations,
-    dependencies.billingCanceller,
+    dependencies.workspaceDeletion,
     dependencies.audit,
     dependencies.clock,
   );

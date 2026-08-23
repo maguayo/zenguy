@@ -30,10 +30,25 @@ export class AcceptInvitation {
   }): Promise<{ workspaceId: string }> {
     const tokenHash = await sha256Hex(input.tokenPlain);
     const now = this.clock.now();
-    let invitation = await this.invitations.findValidByHash(tokenHash, now);
+    const invitation = await this.invitations.acceptByHash({
+      hash: tokenHash,
+      email: input.actor.email,
+      userId: input.actor.id,
+      memberId: this.ids.newId("mem"),
+      now,
+    });
 
     if (invitation === null) {
       const consumed = await this.invitations.findByHash(tokenHash);
+      if (
+        consumed !== null &&
+        consumed.acceptedAt === null &&
+        consumed.revokedAt === null &&
+        consumed.expiresAt > now &&
+        consumed.email.toLowerCase() !== input.actor.email.toLowerCase()
+      ) {
+        throw forbidden("This invitation was sent to a different email address");
+      }
       if (
         consumed === null ||
         consumed.acceptedAt === null ||
@@ -45,24 +60,7 @@ export class AcceptInvitation {
       return { workspaceId: consumed.workspaceId };
     }
 
-    if (invitation.email.toLowerCase() !== input.actor.email.toLowerCase()) {
-      throw forbidden("This invitation was sent to a different email address");
-    }
-    const existing = await this.members.find(
-      invitation.workspaceId,
-      input.actor.id,
-    );
-    if (existing === null) {
-      await this.members.insert({
-        id: this.ids.newId("mem"),
-        workspaceId: invitation.workspaceId,
-        userId: input.actor.id,
-        role: invitation.role,
-        invitedBy: invitation.invitedBy,
-        joinedAt: now,
-      });
-    }
-    await this.invitations.markAccepted(invitation.id, now);
+    const existing = await this.members.find(invitation.workspaceId, input.actor.id);
     await this.audit.execute({
       workspaceId: invitation.workspaceId,
       actorUserId: input.actor.id,

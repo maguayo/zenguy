@@ -5,7 +5,12 @@ export interface ApiKeyRepo {
   findById(workspaceId: string, id: string): Promise<WorkspaceApiKey | null>;
   findByHash(keyHash: string): Promise<WorkspaceApiKey | null>;
   list(workspaceId: string): Promise<WorkspaceApiKey[]>;
-  countActive(workspaceId: string): Promise<number>;
+  countActive(workspaceId: string, now: number): Promise<number>;
   revoke(id: string, at: number): Promise<void>;
+  revokeAllCreatedBy(
+    workspaceId: string,
+    creatorUserId: string,
+    at: number,
+  ): Promise<number>;
   touchLastUsed(id: string, at: number): Promise<void>;
 }

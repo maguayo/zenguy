@@ -3,6 +3,10 @@ import {
   type AgentAction,
   type LlmClient,
 } from "../../domain/browser_tests/agent_types";
+import {
+  cancelResponseBody,
+  readLimitedJsonResponse,
+} from "../../shared/limited_response";
 
 export type { LlmClient } from "../../domain/browser_tests/agent_types";
 
@@ -11,6 +15,7 @@ export type { LlmClient } from "../../domain/browser_tests/agent_types";
 const RESPONSES_URL = "https://api.openai.com/v1/responses";
 const REQUEST_TIMEOUT_MS = 60_000;
 const RETRY_DELAYS_MS = [1_000, 4_000] as const;
+const MAX_RESPONSE_BYTES = 256 * 1_024;
 
 export const AGENT_ACTION_INPUT_SCHEMA = {
   type: "object",
@@ -221,6 +226,7 @@ export class OpenAiLlmClient implements LlmClient {
       });
 
       if (!response.ok) {
+        await cancelResponseBody(response);
         if (retryableStatus(response.status)) {
           throw new RetryableLlmError(`LLM request failed: ${response.status}`);
         }
@@ -229,7 +235,7 @@ export class OpenAiLlmClient implements LlmClient {
 
       let payload: unknown;
       try {
-        payload = await response.json();
+        payload = await readLimitedJsonResponse(response, MAX_RESPONSE_BYTES);
       } catch (error) {
         if (controller.signal.aborted) {
           throw new RetryableLlmError("LLM response timed out", { cause: error });

@@ -40,6 +40,8 @@ describe("monitorConfigSchema", () => {
     [{ ...VALID, name: "" }, "name"],
     [{ ...VALID, name: "x".repeat(121) }, "name"],
     [{ ...VALID, url: "http://169.254.169.254/latest" }, "url"],
+    [{ ...VALID, url: "https://api.zenguy.com/internal" }, "url"],
+    [{ ...VALID, url: "https://app.zenguy.com./api/health" }, "url"],
     [{ ...VALID, method: "OPTIONS" }, "method"],
     [{ ...VALID, headers: [{ key: "Bad header", value: "x" }] }, "headers"],
     [

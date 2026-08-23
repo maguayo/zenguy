@@ -175,6 +175,31 @@ export class D1IncidentRepo implements IncidentRepo {
     return row === null ? null : toIncident(row);
   }
 
+  async findOpenForMonitors(
+    workspaceId: string,
+    monitorIds: string[],
+  ): Promise<Map<string, Incident>> {
+    const result = new Map<string, Incident>();
+    if (monitorIds.length === 0) return result;
+    const placeholders = monitorIds.map(() => "?").join(", ");
+    const rows = await all<IncidentRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM incidents
+           WHERE workspace_id = ? AND status = 'OPEN'
+             AND uptime_monitor_id IN (${placeholders})
+           ORDER BY created_at DESC, id DESC`,
+        )
+        .bind(workspaceId, ...monitorIds),
+    );
+    for (const row of rows) {
+      if (row.uptime_monitor_id !== null && !result.has(row.uptime_monitor_id)) {
+        result.set(row.uptime_monitor_id, toIncident(row));
+      }
+    }
+    return result;
+  }
+
   async findByRunSource(runId: string): Promise<Incident | null> {
     const row = await one<IncidentRow>(
       this.database

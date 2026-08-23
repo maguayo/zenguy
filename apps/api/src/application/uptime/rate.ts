@@ -1,41 +1,49 @@
 import { RATE_LIMITS } from "../../shared/constants";
-import { AppError } from "../../shared/errors";
-import type { RateLimiter } from "../../shared/ratelimit";
+import { sha256Hex } from "../../shared/crypto";
+import {
+  enforceRateLimitScopes,
+  normalizeRateLimitAddress,
+  type RateLimiter,
+} from "../../shared/ratelimit";
+
+async function enforceUptimeRate(
+  limiter: RateLimiter,
+  kind: "monitor_create" | "test_request",
+  input: { workspaceId: string; actorId: string; ip?: string },
+): Promise<void> {
+  await enforceRateLimitScopes(
+    limiter,
+    [
+      `${kind}:workspace:${input.workspaceId}`,
+      `${kind}:actor:${input.actorId}`,
+      `${kind}:ip:${await sha256Hex(normalizeRateLimitAddress(input.ip))}`,
+    ],
+    RATE_LIMITS[kind],
+  );
+}
 
 export async function enforceMonitorCreateRate(
   limiter: RateLimiter,
   workspaceId: string,
+  actorId: string,
+  ip?: string,
 ): Promise<void> {
-  const result = await limiter.hit(
-    `monitor_create:${workspaceId}`,
-    RATE_LIMITS.monitor_create.limit,
-    RATE_LIMITS.monitor_create.windowSeconds,
-  );
-  if (!result.allowed) {
-    throw new AppError(
-      "RATE_LIMITED",
-      "Too many requests",
-      undefined,
-      result.retryAfterSeconds,
-    );
-  }
+  await enforceUptimeRate(limiter, "monitor_create", {
+    workspaceId,
+    actorId,
+    ip,
+  });
 }
 
 export async function enforceTestRequestRate(
   limiter: RateLimiter,
   workspaceId: string,
+  actorId: string,
+  ip?: string,
 ): Promise<void> {
-  const result = await limiter.hit(
-    `test_request:${workspaceId}`,
-    RATE_LIMITS.test_request.limit,
-    RATE_LIMITS.test_request.windowSeconds,
-  );
-  if (!result.allowed) {
-    throw new AppError(
-      "RATE_LIMITED",
-      "Too many requests",
-      undefined,
-      result.retryAfterSeconds,
-    );
-  }
+  await enforceUptimeRate(limiter, "test_request", {
+    workspaceId,
+    actorId,
+    ip,
+  });
 }

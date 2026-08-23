@@ -83,6 +83,22 @@ describe("browser test migration", () => {
     );
   });
 
+  it("defaults pre-policy browser tests to a fail-closed policy", async () => {
+    await insertBrowserTest("bt_legacy_policy");
+
+    const row = await testEnv()
+      .DB.prepare(
+        `SELECT allowed_domains_json, allow_reversible_writes
+         FROM browser_tests WHERE id = 'bt_legacy_policy'`,
+      )
+      .first<{ allowed_domains_json: string; allow_reversible_writes: number }>();
+
+    expect(row).toEqual({
+      allowed_domains_json: "[]",
+      allow_reversible_writes: 0,
+    });
+  });
+
   it("enforces browser/run checks and both partial unique indexes", async () => {
     await insertBrowserTest();
     await expect(

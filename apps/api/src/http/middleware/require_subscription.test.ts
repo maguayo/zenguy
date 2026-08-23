@@ -5,6 +5,9 @@ import { errorHandler } from "./error_handler";
 import type { AppEnv } from "../env";
 import { FakeSubscriptionRepo } from "../../test/fakes/repos";
 import { requireActiveSubscription } from "./require_subscription";
+import { FixedClock } from "../../shared/clock";
+
+const NOW = 1_700_000_000_000;
 
 const WORKSPACE: Workspace = {
   id: "ws_gate",
@@ -17,7 +20,11 @@ const WORKSPACE: Workspace = {
   deletedAt: null,
 };
 
-function subscription(status: Subscription["status"]): Subscription {
+function subscription(
+  status: Subscription["status"],
+  updatedAt = NOW,
+  pastDueSince?: number,
+): Subscription {
   return {
     id: "sub_gate",
     workspaceId: WORKSPACE.id,
@@ -31,14 +38,21 @@ function subscription(status: Subscription["status"]): Subscription {
     updatePaymentUrl: null,
     cancelUrl: null,
     createdAt: 1,
-    updatedAt: 1,
+    updatedAt,
+    ...(pastDueSince === undefined ? {} : { pastDueSince }),
   };
 }
 
-async function probe(status: Subscription["status"] | null) {
+async function probe(
+  status: Subscription["status"] | null,
+  updatedAt = NOW,
+  pastDueSince?: number,
+) {
   const subscriptions = new FakeSubscriptionRepo();
   if (status !== null) {
-    await subscriptions.upsertByWorkspace(subscription(status));
+    await subscriptions.upsertByWorkspace(
+      subscription(status, updatedAt, pastDueSince),
+    );
   }
   const app = new Hono<AppEnv>();
   app.onError(errorHandler);
@@ -46,7 +60,7 @@ async function probe(status: Subscription["status"] | null) {
     context.set("workspace", WORKSPACE);
     await next();
   });
-  app.get("/probe", requireActiveSubscription(subscriptions), (context) =>
+  app.get("/probe", requireActiveSubscription(subscriptions, new FixedClock(NOW)), (context) =>
     context.json({ data: { allowed: true } }),
   );
   return app.request("/probe");
@@ -79,4 +93,23 @@ describe("requireActiveSubscription", () => {
       });
     },
   );
+
+  it("blocks PAST_DUE after the seven-day grace window", async () => {
+    const response = await probe("PAST_DUE", NOW - 7 * 86_400_000);
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "BILLING_REQUIRED" },
+    });
+  });
+
+  it("does not extend grace when a later PAST_DUE update changes updatedAt", async () => {
+    const response = await probe(
+      "PAST_DUE",
+      NOW,
+      NOW - 7 * 86_400_000,
+    );
+
+    expect(response.status).toBe(402);
+  });
 });

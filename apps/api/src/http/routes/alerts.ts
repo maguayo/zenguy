@@ -1,11 +1,14 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { TrackEvent } from "../../application/activity/track_event";
 import { GetAlertsOverview } from "../../application/alerts/get_alerts_overview";
 import { ListCreditEntries } from "../../application/alerts/list_credit_entries";
 import { StartCreditTopUp } from "../../application/alerts/start_credit_topup";
 import { UpdateAlertSettings } from "../../application/alerts/update_alert_settings";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { AlertRepo } from "../../domain/alerts/repo";
+import type { PaddleCheckoutIntentRepo } from "../../domain/billing/repo";
+import { IssuePaddleCheckoutIntent } from "../../application/billing/paddle_checkout_intent";
 import { quoteFor } from "../../domain/alerts/pricing";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import type { UserRepo } from "../../domain/users/repo";
@@ -14,6 +17,7 @@ import type {
   WorkspaceRepo,
 } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
+import type { IdGenerator } from "../../shared/ids";
 import type { AppConfig } from "../../shared/config";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
@@ -31,9 +35,12 @@ export interface AlertRoutesDependencies {
   members: MemberRepo;
   channels: ChannelRepo;
   alerts: AlertRepo;
+  checkoutIntents: PaddleCheckoutIntentRepo;
   audit: Pick<WriteAudit, "execute">;
+  track?: Pick<TrackEvent, "execute">;
   clock: Clock;
-  config: Pick<AppConfig, "jwtSecret" | "encryptionKey" | "paddle">;
+  ids: IdGenerator;
+  config: Pick<AppConfig, "jwtSecret" | "encryptionKeys" | "paddle">;
 }
 
 const settingsSchema = z
@@ -65,7 +72,9 @@ function requestIp(context: {
 export function alertCreditPriceId(
   paddle: AppConfig["paddle"],
 ): string | null {
-  return paddle === null ? null : paddle.alertCreditPriceId;
+  return paddle === null || paddle.alertCreditProductId === null
+    ? null
+    : paddle.alertCreditPriceId;
 }
 
 export function alertRoutes(
@@ -79,7 +88,7 @@ export function alertRoutes(
   const getOverview = new GetAlertsOverview(
     dependencies.alerts,
     dependencies.channels,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     topUpAvailable,
     dependencies.clock,
   );
@@ -90,7 +99,17 @@ export function alertRoutes(
     dependencies.clock,
   );
   const listEntries = new ListCreditEntries(dependencies.alerts);
-  const startTopUp = new StartCreditTopUp(priceId);
+  const startTopUp = new StartCreditTopUp(
+    new IssuePaddleCheckoutIntent(
+      dependencies.checkoutIntents,
+      dependencies.config.paddle,
+      dependencies.clock,
+      dependencies.ids,
+      undefined,
+      dependencies.track,
+    ),
+    dependencies.track,
+  );
 
   app.get(
     "/:workspaceId/alerts",
@@ -111,7 +130,7 @@ export function alertRoutes(
     auth,
     requireVerifiedEmail,
     workspace,
-    requireAction("channels.manage"),
+    requireAction("paid_alerts.manage"),
     zjson(settingsSchema),
     async (context) => {
       const result = await updateSettings.execute({
@@ -176,6 +195,7 @@ export function alertRoutes(
     async (context) => {
       const result = await startTopUp.execute({
         workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
         actorRole: context.get("role"),
         packs: context.req.valid("json").packs,
       });

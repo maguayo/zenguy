@@ -76,6 +76,7 @@ function ScreenshotThumbnail({
       ) : (
         <Image
           accessibilityLabel={`Step ${sequence} screenshot`}
+          cachePolicy="memory"
           contentFit="cover"
           contentPosition="top"
           source={{ uri: absoluteArtifactUrl(screenshot.url) }}

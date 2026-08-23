@@ -62,4 +62,23 @@ describe("delivery history", () => {
     expect(html).toContain("0,18");
     expect(html).toContain("Spain");
   });
+
+  it("surfaces an ambiguous provider outcome instead of calling it pending", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <DeliveryRow
+          delivery={{
+            ...failed,
+            attemptCount: 1,
+            errorSanitized: "provider acknowledgement lost",
+            status: "AMBIGUOUS",
+          }}
+          timezone="UTC"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Needs reconciliation");
+    expect(html).toContain("provider acknowledgement lost");
+  });
 });

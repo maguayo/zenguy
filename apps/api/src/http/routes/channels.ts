@@ -24,7 +24,11 @@ import type {
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import type { IdGenerator } from "../../shared/ids";
-import type { RateLimiter } from "../../shared/ratelimit";
+import { MAX_CURSOR_LENGTH } from "../../shared/pagination";
+import {
+  collectionCreateRateLimit,
+  type RateLimiter,
+} from "../../shared/ratelimit";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireActiveSubscription } from "../middleware/require_subscription";
@@ -47,7 +51,7 @@ export interface ChannelRoutesDependencies {
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "appUrl" | "jwtSecret" | "encryptionKey">;
+  config: Pick<AppConfig, "appUrl" | "jwtSecret" | "encryptionKeys">;
 }
 
 const channelTypeSchema = z.enum([
@@ -87,6 +91,10 @@ const deliveriesQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
+const channelsQuerySchema = z.object({
+  cursor: z.string().max(MAX_CURSOR_LENGTH).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+});
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -100,13 +108,16 @@ export function channelRoutes(
   const app = new Hono<AppEnv>();
   const auth = requireAuth(dependencies);
   const workspace = withWorkspace(dependencies);
-  const active = requireActiveSubscription(dependencies.subscriptions);
+  const active = requireActiveSubscription(
+    dependencies.subscriptions,
+    dependencies.clock,
+  );
   const createChannel = new CreateChannel(
     dependencies.channels,
     dependencies.subscriptions,
     dependencies.alerts,
     dependencies.audit,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     dependencies.clock,
     dependencies.ids,
   );
@@ -115,7 +126,7 @@ export function channelRoutes(
     dependencies.subscriptions,
     dependencies.alerts,
     dependencies.audit,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     dependencies.clock,
   );
   const deleteChannel = new DeleteChannel(
@@ -134,16 +145,23 @@ export function channelRoutes(
     dependencies.clock,
     dependencies.ids,
     dependencies.charger,
+    {
+      isOperational: async (workspaceId) =>
+        (await dependencies.workspaces.findById(workspaceId)) !== null,
+    },
   );
   const listChannels = new ListChannels(
     dependencies.channels,
     dependencies.alerts,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     dependencies.pushDevices,
   );
   const listDeliveries = new ListDeliveries(
     dependencies.channels,
     dependencies.deliveries,
+  );
+  const commonCreateLimit = collectionCreateRateLimit(
+    dependencies.rateLimiter,
   );
 
   app.get(
@@ -151,11 +169,18 @@ export function channelRoutes(
     auth,
     requireVerifiedEmail,
     workspace,
+    zquery(channelsQuerySchema),
     async (context) => {
+      const query = context.req.valid("query");
       const result = await listChannels.execute({
         workspaceId: context.get("workspace").id,
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        limit: query.limit,
       });
-      return context.json({ data: result.map(presentChannel) });
+      return context.json({
+        data: result.channels.map(presentChannel),
+        nextCursor: result.nextCursor,
+      });
     },
   );
 
@@ -166,6 +191,7 @@ export function channelRoutes(
     workspace,
     requireAction("channels.manage"),
     active,
+    commonCreateLimit,
     zjson(createSchema),
     async (context) => {
       const result = await createChannel.execute({

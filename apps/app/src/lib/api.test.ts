@@ -8,10 +8,12 @@ import {
   apiGetText,
   apiPost,
   authEvents,
+  beginTerminalLogout,
   clearSession,
   ensureFreshToken,
   filenameFromDisposition,
   hasStoredSession,
+  SessionSupersededError,
   storeSession,
 } from "./api";
 import { getToken } from "./auth-token";
@@ -160,6 +162,38 @@ describe("api client", () => {
 
     const refreshCalls = fetchMock.mock.calls.filter(([url]) => url.endsWith("/api/auth/refresh"));
     expect(refreshCalls).toHaveLength(1);
+  });
+
+  it("aborts and discards a refresh that resolves after terminal logout", async () => {
+    await storeSession({ accessToken: "principal-a", expiresIn: 1_800, refreshToken: "refresh-a" });
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    const signals: AbortSignal[] = [];
+    fetchMock.mockImplementationOnce((_url, init) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    });
+
+    const pending = ensureFreshToken();
+    while (fetchMock.mock.calls.length === 0) await Promise.resolve();
+    await beginTerminalLogout();
+    expect(signals[0]?.aborted).toBe(true);
+    resolveRefresh?.(
+      jsonResponse({
+        data: {
+          accessToken: "late-a",
+          expiresIn: 1_800,
+          refreshExpiresIn: 2_592_000,
+          refreshToken: "late-refresh-a",
+          user: { id: "usr_a" },
+        },
+      }),
+    );
+
+    await expect(pending).rejects.toBeInstanceOf(SessionSupersededError);
+    expect(getToken().accessToken).toBeNull();
+    expect(await secureStorage.getItem(storageKeys.refreshToken)).toBe("refresh-a");
   });
 
   it("unwraps pages and envelopes", async () => {

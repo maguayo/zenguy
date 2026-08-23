@@ -20,7 +20,7 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { decryptSecret } from "../../shared/crypto";
+import { decryptSecret, type EncryptionKeyring } from "../../shared/crypto";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import type { AppEnv } from "../env";
 
@@ -36,6 +36,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@channels.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -45,6 +46,7 @@ const USERS: Record<Actor, User> = {
     email: "admin@channels.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -54,6 +56,7 @@ const USERS: Record<Actor, User> = {
     email: "member@channels.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -117,7 +120,7 @@ describe("channel routes", () => {
   let subscriptions: D1SubscriptionRepo;
   let audits: D1AuditRepo;
   let alerts: D1AlertRepo;
-  let encryptionKey: Uint8Array;
+  let encryptionKeys: EncryptionKeyring;
 
   beforeEach(async () => {
     await Promise.all([freshDb(), freshKv()]);
@@ -146,7 +149,7 @@ describe("channel routes", () => {
     audits = new D1AuditRepo(bindings.DB);
     alerts = new D1AlertRepo(bindings.DB);
     const config = loadConfig(bindings);
-    encryptionKey = config.encryptionKey;
+    encryptionKeys = config.encryptionKeys;
     tokens = {
       owner: `Bearer ${await issueAccessToken(config, USERS.owner, systemClock)}`,
       admin: `Bearer ${await issueAccessToken(config, USERS.admin, systemClock)}`,
@@ -202,7 +205,11 @@ describe("channel routes", () => {
     const stored = await channels.findById(WORKSPACE.id, created.id);
     expect(stored?.encryptedConfig).not.toContain(WEBHOOK_URL);
     await expect(
-      decryptSecret(stored?.encryptedConfig ?? "", encryptionKey),
+      decryptSecret(stored?.encryptedConfig ?? "", encryptionKeys, {
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: created.id,
+      }),
     ).resolves.toBe(JSON.stringify({ webhookUrl: WEBHOOK_URL }));
 
     const listed = await app.request(
@@ -220,7 +227,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({
           name: "Primary Slack",
           enabled: false,
@@ -237,7 +244,11 @@ describe("channel routes", () => {
     });
     const replaced = await channels.findById(WORKSPACE.id, created.id);
     await expect(
-      decryptSecret(replaced?.encryptedConfig ?? "", encryptionKey),
+      decryptSecret(replaced?.encryptedConfig ?? "", encryptionKeys, {
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: created.id,
+      }),
     ).resolves.toBe(
       JSON.stringify({ webhookUrl: REPLACEMENT_WEBHOOK_URL }),
     );
@@ -266,7 +277,9 @@ describe("channel routes", () => {
       ["SMS", { phoneNumber: "600123456", consent: true }],
       ["SMS", { phoneNumber: "+34600123456" }],
       ["WHATSAPP", { phoneNumber: "+01234567" }],
+      ["WHATSAPP", { phoneNumber: "+34600123456" }],
       ["CALL", { phoneNumber: "+123" }],
+      ["CALL", { phoneNumber: "+34600123456" }],
       ["SLACK", { webhookUrl: "https://example.com/not-slack" }],
       [
         "DISCORD",
@@ -296,8 +309,8 @@ describe("channel routes", () => {
     const valid: [ChannelType, unknown][] = [
       ["EMAIL", { emails: ["ops@example.com"] }],
       ["SMS", { phoneNumber: "+34600123456", consent: true }],
-      ["WHATSAPP", { phoneNumber: "+34600123456" }],
-      ["CALL", { phoneNumber: "+34600123456" }],
+      ["WHATSAPP", { phoneNumber: "+34600123456", consent: true }],
+      ["CALL", { phoneNumber: "+34600123456", consent: true }],
       [
         "SLACK",
         { webhookUrl: "https://hooks.slack.com/services/T/B/token" },
@@ -346,7 +359,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${createdBody.data.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({ isDefault: false }),
       },
     );
@@ -365,7 +378,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${createdBody.data.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({ isDefault: true }),
       },
     );
@@ -430,7 +443,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({ isDefault: true }),
       },
     );
@@ -447,7 +460,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({ enabled: false }),
       },
     );
@@ -456,7 +469,7 @@ describe("channel routes", () => {
       `/api/workspaces/${WORKSPACE.id}/channels/${created.id}`,
       {
         method: "PATCH",
-        headers: headers("admin"),
+        headers: headers("owner"),
         body: JSON.stringify({ enabled: true }),
       },
     );
@@ -684,7 +697,7 @@ describe("channel routes", () => {
     ).toBe(200);
   });
 
-  it("rate limits test sends to five per hour per channel", async () => {
+  it("rate limits test sends per workspace, actor and destination", async () => {
     const created = await createChannel();
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const response = await app.request(

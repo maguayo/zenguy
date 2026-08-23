@@ -28,11 +28,17 @@ export class AuthenticateApiKey {
   async execute(input: { key: string }): Promise<AuthenticatedApiKey> {
     if (!input.key.startsWith(API_KEY_PREFIX)) throw invalidKey();
     const apiKey = await this.apiKeys.findByHash(await sha256Hex(input.key));
-    if (apiKey === null || apiKey.revokedAt !== null) throw invalidKey();
+    if (
+      apiKey === null ||
+      apiKey.revokedAt !== null ||
+      apiKey.expiresAt <= this.clock.now() ||
+      apiKey.scopes.length === 0
+    ) {
+      throw invalidKey();
+    }
     const workspace = await this.workspaces.findById(apiKey.workspaceId);
     if (workspace === null || workspace.deletedAt !== null) throw invalidKey();
 
-    await this.apiKeys.touchLastUsed(apiKey.id, this.clock.now());
     return { apiKey, workspace };
   }
 }

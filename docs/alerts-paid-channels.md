@@ -83,23 +83,39 @@ Top-ups are one-time Paddle checkouts of 1–10 packs of €10
 (`ALERT_CREDIT_PACK_CENTS`). To open them in an environment:
 
 1. In the Paddle catalog create a non-recurring price "Zenguy alert credit
-   pack" at EUR 10.00 (quantity 1–10) and copy its `pri_…` id.
-2. Install it as the Worker secret/var `PADDLE_ALERT_CREDIT_PRICE_ID`
-   alongside the existing `PADDLE_*` group. Sandbox and Live ids must never be
-   mixed.
-3. Subscribe the Paddle notification destination to `transaction.completed`
-   (in addition to the subscription events). The webhook credits
-   `quantity × €10` only for transactions whose `custom_data.purpose` is
-   `alert_credit` and whose items contain the configured price; it is
-   idempotent per transaction id and clears the low-balance notice.
-4. Verify in staging with Paddle's sandbox cards: `Alerts → SMS & calls → Top
+   pack" at EUR 10.00 (quantity 1–10) and copy its `pro_…` product id and
+   `pri_…` price id.
+2. Install both as the Worker secret/vars `PADDLE_ALERT_CREDIT_PRODUCT_ID` and
+   `PADDLE_ALERT_CREDIT_PRICE_ID` alongside the existing `PADDLE_*` group.
+   They are an all-or-nothing pair. Sandbox and Live ids must never be mixed.
+3. Subscribe the Paddle notification destination to exactly
+   `subscription.created`, `subscription.updated`, `subscription.canceled`,
+   `subscription.past_due`, `transaction.completed`, `adjustment.created`, and
+   `adjustment.updated`; do not subscribe any other event. The transaction
+   webhook credits `quantity × €10` only when its signed custom-data reference
+   resolves to a server-issued `alert_credit` checkout intent and its product,
+   price, quantity, currency, and net total all match.
+4. Give the server-side Paddle key `adjustment.read` in addition to the billing
+   permissions documented in `apps/api/README.md`. Every six hours the Worker
+   lists approved adjustments as a safety net for missed or delayed webhooks.
+5. Verify in staging with Paddle's sandbox cards: `Alerts → SMS & calls → Top
    up` opens the overlay; after `checkout.completed` the page polls the
    overview until the balance grows.
 
-While `PADDLE_ALERT_CREDIT_PRICE_ID` is unset (production free launch), the
-API reports `topUp.available = false`, `POST …/alerts/credit/topups` returns
-503, and the SMS & calls switch cannot be turned on unless the workspace
-already holds credit. Prices remain visible so teams can plan.
+The credited ledger row pins both Paddle's transaction ID and customer ID from
+the verified checkout. An adjustment changes credit only when both values
+match. `adjustment.created` may be approved immediately, or a live refund may
+arrive as `pending_approval`; pending and rejected records are ignored.
+`adjustment.updated` applies the refund if Paddle later approves it. Webhook and
+reconciliation paths use the same adjustment idempotency key, so racing or
+replaying them cannot move the balance twice. A legacy top-up without a pinned
+customer fails closed and must be backfilled from its original Paddle
+transaction before it can be reconciled.
+
+While the alert-credit product/price pair is unset (production free launch),
+the API reports `topUp.available = false`, `POST …/alerts/credit/topups`
+returns 503, and the SMS & calls switch cannot be turned on unless the
+workspace already holds credit. Prices remain visible so teams can plan.
 
 ## API
 

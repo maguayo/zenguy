@@ -7,6 +7,7 @@ export type Action =
   | "reports.download"
   | "uptime.manage"
   | "channels.manage"
+  | "paid_alerts.manage"
   | "secrets.manage"
   | "members.invite"
   | "members.remove"
@@ -25,6 +26,7 @@ export const actions: Action[] = [
   "reports.download",
   "uptime.manage",
   "channels.manage",
+  "paid_alerts.manage",
   "secrets.manage",
   "members.invite",
   "members.remove",

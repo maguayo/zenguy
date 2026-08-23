@@ -1,6 +1,11 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
+import {
+  newPasswordIssues,
+  passwordCodePointLength,
+} from "../../shared/password_policy";
+import { sha256Hex } from "../../shared/crypto";
 import { ForgotPassword } from "../../application/auth/forgot_password";
 import { Login } from "../../application/auth/login";
 import { Logout } from "../../application/auth/logout";
@@ -14,19 +19,27 @@ import type { EmailSender } from "../../domain/email/sender";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
+  SessionSecurityRepo,
   UserRepo,
 } from "../../domain/users/repo";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
+import type { TrackEvent } from "../../application/activity/track_event";
 import type { WriteAudit } from "../../application/audit/write_audit";
+import type { AuthClient } from "../../application/auth/session";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import {
+  MAX_PASSWORD_LENGTH,
   RATE_LIMITS,
   REFRESH_TOKEN_TTL_DAYS,
 } from "../../shared/constants";
 import { AppError, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
-import type { RateLimiter } from "../../shared/ratelimit";
+import {
+  enforceRateLimitScopes,
+  normalizeRateLimitAddress,
+  type RateLimiter,
+} from "../../shared/ratelimit";
 import {
   clearRefreshCookieHeader,
   readRefreshCookie,
@@ -41,8 +54,10 @@ export interface AuthRoutesDependencies {
   users: UserRepo;
   emailTokens: EmailTokenRepo;
   refreshTokens: RefreshTokenRepo;
+  sessionSecurity: SessionSecurityRepo;
   workspaces: WorkspaceRepo;
   audit: Pick<WriteAudit, "execute">;
+  track?: Pick<TrackEvent, "execute">;
   emailSender: EmailSender;
   rateLimiter: RateLimiter;
   clock: Clock;
@@ -51,40 +66,49 @@ export interface AuthRoutesDependencies {
 }
 
 const emailSchema = z.email();
+const newPasswordSchema = z.string().superRefine((password, context) => {
+  for (const message of newPasswordIssues(password)) {
+    context.addIssue({
+      code: "custom",
+      message,
+    });
+  }
+});
+
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: emailSchema,
-  password: z.string().min(8).max(100),
+  password: newPasswordSchema,
 });
-const tokenSchema = z.object({ token: z.string().min(1) });
 const emailInputSchema = z.object({ email: emailSchema });
+const existingPasswordSchema = z
+  .string()
+  .min(1)
+  // Login must accept every password that the Unicode-aware creation policy
+  // can store; do not apply new-password strength/blocklist rules to existing
+  // credentials.
+  .refine(
+    (password) => passwordCodePointLength(password) <= MAX_PASSWORD_LENGTH,
+  );
 const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1).max(100),
+  password: existingPasswordSchema,
+});
+const verifyEmailSchema = z.object({
+  token: z.string().min(1).max(512),
+  password: existingPasswordSchema,
 });
 const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8).max(100),
+  token: z.string().min(1).max(512),
+  password: newPasswordSchema,
 });
 
 function clientIp(context: { req: { header(name: string): string | undefined } }) {
-  return context.req.header("CF-Connecting-IP") ?? "unknown";
+  return normalizeRateLimitAddress(context.req.header("CF-Connecting-IP"));
 }
 
-async function enforceRateLimit(
-  limiter: RateLimiter,
-  key: string,
-  rule: { readonly limit: number; readonly windowSeconds: number },
-): Promise<void> {
-  const result = await limiter.hit(key, rule.limit, rule.windowSeconds);
-  if (!result.allowed) {
-    throw new AppError(
-      "RATE_LIMITED",
-      "Too many requests",
-      undefined,
-      result.retryAfterSeconds,
-    );
-  }
+async function privateScope(value: string): Promise<string> {
+  return sha256Hex(value.trim().toLowerCase());
 }
 
 function sessionPayload(session: {
@@ -116,6 +140,11 @@ function isNativeClient(context: Context<AppEnv>): boolean {
   return (
     context.req.header(NATIVE_CLIENT_HEADER)?.trim().toLowerCase() === "native"
   );
+}
+
+// Auth activity events record which first-party client acted as their source.
+function clientKind(context: Context<AppEnv>): AuthClient {
+  return isNativeClient(context) ? "app" : "web";
 }
 
 async function readNativeBody<T extends z.ZodType>(
@@ -163,6 +192,18 @@ export function authRoutes(
   const secureCookies = dependencies.config.environment !== "development";
   const refreshMaxAge = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60;
 
+  // Auth bodies and cookies are credentials, never cacheable application data.
+  app.use("*", async (context, next) => {
+    try {
+      await next();
+    } finally {
+      // Keep the invariant on validation/auth/rate-limit failures too; those
+      // responses can still reflect whether a submitted capability was live.
+      context.header("Cache-Control", "no-store");
+      context.header("Pragma", "no-cache");
+    }
+  });
+
   // Hands a session to the calling client: browsers get the refresh token as
   // an HttpOnly cookie, native apps get it in the JSON payload.
   function sessionResponse(context: Context<AppEnv>, session: AuthSession) {
@@ -181,17 +222,36 @@ export function authRoutes(
   }
 
   app.post("/register", zjson(registerSchema), async (context) => {
-    await enforceRateLimit(
+    const input = context.req.valid("json");
+    await enforceRateLimitScopes(
       dependencies.rateLimiter,
-      `register:${clientIp(context)}`,
+      [
+        `register:ip:${await privateScope(clientIp(context))}`,
+        `register:email:${await privateScope(input.email)}`,
+      ],
       RATE_LIMITS.register,
     );
-    const session = await register.execute(context.req.valid("json"));
-    return context.json({ data: sessionResponse(context, session) }, 201);
+    const pending = await register.execute({
+      ...input,
+      client: clientKind(context),
+    });
+    return context.json({ data: pending }, 201);
   });
 
-  app.post("/verify-email", zjson(tokenSchema), async (context) => {
-    const session = await verifyEmail.execute(context.req.valid("json"));
+  app.post("/verify-email", zjson(verifyEmailSchema), async (context) => {
+    const input = context.req.valid("json");
+    await enforceRateLimitScopes(
+      dependencies.rateLimiter,
+      [
+        `verify:ip:${await privateScope(clientIp(context))}`,
+        `verify:token:${await sha256Hex(input.token)}`,
+      ],
+      RATE_LIMITS.verify_email,
+    );
+    const session = await verifyEmail.execute({
+      ...input,
+      client: clientKind(context),
+    });
     return context.json({
       data: { verified: true, ...sessionResponse(context, session) },
     });
@@ -202,9 +262,12 @@ export function authRoutes(
     zjson(emailInputSchema),
     async (context) => {
       const input = context.req.valid("json");
-      await enforceRateLimit(
+      await enforceRateLimitScopes(
         dependencies.rateLimiter,
-        `resend:${input.email.trim().toLowerCase()}`,
+        [
+          `resend:ip:${await privateScope(clientIp(context))}`,
+          `resend:email:${await privateScope(input.email)}`,
+        ],
         RATE_LIMITS.resend,
       );
       const result = await resendVerification.execute(input);
@@ -214,17 +277,18 @@ export function authRoutes(
 
   app.post("/login", zjson(loginSchema), async (context) => {
     const input = context.req.valid("json");
-    await enforceRateLimit(
+    await enforceRateLimitScopes(
       dependencies.rateLimiter,
-      `login:ip:${clientIp(context)}`,
+      [
+        `login:ip:${await privateScope(clientIp(context))}`,
+        `login:email:${await privateScope(input.email)}`,
+      ],
       RATE_LIMITS.login,
     );
-    await enforceRateLimit(
-      dependencies.rateLimiter,
-      `login:email:${input.email.trim().toLowerCase()}`,
-      RATE_LIMITS.login,
-    );
-    const session = await login.execute(input);
+    const session = await login.execute({
+      ...input,
+      client: clientKind(context),
+    });
     return context.json({ data: sessionResponse(context, session) });
   });
 
@@ -255,10 +319,16 @@ export function authRoutes(
   app.post("/logout", async (context) => {
     if (isNativeClient(context)) {
       const input = await readNativeBody(context, nativeLogoutSchema);
-      await logout.execute({ refreshTokenPlain: input.refreshToken ?? null });
+      await logout.execute({
+        refreshTokenPlain: input.refreshToken ?? null,
+        client: clientKind(context),
+      });
       return context.body(null, 204);
     }
-    await logout.execute({ refreshTokenPlain: readRefreshCookie(context) });
+    await logout.execute({
+      refreshTokenPlain: readRefreshCookie(context),
+      client: clientKind(context),
+    });
     context.header("Set-Cookie", clearRefreshCookieHeader(secureCookies));
     return context.body(null, 204);
   });
@@ -268,9 +338,12 @@ export function authRoutes(
     zjson(emailInputSchema),
     async (context) => {
       const input = context.req.valid("json");
-      await enforceRateLimit(
+      await enforceRateLimitScopes(
         dependencies.rateLimiter,
-        `forgot:${input.email.trim().toLowerCase()}`,
+        [
+          `forgot:ip:${await privateScope(clientIp(context))}`,
+          `forgot:email:${await privateScope(input.email)}`,
+        ],
         RATE_LIMITS.forgot,
       );
       const result = await forgotPassword.execute(input);
@@ -282,10 +355,20 @@ export function authRoutes(
     "/reset-password",
     zjson(resetPasswordSchema),
     async (context) => {
-      const result = await resetPassword.execute({
-        ...context.req.valid("json"),
-        ip: clientIp(context),
-      });
+      const input = context.req.valid("json");
+      const ip = clientIp(context);
+      // Both scopes run before ResetPassword can reach PBKDF2. The IP budget
+      // stops random-token floods; the digest budget also contains a leaked
+      // valid token when requests are distributed across source addresses.
+      await enforceRateLimitScopes(
+        dependencies.rateLimiter,
+        [
+          `reset:ip:${await privateScope(ip)}`,
+          `reset:token:${await sha256Hex(input.token)}`,
+        ],
+        RATE_LIMITS.reset_password,
+      );
+      const result = await resetPassword.execute({ ...input, ip });
       return context.json({ data: result });
     },
   );

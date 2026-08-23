@@ -11,6 +11,11 @@ export type ChannelType =
 
 export type DeliveryEventType = "FAILURE" | "RECOVERY" | "TEST";
 export type DeliveryStatus = "PENDING" | "SENT" | "FAILED";
+export type DeliveryDispatchState =
+  | "READY"
+  | "DISPATCHING"
+  | "AMBIGUOUS"
+  | "CONFIRMED";
 
 export interface NotificationChannel {
   id: string;
@@ -40,6 +45,16 @@ export interface NotificationDelivery {
   errorSanitized: string | null;
   sentAt: number | null;
   createdAt: number;
+  /**
+   * State of the non-transactional provider boundary. `AMBIGUOUS` is
+   * intentionally not retried: the provider may already have accepted the
+   * request even though ZenGuy did not receive/persist its acknowledgement.
+   */
+  dispatchState?: DeliveryDispatchState;
+  /** Stable external-operation key, derived from the delivery id. */
+  providerIdempotencyKey?: string | null;
+  /** Monotonic fencing generation for diagnostics and reconciliation. */
+  dispatchGeneration?: number;
   /** Euro cents charged to the workspace's alert credit, for paid channels. */
   costCents?: number | null;
   /** Destination country name used for pricing, for paid channels. */
@@ -56,7 +71,13 @@ export const emailChannelConfigSchema = z
   .strict();
 
 export const phoneChannelConfigSchema = z
-  .object({ phoneNumber: z.string().regex(/^\+[1-9]\d{6,14}$/u) })
+  .object({
+    phoneNumber: z.string().regex(/^\+[1-9]\d{6,14}$/u),
+    // Optional only so existing encrypted rows can still be previewed and
+    // disabled. Every new/updated paid phone channel is required to set this
+    // to true by parseChannelConfig, and dispatch checks it again at runtime.
+    consent: z.literal(true).optional(),
+  })
   .strict();
 
 export const smsChannelConfigSchema = z
@@ -117,6 +138,23 @@ export function channelConfigSchema(type: ChannelType): z.ZodType<ChannelConfig>
     case "PUSH":
       return pushChannelConfigSchema;
   }
+}
+
+export function requiresRecipientConsent(type: ChannelType): boolean {
+  return type === "SMS" || type === "WHATSAPP" || type === "CALL";
+}
+
+export function hasRecipientConsent(
+  type: ChannelType,
+  config: unknown,
+): boolean {
+  if (!requiresRecipientConsent(type)) return true;
+  return (
+    config !== null &&
+    typeof config === "object" &&
+    "consent" in config &&
+    config.consent === true
+  );
 }
 
 export type ChannelConfigPreview =

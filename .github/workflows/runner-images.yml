@@ -1,0 +1,356 @@
+name: Runner image supply chain
+
+on:
+  pull_request:
+    paths:
+      - "runner/**"
+      - ".github/workflows/runner-images.yml"
+      - "scripts/security/check-repository.mjs"
+      - "scripts/security/install-buildx.sh"
+      - "scripts/security/install-trivy.sh"
+  push:
+    tags:
+      - "runner-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: runner-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner-tests:
+    name: Runner safety and deployment tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release tag points to main history
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/runner-v') && github.repository == 'maguayo/zenguy' }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          test "$GITHUB_SHA" = "$(git rev-parse refs/remotes/origin/main)"
+
+      # actions/setup-python v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: 3.12.14
+
+      # actions/setup-node v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.2
+
+      - name: Install the exact hashed runner environment
+        run: |
+          python -m venv "$RUNNER_TEMP/runner-env"
+          "$RUNNER_TEMP/runner-env/bin/pip" install --no-deps \
+            --only-binary=:all: --require-hashes \
+            --requirement runner/requirements.lock
+          "$RUNNER_TEMP/runner-env/bin/python" runner/browser_worker.py \
+            --verify-locked-runtime
+
+      - name: Run runner safety tests
+        working-directory: runner
+        run: PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/runner-env/bin/python" -m unittest -v test_browser_worker.py
+
+      - name: Run repository and shell guards
+        run: |
+          node scripts/security/check-repository.mjs
+          sh -n scripts/security/install-buildx.sh
+          sh -n scripts/security/install-trivy.sh
+          sh -n runner/deploy/verify-container-runtime.sh
+          sh -n runner/deploy/verify-runtime-images.sh
+
+      - name: Render the digest-only Compose topology
+        env:
+          ZENGUY_RUNNER_IMAGE: ghcr.io/maguayo/zenguy-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ZENGUY_EGRESS_PROXY_IMAGE: ghcr.io/maguayo/zenguy-egress-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ZENGUY_RUNNER_ENVIRONMENT: production
+          ZENGUY_WORKER_ID: zenguy-production-fallback
+          ZENGUY_RUNNER_ENV_FILE: ${{ runner.temp }}/empty-runner.env
+          ZENGUY_HOST_EGRESS_DENY_FILE: ${{ runner.temp }}/host-egress-deny.conf
+        run: |
+          touch "$ZENGUY_RUNNER_ENV_FILE"
+          printf 'acl forbidden_host dst 192.0.2.1\n' >"$ZENGUY_HOST_EGRESS_DENY_FILE"
+          docker compose --file runner/deploy/compose.yml config --quiet
+
+  validation-images:
+    name: Validate ${{ matrix.name }} image
+    needs: runner-tests
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      BUILDX_DEFAULT_POLICY: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: runner
+            image: ghcr.io/maguayo/zenguy-runner
+            context: runner
+            dockerfile: runner/deploy/Dockerfile
+          - name: egress-proxy
+            image: ghcr.io/maguayo/zenguy-egress-proxy
+            context: runner/deploy
+            dockerfile: runner/deploy/egress-proxy.Dockerfile
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install hash-pinned Buildx
+        run: sh scripts/security/install-buildx.sh
+
+      - name: Create authenticated BuildKit builder
+        run: |
+          docker buildx create \
+            --name zenguy-builder \
+            --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8 \
+            --use
+          docker buildx inspect --bootstrap
+
+      # A pull request or manual run proves that the exact Docker context can
+      # build and that the resulting local image passes the vulnerability gate.
+      - name: Build validation image once
+        # docker/build-push-action v6.18.0
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          load: true
+          platforms: linux/amd64
+          tags: ${{ matrix.image }}:validation-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Launch Chromium in the exact runner sandbox
+        if: ${{ matrix.name == 'runner' }}
+        run: |
+          docker run --rm \
+            --network none \
+            --user 10001:10001 \
+            --read-only \
+            --init \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --security-opt seccomp=runner/deploy/seccomp/chromium-moby-v0.2.1.json \
+            --pids-limit 512 \
+            --memory 2g \
+            --cpus 2.0 \
+            --shm-size 512m \
+            --tmpfs /tmp:size=768m,mode=1777 \
+            --tmpfs /home/runner:size=64m,mode=0700,uid=10001,gid=10001 \
+            "${{ matrix.image }}:validation-${{ github.sha }}" \
+            --verify-browser-sandbox
+
+      - name: Install hash-pinned Trivy
+        run: sh scripts/security/install-trivy.sh
+
+      - name: Scan validation image
+        env:
+          IMAGE: ${{ matrix.image }}:validation-${{ github.sha }}
+        run: |
+          "$RUNNER_TEMP/zenguy-tools/trivy" image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --cache-dir "$RUNNER_TEMP/trivy-cache" \
+            "$IMAGE"
+
+  release-images:
+    name: Release ${{ matrix.name }} image
+    needs: runner-tests
+    if: ${{ github.event_name == 'push' && github.repository == 'maguayo/zenguy' && startsWith(github.ref, 'refs/tags/runner-v') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: runner-release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      BUILDX_DEFAULT_POLICY: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: runner
+            image: ghcr.io/maguayo/zenguy-runner
+            context: runner
+            dockerfile: runner/deploy/Dockerfile
+          - name: egress-proxy
+            image: ghcr.io/maguayo/zenguy-egress-proxy
+            context: runner/deploy
+            dockerfile: runner/deploy/egress-proxy.Dockerfile
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      # Environment approval happens before this job starts. Re-fence inside
+      # the privileged job so a tag that was current before a long approval
+      # wait cannot publish after main has advanced.
+      - name: Verify release commit after Environment approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$GITHUB_SHA" = "$current_sha"
+
+      - name: Install hash-pinned Buildx
+        run: sh scripts/security/install-buildx.sh
+
+      - name: Create authenticated BuildKit builder
+        run: |
+          docker buildx create \
+            --name zenguy-builder \
+            --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8 \
+            --use
+          docker buildx inspect --bootstrap
+
+      # A tag is the only publishing path. It uses GitHub's short-lived token;
+      # no registry password or signing key is stored in repository secrets.
+      - name: Log in to GHCR
+        # docker/login-action v3.5.0
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish immutable release image once
+        id: release-build
+        # docker/build-push-action v6.18.0
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ matrix.image }}:${{ github.ref_name }}
+            ${{ matrix.image }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      # Publishing precedes the remote scan because BuildKit attaches the SBOM
+      # and provenance to the immutable manifest. An image is deployable only
+      # after this gate signs that exact digest; unsigned manifests are rejected
+      # by verify-runtime-images.sh on the host.
+      - name: Install hash-pinned Trivy
+        run: sh scripts/security/install-trivy.sh
+
+      - name: Scan published digest
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.release-build.outputs.digest }}
+        run: |
+          "$RUNNER_TEMP/zenguy-tools/trivy" image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --cache-dir "$RUNNER_TEMP/trivy-cache" \
+            "${IMAGE}@${DIGEST}"
+
+      # Exercise the exact published manifest with the same kernel boundary as
+      # the VPS before the digest becomes deployable through a signature.
+      - name: Launch published Chromium in the exact runner sandbox
+        if: ${{ matrix.name == 'runner' }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.release-build.outputs.digest }}
+        run: |
+          docker run --rm \
+            --network none \
+            --user 10001:10001 \
+            --read-only \
+            --init \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --security-opt seccomp=runner/deploy/seccomp/chromium-moby-v0.2.1.json \
+            --pids-limit 512 \
+            --memory 2g \
+            --cpus 2.0 \
+            --shm-size 512m \
+            --tmpfs /tmp:size=768m,mode=1777 \
+            --tmpfs /home/runner:size=64m,mode=0700,uid=10001,gid=10001 \
+            "${IMAGE}@${DIGEST}" \
+            --verify-browser-sandbox
+
+      - name: Install cosign
+        # sigstore/cosign-installer v4.1.2 (Cosign v3.0.6)
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+
+      # A main update during build/scan leaves only an unsigned manifest. The
+      # runtime verifier rejects it, so stale output can never be deployable.
+      - name: Verify release commit immediately before signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$GITHUB_SHA" = "$current_sha"
+
+      - name: Sign and verify the published digest
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.release-build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify \
+            --certificate-identity-regexp '^https://github\.com/maguayo/zenguy/\.github/workflows/runner-images\.yml@refs/tags/runner-v[0-9A-Za-z._-]+$' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            --certificate-github-workflow-ref "$GITHUB_REF" \
+            --certificate-github-workflow-sha "$GITHUB_SHA" \
+            --certificate-github-workflow-trigger push \
+            "${IMAGE}@${DIGEST}" >/dev/null
+
+      - name: Record the deployable digest
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.release-build.outputs.digest }}
+          IMAGE_NAME: ${{ matrix.name }}
+        run: |
+          printf '%s@%s\n' "${IMAGE}" "${DIGEST}" >"${RUNNER_TEMP}/${IMAGE_NAME}.digest"
+          printf 'release_tag=%s\nrelease_sha=%s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" \
+            >"${RUNNER_TEMP}/${IMAGE_NAME}.release"
+
+      - name: Upload the deployable digest
+        # actions/upload-artifact v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zenguy-${{ matrix.name }}-digest
+          path: |
+            ${{ runner.temp }}/${{ matrix.name }}.digest
+            ${{ runner.temp }}/${{ matrix.name }}.release
+          if-no-files-found: error
+          retention-days: 30

@@ -7,6 +7,7 @@ describe("assertSafeExternalUrl", () => {
     "ftp://example.com/file",
     "https://user:password@example.com/",
     "http://localhost/",
+    "http://localhost./",
     "http://api.localhost/",
     "http://service.local/",
     "http://service.internal/",
@@ -28,7 +29,17 @@ describe("assertSafeExternalUrl", () => {
     "http://[fc00::1]/",
     "http://[fdff::1]/",
     "http://[fe80::1]/",
+    "http://[fec0::1]/",
+    "http://[feff::1]/",
+    "http://[ff02::1]/",
+    "http://[::127.0.0.1]/",
     "http://[::ffff:127.0.0.1]/",
+    "http://[64:ff9b::127.0.0.1]/",
+    "http://[64:ff9b:1::8.8.8.8]/",
+    "http://[2002:7f00:1::1]/",
+    "http://[2001:0:7f00:1:0:0:c000:221]/",
+    "http://[2001:0:808:808:0:0:80ff:fffe]/",
+    "http://[2001:db8::5efe:127.0.0.1]/",
     "http://example.com:0/",
   ])("blocks %s", (raw) => {
     expect(() => assertSafeExternalUrl(raw)).toThrowError(AppError);
@@ -51,6 +62,8 @@ describe("assertSafeExternalUrl", () => {
     "https://bücher.example/catalogue",
     "http://100.63.255.255/",
     "http://[::ffff:8.8.8.8]/",
+    "http://[64:ff9b::8.8.8.8]/",
+    "http://[2002:808:808::1]/",
   ])("allows %s", (raw) => {
     expect(assertSafeExternalUrl(raw)).toBeInstanceOf(URL);
   });
@@ -59,6 +72,33 @@ describe("assertSafeExternalUrl", () => {
     expect(assertSafeExternalUrl("https://bücher.example/").hostname).toBe(
       "xn--bcher-kva.example",
     );
+  });
+
+  it("can enforce monitor-only service-origin and HTTPS policy", () => {
+    expect(() =>
+      assertSafeExternalUrl("https://api.zenguy.com/health", {
+        denyZenguyOrigins: true,
+      }),
+    ).toThrowError(AppError);
+    expect(() =>
+      assertSafeExternalUrl("https://api.zenguy.com./health", {
+        denyZenguyOrigins: true,
+      }),
+    ).toThrowError(AppError);
+    expect(() =>
+      assertSafeExternalUrl("http://example.com/health", {
+        requireHttps: true,
+      }),
+    ).toThrowError(AppError);
+    expect(
+      assertSafeExternalUrl("https://example.com/health", {
+        denyZenguyOrigins: true,
+        requireHttps: true,
+      }).origin,
+    ).toBe("https://example.com");
+    // Browser-test validation uses the default policy and is intentionally
+    // independent from the uptime control-plane denylist.
+    expect(assertSafeExternalUrl("https://app.zenguy.com")).toBeInstanceOf(URL);
   });
 });
 

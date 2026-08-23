@@ -208,7 +208,11 @@ export function ChannelCard({
                       styles.dot,
                       {
                         backgroundColor:
-                          channel.lastDeliveryStatus === "SENT" ? toneSolid.ok : toneSolid.danger,
+                          channel.lastDeliveryStatus === "SENT"
+                            ? toneSolid.ok
+                            : channel.lastDeliveryStatus === "AMBIGUOUS"
+                              ? toneSolid.warn
+                              : toneSolid.danger,
                       },
                     ]}
                   />

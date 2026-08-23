@@ -17,6 +17,7 @@ import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { Clock } from "../../shared/clock";
 import { decryptSecret } from "../../shared/crypto";
+import type { EncryptionKeyring } from "../../shared/crypto";
 import { phoneNumberOf } from "./charge_paid_delivery";
 import { ensureAlertSettings } from "./settings";
 
@@ -50,7 +51,7 @@ export class GetAlertsOverview {
   constructor(
     private readonly alerts: AlertRepo,
     private readonly channels: Pick<ChannelRepo, "list">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly topUpAvailable: boolean,
     private readonly clock: Clock,
   ) {}
@@ -77,7 +78,12 @@ export class GetAlertsOverview {
       try {
         const plaintext = await decryptSecret(
           channel.encryptedConfig,
-          this.encryptionKey,
+          this.encryptionKeys,
+          {
+            type: "notification_channel",
+            workspaceId: channel.workspaceId,
+            recordId: channel.id,
+          },
         );
         phoneNumber = phoneNumberOf(JSON.parse(plaintext) as unknown);
       } catch {

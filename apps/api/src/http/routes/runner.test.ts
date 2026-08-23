@@ -7,6 +7,7 @@ import { fakeBindings } from "../../test/fakes/bindings";
 import { FakeRunnerWorkerRepo } from "../../test/fakes/runners";
 
 const TOKEN = "runner-test-secret".padEnd(32, "-");
+const FALLBACK_TOKEN = "fallback-runner-test-secret".padEnd(32, "-");
 const MESSAGE: AttemptMessage = {
   kind: "attempt",
   runId: "run_1",
@@ -37,7 +38,6 @@ const JOB: ExternalRunnerJob = {
     modelName: "qwen3:8b",
     runnerVersion: "zenguy-local-runner/1.0.0",
   },
-  secrets: [],
   limits: {
     attemptTimeoutMs: 300_000,
     maxAgentSteps: 40,
@@ -50,7 +50,12 @@ function runner() {
   return {
     claim: vi.fn(async () => JOB),
     claimStale: vi.fn(async (): Promise<ExternalRunnerJob | null> => JOB),
-    start: vi.fn(async () => ({ startedAt: 2_000, deadlineAt: 302_000 })),
+    start: vi.fn(async () => ({
+      startedAt: 2_000,
+      deadlineAt: 302_000,
+      secrets: [],
+    })),
+    authorizeAction: vi.fn(async () => true),
     recordStep: vi.fn(async () => true),
     complete: vi.fn(async () => true),
   };
@@ -60,6 +65,32 @@ function headers(token = TOKEN): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
     "content-type": "application/json",
+  };
+}
+
+async function claimCapability(
+  app: ReturnType<typeof buildApp>,
+  workerId = "mac-1",
+): Promise<string> {
+  const response = await app.request("/api/runner/attempts/claim", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      deliveryId: REFERENCE.deliveryId,
+      message: MESSAGE,
+      workerId,
+    }),
+  });
+  const body = (await response.json()) as {
+    data: { job: { capability: string } };
+  };
+  return body.data.job.capability;
+}
+
+function capabilityHeaders(capability: string, workerId = "mac-1"): HeadersInit {
+  return {
+    ...headers(capability),
+    "X-Zenguy-Worker-Id": workerId,
   };
 }
 
@@ -100,14 +131,84 @@ describe("external runner routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    await expect(response.json()).resolves.toEqual({
-      data: { disposition: "EXECUTE", job: JOB },
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        disposition: "EXECUTE",
+        job: { ...JOB, capability: expect.any(String) },
+      },
     });
     expect(externalRunner.claim).toHaveBeenCalledWith({
       deliveryId: "queue-message-1",
       message: MESSAGE,
       workerId: "mac-1",
     });
+  });
+
+  it("binds non-development bootstrap tokens to the configured runner identity", async () => {
+    const externalRunner = runner();
+    const bindings = fakeBindings();
+    bindings.ENVIRONMENT = "production";
+    const app = buildApp(bindings, { externalRunner });
+
+    const wrong = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        deliveryId: "queue-message-1",
+        message: MESSAGE,
+        workerId: "stolen-token-alias",
+      }),
+    });
+    expect(wrong.status).toBe(401);
+    expect(externalRunner.claim).not.toHaveBeenCalled();
+
+    const accepted = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        deliveryId: "queue-message-1",
+        message: MESSAGE,
+        workerId: "zenguy-production-primary",
+      }),
+    });
+    expect(accepted.status).toBe(200);
+    expect(externalRunner.claim).toHaveBeenCalledWith(
+      expect.objectContaining({ workerId: "zenguy-production-primary" }),
+    );
+  });
+
+  it("does not accept primary and fallback bootstrap tokens interchangeably", async () => {
+    const externalRunner = runner();
+    const app = buildApp(fakeBindings(), { externalRunner });
+
+    const primaryWithFallback = await app.request(
+      "/api/runner/attempts/claim",
+      {
+        method: "POST",
+        headers: headers(FALLBACK_TOKEN),
+        body: JSON.stringify({
+          deliveryId: "queue-message-1",
+          message: MESSAGE,
+          workerId: "mac-1",
+        }),
+      },
+    );
+    const fallbackWithPrimary = await app.request(
+      "/api/runner/attempts/claim-stale",
+      {
+        method: "POST",
+        headers: headers(TOKEN),
+        body: JSON.stringify({
+          deliveryId: "fallback-1",
+          workerId: "fallback-1",
+        }),
+      },
+    );
+
+    expect(primaryWithFallback.status).toBe(401);
+    expect(fallbackWithPrimary.status).toBe(401);
+    expect(externalRunner.claim).not.toHaveBeenCalled();
+    expect(externalRunner.claimStale).not.toHaveBeenCalled();
   });
 
   it("rejects claims from a malformed worker id", async () => {
@@ -144,23 +245,27 @@ describe("external runner routes", () => {
 
     const claimed = await app.request("/api/runner/attempts/claim-stale", {
       method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ deliveryId: "fallback-1" }),
+      headers: headers(FALLBACK_TOKEN),
+      body: JSON.stringify({ deliveryId: "fallback-1", workerId: "fallback-1" }),
     });
     expect(claimed.status).toBe(200);
     expect(claimed.headers.get("Cache-Control")).toBe("no-store");
-    await expect(claimed.json()).resolves.toEqual({
-      data: { disposition: "EXECUTE", job: JOB },
+    await expect(claimed.json()).resolves.toMatchObject({
+      data: {
+        disposition: "EXECUTE",
+        job: { ...JOB, capability: expect.any(String) },
+      },
     });
     expect(externalRunner.claimStale).toHaveBeenCalledWith({
       deliveryId: "fallback-1",
+      workerId: "fallback-1",
     });
 
     externalRunner.claimStale.mockResolvedValueOnce(null);
     const empty = await app.request("/api/runner/attempts/claim-stale", {
       method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ deliveryId: "fallback-2" }),
+      headers: headers(FALLBACK_TOKEN),
+      body: JSON.stringify({ deliveryId: "fallback-2", workerId: "fallback-1" }),
     });
     await expect(empty.json()).resolves.toEqual({
       data: { disposition: "SKIP" },
@@ -168,7 +273,7 @@ describe("external runner routes", () => {
 
     const invalid = await app.request("/api/runner/attempts/claim-stale", {
       method: "POST",
-      headers: headers(),
+      headers: headers(FALLBACK_TOKEN),
       body: JSON.stringify({}),
     });
     expect(invalid.status).toBe(400);
@@ -178,9 +283,10 @@ describe("external runner routes", () => {
     const externalRunner = runner();
     const app = buildApp(fakeBindings(), { externalRunner });
 
+    const capability = await claimCapability(app);
     const mismatch = await app.request("/api/runner/attempts/another/start", {
       method: "POST",
-      headers: headers(),
+      headers: capabilityHeaders(capability),
       body: JSON.stringify({ reference: REFERENCE }),
     });
     expect(mismatch.status).toBe(409);
@@ -189,7 +295,7 @@ describe("external runner routes", () => {
       "/api/runner/attempts/att_1/complete",
       {
         method: "POST",
-        headers: headers(),
+        headers: capabilityHeaders(capability),
         body: JSON.stringify({
           reference: REFERENCE,
           outcome: {
@@ -206,6 +312,129 @@ describe("external runner routes", () => {
     expect(invalidOutcome.status).toBe(400);
     expect(externalRunner.start).not.toHaveBeenCalled();
     expect(externalRunner.complete).not.toHaveBeenCalled();
+  });
+
+  it("gates exact irreversible actions behind the job capability", async () => {
+    const externalRunner = runner();
+    const app = buildApp(fakeBindings(), { externalRunner });
+    const capability = await claimCapability(app);
+    const action = {
+      kind: "HTTP",
+      method: "POST",
+      origin: "https://staging.example.com",
+      path: "/orders",
+    };
+
+    const accepted = await app.request(
+      "/api/runner/attempts/att_1/actions/authorize",
+      {
+        method: "POST",
+        headers: capabilityHeaders(capability),
+        body: JSON.stringify({ reference: REFERENCE, action }),
+      },
+    );
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toEqual({
+      data: { disposition: "AUTHORIZED" },
+    });
+    expect(externalRunner.authorizeAction).toHaveBeenCalledWith({
+      reference: REFERENCE,
+      action,
+    });
+
+    externalRunner.authorizeAction.mockResolvedValueOnce(false);
+    const blocked = await app.request(
+      "/api/runner/attempts/att_1/actions/authorize",
+      {
+        method: "POST",
+        headers: capabilityHeaders(capability),
+        body: JSON.stringify({ reference: REFERENCE, action }),
+      },
+    );
+    await expect(blocked.json()).resolves.toEqual({
+      data: { disposition: "BLOCKED" },
+    });
+  });
+
+  it("rejects legacy DOM action requests without the live form identity", async () => {
+    const externalRunner = runner();
+    const app = buildApp(fakeBindings(), { externalRunner });
+    const capability = await claimCapability(app);
+    const response = await app.request(
+      "/api/runner/attempts/att_1/actions/authorize",
+      {
+        method: "POST",
+        headers: capabilityHeaders(capability),
+        body: JSON.stringify({
+          reference: REFERENCE,
+          action: {
+            kind: "DOM",
+            action: "CLICK",
+            origin: "https://staging.example.com",
+            path: "/checkout",
+            target: { attribute: "data-testid", value: "place-order" },
+          },
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(externalRunner.authorizeAction).not.toHaveBeenCalled();
+  });
+
+  it("requires a job-scoped capability and binds it to the worker and reference", async () => {
+    const externalRunner = runner();
+    const clock = new FixedClock(10_000);
+    const app = buildApp(fakeBindings(), { externalRunner, clock });
+    const capability = await claimCapability(app, "mac-1");
+
+    const bootstrapRejected = await app.request(
+      "/api/runner/attempts/att_1/start",
+      {
+        method: "POST",
+        headers: { ...headers(), "X-Zenguy-Worker-Id": "mac-1" },
+        body: JSON.stringify({ reference: REFERENCE }),
+      },
+    );
+    expect(bootstrapRejected.status).toBe(401);
+
+    const wrongWorker = await app.request("/api/runner/attempts/att_1/start", {
+      method: "POST",
+      headers: capabilityHeaders(capability, "other-worker"),
+      body: JSON.stringify({ reference: REFERENCE }),
+    });
+    expect(wrongWorker.status).toBe(401);
+
+    const alteredReference = { ...REFERENCE, deliveryId: "other-delivery" };
+    const replayed = await app.request("/api/runner/attempts/att_1/start", {
+      method: "POST",
+      headers: capabilityHeaders(capability),
+      body: JSON.stringify({ reference: alteredReference }),
+    });
+    expect(replayed.status).toBe(401);
+
+    const accepted = await app.request("/api/runner/attempts/att_1/start", {
+      method: "POST",
+      headers: capabilityHeaders(capability),
+      body: JSON.stringify({ reference: REFERENCE }),
+    });
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toEqual({
+      data: {
+        disposition: "STARTED",
+        startedAt: 2_000,
+        deadlineAt: 302_000,
+        secrets: [],
+      },
+    });
+
+    clock.advance(6 * 60_000 + 1);
+    const expired = await app.request("/api/runner/attempts/att_1/start", {
+      method: "POST",
+      headers: capabilityHeaders(capability),
+      body: JSON.stringify({ reference: REFERENCE }),
+    });
+    expect(expired.status).toBe(401);
   });
 });
 

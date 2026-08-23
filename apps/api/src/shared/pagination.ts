@@ -5,6 +5,9 @@ export interface Cursor {
   id: string;
 }
 
+export const MAX_CURSOR_LENGTH = 512;
+const MAX_CURSOR_ID_LENGTH = 256;
+
 function invalidCursor(): never {
   throw validation([{ field: "cursor", message: "Invalid cursor" }]);
 }
@@ -18,7 +21,11 @@ export function encodeCursor(createdAt: number, id: string): string {
 
 export function decodeCursor(encoded: string): Cursor {
   try {
-    if (!/^[A-Za-z0-9_-]+$/u.test(encoded)) {
+    if (
+      encoded.length === 0 ||
+      encoded.length > MAX_CURSOR_LENGTH ||
+      !/^[A-Za-z0-9_-]+$/u.test(encoded)
+    ) {
       return invalidCursor();
     }
     const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
@@ -29,7 +36,13 @@ export function decodeCursor(encoded: string): Cursor {
     }
     const createdAt = Number(decoded.slice(0, separator));
     const id = decoded.slice(separator + 1);
-    if (!Number.isSafeInteger(createdAt) || createdAt < 0 || id.length === 0) {
+    if (
+      !Number.isSafeInteger(createdAt) ||
+      createdAt < 0 ||
+      id.length === 0 ||
+      id.length > MAX_CURSOR_ID_LENGTH ||
+      /[\u0000-\u001f\u007f]/u.test(id)
+    ) {
       return invalidCursor();
     }
     return { createdAt, id };

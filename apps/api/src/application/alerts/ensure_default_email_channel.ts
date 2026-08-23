@@ -3,9 +3,13 @@ import { DEFAULT_EMAIL_CHANNEL_NAME } from "../../domain/alerts/types";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import { emailChannelConfigSchema } from "../../domain/channels/types";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import {
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { ensureAlertSettings } from "./settings";
 
 export interface DefaultChannelResult {
@@ -25,7 +29,7 @@ export class EnsureDefaultEmailChannel {
       AlertRepo,
       "findSettings" | "insertSettings" | "updateSettings"
     >,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -62,24 +66,32 @@ export class EnsureDefaultEmailChannel {
       return { created: false, channelId: null };
     }
     const channelId = this.ids.newId("ch");
-    await this.channels.insert({
-      id: channelId,
-      workspaceId: input.workspaceId,
-      name: DEFAULT_EMAIL_CHANNEL_NAME,
-      type: "EMAIL",
-      encryptedConfig: await encryptSecret(
-        JSON.stringify(config.data),
-        this.encryptionKey,
-      ),
-      enabled: true,
-      isDefault: true,
-      // The owner's address was verified at sign-up.
-      verifiedAt: now,
-      lastDeliveryStatus: null,
-      createdBy: input.ownerUserId,
-      createdAt: now,
-      updatedAt: now,
-    });
+    await writeWithActiveDataKeyRetry(
+      async () => ({
+        id: channelId,
+        workspaceId: input.workspaceId,
+        name: DEFAULT_EMAIL_CHANNEL_NAME,
+        type: "EMAIL" as const,
+        encryptedConfig: await encryptSecret(
+          JSON.stringify(config.data),
+          this.encryptionKeys,
+          {
+            type: "notification_channel",
+            workspaceId: input.workspaceId,
+            recordId: channelId,
+          },
+        ),
+        enabled: true,
+        isDefault: true,
+        // The owner's address was verified at sign-up.
+        verifiedAt: now,
+        lastDeliveryStatus: null,
+        createdBy: input.ownerUserId,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      (candidate) => this.channels.insert(candidate),
+    );
     await this.markCreated(input.workspaceId, now);
     return { created: true, channelId };
   }

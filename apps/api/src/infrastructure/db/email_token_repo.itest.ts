@@ -43,6 +43,18 @@ describe("D1EmailTokenRepo", () => {
     ).resolves.toBeNull();
   });
 
+  it("lets exactly one concurrent caller consume a token", async () => {
+    await repo.insert(TOKEN);
+
+    const results = await Promise.all([
+      repo.consumeValidByHash(TOKEN.tokenHash, TOKEN.type, 1_500),
+      repo.consumeValidByHash(TOKEN.tokenHash, TOKEN.type, 1_500),
+    ]);
+
+    expect(results.filter((token) => token !== null)).toHaveLength(1);
+    expect(results.filter((token) => token === null)).toHaveLength(1);
+  });
+
   it("deletes all tokens for only the requested user and type", async () => {
     const resetToken: EmailToken = {
       ...TOKEN,

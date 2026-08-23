@@ -5,6 +5,10 @@ const NOW = 1_700_000_000_000;
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+const USER_ONE = "usr_00000000000000000000000001";
+const USER_TWO = "usr_00000000000000000000000002";
+const USER_THREE = "usr_00000000000000000000000003";
+const MISSING_USER = "usr_00000000000000000000000004";
 
 const TABLES = ["activity_events", "workspace_members", "workspaces", "users"] as const;
 
@@ -110,22 +114,22 @@ async function seed(): Promise<void> {
   await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
   const tombstoneGone = await tombstone("ws_gone", NOW - DAY);
   await env.DB.batch([
-    insertUser("usr_one", "One", "one@example.com"),
-    insertUser("usr_two", "Two", "two@example.com"),
+    insertUser(USER_ONE, "One", "one@example.com"),
+    insertUser(USER_TWO, "Two", "two@example.com"),
     // Never a member of a live workspace: its login must not leak into ws_acme.
-    insertUser("usr_three", "Three", "three@example.com"),
-    insertWorkspace("ws_acme", "Acme", "usr_one", NOW - 2 * DAY),
-    insertWorkspace("ws_gone", "Former", "usr_one", NOW - 40 * DAY),
-    insertMember("wm_one", "ws_acme", "usr_one", "OWNER"),
-    insertMember("wm_two", "ws_acme", "usr_two", "MEMBER"),
-    insertMember("wm_gone", "ws_gone", "usr_one", "OWNER"),
+    insertUser(USER_THREE, "Three", "three@example.com"),
+    insertWorkspace("ws_acme", "Acme", USER_ONE, NOW - 2 * DAY),
+    insertWorkspace("ws_gone", "Former", USER_ONE, NOW - 40 * DAY),
+    insertMember("wm_one", "ws_acme", USER_ONE, "OWNER"),
+    insertMember("wm_two", "ws_acme", USER_TWO, "MEMBER"),
+    insertMember("wm_gone", "ws_gone", USER_ONE, "OWNER"),
     // Tombstoned after its member row: 0029 fences member inserts on deleted workspaces.
     tombstoneGone,
     // Logins carry no workspace; they reach a workspace through its members.
     insertEvent({
       id: "act_login_one",
       type: "user.logged_in",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: null,
       source: "web",
       occurredAt: NOW - 6 * HOUR,
@@ -133,7 +137,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_login_two",
       type: "user.logged_in",
-      userId: "usr_two",
+      userId: USER_TWO,
       workspaceId: null,
       source: "app",
       occurredAt: NOW - 3 * HOUR,
@@ -141,7 +145,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_login_three",
       type: "user.logged_in",
-      userId: "usr_three",
+      userId: USER_THREE,
       workspaceId: null,
       source: "web",
       occurredAt: NOW - MINUTE,
@@ -149,7 +153,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_page",
       type: "web.page_viewed",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_acme",
       source: "web",
       occurredAt: NOW - 2 * HOUR,
@@ -157,7 +161,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_screen",
       type: "app.screen_viewed",
-      userId: "usr_two",
+      userId: USER_TWO,
       workspaceId: "ws_acme",
       source: "app",
       occurredAt: NOW - 4 * HOUR,
@@ -165,7 +169,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_test_created",
       type: "browser_test.created",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_acme",
       source: "web",
       occurredAt: NOW - DAY,
@@ -207,7 +211,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_gone_page",
       type: "web.page_viewed",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_gone",
       source: "web",
       occurredAt: NOW - 5 * MINUTE,
@@ -240,7 +244,7 @@ describe("loadWorkspaces", () => {
         lastActiveAt: NOW - 2 * HOUR,
         lastWebAt: NOW - 2 * HOUR,
         lastAppAt: NOW - 4 * HOUR,
-        // usr_two's login: members count, usr_three does not.
+        // The member's login counts; the unrelated user's login does not.
         lastLoginAt: NOW - 3 * HOUR,
         lastTestCreatedAt: NOW - DAY,
         lastRunAt: NOW - HOUR,
@@ -280,18 +284,18 @@ describe("loadWorkspaces", () => {
 
   it("orders by last activity with idle workspaces last, and honours the limit", async () => {
     await env.DB.batch([
-      insertWorkspace("ws_busy", "Busy", "usr_two", NOW - 3 * DAY),
-      insertMember("wm_busy", "ws_busy", "usr_two", "OWNER"),
+      insertWorkspace("ws_busy", "Busy", USER_TWO, NOW - 3 * DAY),
+      insertMember("wm_busy", "ws_busy", USER_TWO, "OWNER"),
       insertEvent({
         id: "act_busy_view",
         type: "browser_test.viewed",
-        userId: "usr_two",
+        userId: USER_TWO,
         workspaceId: "ws_busy",
         source: "app",
         occurredAt: NOW - MINUTE,
       }),
       // No members, no events, and an owner that no longer exists.
-      insertWorkspace("ws_idle", "Idle", "usr_missing", NOW - DAY),
+      insertWorkspace("ws_idle", "Idle", MISSING_USER, NOW - DAY),
     ]);
 
     const workspaces = await loadListed();

@@ -17,6 +17,7 @@ interface SubscriptionRow {
   cancel_url: string | null;
   created_at: number;
   updated_at: number;
+  past_due_since: number | null;
   last_provider_event_at: number | null;
 }
 
@@ -47,6 +48,9 @@ function toSubscription(row: SubscriptionRow): Subscription {
   if (row.last_provider_event_at !== null) {
     subscription.lastProviderEventAt = row.last_provider_event_at;
   }
+  if (row.past_due_since !== null) {
+    subscription.pastDueSince = row.past_due_since;
+  }
   return subscription;
 }
 
@@ -54,15 +58,15 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
   constructor(private readonly database: D1Database) {}
 
   async upsertByWorkspace(subscription: Subscription): Promise<void> {
-    await run(
+    const result = await run(
       this.database
         .prepare(
           `INSERT INTO subscriptions
             (id, workspace_id, provider, source, provider_customer_id,
              provider_subscription_id, status, period_start, period_end,
              cancel_at_period_end, update_payment_url, cancel_url,
-             created_at, updated_at, last_provider_event_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_at, updated_at, past_due_since, last_provider_event_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id) DO UPDATE SET
              provider = excluded.provider,
              source = excluded.source,
@@ -75,13 +79,27 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
              update_payment_url = excluded.update_payment_url,
              cancel_url = excluded.cancel_url,
              updated_at = excluded.updated_at,
+             past_due_since = CASE
+               WHEN excluded.status != 'PAST_DUE' THEN NULL
+               WHEN subscriptions.status = 'PAST_DUE' THEN COALESCE(
+                 subscriptions.past_due_since,
+                 subscriptions.updated_at
+               )
+               ELSE excluded.past_due_since
+             END,
              last_provider_event_at = COALESCE(
                excluded.last_provider_event_at,
                subscriptions.last_provider_event_at
              )
-           WHERE subscriptions.last_provider_event_at IS NULL
-              OR excluded.last_provider_event_at IS NULL
-              OR excluded.last_provider_event_at >= subscriptions.last_provider_event_at`,
+           WHERE (
+               subscriptions.last_provider_event_at IS NULL
+               OR excluded.last_provider_event_at IS NULL
+               OR excluded.last_provider_event_at >= subscriptions.last_provider_event_at
+             ) AND (
+               subscriptions.provider_subscription_id IS NULL
+               OR excluded.provider_subscription_id IS NULL
+               OR subscriptions.provider_subscription_id = excluded.provider_subscription_id
+             )`,
         )
         .bind(
           subscription.id,
@@ -99,9 +117,21 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
           subscription.cancelUrl,
           subscription.createdAt,
           subscription.updatedAt,
+          subscription.status === "PAST_DUE"
+            ? (subscription.pastDueSince ?? subscription.updatedAt)
+            : null,
           subscription.lastProviderEventAt ?? null,
-        ),
+      ),
     );
+    if ((result.meta.changes ?? 0) === 0 && subscription.providerSubscriptionId !== null) {
+      const current = await this.findByWorkspace(subscription.workspaceId);
+      if (
+        current?.providerSubscriptionId !== null &&
+        current?.providerSubscriptionId !== subscription.providerSubscriptionId
+      ) {
+        throw new Error("Workspace already has a different provider subscription");
+      }
+    }
   }
 
   async findByWorkspace(workspaceId: string): Promise<Subscription | null> {

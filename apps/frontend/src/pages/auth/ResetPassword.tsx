@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import { resetPassword } from "../../api/auth";
@@ -13,11 +13,29 @@ import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
+import {
+  parseUrlCapability,
+  parseUrlCapabilityFragment,
+  redactCurrentUrlCapability,
+} from "../../lib/url-capabilities";
+import {
+  isAcceptableNewPassword,
+  MIN_PASSWORD_LENGTH,
+} from "../../lib/password-policy";
 
 export const resetPasswordSchema = z
   .object({
     confirmPassword: z.string(),
-    password: z.string().min(8, "Password must be at least 8 characters."),
+    password: z
+      .string()
+      .min(
+        MIN_PASSWORD_LENGTH,
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      )
+      .refine(
+        isAcceptableNewPassword,
+        "Choose a password that is not commonly compromised.",
+      ),
   })
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords don't match.",
@@ -28,13 +46,24 @@ type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const location = useLocation();
+  const [token] = useState(
+    () =>
+      parseUrlCapabilityFragment(location.hash) ||
+      parseUrlCapability(searchParams.get("token")),
+  );
   const toast = useToast();
   const [state, setState] = useState<"form" | "success" | "gone">(token ? "form" : "gone");
   const form = useForm<ResetPasswordValues>({
     defaultValues: { confirmPassword: "", password: "" },
     resolver: zodResolver(resetPasswordSchema),
   });
+
+  useLayoutEffect(() => {
+    if (location.hash || searchParams.has("token")) {
+      redactCurrentUrlCapability("token");
+    }
+  }, [location.hash, searchParams]);
 
   const submit = form.handleSubmit(async ({ password }) => {
     try {

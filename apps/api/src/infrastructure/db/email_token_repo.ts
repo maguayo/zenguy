@@ -63,6 +63,25 @@ export class D1EmailTokenRepo implements EmailTokenRepo {
     return row === null ? null : toEmailToken(row);
   }
 
+  async consumeValidByHash(
+    hash: string,
+    type: EmailToken["type"],
+    now: number,
+  ): Promise<EmailToken | null> {
+    const row = await one<EmailTokenRow>(
+      this.database
+        .prepare(
+          `UPDATE email_tokens
+           SET used_at = ?
+           WHERE token_hash = ? AND type = ?
+             AND used_at IS NULL AND expires_at > ?
+           RETURNING *`,
+        )
+        .bind(now, hash, type, now),
+    );
+    return row === null ? null : toEmailToken(row);
+  }
+
   async markUsed(id: string, at: number): Promise<void> {
     await run(
       this.database

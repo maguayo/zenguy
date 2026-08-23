@@ -25,7 +25,7 @@ export interface ListedSubscriptionGrant {
 }
 
 export function getSubscriptionGrant(token: string): Promise<PublicSubscriptionGrant> {
-  return apiGet(`/api/subscription-grants/${encodeURIComponent(token)}`);
+  return apiPost("/api/subscription-grants/preview", { token });
 }
 
 export function listSubscriptionGrants(): Promise<ListedSubscriptionGrant[]> {
@@ -40,9 +40,7 @@ export function redeemSubscriptionGrant(
   token: string,
   workspaceId: string,
 ): Promise<{ subscriptionStatus: "ACTIVE"; workspaceId: string }> {
-  return apiPost(`/api/subscription-grants/${encodeURIComponent(token)}/redeem`, {
-    workspaceId,
-  });
+  return apiPost("/api/subscription-grants/redeem", { token, workspaceId });
 }
 
 export function complimentaryWorkspaces(workspaces: Workspace[]): Workspace[] {

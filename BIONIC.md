@@ -1,10 +1,17 @@
 # Browser worker local con Bionic
 
-Este documento describe la arquitectura, configuración y procedimiento de réplica del sistema de browser tests de Zenguy. El estado aquí documentado corresponde al 20 de agosto de 2026.
+> [!CAUTION]
+> **Documento histórico. No ejecutes jobs remotos con este procedimiento.**
+> El modo host fue deshabilitado para staging y producción tras la auditoría
+> SEC-01. Conservamos la arquitectura original como trazabilidad; todo job real
+> debe usar la topología efímera, proxy de egreso e imágenes firmadas descrita en
+> `runner/README.md`.
+
+Este documento describe la arquitectura y el procedimiento histórico del sistema de browser tests de Zenguy a 20 de agosto de 2026.
 
 El objetivo es que la aplicación **no ejecute el navegador ni el modelo**. La aplicación crea el run, lo publica en Cloudflare Queues y un proceso Python independiente, ejecutado en un ordenador local, consume el trabajo, abre un navegador local, consulta un modelo servido por Bionic y devuelve todos los resultados a la aplicación.
 
-Uso previsto:
+Uso histórico, ahora bloqueado por el CLI:
 
 ```bash
 ./browser_worker.py             # producción
@@ -14,7 +21,9 @@ Uso previsto:
 El launcher instala y reutiliza automáticamente su entorno Python local. No hay que activar manualmente un virtualenv.
 
 > [!IMPORTANT]
-> Staging está configurado y verificado de extremo a extremo. Producción está preparada en el código, pero su activación sigue bloqueada intencionadamente por los controles de release descritos en [Estado por entorno](#estado-por-entorno). En el estado actual, `./browser_worker.py --once` falla de forma explícita porque la cola de producción todavía no tiene un consumidor HTTP pull.
+> Las pruebas históricas de staging validaron el protocolo, no el aislamiento.
+> `browser_worker.py` rechaza hoy todo modo no fallback; no existe un flag de
+> excepción para volver a habilitar Chrome directo en el host.
 
 ## Arquitectura
 
@@ -163,7 +172,7 @@ La copia actual está orientada a este Mac y contiene rutas deliberadamente hard
 | Navegador `browser-use` | Google Chrome en `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` |
 | Modo navegador | visible, `headless=False` |
 | Perfil de Chrome | perfil temporal de `browser-use`; no reutiliza la sesión personal de Chrome |
-| Perfil Wrangler | `zenguy-personal` |
+| Autenticación Cloudflare CLI | `CLOUDFLARE_API_TOKEN` efímero y de alcance mínimo; sin perfil OAuth persistente |
 | Poll cuando no hay mensajes | 5 segundos |
 | API del modelo | `http://127.0.0.1:1234/v1` |
 | Modelo | `qwen/qwen3.8-27b` |
@@ -210,27 +219,23 @@ El mapa de entornos y estos IDs están hardcodeados en `runner/browser_worker.py
 
 ## Autenticación y secretos
 
-Hay dos credenciales distintas y nunca deben confundirse:
+Hay cuatro credenciales distintas y nunca deben confundirse:
 
-1. **Credencial de Cloudflare Queues.** Permite al proceso local hacer pull y ACK en la cola.
-2. **`RUNNER_API_TOKEN` de Zenguy.** Permite reclamar y actualizar attempts a través de `/api/runner`.
+1. **Token API dedicado de Cloudflare Queues.** Permite al proceso hacer pull y ACK con sólo `Queues Read` + `Queues Write` (`Queues Edit`) en la cuenta seleccionada. Cloudflare no ofrece scope por cola para este token; el proceso fija el `queue_id`, pero la credencial debe considerarse válida para las colas de esa cuenta.
+2. **`RUNNER_API_TOKEN` de Zenguy.** Bootstrap y heartbeat del runner primario.
+3. **`RUNNER_FALLBACK_API_TOKEN`.** Claim y heartbeat exclusivos del fallback.
+4. **`RUNNER_CAPABILITY_SECRET`.** Firma capacidades de seis minutos ligadas al worker y attempt; nunca sale del Worker API.
 
 ### Credencial de Cloudflare
 
-La implementación actual reutiliza el token OAuth del perfil local de Wrangler:
-
-```bash
-pnpm --filter @zenguy/api exec wrangler auth token --json --profile zenguy-personal
-```
-
-El worker captura ese token en memoria y no lo imprime ni lo copia a ningún fichero suyo. Para replicar la instalación sin tocar el código:
-
-1. Instalar Wrangler a través de las dependencias del repositorio.
-2. Iniciar sesión en Cloudflare.
-3. Dejar activo un perfil llamado `zenguy-personal`, o cambiar `WRANGLER_PROFILE` en el worker.
-4. Verificar que el token puede leer y escribir en Queues.
-
-Como alternativa más limitada, se puede usar un API token dedicado con permisos de lectura y escritura de Cloudflare Queues. Para ello habría que modificar `cloudflare_queues_token()` para leerlo desde un keychain o variable de entorno segura. No debe incluirse un token Cloudflare en Git.
+El servicio **no lee un OAuth personal de Wrangler en runtime**. Crea un API
+token distinto por entorno, limitado a la cuenta y exclusivamente a las
+operaciones Queue read/write necesarias para pull/ack, y entrégalo como
+`CLOUDFLARE_QUEUES_TOKEN` o como
+`production_queues_token` / `staging_queues_token` en el fichero privado. Rota
+el OAuth que usó la instalación anterior. No debe incluirse ningún token
+Cloudflare en Git. La limitación disponible es por cuenta, no por cola; consulta
+la [autenticación oficial de pull consumers](https://developers.cloudflare.com/queues/configuration/pull-consumers/#2-consumer-authentication).
 
 ### Token de la API del runner
 
@@ -240,26 +245,43 @@ Cada entorno usa un token independiente de al menos 32 caracteres. Una forma de 
 openssl rand -hex 32
 ```
 
-El mismo valor se instala como secret del Worker de ese entorno y se guarda solo en el ordenador que ejecutará los tests.
+Genera tres valores distintos por entorno: primario, fallback y firma de
+capabilities. Los dos bearers se guardan únicamente en su runner respectivo;
+el secreto de firma se instala sólo en el Worker API.
 
 Ejemplo para staging:
 
 ```bash
-pnpm --filter @zenguy/api exec wrangler secret put RUNNER_API_TOKEN --env staging --profile zenguy-personal
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_API_TOKEN --env staging
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_FALLBACK_API_TOKEN --env staging
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_CAPABILITY_SECRET --env staging
 ```
 
 Ejemplo para producción, únicamente cuando se autorice el release:
 
 ```bash
-pnpm --filter @zenguy/api exec wrangler secret put RUNNER_API_TOKEN --profile zenguy-personal
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_API_TOKEN
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_FALLBACK_API_TOKEN
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_CAPABILITY_SECRET
 ```
+
+Antes de cada bloque, carga `CLOUDFLARE_API_TOKEN` desde el gestor de secretos
+en el entorno del proceso. Usa un token efímero, distinto por entorno y limitado
+a la operación concreta; no inicies una sesión OAuth interactiva, no uses un
+perfil personal o token global reutilizado ni escribas el valor en el comando,
+el repositorio o el historial del shell.
 
 Fichero local esperado:
 
 ```json
 {
   "production_runner_token": "SUSTITUIR_POR_UN_TOKEN_DISTINTO",
-  "staging_runner_token": "SUSTITUIR_POR_OTRO_TOKEN_DISTINTO"
+  "staging_runner_token": "SUSTITUIR_POR_OTRO_TOKEN_DISTINTO",
+  "production_fallback_runner_token": "BEARER_FALLBACK_PRODUCCION",
+  "staging_fallback_runner_token": "BEARER_FALLBACK_STAGING",
+  "production_queues_token": "TOKEN_QUEUE_PRODUCCION_DE_SCOPE_MINIMO",
+  "staging_queues_token": "TOKEN_QUEUE_STAGING_DE_SCOPE_MINIMO",
+  "egress_proxy": "http://127.0.0.1:3128"
 }
 ```
 
@@ -283,15 +305,19 @@ La API expone estos endpoints bajo el origen de cada entorno:
 
 ```text
 POST /api/runner/attempts/claim
+POST /api/runner/attempts/claim-stale
 POST /api/runner/attempts/:attemptId/start
 POST /api/runner/attempts/:attemptId/steps
 POST /api/runner/attempts/:attemptId/complete
 ```
 
-Todas las peticiones usan:
+`claim` usa el bearer primario; `claim-stale` usa el bearer fallback. Ambos
+devuelven una capability HMAC de seis minutos ligada a `workerId`, run,
+attempt, índice, generación y delivery. `start`, `steps` y `complete` rechazan
+los bearers bootstrap y exigen esa capability más `X-Zenguy-Worker-Id`:
 
 ```http
-Authorization: Bearer <RUNNER_API_TOKEN>
+Authorization: Bearer <RUNNER_API_TOKEN | RUNNER_FALLBACK_API_TOKEN | capability>
 Content-Type: application/json
 ```
 
@@ -321,10 +347,13 @@ Si el claim es válido, la respuesta contiene:
 
 - una referencia firmemente asociada al attempt y al lease;
 - un snapshot inmutable de las instrucciones y configuración del test;
-- únicamente los secretos referenciados por el test;
+- la capability de vida corta;
 - límites de ejecución.
 
-El worker repite esa referencia al iniciar, añadir cada step y completar. Esto evita que una entrega vieja termine una ejecución nueva.
+Los secretos no viajan en el claim. `start` los libera únicamente tras validar
+la capability y devuelve sólo los referenciados por el test. El worker repite
+referencia, capability e identidad al añadir cada step y completar. Esto evita
+que un bearer bootstrap o una entrega vieja termine una ejecución nueva.
 
 La migración `0016_external_runner_claims.sql` añade `runner_delivery_id` a `test_attempts` y un índice único parcial. Debe aplicarse antes de desplegar la API que acepta claims externos.
 
@@ -350,33 +379,36 @@ Desde la raíz del repositorio:
 1. Aplicar la migración remota:
 
    ```bash
-   pnpm --filter @zenguy/api exec wrangler d1 migrations apply zenguy-staging-db --remote --env staging --profile zenguy-personal
+   pnpm --filter @zenguy/api exec wrangler d1 migrations apply zenguy-staging-db --remote --env staging
    ```
 
-2. Instalar `RUNNER_API_TOKEN` en Cloudflare y guardar el mismo valor en el fichero local privado.
+2. Instalar `RUNNER_API_TOKEN`, `RUNNER_FALLBACK_API_TOKEN` y
+   `RUNNER_CAPABILITY_SECRET` distintos. Guardar sólo el bearer primario en el
+   worker local; crear además el token Queue de scope mínimo y configurar el
+   proxy de egreso obligatorio.
 
 3. Desplegar la API de staging:
 
    ```bash
-   pnpm --filter @zenguy/api exec wrangler deploy --env staging --profile zenguy-personal
+   pnpm --filter @zenguy/api exec wrangler deploy --env staging
    ```
 
 4. Eliminar el consumidor Worker/push anterior, si existe:
 
    ```bash
-   pnpm --filter @zenguy/api exec wrangler queues consumer worker remove zenguy-staging-runs zenguy-api-staging --profile zenguy-personal
+   pnpm --filter @zenguy/api exec wrangler queues consumer worker remove zenguy-staging-runs zenguy-api-staging
    ```
 
 5. Crear el consumidor HTTP pull:
 
    ```bash
-   pnpm --filter @zenguy/api exec wrangler queues consumer http add zenguy-staging-runs --batch-size 1 --message-retries 3 --dead-letter-queue zenguy-staging-runs-dlq --visibility-timeout-secs 900 --retry-delay-secs 30 --profile zenguy-personal
+   pnpm --filter @zenguy/api exec wrangler queues consumer http add zenguy-staging-runs --batch-size 1 --message-retries 3 --dead-letter-queue zenguy-staging-runs-dlq --visibility-timeout-secs 900 --retry-delay-secs 30
    ```
 
 6. Consultar la cola y copiar su ID al mapa de entornos del worker:
 
    ```bash
-   pnpm --filter @zenguy/api exec wrangler queues list --profile zenguy-personal
+   pnpm --filter @zenguy/api exec wrangler queues list
    ```
 
 7. Esperar unos segundos a que se propague el consumidor y probar un pull vacío:
@@ -395,13 +427,18 @@ Inmediatamente después de crear el consumidor se observó una respuesta `405`; 
 2. Asegurar que la API tiene un binding productor hacia esa Queue.
 3. Añadir la URL, nombres, Queue ID y token local al mapa de entornos del worker.
 4. Aplicar todas las migraciones D1, incluida `0016`.
-5. Generar un `RUNNER_API_TOKEN` exclusivo para el entorno.
+5. Generar los tres secretos runner exclusivos del entorno, el token Queue
+   dedicado y la configuración de proxy/aislamiento.
 6. Desplegar la API.
 7. Quitar cualquier consumidor Worker/push de la Queue de runs.
 8. Añadir el consumidor HTTP/pull con batch 1, timeout 900, tres reintentos, delay 30 y DLQ.
 9. Ejecutar primero un pull vacío y después un run desechable completo.
 
-## Ejecución diaria
+## Ejecución diaria — procedimiento histórico deshabilitado
+
+Los comandos siguientes se conservan como registro del diseño inicial y ahora
+fallan de forma cerrada. La operación vigente usa el servicio Compose firmado
+descrito en `runner/README.md`.
 
 Producción:
 
@@ -440,18 +477,18 @@ Secuencia de arranque esperada:
 La ejecución de un modelo sobre páginas web requiere tratar la página como entrada no confiable. Se aplicaron estas medidas:
 
 - El contenido de una página nunca puede redefinir las instrucciones del sistema; cualquier texto web puede ser prompt injection.
-- El worker bloquea destinos localhost, privados, link-local, reservados, metadata y hosts que resuelvan a IP no global, como defensa SSRF.
+- El worker intercepta por CDP cada navegación, redirect y subrecurso y bloquea destinos localhost, privados, link-local, reservados, metadata y hosts que resuelvan a IP no global; el despliegue aislado repite esa decisión en el proxy de egreso.
 - Los orígenes remotos de la API de Zenguy deben usar HTTPS.
 - La API de Bionic está fijada a loopback.
-- Los secretos se conservan como tags de `sensitive_data`; `browser-use` los sustituye únicamente en acciones autorizadas sobre los dominios permitidos.
-- Credenciales incluidas en URL, fragments y query params sensibles se eliminan o redactan antes de registrar el estado.
+- Los secretos se conservan como tags de `sensitive_data`; `browser-use` los sustituye únicamente sobre HTTPS y en acciones autorizadas sobre los dominios permitidos.
+- Las URLs persistidas se reducen al origin, sin path, query, fragment ni credenciales.
 - Si un attempt utiliza secretos, sus screenshots se desactivan durante toda la ejecución para evitar persistir valores visibles.
 - El razonamiento interno del modelo no se guarda como descripción de los steps.
 - La telemetría anónima y el cloud sync de `browser-use` están desactivados.
 - Las acciones de lectura/escritura de ficheros, evaluación JavaScript, búsqueda web, upload y PDF no están disponibles para el agente.
-- Las acciones destructivas en un navegador real solo deben formar parte de instrucciones de test explícitas. No se deben usar credenciales ni datos productivos en pruebas desechables.
-- El token de Cloudflare y el `RUNNER_API_TOKEN` tienen ámbitos y almacenamiento separados.
-- Cada entorno tiene un token de runner diferente.
+- Clicks de alto riesgo (pago, compra, publicación, borrado/cierre de cuenta y cancelación) tienen un gate determinista y se bloquean; no se deben usar credenciales ni datos productivos en pruebas desechables.
+- Los tokens Cloudflare, primario, fallback y secreto de capabilities tienen ámbitos y almacenamiento separados.
+- Cada entorno tiene valores distintos y los endpoints de job rechazan los bearers bootstrap.
 - Ningún token real forma parte de este documento ni del repositorio.
 
 ## Semántica de errores y reintentos
@@ -585,11 +622,15 @@ La Queue no tiene consumidor HTTP, el consumidor aún se está propagando o el Q
 
 ### HTTP 401/403 al hacer pull
 
-El token obtenido del perfil Wrangler no pertenece a la cuenta indicada o no tiene permisos Queues Read/Write. Volver a autenticar el perfil correcto o usar un token dedicado.
+El API token dedicado no pertenece a la cuenta/Queue indicada o carece de los
+permisos mínimos Queue necesarios. Rota/corrige ese token; el servicio no debe
+usar un perfil OAuth de Wrangler.
 
 ### HTTP 401 en `/api/runner`
 
-El token local no coincide con el secret `RUNNER_API_TOKEN` del entorno. No copiar el token de staging a producción ni viceversa.
+El bearer local no coincide con `RUNNER_API_TOKEN` (primario) o
+`RUNNER_FALLBACK_API_TOKEN` (fallback), o la capability expiró/no corresponde
+al worker/attempt. No copiar valores entre roles ni entornos.
 
 ### El modelo no aparece
 
@@ -617,13 +658,14 @@ Es un formato soportado. No restaurar el decoder antiguo: Cloudflare entregó JS
 
 ## Plan B: worker de respaldo
 
-Este documento describe el camino principal (worker local + Bionic). Existe
-además un modo de respaldo `./browser_worker.py --fallback` pensado para un
+Este documento describe el camino principal histórico (worker local + Bionic).
+El único modo remoto habilitado es `./browser_worker.py --fallback`, pensado para un
 VPS: no usa Cloudflare Queues y reclama contra la API únicamente los attempts
 que el worker local no ha cogido en 10 segundos, ejecutándolos con la API de
 OpenAI (`gpt-5-mini` por defecto). El diseño completo, las decisiones y la
 checklist de activación están en `BACKUP_RUNNER.md` en la raíz del
-repositorio.
+repositorio. También ese modo debe ejecutarse exclusivamente dentro de la
+topología aislada; nunca directamente en el VPS.
 
 ## Referencias oficiales
 

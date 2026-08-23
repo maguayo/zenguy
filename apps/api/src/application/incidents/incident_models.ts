@@ -34,7 +34,7 @@ export interface IncidentDeliveryOutput {
   channelName: string;
   channelType: ChannelType | null;
   eventType: DeliveryEventType;
-  status: DeliveryStatus;
+  status: DeliveryStatus | "AMBIGUOUS";
   attemptCount: number;
   errorSanitized: string | null;
   sentAt: number | null;

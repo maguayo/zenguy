@@ -1,0 +1,4 @@
+**
+!egress-proxy.Dockerfile
+!squid.conf
+!host-egress-deny.build.conf

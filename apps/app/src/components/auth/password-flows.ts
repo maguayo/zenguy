@@ -3,6 +3,10 @@ import { z } from "zod";
 import { ApiError } from "@/lib/api";
 import { parseLinkToken } from "@/lib/links";
 import { isExpiredLink } from "./link-errors";
+import {
+  isAcceptableNewPassword,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/password-policy";
 
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -12,7 +16,16 @@ export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 const passwordFields = {
   confirmPassword: z.string(),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: z
+    .string()
+    .min(
+      MIN_PASSWORD_LENGTH,
+      `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    )
+    .refine(
+      isAcceptableNewPassword,
+      "Choose a password that is not commonly compromised.",
+    ),
 };
 
 const passwordsMatch = (values: { confirmPassword: string; password: string }) =>

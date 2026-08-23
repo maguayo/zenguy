@@ -1,77 +1,124 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useLayoutEffect, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
 
 import { SessionStorageError, verifyEmail as verifyEmailRequest } from "@/api/auth";
 import { isExpiredLink } from "@/components/auth/link-errors";
 import {
-  createTokenVerifier,
   verificationEmailSchema,
+  verificationPasswordSchema,
   type VerificationEmailValues,
+  type VerificationPasswordValues,
   type VerificationState,
 } from "@/components/auth/verify-email";
 import { AuthStatus } from "@/components/auth/AuthStatus";
 import { AuthShell } from "@/components/AuthShell";
+import { FormError } from "@/components/FormError";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useResendVerification } from "@/hooks/useResendVerification";
-import { parseLinkToken } from "@/lib/links";
+import {
+  captureLinkCapability,
+  forgetLinkCapability,
+  linkCapability,
+} from "@/lib/link-capabilities";
+import { parseLinkFragment } from "@/lib/links";
+import { ApiError } from "@/lib/api";
+import { clearPendingRegistrationEmail } from "@/lib/registration-pending";
 import { spacing } from "@/theme";
-import { Button, ErrorState, Field, Input, Spinner } from "@/ui";
-
-const verifyEmailOnce = createTokenVerifier(verifyEmailRequest);
+import { Button, ErrorState, Field, Input, PasswordInput, Spinner } from "@/ui";
 
 /** Reachable signed in or signed out: the link in the email carries no session. */
 export default function VerifyEmail() {
-  const params = useLocalSearchParams<{ token?: string }>();
-  const token = parseLinkToken(params.token);
+  const params = useLocalSearchParams<{ "#"?: string; token?: string }>();
+  const hasIncomingCapability = params.token !== undefined || params["#"] !== undefined;
+  if (hasIncomingCapability) {
+    return (
+      <VerifyEmailLink
+        value={params.token ?? parseLinkFragment(params["#"])}
+      />
+    );
+  }
+  return <VerifyEmailFlow token={linkCapability("verification")} />;
+}
+
+function VerifyEmailLink({ value }: { value: unknown }) {
+  const router = useRouter();
+  const [token] = useState(() => captureLinkCapability("verification", value));
+
+  useLayoutEffect(() => {
+    Linking.clearInitialURL();
+    router.replace("/verify-email");
+  }, [router]);
+
+  return <VerifyEmailFlow token={token} />;
+}
+
+function VerifyEmailFlow({ token }: { token: string | null }) {
   const router = useRouter();
   const toast = useToast();
   const { adoptSession, refreshUser, status, user } = useAuth();
-  const [state, setState] = useState<VerificationState>(token ? "loading" : "gone");
-  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<VerificationState>(token ? "ready" : "gone");
   const [continuing, setContinuing] = useState(false);
-  const form = useForm<VerificationEmailValues>({
+  const emailForm = useForm<VerificationEmailValues>({
     defaultValues: { email: user?.email ?? "" },
     resolver: zodResolver(verificationEmailSchema),
   });
-  const email = form.watch("email");
+  const passwordForm = useForm<VerificationPasswordValues>({
+    defaultValues: { password: "" },
+    resolver: zodResolver(verificationPasswordSchema),
+  });
+  const email = useWatch({ control: emailForm.control, name: "email" });
   const { countdown, resend, sending } = useResendVerification(email);
 
-  useEffect(() => {
-    let active = true;
+  const verify = passwordForm.handleSubmit(async ({ password }) => {
     if (!token) {
       setState("gone");
-      return () => {
-        active = false;
-      };
+      return;
     }
+    passwordForm.clearErrors();
     setState("loading");
-    void verifyEmailOnce(token)
-      .then((session) => {
-        if (!active) return;
-        // Using the link proves control of the inbox: this device is signed in
-        // and continues into the app instead of the password form.
-        adoptSession(session);
-        toast.success("Email verified");
-        router.replace("/");
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        // The address is verified even when the Keychain refused the session;
-        // the user can still continue and sign in by hand.
-        if (error instanceof SessionStorageError) {
-          setState("success");
-          return;
-        }
-        setState(isExpiredLink(error) ? "gone" : "error");
-      });
-    return () => {
-      active = false;
-    };
-  }, [adoptSession, attempt, router, toast, token]);
+    try {
+      const session = await verifyEmailRequest(token, password);
+      await adoptSession(session);
+      clearPendingRegistrationEmail();
+      forgetLinkCapability("verification");
+      toast.success("Email verified");
+      router.replace("/");
+    } catch (error) {
+      // The address is verified even when the Keychain refused the session;
+      // the user can still continue and sign in by hand.
+      if (error instanceof SessionStorageError) {
+        clearPendingRegistrationEmail();
+        forgetLinkCapability("verification");
+        setState("success");
+      } else if (isExpiredLink(error)) {
+        forgetLinkCapability("verification");
+        setState("gone");
+      } else if (
+        error instanceof ApiError &&
+        error.code === "INVALID_CREDENTIALS"
+      ) {
+        setState("ready");
+        passwordForm.setError("password", {
+          message: "That is not the password used to create this account.",
+        });
+      } else if (
+        error instanceof ApiError &&
+        error.code === "RATE_LIMITED"
+      ) {
+        setState("ready");
+        passwordForm.setError("root", {
+          message: "Too many attempts. Try again in a moment.",
+        });
+      } else {
+        setState("error");
+      }
+    }
+  });
 
   const continueToApp = async () => {
     setContinuing(true);
@@ -95,7 +142,7 @@ export default function VerifyEmail() {
   if (state === "error") {
     return (
       <AuthStatus icon="mail" title="Verify your email" tone="warn">
-        <ErrorState onRetry={() => setAttempt((current) => current + 1)} />
+        <ErrorState onRetry={() => setState(token ? "ready" : "gone")} />
       </AuthStatus>
     );
   }
@@ -120,7 +167,49 @@ export default function VerifyEmail() {
     );
   }
 
-  const submit = form.handleSubmit(async () => resend());
+  if (state === "ready") {
+    return (
+      <AuthShell
+        hasHeader
+        description="Enter the password you chose when creating this account. The email link alone cannot activate it."
+        title="Verify your email"
+      >
+        <View style={styles.form}>
+          <Controller
+            control={passwordForm.control}
+            name="password"
+            render={({ field, fieldState }) => (
+              <Field error={fieldState.error?.message} label="Password" required>
+                <PasswordInput
+                  autoComplete="current-password"
+                  invalid={Boolean(fieldState.error)}
+                  returnKeyType="go"
+                  testID="verification-password"
+                  textContentType="password"
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChangeText={field.onChange}
+                  onSubmitEditing={() => void verify()}
+                />
+              </Field>
+            )}
+          />
+          <FormError message={passwordForm.formState.errors.root?.message} />
+          <Button
+            fullWidth
+            loading={passwordForm.formState.isSubmitting}
+            size="lg"
+            testID="verification-submit"
+            title="Verify email"
+            variant="accent"
+            onPress={() => void verify()}
+          />
+        </View>
+      </AuthShell>
+    );
+  }
+
+  const submit = emailForm.handleSubmit(async () => resend());
   return (
     <AuthShell
       hasHeader
@@ -129,7 +218,7 @@ export default function VerifyEmail() {
     >
       <View style={styles.form}>
         <Controller
-          control={form.control}
+          control={emailForm.control}
           name="email"
           render={({ field, fieldState }) => (
             <Field error={fieldState.error?.message} label="Email" required>

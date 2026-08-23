@@ -29,7 +29,7 @@ export class UpdateAlertSettings {
     dailyPaidAlertLimit?: number;
     ip?: string;
   }): Promise<AlertSettings> {
-    if (!can(input.actorRole, "channels.manage")) throw forbidden();
+    if (!can(input.actorRole, "paid_alerts.manage")) throw forbidden();
     if (
       input.paidChannelsEnabled === undefined &&
       input.dailyPaidAlertLimit === undefined

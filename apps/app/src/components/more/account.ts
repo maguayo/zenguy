@@ -1,6 +1,10 @@
 import type { AppLockThreshold } from "@/contexts/AppLockContext";
 import type { SelectOption } from "@/ui";
 
+const EAS_CHANNEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/u;
+const UPDATE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
 export const lockAfterOptions: SelectOption<AppLockThreshold>[] = [
   { label: "Immediately", value: "immediate" },
   { label: "1 minute", value: "1m" },
@@ -28,4 +32,22 @@ export function appVersionLabel(
 ): string {
   if (!version) return "Zenguy";
   return buildNumber ? `Zenguy ${version} (${buildNumber})` : `Zenguy ${version}`;
+}
+
+/** Compact, display-only EAS metadata; malformed native values stay hidden. */
+export function appUpdateTraceLabel(
+  channel: string | null | undefined,
+  updateId: string | null | undefined,
+): string | null {
+  const parts: string[] = [];
+  const normalizedChannel = channel?.trim();
+  if (normalizedChannel && EAS_CHANNEL_PATTERN.test(normalizedChannel)) {
+    parts.push(`Channel ${normalizedChannel}`);
+  }
+
+  const normalizedUpdateId = updateId?.trim().toLowerCase();
+  if (normalizedUpdateId && UPDATE_ID_PATTERN.test(normalizedUpdateId)) {
+    parts.push(`Update ${normalizedUpdateId.slice(0, 8)}\u2026`);
+  }
+  return parts.length > 0 ? parts.join(" \u00b7 ") : null;
 }

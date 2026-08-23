@@ -88,6 +88,7 @@ describe("TwilioApi", () => {
 
     for (const request of recorder.requests) {
       expect(request.init?.method).toBe("POST");
+      expect(request.init?.signal).toBeInstanceOf(AbortSignal);
       const headers = new Headers(request.init?.headers);
       expect(headers.get("Authorization")).toBe(
         `Basic ${btoa("AC_account:auth-token")}`,

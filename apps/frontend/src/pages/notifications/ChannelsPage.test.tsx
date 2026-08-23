@@ -115,6 +115,7 @@ describe("notification channels list", () => {
     expect(failed).toContain("Disabled");
     expect(failed).toContain("Failed");
     expect(lastDeliveryText(null)).toBe("Never used");
+    expect(lastDeliveryText("AMBIGUOUS")).toBe("Needs reconciliation");
   });
 
   it("describes mobile push channels by reach", () => {
@@ -153,6 +154,17 @@ describe("notification channels list", () => {
       }),
     ).toEqual({
       message: "Test failed: provider unavailable",
+      tone: "error",
+    });
+    expect(
+      testDeliveryResult({
+        ...delivery,
+        errorSanitized: "provider acknowledgement lost",
+        status: "AMBIGUOUS",
+      }),
+    ).toEqual({
+      message:
+        "Test outcome needs reconciliation: provider acknowledgement lost",
       tone: "error",
     });
   });

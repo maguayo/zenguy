@@ -43,11 +43,17 @@ export function incidentDeliveryColumns(timezone: string): TableColumn<IncidentD
       key: "status",
       render: (delivery) => {
         const badge = (
-          <Badge tone={delivery.status === "SENT" ? "ok" : delivery.status === "FAILED" ? "danger" : "neutral"}>
-            {delivery.status === "SENT" ? "Sent" : delivery.status === "FAILED" ? "Failed" : "Pending"}
+          <Badge tone={delivery.status === "SENT" ? "ok" : delivery.status === "PENDING" ? "neutral" : "danger"}>
+            {delivery.status === "SENT"
+              ? "Sent"
+              : delivery.status === "FAILED"
+                ? "Failed"
+                : delivery.status === "AMBIGUOUS"
+                  ? "Needs reconciliation"
+                  : "Pending"}
           </Badge>
         );
-        return delivery.status === "FAILED" && delivery.errorSanitized ? (
+        return (delivery.status === "FAILED" || delivery.status === "AMBIGUOUS") && delivery.errorSanitized ? (
           <Tooltip content={delivery.errorSanitized}>{badge}</Tooltip>
         ) : badge;
       },

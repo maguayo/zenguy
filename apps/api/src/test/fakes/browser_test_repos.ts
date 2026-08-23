@@ -23,6 +23,10 @@ import type {
 } from "../../domain/browser_tests/types";
 import type { UsageEvent } from "../../domain/billing/types";
 import type { Cursor } from "../../shared/pagination";
+import {
+  actionMatchesScope,
+  validActionAuthorizationState,
+} from "../../domain/browser_tests/irreversible_authorization";
 
 function copy<T>(value: T): T {
   return structuredClone(value);
@@ -59,6 +63,22 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
           right.createdAt - left.createdAt || right.id.localeCompare(left.id),
       )
       .map(copy);
+  }
+
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<BrowserTest[]> {
+    return (await this.list(workspaceId))
+      .filter(
+        (test) =>
+          cursor === null ||
+          cursor === undefined ||
+          test.createdAt < cursor.createdAt ||
+          (test.createdAt === cursor.createdAt && test.id < cursor.id),
+      )
+      .slice(0, limit);
   }
 
   async update(
@@ -115,6 +135,23 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
 
   async getChannelIds(testId: string): Promise<string[]> {
     return [...(this.channels.get(testId) ?? [])];
+  }
+
+  async getChannelIdsForTests(
+    workspaceId: string,
+    testIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    for (const testId of new Set(testIds)) {
+      const test = this.tests.get(testId);
+      result.set(
+        testId,
+        test?.workspaceId === workspaceId && test.deletedAt === null
+          ? [...(this.channels.get(testId) ?? [])]
+          : [],
+      );
+    }
+    return result;
   }
 }
 
@@ -185,6 +222,29 @@ export class FakeRunRepo implements RunRepo {
   async findByIdForExecution(runId: string): Promise<TestRun | null> {
     const run = this.runs.get(runId);
     return run === undefined ? null : copy(run);
+  }
+
+  async consumeActionAuthorization(
+    runId: string,
+    action: import("../../domain/browser_tests/types").IrreversibleActionRequest,
+  ): Promise<boolean> {
+    const run = this.runs.get(runId);
+    if (run === undefined || run.status !== "RUNNING") return false;
+    const state = structuredClone(run.actionAuthorizations ?? []);
+    if (!validActionAuthorizationState(run.snapshot, state)) return false;
+    const index = state.findIndex(
+      (entry) =>
+        entry.remainingUses > 0 && actionMatchesScope(action, entry.scope),
+    );
+    if (index < 0) return false;
+    const current = state[index];
+    if (current === undefined) return false;
+    state[index] = {
+      scope: current.scope,
+      remainingUses: current.remainingUses - 1,
+    };
+    this.runs.set(runId, { ...run, actionAuthorizations: state });
+    return true;
   }
 
   async listForTest(
@@ -295,11 +355,16 @@ export class FakeRunRepo implements RunRepo {
   async recentRunsPerTest(
     workspaceId: string,
     limit: number,
+    testIds?: string[],
   ): Promise<Map<string, RunTick[]>> {
     const ticks = new Map<string, RunTick[]>();
+    const selected = testIds === undefined ? null : new Set(testIds);
     const runs = [...this.runs.values()]
       .filter(
-        (run) => run.workspaceId === workspaceId && run.browserTestId !== null,
+        (run) =>
+          run.workspaceId === workspaceId &&
+          run.browserTestId !== null &&
+          (selected === null || selected.has(run.browserTestId)),
       )
       .sort(
         (left, right) =>
@@ -317,13 +382,16 @@ export class FakeRunRepo implements RunRepo {
 
   async lastRunSummaryPerTest(
     workspaceId: string,
+    testIds?: string[],
   ): Promise<Map<string, RunSummaryRow>> {
     const summaries = new Map<string, RunSummaryRow>();
+    const selected = testIds === undefined ? null : new Set(testIds);
     const finished = [...this.runs.values()]
       .filter(
         (run) =>
           run.workspaceId === workspaceId &&
           run.browserTestId !== null &&
+          (selected === null || selected.has(run.browserTestId)) &&
           run.finishedAt !== null,
       )
       .sort(
@@ -662,6 +730,13 @@ export class FakeArtifactRepo implements ArtifactRepo {
   async findById(id: string): Promise<RunArtifact | null> {
     const artifact = this.artifacts.get(id);
     return artifact === undefined ? null : copy(artifact);
+  }
+
+  async findByIds(ids: string[]): Promise<RunArtifact[]> {
+    return [...new Set(ids)]
+      .map((id) => this.artifacts.get(id))
+      .filter((artifact): artifact is RunArtifact => artifact !== undefined)
+      .map(copy);
   }
 
   async listForAttempt(attemptId: string): Promise<RunArtifact[]> {

@@ -17,12 +17,15 @@ type Publisher = Pick<PublishQueueOutbox, "publishById">;
 
 function dlqKind(queueName: string): DurableQueueKind | null {
   switch (queueName) {
+    case "zenguy-local-runs-dlq":
     case "zenguy-runs-dlq":
     case "zenguy-staging-runs-dlq":
       return "RUN";
+    case "zenguy-local-checks-dlq":
     case "zenguy-checks-dlq":
     case "zenguy-staging-checks-dlq":
       return "CHECK";
+    case "zenguy-local-notify-dlq":
     case "zenguy-notify-dlq":
     case "zenguy-staging-notify-dlq":
       return "NOTIFY";
@@ -64,8 +67,9 @@ export class RedriveDeadLetter {
         queue: queueName,
         messageId: message.id,
       });
-      message.ack();
-      return;
+      // Never acknowledge a queue we cannot classify. The configured DLQ
+      // retry/quarantine chain must retain it for operator inspection.
+      throw new Error(`Unsupported dead-letter queue: ${queueName}`);
     }
 
     const now = this.clock.now();

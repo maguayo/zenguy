@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import { verifyEmail as verifyEmailRequest } from "../../api/auth";
@@ -10,85 +10,98 @@ import { Button } from "../../components/ui/Button";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { Spinner } from "../../components/ui/Spinner";
 import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
+import {
+  parseUrlCapability,
+  parseUrlCapabilityFragment,
+  redactCurrentUrlCapability,
+} from "../../lib/url-capabilities";
 import { useResendVerification } from "./useResendVerification";
 
 export const verificationEmailSchema = z.object({
   email: z.string().email("Enter a valid email address."),
 });
+export const verificationPasswordSchema = z.object({
+  password: z
+    .string()
+    .min(1, "Enter the password used to create this account."),
+});
 
 type VerificationEmailValues = z.infer<typeof verificationEmailSchema>;
-type VerificationState = "loading" | "gone" | "error";
-
-/**
- * Verification tokens are single-use: the same token is only ever sent once,
- * even when the effect runs twice (Strict Mode). A failed request is
- * forgotten so the user can retry; a successful result is kept.
- */
-export function createTokenVerifier<T>(
-  verify: (token: string) => Promise<T>,
-): (token: string) => Promise<T> {
-  const requests = new Map<string, Promise<T>>();
-  return (token) => {
-    const existing = requests.get(token);
-    if (existing) return existing;
-    const request = verify(token).catch((error: unknown) => {
-      requests.delete(token);
-      throw error;
-    });
-    requests.set(token, request);
-    return request;
-  };
-}
-
-const verifyEmailOnce = createTokenVerifier(verifyEmailRequest);
+type VerificationPasswordValues = z.infer<typeof verificationPasswordSchema>;
+type VerificationState = "ready" | "loading" | "gone" | "error";
 
 /** Reachable signed in or signed out: the link in the email carries no session. */
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const location = useLocation();
+  const [token] = useState(
+    () =>
+      parseUrlCapabilityFragment(location.hash) ||
+      parseUrlCapability(searchParams.get("token")),
+  );
   const { adoptSession } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [state, setState] = useState<VerificationState>("loading");
-  const [attempt, setAttempt] = useState(0);
-  const form = useForm<VerificationEmailValues>({
+  const [state, setState] = useState<VerificationState>(token ? "ready" : "gone");
+  const emailForm = useForm<VerificationEmailValues>({
     defaultValues: { email: "" },
     resolver: zodResolver(verificationEmailSchema),
   });
-  const email = form.watch("email");
+  const passwordForm = useForm<VerificationPasswordValues>({
+    defaultValues: { password: "" },
+    resolver: zodResolver(verificationPasswordSchema),
+  });
+  const email = emailForm.watch("email");
   const { countdown, resend, sending } = useResendVerification(email);
 
-  useEffect(() => {
-    let active = true;
+  useLayoutEffect(() => {
+    if (location.hash || searchParams.has("token")) {
+      redactCurrentUrlCapability("token");
+    }
+  }, [location.hash, searchParams]);
+
+  const verify = passwordForm.handleSubmit(async ({ password }) => {
     if (!token) {
       setState("gone");
-      return () => {
-        active = false;
-      };
+      return;
     }
+    passwordForm.clearErrors();
     setState("loading");
-    void verifyEmailOnce(token)
-      .then((session) => {
-        if (!active) return;
-        // Using the link proves control of the inbox: sign this browser in
-        // and continue instead of asking for the password again.
-        adoptSession(session);
-        toast.success("Email verified");
-        navigate("/", { replace: true });
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setState(error instanceof ApiError && error.code === "GONE" ? "gone" : "error");
-      });
-    return () => {
-      active = false;
-    };
-  }, [adoptSession, attempt, navigate, toast, token]);
+    try {
+      const session = await verifyEmailRequest(token, password);
+      await adoptSession(session);
+      toast.success("Email verified");
+      navigate("/", { replace: true });
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "GONE") {
+        setState("gone");
+      } else if (
+        error instanceof ApiError &&
+        error.code === "INVALID_CREDENTIALS"
+      ) {
+        setState("ready");
+        passwordForm.setError("password", {
+          message: "That is not the password used to create this account.",
+        });
+      } else if (
+        error instanceof ApiError &&
+        error.code === "RATE_LIMITED"
+      ) {
+        setState("ready");
+        passwordForm.setError("root", {
+          message: "Too many attempts. Try again in a moment.",
+        });
+      } else {
+        setState("error");
+      }
+    }
+  });
 
   if (state === "loading") {
     return (
@@ -103,12 +116,60 @@ export default function VerifyEmail() {
   if (state === "error") {
     return (
       <AuthShell title="Verify your email">
-        <ErrorState onRetry={() => setAttempt((current) => current + 1)} />
+        <ErrorState onRetry={() => setState(token ? "ready" : "gone")} />
       </AuthShell>
     );
   }
 
-  const submit = form.handleSubmit(async () => resend());
+  if (state === "ready") {
+    return (
+      <AuthShell
+        description="Enter the password you chose when creating this account. The email link alone cannot activate it."
+        title="Verify your email"
+      >
+        <form
+          className="space-y-5"
+          noValidate
+          onSubmit={(event) => void verify(event)}
+        >
+          <Field
+            error={fieldError(passwordForm.formState, "password")}
+            htmlFor="verification-password"
+            label="Password"
+            required
+          >
+            <PasswordInput
+              autoComplete="current-password"
+              autoFocus
+              controlSize="lg"
+              id="verification-password"
+              invalid={Boolean(passwordForm.formState.errors.password)}
+              {...passwordForm.register("password")}
+            />
+          </Field>
+          {passwordForm.formState.errors.root?.message ? (
+            <p
+              className="rounded-md border border-danger-600/20 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+              role="alert"
+            >
+              {passwordForm.formState.errors.root.message}
+            </p>
+          ) : null}
+          <Button
+            className="w-full"
+            loading={passwordForm.formState.isSubmitting}
+            size="lg"
+            type="submit"
+            variant="primary"
+          >
+            Verify email
+          </Button>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  const submit = emailForm.handleSubmit(async () => resend());
   return (
     <AuthShell
       description="This verification link is invalid or has expired."
@@ -116,7 +177,7 @@ export default function VerifyEmail() {
     >
       <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
         <Field
-          error={fieldError(form.formState, "email")}
+          error={fieldError(emailForm.formState, "email")}
           htmlFor="verification-email"
           label="Email"
           required
@@ -124,9 +185,9 @@ export default function VerifyEmail() {
           <Input
             autoComplete="email"
             id="verification-email"
-            invalid={Boolean(form.formState.errors.email)}
+            invalid={Boolean(emailForm.formState.errors.email)}
             type="email"
-            {...form.register("email")}
+            {...emailForm.register("email")}
           />
         </Field>
         <Button

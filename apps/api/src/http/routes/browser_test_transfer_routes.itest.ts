@@ -2,10 +2,12 @@ import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import type { Subscription } from "../../domain/billing/types";
 import {
+  MAX_TRANSFER_TESTS,
   parseTestsFile,
   serializeTestsFile,
   type BrowserTestTransferEntry,
 } from "../../domain/browser_tests/transfer";
+import type { BrowserTest } from "../../domain/browser_tests/types";
 import type { NotificationChannel } from "../../domain/channels/types";
 import type { User } from "../../domain/users/types";
 import type { Role, Workspace } from "../../domain/workspaces/types";
@@ -34,6 +36,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@transfer.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -43,6 +46,7 @@ const USERS: Record<Actor, User> = {
     email: "member@transfer.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -149,11 +153,25 @@ describe("browser test export/import routes", () => {
     const channels = new D1ChannelRepo(bindings.DB);
     const encryptedEmail = await encryptSecret(
       JSON.stringify({ emails: ["ops@example.com"] }),
-      config.encryptionKey,
+      config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "ch_transfer",
+      },
     );
     await channels.insert(channel("ch_transfer", WORKSPACE.id, encryptedEmail));
+    const encryptedOtherEmail = await encryptSecret(
+      JSON.stringify({ emails: ["ops@example.com"] }),
+      config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: OTHER_WORKSPACE.id,
+        recordId: "ch_other_workspace",
+      },
+    );
     await channels.insert(
-      channel("ch_other_workspace", OTHER_WORKSPACE.id, encryptedEmail),
+      channel("ch_other_workspace", OTHER_WORKSPACE.id, encryptedOtherEmail),
     );
     tests = new D1BrowserTestRepo(bindings.DB);
     audits = new D1AuditRepo(bindings.DB);
@@ -245,6 +263,40 @@ describe("browser test export/import routes", () => {
     );
     const parsed = JSON.parse(await json.text()) as { tests: unknown[] };
     expect(parsed.tests).toHaveLength(2);
+  });
+
+  it("exports all 200 browser tests allowed by the workspace collection cap", async () => {
+    for (let index = 0; index < MAX_TRANSFER_TESTS; index += 1) {
+      const test: BrowserTest = {
+        id: `bt_export_${String(index).padStart(3, "0")}`,
+        workspaceId: WORKSPACE.id,
+        name: `Export ${index}`,
+        startUrl: "https://example.com",
+        instructions: "Check it",
+        device: "DESKTOP",
+        intervalHours: 24,
+        maxRetries: 0,
+        notifyOnRecovery: false,
+        nextRunAt: NOW,
+        createdBy: USERS.owner.id,
+        updatedBy: USERS.owner.id,
+        createdAt: NOW + index,
+        updatedAt: NOW + index,
+        deletedAt: null,
+      };
+      await tests.insert(test);
+    }
+
+    const response = await exportRequest("?format=json");
+    expect(response.status).toBe(200);
+    const file = parseTestsFile(await response.text());
+    expect(file.tests).toHaveLength(MAX_TRANSFER_TESTS);
+    expect(new Set(file.tests.map((test) => test.id)).size).toBe(
+      MAX_TRANSFER_TESTS,
+    );
+    expect(file.tests.map((test) => test.name)).toEqual(
+      expect.arrayContaining(["Export 0", `Export ${MAX_TRANSFER_TESTS - 1}`]),
+    );
   });
 
   it("imports new tests and upserts existing ones by id", async () => {

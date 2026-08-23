@@ -14,6 +14,7 @@ const ACTOR: User = {
   email: "admin@acme.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -38,7 +39,7 @@ describe("UpdateAlertSettings", () => {
     const result = await useCase.execute({
       workspaceId: "ws_1",
       actor: ACTOR,
-      actorRole: "ADMIN",
+      actorRole: "OWNER",
       paidChannelsEnabled: true,
       dailyPaidAlertLimit: 50,
       ip: "203.0.113.1",

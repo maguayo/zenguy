@@ -1,5 +1,8 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+const isDevelopmentProfile = process.env.EAS_BUILD_PROFILE === "development";
+const isProductionProfile = process.env.EAS_BUILD_PROFILE === "production";
+
 // The app ships no secrets: the only build-time setting is the API origin,
 // provided through EXPO_PUBLIC_API_ORIGIN (see eas.json and README.md).
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -8,20 +11,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "zenguy",
   // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
   owner: "maguayo",
-  version: "0.2.1",
-  // EAS Update: one runtime per app version. Any native change (dependency with
-  // native code, config plugin, permission, entitlement, icon, splash) must
-  // bump `version`, so an OTA update can never reach an incompatible binary.
-  // This also matches the forced-update check (MIN_APP_VERSION) on the API.
-  runtimeVersion: { policy: "appVersion" },
+  version: "0.2.2",
+  // Native inputs produce a distinct runtime automatically. This prevents an
+  // OTA from crossing an entitlement, module or config-plugin boundary.
+  runtimeVersion: { policy: "fingerprint" },
   updates: {
     url: "https://u.expo.dev/dbac86d4-6e5f-4cb1-b465-4182ccb5cac7",
+    codeSigningCertificate: "./certs/updates-certificate.pem",
+    codeSigningMetadata: {
+      alg: "rsa-v1_5-sha256",
+      keyid: "zenguy-2026-01",
+    },
     // Check on launch; a pending update is applied on the next cold start.
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
   orientation: "portrait",
-  scheme: "zenguy",
   platforms: ["ios"],
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
@@ -43,13 +48,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // API during development (http://127.0.0.1).
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: false,
-        NSAllowsLocalNetworking: true,
+        ...(isDevelopmentProfile ? { NSAllowsLocalNetworking: true } : {}),
       },
       UIBackgroundModes: [],
     },
-    // Universal links (https://app.zenguy.com/...) need an AASA file served by
-    // the web app before this can be enabled. The custom scheme works today.
-    // associatedDomains: ["applinks:app.zenguy.com"],
+    // The matching AASA file is versioned under apps/frontend/public/.well-known.
+    associatedDomains: ["applinks:app.zenguy.com"],
+    // expo-notifications can be auto-applied before its configured plugin and
+    // otherwise leaves the default development entitlement in store builds.
+    // Set the entitlement explicitly from the EAS profile.
+    entitlements: {
+      "aps-environment": isProductionProfile ? "production" : "development",
+    },
   },
   plugins: [
     "expo-router",
@@ -92,6 +102,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
       },
     ],
+    // Must remain last: Expo's default iOS scheme plugin otherwise adds the
+    // bundle identifier as a claimable custom URL scheme.
+    "./plugins/with-universal-links-only",
   ],
   experiments: {
     // Typed routes reject string-built hrefs and only exist after `expo start`,

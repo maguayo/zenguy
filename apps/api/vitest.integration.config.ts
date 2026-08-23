@@ -13,9 +13,18 @@ export default defineConfig({
       );
       return {
         remoteBindings: false,
-        wrangler: { configPath: "./wrangler.jsonc" },
+        // Keep the Wrangler config in a directory that has no `.dev.vars`.
+        // The Cloudflare pool resolves local secret files beside configPath;
+        // integration tests must use only the synthetic bindings below and in
+        // testEnv(), never a developer's local credentials.
+        wrangler: { configPath: "./test/wrangler.jsonc" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations },
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            // Keep integration email traffic inside Miniflare's allowlist even
+            // when a developer's .dev.vars uses a local placeholder sender.
+            EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
+          },
         },
       };
     }),

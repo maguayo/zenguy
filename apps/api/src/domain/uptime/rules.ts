@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { UPTIME_FREQUENCIES_SECONDS } from "../../shared/constants";
 import { assertSafeExternalUrl } from "../../shared/ssrf";
+import { isMutableMonitorMethod } from "./types";
 
 function safeExternalUrl(value: string): boolean {
   try {
-    assertSafeExternalUrl(value);
+    assertSafeExternalUrl(value, { denyZenguyOrigins: true });
     return true;
   } catch {
     return false;
@@ -57,6 +58,19 @@ function validateRelationships(
   config: MonitorConfigBase,
   context: z.RefinementCtx,
 ): void {
+  if (
+    isMutableMonitorMethod(config.method) &&
+    config.headers?.some(
+      (header) => header.key.toLowerCase() === "idempotency-key",
+    ) === true
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["headers"],
+      message:
+        "Idempotency-Key is managed by ZenGuy and is stable for the monitor cycle",
+    });
+  }
   if (
     (config.method === "GET" || config.method === "HEAD") &&
     config.body !== undefined

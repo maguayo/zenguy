@@ -10,6 +10,7 @@ android/
 *.p12
 *.key
 *.pem
+!certs/updates-certificate.pem
 *.cer
 *.certSigningRequest
 *.mobileprovision

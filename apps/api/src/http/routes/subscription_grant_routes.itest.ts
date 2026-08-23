@@ -17,6 +17,7 @@ const ISSUER: User = {
   email: "marcos@aguayo.es",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -26,6 +27,7 @@ const FRIEND: User = {
   email: "ivy@example.com",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -35,6 +37,7 @@ const OTHER: User = {
   email: "other@example.com",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -135,9 +138,15 @@ describe("subscription grant routes", () => {
       data: { token: string; redeemUrl: string };
     };
     const token = issuedBody.data.token;
-    expect(issuedBody.data.redeemUrl).toContain(`/grants/${token}`);
+    expect(issuedBody.data.redeemUrl).toBe(
+      `${testEnv().APP_URL}/grants/redeem#${token}`,
+    );
 
-    const preview = await app.request(`/api/subscription-grants/${token}`);
+    const preview = await app.request("/api/subscription-grants/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
     expect(preview.status).toBe(200);
 
     const before = await app.request(
@@ -154,14 +163,14 @@ describe("subscription grant routes", () => {
     expect(before.status).toBe(402);
 
     const redeemed = await app.request(
-      `/api/subscription-grants/${token}/redeem`,
+      "/api/subscription-grants/redeem",
       {
         method: "POST",
         headers: {
           Authorization: friendToken,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ workspaceId: FRIEND_WORKSPACE.id }),
+        body: JSON.stringify({ token, workspaceId: FRIEND_WORKSPACE.id }),
       },
     );
     expect(redeemed.status).toBe(200);
@@ -186,14 +195,14 @@ describe("subscription grant routes", () => {
     expect(created.status).toBe(201);
 
     const reuse = await app.request(
-      `/api/subscription-grants/${token}/redeem`,
+      "/api/subscription-grants/redeem",
       {
         method: "POST",
         headers: {
           Authorization: friendToken,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ workspaceId: FRIEND_WORKSPACE.id }),
+        body: JSON.stringify({ token, workspaceId: FRIEND_WORKSPACE.id }),
       },
     );
     expect(reuse.status).toBe(410);

@@ -179,10 +179,21 @@ export default function TestsListScreen() {
       if (picked.canceled) return;
       const asset = picked.assets[0];
       if (!asset) return;
-      const text = await new File(asset.uri).text();
-      const summary = await importFile.mutateAsync(text);
-      await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
-      toast.success(importSummaryMessage(summary));
+      const importedFile = new File(asset.uri);
+      try {
+        const text = await importedFile.text();
+        const summary = await importFile.mutateAsync(text);
+        await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
+        toast.success(importSummaryMessage(summary));
+      } finally {
+        // DocumentPicker created this app-owned cache copy; never retain test
+        // definitions after the import attempt finishes.
+        try {
+          if (importedFile.exists) importedFile.delete();
+        } catch {
+          // The OS cache remains the final eviction boundary if cleanup races.
+        }
+      }
     } catch (error) {
       if (!handleMutationError(error)) toast.error(importErrorMessage(error));
     }

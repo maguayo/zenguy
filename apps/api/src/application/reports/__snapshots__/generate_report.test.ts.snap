@@ -7,7 +7,7 @@ exports[`GenerateReport > renders and stores the complete factual report with ev
 **Date:** 2026-08-19T12:29:59.000Z (UTC)
 **Workspace timezone:** Europe/Madrid
 **Source:** SCHEDULED
-**Starting URL:** https://shop.example.com/start?token=redacted&view=full
+**Starting URL:** https://shop.example.com
 **Device:** MOBILE (390×844)
 
 ## Instructions
@@ -42,15 +42,15 @@ The page showed {{API_TOKEN}} rejected
 
 ### Attempt 0 (FAILED, 30s, waited 0s)
 
-1. [12:28:02] click — Clicked checkout using {{API_TOKEN}} (https://shop.example.com/cart?note={{API_TOKEN}})
+1. [12:28:02] click — Clicked checkout using {{API_TOKEN}} (https://shop.example.com)
 
 ### Attempt 1 (TIMEOUT, 30s, waited 60s)
 
-2. [12:29:02] wait — Waited after {{API_TOKEN}} (https://shop.example.com/cart)
+2. [12:29:02] wait — Waited after {{API_TOKEN}} (https://shop.example.com)
 
 ## Visited URLs
 
-- https://shop.example.com/checkout?note={{API_TOKEN}}
+- https://shop.example.com
 
 ## Console errors
 

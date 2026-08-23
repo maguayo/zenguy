@@ -13,6 +13,7 @@ export interface AuthDebrisCounts {
   emailTokens: number;
   refreshTokens: number;
   invitations: number;
+  adminSessions: number;
 }
 
 export interface DeletedWorkspacePurgeCounts {
@@ -27,10 +28,12 @@ export interface CleanupRepo {
   ): Promise<ExpiredRunBatch>;
   deleteRunBatch(runIds: string[]): Promise<void>;
   deleteDeliveriesOlderThan(before: number, limit: number): Promise<number>;
+  deleteExpiredRateLimits(before: number, limit: number): Promise<number>;
   deleteAuthDebris(input: {
     emailBefore: number;
     refreshBefore: number;
     invitationBefore: number;
+    adminSessionBefore: number;
     limit: number;
   }): Promise<AuthDebrisCounts>;
   purgeDeletedWorkspaceOperational(

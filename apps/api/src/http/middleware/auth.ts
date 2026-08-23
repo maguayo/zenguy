@@ -26,7 +26,9 @@ export function requireAuth(
     if (token === undefined) throw unauthorized();
     const claims = await verifyAccessToken(dependencies.config, token);
     const user = await dependencies.users.findById(claims.sub);
-    if (user === null) throw unauthorized();
+    if (user === null || user.authVersion !== claims.authVersion) {
+      throw unauthorized();
+    }
 
     context.set("user", user);
     await next();

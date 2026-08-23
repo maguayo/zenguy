@@ -41,7 +41,6 @@ import { useMutationError } from "../../hooks/useMutationError";
 import type { ApiPage } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatDateTime, formatEuros } from "../../lib/format";
-import { initPaddle, loadPaddle, openCheckout } from "../../lib/paddle";
 import { AlertsTabs } from "./AlertsTabs";
 
 export const paidAlertsDescription =
@@ -182,7 +181,7 @@ function StatusCard({ overview }: { overview: AlertsOverview }) {
   const invalidate = useInvalidateAlerts();
   const status = statusCopy(overview);
   const unavailable = topUpCopy(overview);
-  const canToggle = can("channels.manage");
+  const canToggle = can("paid_alerts.manage");
   const toggle = useMutation({
     mutationFn: (paidChannelsEnabled: boolean) =>
       updateAlertSettings(current.id, { paidChannelsEnabled }),
@@ -225,7 +224,7 @@ function StatusCard({ overview }: { overview: AlertsOverview }) {
         </p>
       ) : null}
       {!canToggle ? (
-        <p className="mt-4 text-xs text-zinc-500">Only owners and admins can change this.</p>
+        <p className="mt-4 text-xs text-zinc-500">Only the workspace owner can change this.</p>
       ) : null}
       <ul className="mt-4 space-y-1.5 text-xs text-zinc-500">
         <li className="flex items-center gap-2">
@@ -288,15 +287,16 @@ function TopUpModal({
       if (config.mode !== "paddle") {
         throw new Error("Top-ups are not available yet.");
       }
-      await loadPaddle();
-      await initPaddle(config);
-      openCheckout({
+      // The Paddle loader is a separate chunk and is only evaluated after an
+      // owner explicitly requests a credit checkout.
+      const paddle = await import("../../lib/paddle");
+      await paddle.initPaddle(config);
+      paddle.openCheckout({
         customData: checkout.customData,
         email: user?.email ?? "",
         onCompleted: () => void confirm(),
         priceId: checkout.priceId,
         quantity: checkout.quantity,
-        workspaceId: current.id,
       });
       onClose();
       setPhase("idle");
@@ -434,7 +434,7 @@ function ProtectionsCard({ overview }: { overview: AlertsOverview }) {
 
   return (
     <Card title="Protections">
-      {can("channels.manage") ? (
+      {can("paid_alerts.manage") ? (
         <form
           className="flex flex-wrap items-end gap-3"
           noValidate

@@ -21,6 +21,7 @@ const USERS: Record<"owner" | "successor" | "admin", User> = {
     email: "owner@lifecycle.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -30,6 +31,7 @@ const USERS: Record<"owner" | "successor" | "admin", User> = {
     email: "successor@lifecycle.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -39,6 +41,7 @@ const USERS: Record<"owner" | "successor" | "admin", User> = {
     email: "admin@lifecycle.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -227,7 +230,7 @@ describe("workspace ownership and deletion routes", () => {
   });
 
   it("keeps deletion successful when billing cancellation fails", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     billing = new RecordingBillingCanceller(new Error("provider unavailable"));
     app = buildApp(testEnv(), { billingCanceller: billing });
 
@@ -238,9 +241,21 @@ describe("workspace ownership and deletion routes", () => {
 
     expect(response.status).toBe(204);
     await expect(workspaces.findById(WORKSPACE.id)).resolves.toBeNull();
-    expect(log.mock.calls.some(([line]) => String(line).includes("billing_cancel_failed"))).toBe(
-      true,
-    );
+    expect(
+      log.mock.calls.some(([line]) =>
+        String(line).includes("workspace_deletion_retry_scheduled"),
+      ),
+    ).toBe(true);
+    await expect(
+      testEnv().DB.prepare(
+        `SELECT deletion_state, deletion_attempt_count, deletion_retry_at
+         FROM workspaces WHERE id = ?`,
+      ).bind(WORKSPACE.id).first(),
+    ).resolves.toEqual({
+      deletion_state: "CANCELLATION_PENDING",
+      deletion_attempt_count: 1,
+      deletion_retry_at: expect.any(Number),
+    });
     log.mockRestore();
   });
 });

@@ -1,5 +1,8 @@
 import type { Subscription } from "../../domain/billing/types";
-import type { WorkspaceApiKey } from "../../domain/api_keys/types";
+import {
+  DEFAULT_API_KEY_SCOPES,
+  type WorkspaceApiKey,
+} from "../../domain/api_keys/types";
 import type { User } from "../../domain/users/types";
 import type { Workspace } from "../../domain/workspaces/types";
 
@@ -9,6 +12,7 @@ export const OWNER: User = {
   email: "owner@apikeys.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -51,6 +55,8 @@ export function storedApiKey(
     name: "Dashboard",
     keyPrefix: "zgk_stored00",
     keyHash: "stored-hash-1",
+    scopes: [...DEFAULT_API_KEY_SCOPES],
+    expiresAt: 9_999_999_999_999,
     createdBy: OWNER.id,
     createdAt: 100,
     lastUsedAt: null,

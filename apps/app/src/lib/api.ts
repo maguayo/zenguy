@@ -81,7 +81,57 @@ export interface ApiPage<T> {
   nextCursor: string | null;
 }
 
-let refreshInFlight: Promise<RefreshPayload> | null = null;
+let sessionEpoch = 0;
+let sessionController = new AbortController();
+let logoutPendingInMemory = false;
+let refreshInFlight: { epoch: number; promise: Promise<RefreshPayload> } | null = null;
+
+/** A request completed after its principal was replaced or signed out. */
+export class SessionSupersededError extends Error {
+  constructor() {
+    super("The authenticated session changed while the request was in flight");
+    this.name = "SessionSupersededError";
+  }
+}
+
+function throwIfSessionChanged(epoch: number): void {
+  if (epoch !== sessionEpoch || sessionController.signal.aborted) {
+    throw new SessionSupersededError();
+  }
+}
+
+/** Abort and fence every operation that started under the previous principal. */
+export function supersedeSession(): number {
+  sessionEpoch += 1;
+  sessionController.abort();
+  sessionController = new AbortController();
+  refreshInFlight = null;
+  clearToken();
+  return sessionEpoch;
+}
+
+export async function isTerminalLogoutPending(): Promise<boolean> {
+  if (logoutPendingInMemory) return true;
+  const stored = await secureStorage.getItem(storageKeys.logoutPending);
+  if (stored === "1") logoutPendingInMemory = true;
+  return stored === "1";
+}
+
+/** Fence refresh immediately, but retain its token so revocation can retry. */
+export async function beginTerminalLogout(): Promise<void> {
+  logoutPendingInMemory = true;
+  supersedeSession();
+  try {
+    await secureStorage.setItem(storageKeys.logoutPending, "1");
+  } catch {
+    // The in-memory tombstone still protects this app lifecycle.
+  }
+}
+
+export async function confirmTerminalLogout(): Promise<void> {
+  logoutPendingInMemory = false;
+  await secureStorage.deleteItem(storageKeys.logoutPending);
+}
 
 async function parseApiError(response: Response): Promise<ApiError> {
   let envelope: ErrorEnvelope = {};
@@ -108,18 +158,34 @@ function requestHeaders(includeJson: boolean): Headers {
 }
 
 /** Keeps the access token in memory and the refresh token in the Keychain. */
-export async function storeSession(session: SessionTokens): Promise<void> {
-  setToken(session.accessToken, session.expiresIn);
+export async function storeSession(
+  session: SessionTokens,
+  expectedEpoch = sessionEpoch,
+): Promise<void> {
+  throwIfSessionChanged(expectedEpoch);
   await secureStorage.setItem(storageKeys.refreshToken, session.refreshToken);
+  if (expectedEpoch !== sessionEpoch) {
+    // Do not delete a newer principal's token if its write won the race.
+    if ((await secureStorage.getItem(storageKeys.refreshToken)) === session.refreshToken) {
+      await secureStorage.deleteItem(storageKeys.refreshToken);
+    }
+    throw new SessionSupersededError();
+  }
+  setToken(session.accessToken, session.expiresIn);
 }
 
 /** Forgets the session locally (memory + Keychain). */
 export async function clearSession(): Promise<void> {
-  clearToken();
-  await secureStorage.deleteItem(storageKeys.refreshToken);
+  supersedeSession();
+  logoutPendingInMemory = false;
+  await Promise.all([
+    secureStorage.deleteItem(storageKeys.refreshToken),
+    secureStorage.deleteItem(storageKeys.logoutPending),
+  ]);
 }
 
 export async function hasStoredSession(): Promise<boolean> {
+  if (await isTerminalLogoutPending()) return false;
   return (await secureStorage.getItem(storageKeys.refreshToken)) !== null;
 }
 
@@ -134,10 +200,15 @@ export function isAuthRejection(error: unknown): boolean {
 }
 
 export async function ensureFreshToken(): Promise<RefreshPayload> {
-  if (refreshInFlight) return refreshInFlight;
+  if (await isTerminalLogoutPending()) {
+    throw new ApiError("Signed out", { code: "UNAUTHORIZED", status: 401 });
+  }
+  const epoch = sessionEpoch;
+  if (refreshInFlight?.epoch === epoch) return refreshInFlight.promise;
 
-  refreshInFlight = (async () => {
+  const promise = (async () => {
     const refreshToken = await secureStorage.getItem(storageKeys.refreshToken);
+    throwIfSessionChanged(epoch);
     if (refreshToken === null) {
       throw new ApiError("Not signed in", { code: "UNAUTHORIZED", status: 401 });
     }
@@ -145,27 +216,38 @@ export async function ensureFreshToken(): Promise<RefreshPayload> {
       body: JSON.stringify({ refreshToken }),
       headers: requestHeaders(true),
       method: "POST",
+      signal: sessionController.signal,
     });
+    throwIfSessionChanged(epoch);
     if (!response.ok) throw await parseApiError(response);
     const envelope = (await response.json()) as SuccessEnvelope<RefreshPayload>;
-    await storeSession(envelope.data);
+    throwIfSessionChanged(epoch);
+    await storeSession(envelope.data, epoch);
     return envelope.data;
   })();
+  refreshInFlight = { epoch, promise };
 
   try {
-    return await refreshInFlight;
+    return await promise;
   } finally {
-    refreshInFlight = null;
+    if (refreshInFlight?.promise === promise) refreshInFlight = null;
   }
 }
 
 async function refreshOrSignOut(): Promise<void> {
+  const epoch = sessionEpoch;
   try {
     await ensureFreshToken();
   } catch (error) {
     // Only a rejected token ends the session. Being offline must not wipe the
     // Keychain and force the user to sign in again.
-    if (isAuthRejection(error)) await signOutAfterAuthFailure();
+    if (
+      epoch === sessionEpoch &&
+      !(error instanceof SessionSupersededError) &&
+      isAuthRejection(error)
+    ) {
+      await signOutAfterAuthFailure();
+    }
     throw error;
   }
 }
@@ -185,6 +267,7 @@ async function send(
   body: unknown,
   options: RequestOptions,
   retried: boolean,
+  epoch = sessionEpoch,
 ): Promise<Response> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
   const response = await fetch(apiUrl(path), {
@@ -192,12 +275,15 @@ async function send(
       body === undefined ? undefined : options.rawText ? String(body) : JSON.stringify(body),
     headers: requestHeaders(!options.rawText && body !== undefined),
     method,
+    signal: sessionController.signal,
   });
+  throwIfSessionChanged(epoch);
 
   const isAuthPath = path.startsWith("/api/auth/");
   if (response.status === 401 && !isAuthPath && !retried) {
     await refreshOrSignOut();
-    return send(method, path, body, options, true);
+    throwIfSessionChanged(epoch);
+    return send(method, path, body, options, true, epoch);
   }
 
   if (!response.ok) {
@@ -213,10 +299,12 @@ async function request<T>(
   body?: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
-  const response = await send(method, path, body, options, false);
+  const epoch = sessionEpoch;
+  const response = await send(method, path, body, options, false, epoch);
   if (response.status === 204) return undefined as T;
 
   const envelope = (await response.json()) as SuccessEnvelope<unknown>;
+  throwIfSessionChanged(epoch);
   if (options.page) {
     return {
       items: envelope.data,
@@ -275,10 +363,13 @@ export interface TextDownload {
 
 /** Text downloads (Markdown reports, YAML/JSON exports). */
 export async function apiGetText(path: string): Promise<TextDownload> {
-  const response = await send("GET", path, undefined, {}, false);
+  const epoch = sessionEpoch;
+  const response = await send("GET", path, undefined, {}, false, epoch);
+  const text = await response.text();
+  throwIfSessionChanged(epoch);
   return {
     filename: filenameFromDisposition(response.headers.get("Content-Disposition")),
     mimeType: response.headers.get("Content-Type")?.split(";")[0]?.trim() || "text/plain",
-    text: await response.text(),
+    text,
   };
 }

@@ -1,6 +1,7 @@
 import type { ChannelRepo } from "../../domain/channels/repo";
 import {
   browserTestConfigSchema,
+  browserTestConfigUpdateSchema,
   type BrowserTestConfig,
 } from "../../domain/browser_tests/rules";
 import { validation } from "../../shared/errors";
@@ -26,7 +27,7 @@ export type BrowserTestConfigUpdate = Partial<BrowserTestConfig>;
 export function parseBrowserTestUpdate(
   value: unknown,
 ): BrowserTestConfigUpdate {
-  const result = browserTestConfigSchema.partial().safeParse(value);
+  const result = browserTestConfigUpdateSchema.safeParse(value);
   if (!result.success) return configValidation(result.error);
   if (Object.keys(result.data).length === 0) {
     throw validation([

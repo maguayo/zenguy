@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { parseLinkToken, safeNextPath, workspaceHref } from "./links";
+import { parseLinkFragment, parseLinkToken, safeNextPath, workspaceHref } from "./links";
 
 describe("parseLinkToken", () => {
   it("accepts base64url tokens and trims whitespace", () => {
@@ -16,6 +16,19 @@ describe("parseLinkToken", () => {
     expect(parseLinkToken("../etc")).toBeNull();
     expect(parseLinkToken(42)).toBeNull();
     expect(parseLinkToken(undefined)).toBeNull();
+  });
+});
+
+describe("parseLinkFragment", () => {
+  it("accepts raw and named encoded fragment capabilities", () => {
+    expect(parseLinkFragment("abc_-1")).toBe("abc_-1");
+    expect(parseLinkFragment("token=abc%5F-1")).toBe("abc_-1");
+  });
+
+  it("rejects malformed encodings and non-capability fragments", () => {
+    expect(parseLinkFragment("%E0%A4%A")).toBeNull();
+    expect(parseLinkFragment("section one")).toBeNull();
+    expect(parseLinkFragment(undefined)).toBeNull();
   });
 });
 

@@ -3,7 +3,7 @@ import type { ResolvedSecrets } from "./types";
 
 export const SECRET_KEY_REGEX = /^[A-Z][A-Z0-9_]{1,63}$/;
 
-const HOSTNAME_REGEX =
+export const ALLOWED_DOMAIN_PATTERN_REGEX =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
 export function validateAllowedDomains(domains: string[]): void {
@@ -17,7 +17,7 @@ export function validateAllowedDomains(domains: string[]): void {
   }
   for (const entry of domains) {
     const hostname = entry.startsWith("*.") ? entry.slice(2) : entry;
-    if (!HOSTNAME_REGEX.test(hostname)) {
+    if (!ALLOWED_DOMAIN_PATTERN_REGEX.test(hostname)) {
       throw validation([
         {
           field: "allowedDomains",

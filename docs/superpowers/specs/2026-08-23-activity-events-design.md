@@ -1,7 +1,7 @@
 # Zenguy — Diseño de eventos de actividad (`activity_events`)
 
 **Fecha:** 2026-08-23
-**Estado:** propuesta; pendiente de revisión de Marcos antes del plan de implementación
+**Estado:** aprobado e implementado el 2026-08-23 (plan: `docs/superpowers/plans/2026-08-23-activity-events.md`); esta versión recoge las decisiones tomadas durante la implementación
 **Alcance:** API (`apps/api`), webapp (`apps/frontend`), app iOS (`apps/app`) y panel admin (`apps/admin`). Nada público: ni website, ni landing, ni páginas de login.
 
 ---
@@ -38,7 +38,7 @@ Para ello se introduce el concepto **evento de actividad**: un hecho atómico, c
 | --- | --- | --- |
 | Almacenamiento | Tabla `activity_events` en la misma D1 | El admin ya lee la D1 de producción; "última vez que X" es un seek de índice |
 | Relación con audit | Tabla separada; **puente** desde `WriteAudit` para no tocar 33 use cases | DRY y exhaustividad forzada por tipos (`satisfies Record<AuditAction, …>`) |
-| Eventos de cliente | `POST /api/me/events` en lote, fire-and-forget | Un write de D1 por lote, cero impacto en navegación |
+| Eventos de cliente | `POST /api/me/events` en lote, fire-and-forget, solo cuentas verificadas | Un write de D1 por lote, cero impacto en navegación |
 | Marca de tiempo | Siempre la del servidor | Evita skew y manipulación; los lotes se vacían en ≤ 2 s |
 | Origen (`source`) | `web` \| `app` \| `api` \| `server` | Distingue visitas web/app; `server` para hechos observados en servidor |
 | Retención | 90 días eventos de alto volumen, 365 el resto | Mantiene la tabla acotada en D1 (límite 10 GB) |
@@ -50,7 +50,7 @@ Para ello se introduce el concepto **evento de actividad**: un hecho atómico, c
 2. Retención 90/365 días. Cambiarla es una constante.
 3. La app móvil es solo iOS hoy; el `source` se llama `app` (no `ios`) y la plataforma va en `properties.platform` para no renombrar si llega Android.
 4. No se registra `forgot-password` (ocurre en superficie pública y el usuario puede no existir).
-5. Las visitas a páginas autenticadas fuera del shell de workspace (`/verify-pending`, `/onboarding/workspace`, `/complimentary`, `/w/:wsId/setup/billing`) **sí** se registran: hay usuario autenticado.
+5. Las visitas a páginas autenticadas fuera del shell de workspace (`/onboarding/workspace`, `/complimentary`, `/w/:wsId/setup/billing`) **sí** se registran: hay usuario autenticado. **Excepción decidida en implementación:** las cuentas con email sin verificar no emiten nada (ni `/verify-pending`): la API exige `requireVerifiedEmail` para que una cuenta recién registrada con un email falso no pueda escribir, y los clientes no encolan eventos hasta que `user.emailVerified` es true.
 
 ## 3. Arquitectura
 
@@ -77,12 +77,12 @@ Piezas nuevas en `apps/api`, siguiendo la arquitectura limpia del repo:
 | application | `src/application/activity/activity_wiring.test.ts` | Fuerza que cada punto explícito emite su tipo |
 | infrastructure | `src/infrastructure/db/activity_event_repo.ts` | `D1ActivityEventRepo` |
 | http | `src/http/routes/activity.ts` | `POST /api/me/events` |
-| migrations | `migrations/0037_activity_events.sql` | Tabla e índices |
+| migrations | `migrations/0038_activity_events.sql` | Tabla e índices |
 
 ## 4. Modelo de datos
 
 ```sql
--- migrations/0037_activity_events.sql
+-- migrations/0038_activity_events.sql
 CREATE TABLE activity_events (
   id              TEXT PRIMARY KEY,               -- act_<ulid>
   type            TEXT NOT NULL,                  -- p. ej. 'browser_test.created'
@@ -98,7 +98,13 @@ CREATE INDEX idx_activity_ws_time      ON activity_events (workspace_id, occurre
 CREATE INDEX idx_activity_ws_type_time ON activity_events (workspace_id, type, occurred_at DESC);
 CREATE INDEX idx_activity_user_time    ON activity_events (user_id, occurred_at DESC);
 CREATE INDEX idx_activity_time         ON activity_events (occurred_at DESC);
+-- Añadidos tras medir con EXPLAIN QUERY PLAN las consultas del admin:
+CREATE INDEX idx_activity_user_type_time ON activity_events (user_id, type, occurred_at DESC); -- último login por usuario
+CREATE INDEX idx_activity_type_time      ON activity_events (type, occurred_at DESC);          -- feed filtrado por tipo y purga
+CREATE INDEX idx_activity_ws_source_time ON activity_events (workspace_id, source, occurred_at DESC); -- última visita web/app
 ```
+
+Fichero real: `migrations/0038_activity_events.sql` (el número 0037 lo ocupó otra migración el mismo día).
 
 Por qué estos índices y no otros:
 
@@ -180,7 +186,7 @@ Columna **Origen**: `cliente` (lo envía la SPA/app), `audit` (puente desde `Wri
 | `browser_test.validated` | ws | — | explícito `browser_tests/validate_draft.ts` | usuario | "Test it" antes de guardar |
 | `browser_test.imported` | ws | — | explícito `browser_tests/import_tests.ts` | usuario | `{ count }` |
 | `browser_test.exported` | ws | — | explícito en handler de `/browser-tests/export` (no hay use case) | usuario | `{ count }` |
-| `browser_test.run_passed` / `.run_failed` / `.run_timed_out` / `.run_errored` | ws | `browser_test` (NULL en runs de validación) | sistema: `execution/attempt_lifecycle.ts#resumeRunFinalization` | `run.triggeredByUserId` (NULL si programado) | `{ runId, runSource: MANUAL\|SCHEDULED\|VALIDATION, attemptCount, durationMs, passedAfterRetry }`. Mapeo: PASSED→passed, FAILED→failed, TIMEOUT→timed_out, SYSTEM_ERROR→errored |
+| `browser_test.run_passed` / `.run_failed` / `.run_timed_out` / `.run_errored` | ws | `browser_test` (NULL en runs de validación) | sistema: `execution/attempt_lifecycle.ts#resumeRunFinalization` | `run.triggeredByUserId` (NULL si programado) | `{ runId, runSource: MANUAL\|SCHEDULED\|VALIDATION, attemptCount, durationMs, retried }` (`retried` = `passedAfterRetry`; la clave no puede contener "pass" porque `sanitizeAuditMetadata` la redactaría). Mapeo: PASSED→passed, FAILED→failed, TIMEOUT→timed_out, SYSTEM_ERROR→errored. Las cancelaciones por borrado del test o del workspace (`handleFinalized: false`) no emiten nada |
 | `report.downloaded` | ws | `run` | explícito `browser_tests/download_report.ts` | usuario | |
 | `uptime_monitor.created` / `.updated` / `.deleted` | ws | `uptime_monitor` | audit (`monitor*`) | usuario | |
 | `uptime_monitor.tested` | ws | — | explícito `uptime/test_request.ts` | usuario | "Test request" |
@@ -196,7 +202,7 @@ Columna **Origen**: `cliente` (lo envía la SPA/app), `audit` (puente desde `Wri
 | `api_key.used` | ws | `api_key` | explícito en `public_api.ts` (middleware `recordUse`) | NULL (`source = api`) | **throttle**: solo si `lastUsedAt` es NULL o > 15 min; el valor previo al `touchLastUsed` ya está en el contexto |
 | `billing.checkout_started` | ws | — | explícito `billing/paddle_checkout_intent.ts` | usuario | |
 | `billing.subscription_updated` / `billing.grant_issued` / `billing.grant_redeemed` | ws | — | audit | usuario o NULL (webhook) | |
-| `push_device.registered` | user | `push_device` | explícito `push/register_push_device.ts` | usuario | `{ platform }` |
+| `push_device.registered` | user | `push_device` | explícito `push/register_push_device.ts` | usuario | `{ platform }`; solo cuando el token no existía (la app re-registra en cada arranque) |
 
 Volumen `high` (retención 90 d): `web.page_viewed`, `app.screen_viewed`, `app.opened`, `*.viewed`, `api_key.used`, `alert.sent`, `alert.failed`, `browser_test.run_*`. El resto `normal` (365 d).
 
@@ -251,7 +257,7 @@ No se enhebra `source` por los 33 use cases auditados (supondría tocar 33 rutas
 
 ## 7. Ingesta de eventos de cliente — `POST /api/me/events`
 
-Montado bajo `/api/me` junto a `push-devices` (recurso de ámbito usuario). Middleware: `requireAuth` (sin `requireVerifiedEmail`: `/verify-pending` es una visita legítima). Rate limit por usuario con el `D1RateLimiter` existente: `RATE_LIMITS.events = { limit: 60, windowSeconds: 60 }` (un write por lote, no por evento).
+Montado bajo `/api/me` junto a `push-devices` (recurso de ámbito usuario). Middleware: `requireAuth` + `requireVerifiedEmail` (decisión de implementación: una cuenta sin verificar no escribe; los clientes tampoco envían hasta verificar). Rate limit con el `D1RateLimiter` existente, en **lotes** (los clientes vacían un lote por navegación): `RATE_LIMITS.events = { limit: 120, windowSeconds: 60 }` por usuario y por IP, `events_daily = { limit: 5_000, windowSeconds: 86_400 }` por usuario y por IP, y un cortacircuitos global `events_global_daily = { limit: 50_000, windowSeconds: 86_400 }` (~2,5× el volumen diario esperado con 100 usuarios activos; subir cuando crezca el producto). Además, un lote no puede mezclar más de 5 workspaces.
 
 ```jsonc
 // request
@@ -299,7 +305,7 @@ Lista `ROUTE_EVENTS` con todos los paths autenticados de `App.tsx` (incluidos lo
 
 ### 8.2 Dónde se engancha
 
-Un componente `<ActivityTracker />` renderizado dentro de `RequireAuth` (`App.tsx:72`), que cubre tanto el shell `/w/:wsId` como las páginas autenticadas sueltas. Usa `useLocation()` y `useAuth()`; el `wsId` sale de los params del patrón, **no** de `useWorkspace()` (que lanza fuera de su provider). Solo emite con `status === "signedIn"`.
+Un componente `<ActivityTracker />` renderizado dentro de `RequireAuth` (`App.tsx:72`), que cubre tanto el shell `/w/:wsId` como las páginas autenticadas sueltas. Usa `useLocation()` y `useAuth()`; el `wsId` sale de los params del patrón, **no** de `useWorkspace()` (que lanza fuera de su provider). Solo emite con `status === "signedIn"` y `user.emailVerified`. Las redirecciones puras (`/w/:wsId` índice, `/notifications`) no tienen fila en `ROUTE_EVENTS`.
 
 ### 8.3 Cola y transporte (`src/lib/activity/queue.ts`, `src/lib/api.ts`)
 
@@ -323,7 +329,7 @@ Transporte: `apiBeacon(path, body)` nuevo en `api.ts`: mismo `request()` (cabece
 
 ### 9.2 Dónde se engancha
 
-`<ActivityTracker />` en `src/components/ActivityTracker.tsx`, hermano de `<UpdateGate />` en `ProtectedAppContent` (`app/_layout.tsx:99`): está dentro de Auth/Push/AppLock y del contenedor de navegación. Solo emite con `status === "signedIn"`.
+`<ActivityTracker />` en `src/components/ActivityTracker.tsx`, hermano de `<UpdateGate />` en `ProtectedAppContent` (`app/_layout.tsx:99`): está dentro de Auth/Push/AppLock y del contenedor de navegación. Solo emite con `status === "signedIn"` y `user.emailVerified`. `app.opened` se emite en el arranque en frío (una vez por proceso) y en cada vuelta a foreground; antes del sign-out se vacía la cola y se espera la entrega (el sign-out aborta las peticiones en vuelo).
 
 `AppState` (ya observado en cuatro sitios): transición a `active` ⇒ `app.opened`; transición a `background` ⇒ flush. Con la app bloqueada (AppLock) el navegador sigue montado pero el path no cambia, así que no se generan visitas fantasma; `app.opened` sí se emite aunque esté bloqueada (abrir la app es actividad).
 
@@ -338,6 +344,8 @@ Es un cambio solo JS ⇒ se publica como OTA (EAS Update), sin binario nuevo.
 El admin no toca `apps/api`; lee `activity_events` con SELECTs explícitos, y degrada con el idioma existente (`MIGRATION_PENDING` si la tabla aún no existe en producción).
 
 ### 10.1 Usuarios (`db/users.ts`, `UsersTable`)
+
+*Estado:* pendiente. El cliente del admin está siendo reescrito en la rama `admin-v2` por otra sesión, que montará las secciones nuevas y este cambio de `last_active_at`; en esta entrega el admin solo gana los loaders y rutas de servidor (§10.2, §10.3).
 
 `last_active_at` pasa a ser:
 
@@ -412,7 +420,7 @@ Orden: `last_active_at DESC NULLS LAST`. Cada subconsulta es un seek sobre `idx_
 
 ## 14. Despliegue
 
-1. **API**: migración `0037` + código. Los eventos de servidor empiezan a fluir en cuanto se despliega; el endpoint de ingesta queda listo para los clientes. Staging primero (`push main:staging` reaplica migraciones y resiembra la D1 de staging; lo lanza Marcos).
+1. **API**: migración `0038` + código. Los eventos de servidor empiezan a fluir en cuanto se despliega; el endpoint de ingesta queda listo para los clientes. Staging primero (`push main:staging` reaplica migraciones y resiembra la D1 de staging; lo lanza Marcos).
 2. **Webapp**: se despliega con la API (mismo pipeline).
 3. **Admin**: despliegue manual tras la API de producción; hasta entonces las secciones nuevas muestran "migration pending".
 4. **App iOS**: OTA vía EAS Update (solo JS). Las versiones antiguas simplemente no envían visitas.

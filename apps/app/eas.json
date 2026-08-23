@@ -1,15 +1,18 @@
 {
   "cli": {
-    "version": ">= 22.0.0",
-    "appVersionSource": "remote"
+    "version": "22.0.0",
+    "appVersionSource": "remote",
+    "requireCommit": true
   },
   "build": {
     "development": {
       "environment": "development",
+      "node": "22.23.2",
       "channel": "development",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6",
         "simulator": true
       },
       "env": {
@@ -18,16 +21,24 @@
     },
     "preview": {
       "environment": "preview",
+      "node": "22.23.2",
       "channel": "preview",
       "distribution": "internal",
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6"
+      },
       "env": {
         "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com"
       }
     },
     "production": {
       "environment": "production",
+      "node": "22.23.2",
       "channel": "production",
       "autoIncrement": true,
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6"
+      },
       "env": {
         "EXPO_PUBLIC_API_ORIGIN": "https://api.zenguy.com"
       }

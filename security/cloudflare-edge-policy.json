@@ -1,0 +1,56 @@
+{
+  "policyVersion": 3,
+  "zoneName": "zenguy.com",
+  "maximumAccountIpAllowRules": 0,
+  "maximumZoneIpAllowRules": 0,
+  "allowedSkipRuleIds": [],
+  "requiredCustomRule": {
+    "phase": "http_request_firewall_custom",
+    "ref": "zenguy_block_sensitive_file_probes_v2",
+    "description": "Block sensitive probes and truncated API headers (v2)",
+    "action": "block",
+    "expression": "(http.request.uri.path eq \"/.env\") or (http.request.uri.path eq \"/.git/config\") or (starts_with(http.request.uri.path, \"/api/\") and http.request.headers.truncated)"
+  },
+  "requiredManagedRule": {
+    "phase": "http_request_firewall_managed",
+    "action": "execute",
+    "expression": "true",
+    "allowedTargetRulesets": [
+      {
+        "name": "Cloudflare Free Managed Ruleset"
+      },
+      {
+        "name": "Cloudflare Managed Ruleset",
+        "id": "efb7b8c949ac4650a09736fc376e9aee"
+      }
+    ]
+  },
+  "requiredRateLimitRules": [
+    {
+      "phase": "http_ratelimit",
+      "ref": "zenguy_auth_abuse_rate_limit_v1",
+      "description": "Managed challenge for abusive authentication traffic (v1)",
+      "action": "managed_challenge",
+      "expression": "(http.request.uri.path eq \"/api/auth/register\") or (http.request.uri.path eq \"/api/auth/login\") or (http.request.uri.path eq \"/api/auth/resend-verification\") or (http.request.uri.path eq \"/api/auth/forgot-password\") or (http.request.uri.path eq \"/api/auth/reset-password\")",
+      "ratelimit": {
+        "characteristics": ["cf.colo.id", "ip.src"],
+        "period": 10,
+        "requests_per_period": 10,
+        "mitigation_timeout": 0
+      }
+    },
+    {
+      "phase": "http_ratelimit",
+      "ref": "zenguy_resource_exhaustion_rate_limit_v1",
+      "description": "Block abusive runner, webhook and expensive workspace traffic (v1)",
+      "action": "block",
+      "expression": "(http.request.uri.path eq \"/api/webhooks/paddle\") or starts_with(http.request.uri.path, \"/api/runner/\") or (starts_with(http.request.uri.path, \"/api/workspaces/\") and ((http.request.uri.path contains \"/browser-tests/\") or (http.request.uri.path contains \"/runs\") or (http.request.uri.path contains \"/channels\")))",
+      "ratelimit": {
+        "characteristics": ["cf.colo.id", "ip.src"],
+        "period": 10,
+        "requests_per_period": 120,
+        "mitigation_timeout": 60
+      }
+    }
+  ]
+}

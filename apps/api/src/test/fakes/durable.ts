@@ -27,6 +27,8 @@ export class FakeDurableWorkflowRepo
   readonly jobs = new Map<string, DurableJob>();
   readonly outboxEntries = new Map<string, QueueOutboxEntry>();
   readonly quarantinedOutbox = new Map<string, string>();
+  readonly quarantinedOutboxAt = new Map<string, number>();
+  readonly quarantinedJobsAt = new Map<string, number>();
   readonly outboxFailures = new Map<string, number>();
   readonly deliveryDedupe = new Map<
     string,
@@ -34,7 +36,12 @@ export class FakeDurableWorkflowRepo
   >();
   readonly checkClaims = new Map<
     string,
-    { claimToken: string; claimedAt: number; completedAt: number | null }
+    {
+      claimToken: string;
+      claimedAt: number;
+      completedAt: number | null;
+      generation: number;
+    }
   >();
 
   constructor(
@@ -131,7 +138,7 @@ export class FakeDurableWorkflowRepo
     return { ...value, inserted: true };
   }
 
-  async claimCheckExecution(input: Parameters<DurableWorkflowRepo["claimCheckExecution"]>[0]): Promise<"claimed" | "busy" | "completed"> {
+  async claimCheckExecution(input: Parameters<DurableWorkflowRepo["claimCheckExecution"]>[0]): Promise<"claimed" | "reclaimed" | "busy" | "completed"> {
     const key = `${input.cycleId}:${input.attemptIndex}`;
     const existing = this.checkClaims.get(key);
     if (existing?.completedAt !== null && existing !== undefined) return "completed";
@@ -140,8 +147,9 @@ export class FakeDurableWorkflowRepo
       claimToken: input.claimToken,
       claimedAt: input.claimedAt,
       completedAt: null,
+      generation: (existing?.generation ?? 0) + 1,
     });
-    return "claimed";
+    return existing === undefined ? "claimed" : "reclaimed";
   }
 
   async releaseCheckExecution(input: Parameters<DurableWorkflowRepo["releaseCheckExecution"]>[0]): Promise<void> {
@@ -220,8 +228,11 @@ export class FakeDurableWorkflowRepo
     return copy(entry);
   }
 
-  async quarantineOutbox(id: string, _at: number, reason: string): Promise<void> {
-    if (this.outboxEntries.has(id)) this.quarantinedOutbox.set(id, reason);
+  async quarantineOutbox(id: string, at: number, reason: string): Promise<void> {
+    if (this.outboxEntries.has(id)) {
+      this.quarantinedOutbox.set(id, reason);
+      this.quarantinedOutboxAt.set(id, at);
+    }
   }
 
   async recordOutboxFailure(
@@ -248,6 +259,7 @@ export class FakeDurableWorkflowRepo
     }
     if (count < 8) return "retry";
     this.quarantinedOutbox.set(id, reason);
+    this.quarantinedOutboxAt.set(id, at);
     return "quarantined";
   }
 
@@ -257,9 +269,36 @@ export class FakeDurableWorkflowRepo
     return ids.length;
   }
 
+  async purgeQuarantinedOutbox(before: number, limit: number): Promise<number> {
+    const ids = [...this.quarantinedOutboxAt.entries()]
+      .filter(([, at]) => at < before)
+      .sort((left, right) => left[1] - right[1] || left[0].localeCompare(right[0]))
+      .slice(0, limit)
+      .map(([id]) => id);
+    for (const id of ids) {
+      this.outboxEntries.delete(id);
+      this.quarantinedOutbox.delete(id);
+      this.quarantinedOutboxAt.delete(id);
+    }
+    return ids.length;
+  }
+
   async purgeCompleted(before: number, limit: number): Promise<number> {
     const ids = [...this.jobs.values()].filter((job) => job.status === "COMPLETED" && job.completedAt !== null && job.completedAt < before).sort((left, right) => (left.completedAt ?? 0) - (right.completedAt ?? 0) || left.id.localeCompare(right.id)).slice(0, limit).map((job) => job.id);
     ids.forEach((id) => this.jobs.delete(id));
+    return ids.length;
+  }
+
+  async purgeQuarantinedJobs(before: number, limit: number): Promise<number> {
+    const ids = [...this.quarantinedJobsAt.entries()]
+      .filter(([, at]) => at < before)
+      .sort((left, right) => left[1] - right[1] || left[0].localeCompare(right[0]))
+      .slice(0, limit)
+      .map(([id]) => id);
+    for (const id of ids) {
+      this.jobs.delete(id);
+      this.quarantinedJobsAt.delete(id);
+    }
     return ids.length;
   }
 

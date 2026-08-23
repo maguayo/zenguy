@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { TrackEvent } from "../../application/activity/track_event";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import { CreateMonitor } from "../../application/uptime/create_monitor";
 import { DeleteMonitor } from "../../application/uptime/delete_monitor";
@@ -30,7 +31,9 @@ import type {
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import type { IdGenerator } from "../../shared/ids";
+import { MAX_CURSOR_LENGTH } from "../../shared/pagination";
 import type { RateLimiter } from "../../shared/ratelimit";
+import { collectionCreateRateLimit } from "../../shared/ratelimit";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireActiveSubscription } from "../middleware/require_subscription";
@@ -54,13 +57,15 @@ export interface UptimeRoutesDependencies {
   incidentEvents: IncidentEventRepo;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
+  track?: Pick<TrackEvent, "execute">;
   executeCheck: (
     config: MonitorConfig,
     workspaceId: string,
+    execution?: { idempotencyKey?: string },
   ) => Promise<CheckOutcome>;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret" | "encryptionKey">;
+  config: Pick<AppConfig, "jwtSecret" | "encryptionKeys">;
 }
 
 const updateSchema = monitorConfigUpdateSchema.refine(
@@ -69,6 +74,10 @@ const updateSchema = monitorConfigUpdateSchema.refine(
 );
 const checksQuerySchema = z.object({
   cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+});
+const monitorsQuerySchema = z.object({
+  cursor: z.string().max(MAX_CURSOR_LENGTH).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(100),
 });
 
@@ -84,14 +93,17 @@ export function uptimeRoutes(
   const app = new Hono<AppEnv>();
   const auth = requireAuth(dependencies);
   const workspace = withWorkspace(dependencies);
-  const active = requireActiveSubscription(dependencies.subscriptions);
+  const active = requireActiveSubscription(
+    dependencies.subscriptions,
+    dependencies.clock,
+  );
   const createMonitor = new CreateMonitor(
     dependencies.monitors,
     dependencies.channels,
     dependencies.subscriptions,
     dependencies.rateLimiter,
     dependencies.audit,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     dependencies.clock,
     dependencies.ids,
   );
@@ -102,7 +114,7 @@ export function uptimeRoutes(
     dependencies.subscriptions,
     dependencies.users,
     dependencies.audit,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
     dependencies.clock,
   );
   const deleteMonitor = new DeleteMonitor(
@@ -118,13 +130,13 @@ export function uptimeRoutes(
     dependencies.monitors,
     dependencies.incidents,
     dependencies.users,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
   );
   const listMonitors = new ListMonitors(
     dependencies.monitors,
     dependencies.incidents,
     dependencies.users,
-    dependencies.config.encryptionKey,
+    dependencies.config.encryptionKeys,
   );
   const listChecks = new ListChecks(dependencies.monitors, dependencies.checks);
   const getMonitorStats = new GetMonitorStats(
@@ -138,6 +150,10 @@ export function uptimeRoutes(
     dependencies.subscriptions,
     dependencies.rateLimiter,
     dependencies.executeCheck,
+    dependencies.track,
+  );
+  const commonCreateLimit = collectionCreateRateLimit(
+    dependencies.rateLimiter,
   );
 
   app.get(
@@ -145,12 +161,19 @@ export function uptimeRoutes(
     auth,
     requireVerifiedEmail,
     workspace,
+    zquery(monitorsQuerySchema),
     async (context) => {
+      const query = context.req.valid("query");
       const result = await listMonitors.execute({
         workspaceId: context.get("workspace").id,
         role: context.get("role"),
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        limit: query.limit,
       });
-      return context.json({ data: result.map(presentMonitor) });
+      return context.json({
+        data: result.monitors.map(presentMonitor),
+        nextCursor: result.nextCursor,
+      });
     },
   );
 
@@ -168,6 +191,7 @@ export function uptimeRoutes(
         actor: context.get("user"),
         actorRole: context.get("role"),
         config: context.req.valid("json"),
+        ip: requestIp(context),
       });
       return context.json({ data: result });
     },
@@ -180,6 +204,7 @@ export function uptimeRoutes(
     workspace,
     requireAction("uptime.manage"),
     active,
+    commonCreateLimit,
     zjson(monitorConfigSchema),
     async (context) => {
       const result = await createMonitor.execute({

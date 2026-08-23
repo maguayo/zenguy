@@ -29,9 +29,9 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("subscription grant API", () => {
   it("loads, issues, and redeems a one-time grant link", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const path = String(input);
-      if (path.endsWith("/subscription-grants/tok")) {
+      if (path.endsWith("/subscription-grants/preview")) {
         return response({ expiresAt: "2026-09-18T00:00:00.000Z", status: "valid" });
       }
       if (path.endsWith("/redeem")) {
@@ -42,7 +42,7 @@ describe("subscription grant API", () => {
         expiresAt: "2026-09-18T00:00:00.000Z",
         id: "sgr_1",
         note: "friend",
-        redeemUrl: "https://app.zenguy.com/grants/abc",
+        redeemUrl: "https://app.zenguy.com/grants/redeem#abc",
         token: "abc",
       });
     });
@@ -55,10 +55,15 @@ describe("subscription grant API", () => {
       workspaceId: "ws_1",
     });
     expect(fetchMock.mock.calls.map(([request]) => String(request))).toEqual([
-      "/api/subscription-grants/tok",
+      "/api/subscription-grants/preview",
       "/api/subscription-grants",
-      "/api/subscription-grants/tok/redeem",
+      "/api/subscription-grants/redeem",
     ]);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ token: "tok" });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+      token: "tok",
+      workspaceId: "ws_1",
+    });
   });
 
   it("only offers unpaid workspaces for redeem", () => {

@@ -6,6 +6,7 @@ import type {
   ChannelType,
   NotificationChannel,
 } from "../../domain/channels/types";
+import type { Cursor } from "../../shared/pagination";
 import { all, batch, one, run } from "./d1";
 
 interface ChannelRow {
@@ -93,6 +94,32 @@ export class D1ChannelRepo implements ChannelRepo {
            ORDER BY created_at DESC, id DESC`,
         )
         .bind(workspaceId),
+    );
+    return rows.map(toChannel);
+  }
+
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<NotificationChannel[]> {
+    const values: Array<string | number> = [workspaceId];
+    const cursorClause =
+      cursor === null || cursor === undefined
+        ? ""
+        : "AND (created_at < ? OR (created_at = ? AND id < ?))";
+    if (cursor !== null && cursor !== undefined) {
+      values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+    }
+    values.push(limit);
+    const rows = await all<ChannelRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM notification_channels
+           WHERE workspace_id = ? ${cursorClause}
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+        )
+        .bind(...values),
     );
     return rows.map(toChannel);
   }

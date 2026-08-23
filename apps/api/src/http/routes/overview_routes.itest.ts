@@ -30,7 +30,7 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { FixedClock, systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { freshDb, testEnv } from "../../test/helpers";
+import { encryptTestValue, freshDb, testEnv } from "../../test/helpers";
 
 const NOW = Date.parse("2026-08-19T12:00:00.000Z");
 const HOUR_MS = 60 * 60 * 1_000;
@@ -40,6 +40,7 @@ const USER: User = {
   email: "overview@zenguy.test",
   passwordHash: "unused",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -408,7 +409,11 @@ describe("overview route", () => {
       workspaceId: WORKSPACE.id,
       name: "Ops Slack",
       type: "SLACK",
-      encryptedConfig: "not-read-by-overview",
+      encryptedConfig: await encryptTestValue({
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "channel_overview_ops",
+      }),
       enabled: true,
       verifiedAt: NOW,
       lastDeliveryStatus: "FAILED",

@@ -25,6 +25,7 @@ const OWNER: User = {
   email: "owner@push.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };

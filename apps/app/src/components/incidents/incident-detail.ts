@@ -62,6 +62,9 @@ export function incidentDeliveryStatus(
 ): { label: string; tone: Tone } {
   if (status === "SENT") return { label: "Sent", tone: "ok" };
   if (status === "FAILED") return { label: "Failed", tone: "danger" };
+  if (status === "AMBIGUOUS") {
+    return { label: "Needs reconciliation", tone: "warn" };
+  }
   return { label: "Pending", tone: "neutral" };
 }
 

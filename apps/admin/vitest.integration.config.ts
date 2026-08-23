@@ -16,8 +16,7 @@ export default defineConfig({
           d1Databases: { DB: "zenguy-admin-test" },
           bindings: {
             TEST_MIGRATIONS: migrations,
-            ADMIN_EMAILS: "marcos@aguayo.es",
-            ADMIN_SESSION_SECRET: "admin-test-secret".padEnd(32, "-"),
+            ADMIN_USER_IDS: "usr_00000000000000000000000001",
             ZENGUY_API_ORIGIN: "https://api.zenguy.test",
           },
         },

@@ -3,6 +3,7 @@ import type {
   SecretMetaUpdate,
   WorkspaceSecret,
 } from "../../domain/secrets/types";
+import type { Cursor } from "../../shared/pagination";
 import { all, one, run } from "./d1";
 
 interface SecretRow {
@@ -109,19 +110,46 @@ export class D1SecretRepo implements SecretRepo {
     return rows.map(toSecret);
   }
 
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<WorkspaceSecret[]> {
+    const values: Array<string | number> = [workspaceId];
+    const cursorClause =
+      cursor === null || cursor === undefined
+        ? ""
+        : "AND (created_at < ? OR (created_at = ? AND id < ?))";
+    if (cursor !== null && cursor !== undefined) {
+      values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+    }
+    values.push(limit);
+    const rows = await all<SecretRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM workspace_secrets
+           WHERE workspace_id = ? ${cursorClause}
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+        )
+        .bind(...values),
+    );
+    return rows.map(toSecret);
+  }
+
   async updateValue(
     id: string,
     encryptedValue: string,
+    encryptionVersion: number,
     at: number,
   ): Promise<void> {
     await run(
       this.database
         .prepare(
           `UPDATE workspace_secrets
-           SET encrypted_value = ?, updated_at = ?
+           SET encrypted_value = ?, encryption_version = ?, updated_at = ?
            WHERE id = ?`,
         )
-        .bind(encryptedValue, at, id),
+        .bind(encryptedValue, encryptionVersion, at, id),
     );
   }
 

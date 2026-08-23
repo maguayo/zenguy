@@ -21,7 +21,7 @@ export interface WorkspaceRepo {
     oldOwnerUserId: string,
     newOwnerUserId: string,
     at: number,
-  ): Promise<void>;
+  ): Promise<boolean>;
   softDelete(id: string, at: number): Promise<void>;
   listForUser(
     userId: string,
@@ -37,8 +37,14 @@ export interface MemberRepo {
   insert(member: WorkspaceMember): Promise<void>;
   find(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
   list(workspaceId: string): Promise<WorkspaceMemberWithUser[]>;
-  updateRole(workspaceId: string, userId: string, role: Role): Promise<void>;
-  remove(workspaceId: string, userId: string): Promise<void>;
+  /** Persistent implementations revoke delegated invites/keys/channels atomically on privilege loss. */
+  updateRole(
+    workspaceId: string,
+    userId: string,
+    role: Role,
+    at?: number,
+  ): Promise<void>;
+  remove(workspaceId: string, userId: string, at?: number): Promise<void>;
 }
 
 export interface InvitationRepo {
@@ -53,7 +59,21 @@ export interface InvitationRepo {
     workspaceId: string,
     email: string,
   ): Promise<WorkspaceInvitation | null>;
+  /** Atomically validates current inviter authority, joins the actor and consumes the token. */
+  acceptByHash(input: {
+    hash: string;
+    email: string;
+    userId: string;
+    memberId: string;
+    now: number;
+  }): Promise<WorkspaceInvitation | null>;
   markAccepted(id: string, at: number): Promise<void>;
-  revoke(id: string, at: number): Promise<void>;
+  revoke(id: string, at: number): Promise<boolean>;
+  revokeUnauthorizedByInviter(
+    workspaceId: string,
+    inviterUserId: string,
+    currentRole: Role | null,
+    at: number,
+  ): Promise<number>;
   revokeAllForWorkspace(workspaceId: string, at: number): Promise<void>;
 }

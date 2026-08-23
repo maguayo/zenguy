@@ -7,6 +7,7 @@ export type Action =
   | "reports.download"
   | "uptime.manage"
   | "channels.manage"
+  | "paid_alerts.manage"
   | "secrets.manage"
   | "api_keys.manage"
   | "members.invite"
@@ -27,6 +28,7 @@ export const PERMISSIONS = {
     "reports.download": true,
     "uptime.manage": true,
     "channels.manage": true,
+    "paid_alerts.manage": true,
     "secrets.manage": true,
     "api_keys.manage": true,
     "members.invite": true,
@@ -46,6 +48,7 @@ export const PERMISSIONS = {
     "reports.download": true,
     "uptime.manage": true,
     "channels.manage": true,
+    "paid_alerts.manage": false,
     "secrets.manage": true,
     "api_keys.manage": true,
     "members.invite": true,
@@ -65,6 +68,7 @@ export const PERMISSIONS = {
     "reports.download": true,
     "uptime.manage": false,
     "channels.manage": false,
+    "paid_alerts.manage": false,
     "secrets.manage": false,
     "api_keys.manage": false,
     "members.invite": false,

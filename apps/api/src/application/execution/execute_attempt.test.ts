@@ -585,7 +585,7 @@ describe("ExecuteAttempt", () => {
       sequence: 1,
       result: "OK",
     });
-    expect(JSON.stringify(steps)).toContain("{{SHOP_TOKEN}}");
+    expect(steps[0]?.urlSanitized).toBe("https://shop.example.com");
     expect(JSON.stringify(steps)).not.toContain(secretValue);
     expect(value.session.screenshotCalls).toBe(0);
     expect(await value.artifacts.listForAttempt(ATTEMPT.id)).toEqual([]);
@@ -630,7 +630,7 @@ describe("ExecuteAttempt", () => {
     log.mockRestore();
   });
 
-  it("sanitizes sensitive query values in initial-navigation evidence", async () => {
+  it("persists only the origin in initial-navigation evidence", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const value = await fixture({
       run: {
@@ -645,9 +645,9 @@ describe("ExecuteAttempt", () => {
     await value.executor.execute(MESSAGE);
 
     const steps = await value.steps.listForAttempt(ATTEMPT.id);
-    expect(steps[0]?.description).toContain("token=redacted");
-    expect(steps[0]?.description).toContain("view=full");
-    expect(steps[0]?.urlSanitized).toContain("token=redacted");
+    expect(steps[0]?.description).toContain("https://shop.example.com");
+    expect(steps[0]?.description).not.toContain("view=full");
+    expect(steps[0]?.urlSanitized).toBe("https://shop.example.com");
     expect(JSON.stringify(steps)).not.toContain("literal-sensitive");
     log.mockRestore();
   });

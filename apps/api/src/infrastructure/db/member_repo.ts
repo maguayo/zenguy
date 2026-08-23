@@ -6,7 +6,7 @@ import type {
   Role,
   WorkspaceMember,
 } from "../../domain/workspaces/types";
-import { all, one, run } from "./d1";
+import { all, batch, one, run } from "./d1";
 
 interface MemberRow {
   id: string;
@@ -92,7 +92,55 @@ export class D1MemberRepo implements MemberRepo {
     workspaceId: string,
     userId: string,
     role: Role,
+    at = Date.now(),
   ): Promise<void> {
+    if (role === "MEMBER") {
+      await batch(this.database, [
+        this.database
+          .prepare(
+            "UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ? AND role != 'OWNER'",
+          )
+          .bind(role, workspaceId, userId),
+        this.database
+          .prepare(
+            `UPDATE workspace_invitations SET revoked_at = ?
+             WHERE workspace_id = ? AND invited_by = ?
+               AND accepted_at IS NULL AND revoked_at IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM workspace_members member
+                 WHERE member.workspace_id = workspace_invitations.workspace_id
+                   AND member.user_id = workspace_invitations.invited_by
+                   AND member.role = 'MEMBER'
+               )`,
+          )
+          .bind(at, workspaceId, userId),
+        this.database
+          .prepare(
+            `UPDATE workspace_api_keys SET revoked_at = ?
+             WHERE workspace_id = ? AND created_by = ? AND revoked_at IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM workspace_members member
+                 WHERE member.workspace_id = workspace_api_keys.workspace_id
+                   AND member.user_id = workspace_api_keys.created_by
+                   AND member.role = 'MEMBER'
+               )`,
+          )
+          .bind(at, workspaceId, userId),
+        this.database
+          .prepare(
+            `UPDATE notification_channels SET enabled = 0, updated_at = ?
+             WHERE workspace_id = ? AND created_by = ? AND enabled = 1
+               AND EXISTS (
+                 SELECT 1 FROM workspace_members member
+                 WHERE member.workspace_id = notification_channels.workspace_id
+                   AND member.user_id = notification_channels.created_by
+                   AND member.role = 'MEMBER'
+               )`,
+          )
+          .bind(at, workspaceId, userId),
+      ]);
+      return;
+    }
     await run(
       this.database
         .prepare(
@@ -102,13 +150,54 @@ export class D1MemberRepo implements MemberRepo {
     );
   }
 
-  async remove(workspaceId: string, userId: string): Promise<void> {
-    await run(
+  async remove(
+    workspaceId: string,
+    userId: string,
+    at = Date.now(),
+  ): Promise<void> {
+    await batch(this.database, [
       this.database
         .prepare(
-          "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+          `UPDATE workspace_invitations SET revoked_at = ?
+           WHERE workspace_id = ? AND invited_by = ?
+             AND accepted_at IS NULL AND revoked_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM workspace_members member
+               WHERE member.workspace_id = workspace_invitations.workspace_id
+                 AND member.user_id = workspace_invitations.invited_by
+                 AND member.role != 'OWNER'
+             )`,
+        )
+        .bind(at, workspaceId, userId),
+      this.database
+        .prepare(
+          `UPDATE workspace_api_keys SET revoked_at = ?
+           WHERE workspace_id = ? AND created_by = ? AND revoked_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM workspace_members member
+               WHERE member.workspace_id = workspace_api_keys.workspace_id
+                 AND member.user_id = workspace_api_keys.created_by
+                 AND member.role != 'OWNER'
+             )`,
+        )
+        .bind(at, workspaceId, userId),
+      this.database
+        .prepare(
+          `UPDATE notification_channels SET enabled = 0, updated_at = ?
+           WHERE workspace_id = ? AND created_by = ? AND enabled = 1
+             AND EXISTS (
+               SELECT 1 FROM workspace_members member
+               WHERE member.workspace_id = notification_channels.workspace_id
+                 AND member.user_id = notification_channels.created_by
+                 AND member.role != 'OWNER'
+             )`,
+        )
+        .bind(at, workspaceId, userId),
+      this.database
+        .prepare(
+          "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND role != 'OWNER'",
         )
         .bind(workspaceId, userId),
-    );
+    ]);
   }
 }

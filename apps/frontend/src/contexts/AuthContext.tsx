@@ -4,22 +4,23 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { login, logout, me, refresh, type AuthSession } from "../api/auth";
+import { activateSession, login, logout, me, refresh, type AuthSession } from "../api/auth";
 import type { User } from "../api/types";
 import { Spinner } from "../components/ui/Spinner";
-import { authEvents } from "../lib/api";
-import { clearToken } from "../lib/auth-token";
+import { authEvents, supersedeSession } from "../lib/api";
+import { clearPrincipalCache, setQueryPrincipal } from "../lib/query-client";
 
 export type AuthStatus = "loading" | "signedOut" | "signedIn";
 
 export interface AuthContextValue {
   /** Adopts a session obtained outside the password form (sign-up, email verification). */
-  adoptSession: (session: AuthSession) => void;
+  adoptSession: (session: AuthSession) => Promise<void>;
   refreshUser: () => Promise<User>;
   signIn: (email: string, password: string) => Promise<User>;
   signOut: () => Promise<void>;
@@ -33,9 +34,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
+  const principalRef = useRef<string | null>(null);
 
-  const becomeSignedOut = useCallback(() => {
-    clearToken();
+  const becomeSignedOut = useCallback(async () => {
+    supersedeSession();
+    await clearPrincipalCache();
+    principalRef.current = null;
     setUser(null);
     setStatus("signedOut");
   }, []);
@@ -45,11 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh()
       .then((session) => {
         if (!active) return;
+        setQueryPrincipal(session.user.id);
+        principalRef.current = session.user.id;
         setUser(session.user);
         setStatus("signedIn");
       })
       .catch(() => {
-        if (active) becomeSignedOut();
+        if (active) void becomeSignedOut();
       });
     return () => {
       active = false;
@@ -59,13 +65,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       authEvents.onSignedOut(() => {
-        becomeSignedOut();
-        navigate("/signin", { replace: true });
+        void becomeSignedOut().then(() => navigate("/signin", { replace: true }));
       }),
     [becomeSignedOut, navigate],
   );
 
-  const adoptSession = useCallback((session: AuthSession) => {
+  const adoptSession = useCallback(async (session: AuthSession) => {
+    if (principalRef.current !== null && principalRef.current !== session.user.id) {
+      supersedeSession();
+      await clearPrincipalCache(null);
+      principalRef.current = null;
+      setUser(null);
+      setStatus("signedOut");
+    }
+    activateSession(session);
+    setQueryPrincipal(session.user.id);
+    principalRef.current = session.user.id;
     setUser(session.user);
     setStatus("signedIn");
   }, []);
@@ -73,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (email: string, password: string) => {
       const session = await login(email, password);
-      adoptSession(session);
+      await adoptSession(session);
       return session.user;
     },
     [adoptSession],
@@ -83,17 +98,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await logout();
     } finally {
-      becomeSignedOut();
+      await becomeSignedOut();
       navigate("/signin", { replace: true });
     }
   }, [becomeSignedOut, navigate]);
 
   const refreshUser = useCallback(async () => {
     const nextUser = await me();
+    if (principalRef.current !== null && principalRef.current !== nextUser.id) {
+      await becomeSignedOut();
+      throw new Error("Authenticated principal changed unexpectedly");
+    }
+    setQueryPrincipal(nextUser.id);
+    principalRef.current = nextUser.id;
     setUser(nextUser);
     setStatus("signedIn");
     return nextUser;
-  }, []);
+  }, [becomeSignedOut]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ adoptSession, refreshUser, signIn, signOut, status, user }),
@@ -108,7 +129,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // A principal change remounts the authenticated subtree, closing SSE and
+  // other non-Query subscriptions that may still carry A data.
+  return (
+    <AuthContext.Provider key={user?.id ?? status} value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

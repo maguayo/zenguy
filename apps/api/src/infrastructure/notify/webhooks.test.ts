@@ -25,6 +25,7 @@ describe("SlackWebhookSender", () => {
     const [url, init] = fetchFn.mock.calls[0] ?? [];
     expect(url).toBe(webhookUrl);
     expect(init?.method).toBe("POST");
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(new Headers(init?.headers).get("Content-Type")).toBe(
       "application/json",
     );
@@ -53,8 +54,9 @@ describe("SlackWebhookSender", () => {
   });
 
   it("never includes the webhook path in errors", async () => {
+    const cancel = vi.fn(async () => undefined);
     const sender = new SlackWebhookSender(async () =>
-      new Response("private provider body", { status: 500 }),
+      new Response(new ReadableStream<Uint8Array>({ cancel }), { status: 500 }),
     );
     const webhookUrl =
       "https://hooks.slack.com/services/T000/B000/private-token";
@@ -65,6 +67,7 @@ describe("SlackWebhookSender", () => {
 
     expect(error).toBe("slack error 500");
     expect(error).not.toContain("private-token");
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });
 
@@ -75,7 +78,7 @@ describe("DiscordWebhookSender", () => {
     ["gray", 0x6b7280],
   ] as const)("posts a %s embed with the exact color", async (color, value) => {
     const fetchFn = vi.fn<DiscordFetch>(async () =>
-      new Response(null, { status: 204 }),
+      Response.json({ id: `discord-${color}` }),
     );
     const sender = new DiscordWebhookSender(fetchFn);
     const webhookUrl =
@@ -84,8 +87,9 @@ describe("DiscordWebhookSender", () => {
     await sender.send(webhookUrl, { ...MESSAGE, color });
 
     const [url, init] = fetchFn.mock.calls[0] ?? [];
-    expect(url).toBe(webhookUrl);
+    expect(url).toBe(`${webhookUrl}?wait=true`);
     expect(init?.method).toBe("POST");
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(new Headers(init?.headers).get("Content-Type")).toBe(
       "application/json",
     );
@@ -99,6 +103,18 @@ describe("DiscordWebhookSender", () => {
         },
       ],
     });
+  });
+
+  it("cancels an ignored error body before classifying the outcome", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const sender = new DiscordWebhookSender(async () =>
+      new Response(new ReadableStream<Uint8Array>({ cancel }), { status: 500 }),
+    );
+
+    await expect(
+      sender.send("https://discord.com/api/webhooks/123/private-token", MESSAGE),
+    ).rejects.toThrow("discord error 500");
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it("never includes the webhook path in errors", async () => {

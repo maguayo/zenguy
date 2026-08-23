@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any
 
 import browser_worker as worker
@@ -46,6 +47,11 @@ class SmokeApp:
 
 
 def smoke_config() -> worker.RunnerConfig:
+    proxy = os.environ.get("ZENGUY_EGRESS_PROXY", "").strip()
+    if not proxy:
+        raise worker.ConfigError(
+            "ZENGUY_EGRESS_PROXY is required for the real-library smoke test"
+        )
     return worker.RunnerConfig(
         environment="smoke",
         cloudflare_account_id="unused",
@@ -63,6 +69,10 @@ def smoke_config() -> worker.RunnerConfig:
         browser_channel="chrome",
         poll_seconds=worker.DEFAULT_POLL_SECONDS,
         visibility_timeout_ms=worker.DEFAULT_VISIBILITY_TIMEOUT_MS,
+        egress_proxy=worker.validate_proxy_url(proxy),
+        worker_id="zenguy-smoke",
+        access_client_id="unused-smoke-client-id",
+        access_client_secret="unused-smoke-client-secret".ljust(32, "-"),
     )
 
 

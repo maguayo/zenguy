@@ -7,6 +7,7 @@ import type { WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
 import { isAppError } from "../../shared/errors";
 import { logEvent, type LogFields } from "../../shared/log";
+import { subscriptionAllowsExecution } from "../billing/ensure_active_subscription";
 
 const SWEEP_LIMIT = 200;
 
@@ -60,8 +61,7 @@ export class SweepDueTests {
       ]);
       if (
         workspace === null ||
-        (subscription?.status !== "ACTIVE" &&
-          subscription?.status !== "PAST_DUE") ||
+        !subscriptionAllowsExecution(subscription, now) ||
         (await this.runs.activeRunExists(test.id))
       ) {
         result.skipped += 1;

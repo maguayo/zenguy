@@ -5,13 +5,39 @@ export const RUNNER_VERSION = "zenguy-local-runner/1.0.0";
 export const MIN_APP_VERSION = "0.1.0";
 export const ACCESS_TOKEN_TTL_SECONDS = 1800;
 export const REFRESH_TOKEN_TTL_DAYS = 30;
+export const PUSH_DEVICE_INACTIVITY_TTL_DAYS = 90;
 export const EMAIL_VERIFY_TTL_HOURS = 24;
 export const PASSWORD_RESET_TTL_HOURS = 1;
 export const INVITATION_TTL_DAYS = 7;
-export const PBKDF2_ITERATIONS = 100_000;
+// Cloudflare Workers exposes PBKDF2, but not Argon2id, through Web Crypto. The
+// explicit scheme/version and encoded work factor let login migrate old
+// records without invalidating credentials.
+export const PASSWORD_HASH_SCHEME = "pbkdf2-sha256";
+export const PASSWORD_HASH_VERSION = "v1";
+export const PBKDF2_ITERATIONS = 600_000;
+// Reject corrupted/hostile database records before they can force an
+// unbounded KDF. A future factor above this ceiling requires a format/version
+// rollout first, which keeps old deployments from silently accepting it.
+export const PBKDF2_MAX_VERIFY_ITERATIONS = 1_200_000;
+export const PASSWORD_KDF_TARGET_MAX_MS = 1_000;
+export const MIN_PASSWORD_LENGTH = 15;
+export const MAX_PASSWORD_LENGTH = 100;
 
 export const PLAN_PRICE_CENTS = 3900;
 export const INCLUDED_RUNS = 300;
+export const MAX_ACTIVE_RUNS_PER_WORKSPACE = 10;
+export const MAX_ACTIVE_RUNS_PER_USER = 10;
+export const MAX_ACTIVE_RUNS_PER_OWNER = 20;
+export const MAX_ACTIVE_RUNS_GLOBAL = 100;
+export const MAX_DAILY_RUNS_PER_WORKSPACE = 1_000;
+export const MAX_DAILY_RUNS_PER_USER = 1_000;
+export const MAX_DAILY_RUNS_PER_OWNER = 3_000;
+export const MAX_DAILY_RUNS_GLOBAL = 10_000;
+export const MAX_MONTHLY_RUNS_PER_WORKSPACE = 10_000;
+export const MAX_MONTHLY_RUNS_PER_USER = 10_000;
+export const MAX_MONTHLY_RUNS_PER_OWNER = 30_000;
+export const MAX_MONTHLY_RUNS_GLOBAL = 100_000;
+export const MAX_OWNED_WORKSPACES = 3;
 export const OVERAGE_CENTS_PER_RUN = 20;
 export const SUBSCRIPTION_GRANT_TTL_DAYS = 30;
 export const COMPLIMENTARY_PERIOD_MS = 10 * 365 * 24 * 60 * 60 * 1_000;
@@ -47,6 +73,14 @@ export const MAX_REDIRECTS = 5;
 export const UPTIME_BODY_CAP = 524_288;
 export const UPTIME_EXCERPT_MAX = 2048;
 
+// Most API payloads are small JSON documents. Only browser-test imports and a
+// runner step containing one bounded base64 JPEG receive larger route-specific
+// limits before any parser materializes the body.
+export const MAX_STANDARD_API_REQUEST_BODY_BYTES = 256 * 1024;
+export const MAX_BROWSER_TEST_IMPORT_BODY_BYTES = 2_000_000;
+export const MAX_API_REQUEST_BODY_BYTES = 3_200_000;
+export const MAX_PADDLE_WEBHOOK_BODY_BYTES = 256 * 1024;
+
 export const RETENTION_DAYS = 30;
 export const ARTIFACT_SIG_TTL_SECONDS = 600;
 
@@ -54,6 +88,12 @@ export const API_KEY_PREFIX = "zgk_";
 export const API_KEY_TOKEN_BYTES = 32;
 export const API_KEY_DISPLAY_PREFIX_LENGTH = 12;
 export const MAX_ACTIVE_API_KEYS_PER_WORKSPACE = 20;
+export const API_KEY_DEFAULT_TTL_DAYS = 90;
+export const API_KEY_MAX_TTL_DAYS = 365;
+export const PAST_DUE_GRACE_DAYS = 7;
+export const MAX_BROWSER_TESTS_PER_WORKSPACE = 200;
+export const MAX_SECRETS_PER_WORKSPACE = 100;
+export const MAX_CHANNELS_PER_WORKSPACE = 50;
 
 export const DEVICE_PROFILES = {
   DESKTOP: {
@@ -81,7 +121,12 @@ export const RATE_LIMITS = {
   login: { limit: 10, windowSeconds: 300 },
   forgot: { limit: 3, windowSeconds: 3600 },
   resend: { limit: 3, windowSeconds: 3600 },
+  verify_email: { limit: 5, windowSeconds: 900 },
+  reset_password: { limit: 5, windowSeconds: 900 },
   invitations: { limit: 20, windowSeconds: 86400 },
+  /** Shared across object types so alternating resources cannot bypass quotas. */
+  collection_create: { limit: 30, windowSeconds: 3600 },
+  browser_test_create: { limit: 30, windowSeconds: 3600 },
   run_create: { limit: 10, windowSeconds: 60 },
   channel_test: { limit: 5, windowSeconds: 3600 },
   monitor_create: { limit: 30, windowSeconds: 3600 },

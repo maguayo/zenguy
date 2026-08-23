@@ -92,18 +92,14 @@ export class Redactor {
   }
 }
 
-const SENSITIVE_QUERY_NAME =
-  /pass|token|secret|key|auth|code|session|signature|sig/iu;
-
 export function sanitizeUrl(raw: string): string {
   try {
     const url = new URL(raw);
-    const query = new URLSearchParams();
-    for (const [name, value] of url.searchParams) {
-      query.append(name, SENSITIVE_QUERY_NAME.test(name) ? "redacted" : value);
-    }
-    const search = query.size > 0 ? `?${query.toString()}` : "";
-    return `${url.origin}${url.pathname}${search}`;
+    // Paths and apparently harmless query values routinely carry magic links,
+    // signed object keys and high-entropy capabilities. Persist only the
+    // origin; callers that need request diagnostics store separately bounded,
+    // explicitly allowlisted fields.
+    return url.origin;
   } catch {
     return "<invalid-url>";
   }

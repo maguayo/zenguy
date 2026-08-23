@@ -3,6 +3,8 @@ export interface EmailMessage {
   subject: string;
   html: string;
   text: string;
+  /** Non-secret correlation headers for provider-side reconciliation. */
+  headers?: Record<string, string>;
 }
 
 export interface EmailSender {

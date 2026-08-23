@@ -1,16 +1,28 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { isAdminEmail } from "../allowlist";
-import { LOGIN_FAILURE_DELAY_MS, SESSION_TTL_MS } from "../constants";
+import type { AdminIdentity, AdminSessionStore } from "../admin_sessions";
+import { isAdminUserId, type AdminUserIds } from "../allowlist";
+import { LOGIN_FAILURE_DELAY_MS, SESSION_COOKIE, SESSION_TTL_MS } from "../constants";
 import type { AppEnv, Clock } from "../env";
 import { AppError } from "../errors";
 import { requireSession } from "../require_session";
-import { clearSessionCookie, sessionCookie, signSession } from "../session";
+import {
+  cancelResponseBody,
+  readLimitedJsonResponse,
+} from "../limited_response";
+import {
+  clearSessionCookie,
+  isWellFormedSessionToken,
+  newSessionToken,
+  readCookie,
+  sessionCookie,
+  sessionTokenHash,
+} from "../session";
 
 export interface AuthRoutesDependencies {
-  adminEmails: string;
-  secret: string;
+  adminUserIds: AdminUserIds;
+  sessions: AdminSessionStore;
   apiOrigin: string;
   fetch: typeof fetch;
   clock: Clock;
@@ -24,17 +36,60 @@ const loginSchema = z.object({
 
 /** Upper bound for the delegated login call to the production API. */
 const UPSTREAM_TIMEOUT_MS = 10_000;
+const MAX_UPSTREAM_RESPONSE_BYTES = 64 * 1_024;
 
-type Verdict = "valid" | "invalid" | "rate_limited" | "unavailable";
+type Verdict =
+  | { kind: "valid"; userId: string; email: string }
+  | { kind: "invalid" }
+  | { kind: "rate_limited" }
+  | { kind: "unavailable" };
+
+const PRODUCTION_API_ORIGIN = "https://api.zenguy.com";
+
+function loginEndpoint(rawOrigin: string): string {
+  let origin: URL;
+  try {
+    origin = new URL(rawOrigin);
+  } catch {
+    throw new Error("ZENGUY_API_ORIGIN must be the production API origin");
+  }
+  const production = origin.origin === PRODUCTION_API_ORIGIN;
+  const loopbackDevelopment =
+    origin.protocol === "http:" &&
+    (origin.hostname === "127.0.0.1" || origin.hostname === "localhost") &&
+    origin.port !== "";
+  if (
+    (!production && !loopbackDevelopment) ||
+    origin.username !== "" ||
+    origin.password !== "" ||
+    origin.pathname !== "/" ||
+    origin.search !== "" ||
+    origin.hash !== ""
+  ) {
+    throw new Error("ZENGUY_API_ORIGIN must be the production API origin");
+  }
+  return `${origin.origin}/api/auth/login`;
+}
+
+const upstreamLoginSchema = z.object({
+  data: z.object({
+    user: z.object({
+      id: z.string().min(1).max(128),
+      email: z.email().max(254),
+      emailVerified: z.literal(true),
+    }),
+  }),
+});
 
 async function verifyWithApi(
   deps: AuthRoutesDependencies,
+  endpoint: string,
   email: string,
   password: string,
 ): Promise<Verdict> {
   let response: Response;
   try {
-    response = await deps.fetch(`${deps.apiOrigin.replace(/\/$/u, "")}/api/auth/login`, {
+    response = await deps.fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json", "user-agent": "zenguy-admin/1.0" },
       body: JSON.stringify({ email, password }),
@@ -43,18 +98,44 @@ async function verifyWithApi(
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch {
-    return "unavailable";
+    return { kind: "unavailable" };
   }
-  if (response.status === 200) return "valid";
-  if (response.status === 429) return "rate_limited";
+  if (response.status === 200) {
+    let payload: unknown;
+    try {
+      payload = await readLimitedJsonResponse(
+        response,
+        MAX_UPSTREAM_RESPONSE_BYTES,
+      );
+    } catch {
+      return { kind: "unavailable" };
+    }
+    const parsed = upstreamLoginSchema.safeParse(payload);
+    if (!parsed.success) return { kind: "invalid" };
+    const upstream = parsed.data.data.user;
+    if (upstream.email.trim().toLowerCase() !== email) return { kind: "invalid" };
+    return { kind: "valid", userId: upstream.id, email: upstream.email.trim().toLowerCase() };
+  }
+  await cancelResponseBody(response);
+  if (response.status === 429) return { kind: "rate_limited" };
   if (response.status === 401 || response.status === 403 || response.status === 400) {
-    return "invalid";
+    return { kind: "invalid" };
   }
-  return "unavailable";
+  return { kind: "unavailable" };
+}
+
+async function resolveAdminIdentity(
+  deps: AuthRoutesDependencies,
+  verdict: Extract<Verdict, { kind: "valid" }>,
+): Promise<AdminIdentity | null> {
+  if (!isAdminUserId(deps.adminUserIds, verdict.userId)) return null;
+  return deps.sessions.findEligibleIdentity(verdict.userId, verdict.email);
 }
 
 export function authRoutes(deps: AuthRoutesDependencies): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+  // Validate once at isolate construction, before accepting any password.
+  const endpoint = loginEndpoint(deps.apiOrigin);
 
   app.post(
     "/login",
@@ -67,26 +148,39 @@ export function authRoutes(deps: AuthRoutesDependencies): Hono<AppEnv> {
         await deps.delay(LOGIN_FAILURE_DELAY_MS);
         throw new AppError("UNAUTHORIZED", "Invalid credentials");
       };
-      if (!isAdminEmail(deps.adminEmails, email)) return reject();
-      const verdict = await verifyWithApi(deps, email, password);
-      if (verdict === "invalid") return reject();
-      if (verdict === "rate_limited") {
+      if (email !== context.get("accessEmail")) return reject();
+      const verdict = await verifyWithApi(deps, endpoint, email, password);
+      if (verdict.kind === "invalid") return reject();
+      if (verdict.kind === "rate_limited") {
         throw new AppError("RATE_LIMITED", "Too many attempts, try again later");
       }
-      if (verdict === "unavailable") {
+      if (verdict.kind === "unavailable") {
         throw new AppError("SERVICE_UNAVAILABLE", "Production API is not reachable");
       }
-      const token = await signSession(
-        { email, exp: deps.clock.now() + SESSION_TTL_MS },
-        deps.secret,
-      );
+      const identity = await resolveAdminIdentity(deps, verdict);
+      if (identity === null) return reject();
+      const now = deps.clock.now();
+      const token = newSessionToken();
+      await deps.sessions.create({
+        ...identity,
+        idHash: await sessionTokenHash(token, context.get("accessSubject")),
+        createdAt: now,
+        expiresAt: now + SESSION_TTL_MS,
+      });
       context.header("Set-Cookie", sessionCookie(token, SESSION_TTL_MS / 1_000));
-      return context.json({ data: { email } });
+      return context.json({ data: { email: identity.email } });
     },
   );
 
-  app.post("/logout", (context) => {
+  app.post("/logout", async (context) => {
     context.header("Set-Cookie", clearSessionCookie());
+    const token = readCookie(context.req.header("Cookie"), SESSION_COOKIE);
+    if (token !== null && isWellFormedSessionToken(token)) {
+      await deps.sessions.revoke(
+        await sessionTokenHash(token, context.get("accessSubject")),
+        deps.clock.now(),
+      );
+    }
     return context.body(null, 204);
   });
 

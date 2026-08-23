@@ -145,6 +145,7 @@ export class D1PushDeviceRepo implements PushDeviceRepo {
 
   async listEnabledTokensForWorkspace(
     workspaceId: string,
+    activeSince: number,
   ): Promise<{ token: string; userId: string }[]> {
     const rows = await all<{ token: string; user_id: string }>(
       this.database
@@ -153,9 +154,10 @@ export class D1PushDeviceRepo implements PushDeviceRepo {
            FROM user_push_devices d
            JOIN workspace_members m ON m.user_id = d.user_id
            WHERE m.workspace_id = ? AND d.enabled = 1
+             AND d.last_seen_at >= ?
            ORDER BY d.created_at ASC, d.id ASC`,
         )
-        .bind(workspaceId),
+        .bind(workspaceId, activeSince),
     );
     return rows.map((row) => ({ token: row.token, userId: row.user_id }));
   }

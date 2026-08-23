@@ -30,26 +30,37 @@ declare global {
   }
 }
 
+export const PADDLE_SCRIPT_URL = "https://cdn.paddle.com/paddle/v2/paddle.js";
+const PADDLE_SCRIPT_TIMEOUT_MS = 15_000;
+
 let paddlePromise: Promise<Paddle> | null = null;
 let initializedPaddle: Paddle | null = null;
 let initializedToken: string | null = null;
 let checkoutCompletedCallback: (() => void) | null = null;
+
+export function securePaddleScript(script: HTMLScriptElement): void {
+  script.async = true;
+  script.dataset.zenguyPaddle = "true";
+  script.referrerPolicy = "no-referrer";
+  // Paddle requires its always-current SDK to be loaded directly from its CDN
+  // and does not publish an immutable URL/hash. The versioned CSP restricts
+  // script execution to this exact path instead of trusting the whole origin.
+  script.src = PADDLE_SCRIPT_URL;
+}
 
 export function checkoutOptions({
   customData,
   email,
   priceId,
   quantity = 1,
-  workspaceId,
 }: {
-  customData?: Record<string, string>;
+  customData: Record<string, string>;
   email: string;
   priceId: string;
   quantity?: number;
-  workspaceId: string;
 }): PaddleCheckoutOptions {
   return {
-    customData: { workspace_id: workspaceId, ...customData },
+    customData: { ...customData },
     customer: { email },
     items: [{ priceId, quantity }],
     settings: { displayMode: "overlay" },
@@ -80,26 +91,55 @@ export function loadPaddle(): Promise<Paddle> {
   if (paddlePromise) return paddlePromise;
 
   paddlePromise = new Promise<Paddle>((resolve, reject) => {
-    const finish = () => {
-      if (window.Paddle) resolve(window.Paddle);
-      else reject(new Error("Paddle loaded without exposing its SDK."));
+    let timeoutId: number | undefined;
+    let script: HTMLScriptElement;
+
+    const cleanup = () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      script.removeEventListener("load", finish);
+      script.removeEventListener("error", onError);
     };
-    const fail = () => reject(new Error("Paddle couldn't be loaded. Try again."));
+    const finish = () => {
+      cleanup();
+      if (window.Paddle) {
+        resolve(window.Paddle);
+        return;
+      }
+      script.remove();
+      reject(new Error("Paddle loaded without exposing its SDK."));
+    };
+    const fail = (message: string) => {
+      cleanup();
+      script.remove();
+      reject(new Error(message));
+    };
+    const onError = () => fail("Paddle couldn't be loaded. Try again.");
     const existing = document.querySelector<HTMLScriptElement>(
       'script[data-zenguy-paddle="true"]',
     );
     if (existing) {
+      script = existing;
+      if (script.src !== PADDLE_SCRIPT_URL) {
+        fail("Refused an unexpected Paddle script URL.");
+        return;
+      }
       existing.addEventListener("load", finish, { once: true });
-      existing.addEventListener("error", fail, { once: true });
+      existing.addEventListener("error", onError, { once: true });
+      timeoutId = window.setTimeout(
+        () => fail("Paddle took too long to load. Try again."),
+        PADDLE_SCRIPT_TIMEOUT_MS,
+      );
       return;
     }
 
-    const script = document.createElement("script");
-    script.async = true;
-    script.dataset.zenguyPaddle = "true";
-    script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+    script = document.createElement("script");
+    securePaddleScript(script);
     script.addEventListener("load", finish, { once: true });
-    script.addEventListener("error", fail, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    timeoutId = window.setTimeout(
+      () => fail("Paddle took too long to load. Try again."),
+      PADDLE_SCRIPT_TIMEOUT_MS,
+    );
     document.head.append(script);
   }).catch((error: unknown) => {
     paddlePromise = null;
@@ -125,20 +165,18 @@ export function openCheckout({
   onCompleted,
   priceId,
   quantity,
-  workspaceId,
 }: {
-  customData?: Record<string, string>;
+  customData: Record<string, string>;
   email: string;
   onCompleted: () => void;
   priceId: string;
   quantity?: number;
-  workspaceId: string;
 }): void {
   if (!initializedPaddle) throw new Error("Paddle has not been initialized.");
   checkoutCompletedCallback = onCompleted;
   try {
     initializedPaddle.Checkout.open(
-      checkoutOptions({ customData, email, priceId, quantity, workspaceId }),
+      checkoutOptions({ customData, email, priceId, quantity }),
     );
   } catch (error) {
     checkoutCompletedCallback = null;

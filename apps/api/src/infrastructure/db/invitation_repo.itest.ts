@@ -1,6 +1,10 @@
 import type { WorkspaceInvitation } from "../../domain/workspaces/types";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1InvitationRepo } from "./invitation_repo";
+import { D1MemberRepo } from "./member_repo";
+import { D1UserRepo } from "./user_repo";
+import { D1WorkspaceRepo } from "./workspace_repo";
+import type { User } from "../../domain/users/types";
 
 const INVITATION: WorkspaceInvitation = {
   id: "inv_alice",
@@ -21,6 +25,85 @@ describe("D1InvitationRepo", () => {
   beforeEach(async () => {
     await freshDb();
     repo = new D1InvitationRepo(testEnv().DB);
+  });
+
+  async function seedAuthority(role: "OWNER" | "ADMIN" | "MEMBER") {
+    const users = new D1UserRepo(testEnv().DB);
+    const workspaces = new D1WorkspaceRepo(testEnv().DB);
+    const members = new D1MemberRepo(testEnv().DB);
+    const base = (id: string, email: string): User => ({
+      id,
+      name: id,
+      email,
+      passwordHash: "hash",
+      emailVerifiedAt: 1,
+      authVersion: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await users.insert(base("usr_owner", "owner@example.com"));
+    await users.insert(base("usr_alice", INVITATION.email));
+    await workspaces.insert({
+      id: INVITATION.workspaceId,
+      name: "Primary",
+      slug: "primary",
+      timezone: "UTC",
+      ownerUserId: "usr_owner",
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    });
+    await members.insert({
+      id: "mem_inviter",
+      workspaceId: INVITATION.workspaceId,
+      userId: "usr_owner",
+      role,
+      invitedBy: null,
+      joinedAt: 1,
+    });
+    return members;
+  }
+
+  it("atomically accepts once and revalidates the inviter's current authority", async () => {
+    const members = await seedAuthority("OWNER");
+    await repo.insert(INVITATION);
+
+    const results = await Promise.all([
+      repo.acceptByHash({
+        hash: INVITATION.tokenHash,
+        email: INVITATION.email,
+        userId: "usr_alice",
+        memberId: "mem_alice_a",
+        now: 1_500,
+      }),
+      repo.acceptByHash({
+        hash: INVITATION.tokenHash,
+        email: INVITATION.email,
+        userId: "usr_alice",
+        memberId: "mem_alice_b",
+        now: 1_500,
+      }),
+    ]);
+    expect(results.filter((invitation) => invitation !== null)).toHaveLength(1);
+    await expect(members.find(INVITATION.workspaceId, "usr_alice")).resolves.toMatchObject({
+      role: "MEMBER",
+    });
+
+    await freshDb();
+    const demotedMembers = await seedAuthority("MEMBER");
+    await repo.insert(INVITATION);
+    await expect(
+      repo.acceptByHash({
+        hash: INVITATION.tokenHash,
+        email: INVITATION.email,
+        userId: "usr_alice",
+        memberId: "mem_alice_denied",
+        now: 1_500,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      demotedMembers.find(INVITATION.workspaceId, "usr_alice"),
+    ).resolves.toBeNull();
   });
 
   it("round-trips pending invitations and matches email case-insensitively", async () => {

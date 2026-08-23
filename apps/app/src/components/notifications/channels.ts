@@ -67,7 +67,12 @@ export function lastDeliveryText(
   delivery?: Delivery,
 ): string {
   if (!status) return "Never used";
-  const label = status === "SENT" ? "Delivered" : "Failed";
+  const label =
+    status === "SENT"
+      ? "Delivered"
+      : status === "AMBIGUOUS"
+        ? "Needs reconciliation"
+        : "Failed";
   return delivery ? `${label} ${formatRelative(delivery.createdAt)}` : label;
 }
 
@@ -77,6 +82,11 @@ export function testDeliveryResult(delivery: Delivery): {
 } {
   return delivery.status === "SENT"
     ? { message: "Test sent", tone: "success" }
+    : delivery.status === "AMBIGUOUS"
+      ? {
+          message: `Test outcome needs reconciliation: ${delivery.errorSanitized ?? "Provider outcome is unknown"}`,
+          tone: "error",
+        }
     : {
         message: `Test failed: ${delivery.errorSanitized ?? "Unknown error"}`,
         tone: "error",

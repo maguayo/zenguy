@@ -1,4 +1,5 @@
 import type {
+  DeliveryDispatchClaim,
   DeliveryRepo,
   DeliveryUpdate,
 } from "../../domain/channels/repo";
@@ -25,6 +26,10 @@ interface DeliveryRow {
   created_at: number;
   cost_cents: number | null;
   destination_country: string | null;
+  dispatch_state: NotificationDelivery["dispatchState"];
+  dispatch_token: string | null;
+  dispatch_generation: number;
+  provider_idempotency_key: string | null;
 }
 
 interface IncidentDeliveryRow extends DeliveryRow {
@@ -47,6 +52,9 @@ function toDelivery(row: DeliveryRow): NotificationDelivery {
     createdAt: row.created_at,
     costCents: row.cost_cents ?? null,
     destinationCountry: row.destination_country ?? null,
+    dispatchState: row.dispatch_state ?? "READY",
+    providerIdempotencyKey: row.provider_idempotency_key,
+    dispatchGeneration: row.dispatch_generation ?? 0,
   };
 }
 
@@ -70,8 +78,8 @@ export class D1DeliveryRepo implements DeliveryRepo {
           `INSERT INTO notification_deliveries
             (id, workspace_id, incident_id, notification_channel_id,
              event_type, status, provider_message_id, attempt_count,
-             error_sanitized, sent_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             error_sanitized, sent_at, created_at, provider_idempotency_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           delivery.id,
@@ -85,6 +93,7 @@ export class D1DeliveryRepo implements DeliveryRepo {
           delivery.errorSanitized,
           delivery.sentAt,
           delivery.createdAt,
+          delivery.providerIdempotencyKey ?? delivery.id,
         ),
     );
   }
@@ -104,23 +113,151 @@ export class D1DeliveryRepo implements DeliveryRepo {
     return row === null ? null : toDelivery(row);
   }
 
-  async claimPending(
+  async beginDispatch(
     workspaceId: string,
     id: string,
+    dispatchToken: string,
     claimedAt: number,
     staleBefore: number,
+  ): Promise<DeliveryDispatchClaim | null> {
+    const row = await one<DeliveryRow>(
+      this.database
+        .prepare(
+          `UPDATE notification_deliveries
+           SET processing_at = ?,
+               dispatch_state = 'DISPATCHING',
+               dispatch_token = ?,
+               dispatch_generation = dispatch_generation + 1,
+               provider_idempotency_key = COALESCE(provider_idempotency_key, id),
+               attempt_count = attempt_count + 1
+           WHERE workspace_id = ? AND id = ? AND status = 'PENDING'
+             AND dispatch_state = 'READY'
+             AND (processing_at IS NULL OR processing_at <= ?)
+             AND EXISTS (
+               SELECT 1 FROM workspaces
+               WHERE workspaces.id = notification_deliveries.workspace_id
+                 AND workspaces.deleted_at IS NULL
+                 AND workspaces.deletion_state = 'ACTIVE'
+             )
+           RETURNING *`,
+        )
+        .bind(claimedAt, dispatchToken, workspaceId, id, staleBefore),
+    );
+    return row === null
+      ? null
+      : { delivery: toDelivery(row), dispatchToken };
+  }
+
+  async finishDispatch(
+    id: string,
+    dispatchToken: string,
+    changes: DeliveryUpdate,
+  ): Promise<boolean> {
+    const row = await one<{ id: string }>(
+      this.database
+        .prepare(
+          `UPDATE notification_deliveries
+           SET status = ?,
+               dispatch_state = CASE
+                 WHEN ? = 'PENDING' THEN 'READY'
+                 ELSE 'CONFIRMED'
+               END,
+               processing_at = NULL,
+               dispatch_token = NULL,
+               provider_message_id = CASE WHEN ? = 1 THEN ? ELSE provider_message_id END,
+               error_sanitized = CASE WHEN ? = 1 THEN ? ELSE error_sanitized END,
+               attempt_count = ?,
+               sent_at = CASE WHEN ? = 1 THEN ? ELSE sent_at END,
+               cost_cents = CASE WHEN ? = 1 THEN ? ELSE cost_cents END,
+               destination_country = CASE WHEN ? = 1 THEN ? ELSE destination_country END
+           WHERE id = ? AND status = 'PENDING'
+             AND dispatch_state = 'DISPATCHING' AND dispatch_token = ?
+           RETURNING id`,
+        )
+        .bind(
+          changes.status,
+          changes.status,
+          changes.providerMessageId === undefined ? 0 : 1,
+          changes.providerMessageId ?? null,
+          changes.errorSanitized === undefined ? 0 : 1,
+          changes.errorSanitized ?? null,
+          changes.attemptCount,
+          changes.sentAt === undefined ? 0 : 1,
+          changes.sentAt ?? null,
+          changes.costCents === undefined ? 0 : 1,
+          changes.costCents ?? null,
+          changes.destinationCountry === undefined ? 0 : 1,
+          changes.destinationCountry ?? null,
+          id,
+          dispatchToken,
+        ),
+    );
+    return row !== null;
+  }
+
+  async markDispatchAmbiguous(
+    id: string,
+    dispatchToken: string,
+    attemptCount: number,
+    errorSanitized: string,
   ): Promise<NotificationDelivery | null> {
     const row = await one<DeliveryRow>(
       this.database
         .prepare(
-          `UPDATE notification_deliveries SET processing_at = ?
-           WHERE workspace_id = ? AND id = ? AND status = 'PENDING'
-             AND (processing_at IS NULL OR processing_at <= ?)
+          `UPDATE notification_deliveries
+           SET dispatch_state = 'AMBIGUOUS', processing_at = NULL,
+               dispatch_token = NULL, attempt_count = ?, error_sanitized = ?
+           WHERE id = ? AND status = 'PENDING'
+             AND dispatch_state = 'DISPATCHING' AND dispatch_token = ?
            RETURNING *`,
         )
-        .bind(claimedAt, workspaceId, id, staleBefore),
+        .bind(attemptCount, errorSanitized, id, dispatchToken),
     );
     return row === null ? null : toDelivery(row);
+  }
+
+  async markStaleDispatchAmbiguous(
+    workspaceId: string,
+    id: string,
+    staleBefore: number,
+    errorSanitized: string,
+  ): Promise<NotificationDelivery | null> {
+    const row = await one<DeliveryRow>(
+      this.database
+        .prepare(
+          `UPDATE notification_deliveries
+           SET dispatch_state = 'AMBIGUOUS', processing_at = NULL,
+               dispatch_token = NULL, error_sanitized = ?
+           WHERE workspace_id = ? AND id = ? AND status = 'PENDING'
+             AND dispatch_state = 'DISPATCHING' AND processing_at <= ?
+           RETURNING *`,
+        )
+        .bind(errorSanitized, workspaceId, id, staleBefore),
+    );
+    return row === null ? null : toDelivery(row);
+  }
+
+  async recordProviderAcceptance(
+    id: string,
+    providerIdempotencyKey: string,
+    providerMessageId: string | null,
+    sentAt: number,
+  ): Promise<boolean> {
+    const row = await one<{ id: string }>(
+      this.database
+        .prepare(
+          `UPDATE notification_deliveries
+           SET status = 'SENT', dispatch_state = 'CONFIRMED',
+               processing_at = NULL, dispatch_token = NULL,
+               provider_message_id = ?, error_sanitized = NULL, sent_at = ?
+           WHERE id = ? AND status = 'PENDING'
+             AND dispatch_state = 'AMBIGUOUS'
+             AND provider_idempotency_key = ?
+           RETURNING id`,
+        )
+        .bind(providerMessageId, sentAt, id, providerIdempotencyKey),
+    );
+    return row !== null;
   }
 
   async update(id: string, changes: DeliveryUpdate): Promise<void> {
@@ -129,7 +266,12 @@ export class D1DeliveryRepo implements DeliveryRepo {
         .prepare(
           `UPDATE notification_deliveries
            SET status = ?,
+               dispatch_state = CASE
+                 WHEN ? = 'PENDING' THEN 'READY'
+                 ELSE 'CONFIRMED'
+               END,
                processing_at = NULL,
+               dispatch_token = NULL,
                provider_message_id = CASE WHEN ? = 1 THEN ? ELSE provider_message_id END,
                error_sanitized = CASE WHEN ? = 1 THEN ? ELSE error_sanitized END,
                attempt_count = ?,
@@ -139,6 +281,7 @@ export class D1DeliveryRepo implements DeliveryRepo {
            WHERE id = ?`,
         )
         .bind(
+          changes.status,
           changes.status,
           changes.providerMessageId === undefined ? 0 : 1,
           changes.providerMessageId ?? null,

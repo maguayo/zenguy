@@ -42,13 +42,24 @@ export class UpdateBrowserTest {
     ip?: string;
   }): Promise<BrowserTestOutput> {
     if (!can(input.actorRole, "tests.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const test = await this.tests.findById(input.workspaceId, input.testId);
     if (test === null) throw notFound("Browser test");
     const parsed = parseBrowserTestUpdate(input.changes);
     const currentChannelIds = await this.tests.getChannelIds(test.id);
     const complete = parseBrowserTestConfig({
       name: parsed.name ?? test.name,
+      allowedDomains: parsed.allowedDomains ?? test.allowedDomains ?? [],
+      writableDomains:
+        parsed.writableDomains ?? test.writableDomains ?? [],
+      testDataAttested:
+        parsed.testDataAttested ?? test.testDataAttested ?? false,
+      irreversibleActionScopes:
+        parsed.irreversibleActionScopes ?? test.irreversibleActionScopes ?? [],
       startUrl: parsed.startUrl ?? test.startUrl,
       instructions: parsed.instructions ?? test.instructions,
       device: parsed.device ?? test.device,
@@ -69,6 +80,22 @@ export class UpdateBrowserTest {
     const now = this.clock.now();
     const changes: BrowserTestUpdate = {
       ...(parsed.name === undefined ? {} : { name: complete.name }),
+      ...(parsed.allowedDomains === undefined
+        ? {}
+        : { allowedDomains: [...complete.allowedDomains] }),
+      ...(parsed.writableDomains === undefined
+        ? {}
+        : { writableDomains: [...complete.writableDomains] }),
+      ...(parsed.testDataAttested === undefined
+        ? {}
+        : { testDataAttested: complete.testDataAttested }),
+      ...(parsed.irreversibleActionScopes === undefined
+        ? {}
+        : {
+            irreversibleActionScopes: structuredClone(
+              complete.irreversibleActionScopes,
+            ),
+          }),
       ...(parsed.startUrl === undefined ? {} : { startUrl: complete.startUrl }),
       ...(parsed.instructions === undefined
         ? {}

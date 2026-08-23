@@ -12,6 +12,7 @@ import type { UptimeMonitor } from "../../domain/uptime/types";
 import type { User } from "../../domain/users/types";
 import type { Workspace } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
+import { D1ActivityEventRepo } from "../../infrastructure/db/activity_event_repo";
 import { D1ArtifactRepo } from "../../infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "../../infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "../../infrastructure/db/browser_test_repo";
@@ -35,6 +36,7 @@ const USER_A: User = {
   email: "a@cross-tenant.test",
   passwordHash: "unused",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -256,9 +258,14 @@ describe("cross-tenant route isolation", () => {
       key: "TENANT_A_TOKEN",
       encryptedValue: await encryptSecret(
         "tenant-a-secret",
-        config.encryptionKey,
+        config.encryptionKeys,
+        {
+          type: "workspace_secret",
+          workspaceId: WORKSPACE_A.id,
+          recordId: "sec_tenant_a",
+        },
       ),
-      encryptionVersion: 1,
+      encryptionVersion: 4,
       allowedDomains: ["example.com"],
       description: null,
       createdBy: USER_A.id,
@@ -341,5 +348,56 @@ describe("cross-tenant route isolation", () => {
         error: { code: "NOT_FOUND" },
       });
     }
+  });
+
+  it("drops client activity reported against another tenant's workspace", async () => {
+    await freshDb();
+    const bindings = testEnv();
+    const config = loadConfig(bindings);
+    const users = new D1UserRepo(bindings.DB);
+    await users.insert(USER_A);
+    await users.insert(USER_B);
+    const workspaces = new D1WorkspaceRepo(bindings.DB);
+    await workspaces.insert(WORKSPACE_A);
+    await workspaces.insert(WORKSPACE_B);
+    const members = new D1MemberRepo(bindings.DB);
+    await members.insert({
+      id: "mem_tenant_a",
+      workspaceId: WORKSPACE_A.id,
+      userId: USER_A.id,
+      role: "OWNER",
+      invitedBy: null,
+      joinedAt: NOW,
+    });
+    await members.insert({
+      id: "mem_tenant_b",
+      workspaceId: WORKSPACE_B.id,
+      userId: USER_B.id,
+      role: "OWNER",
+      invitedBy: null,
+      joinedAt: NOW,
+    });
+    const token = await issueAccessToken(config, USER_A, systemClock);
+    const app = buildApp(bindings, { clock: new FixedClock(NOW) });
+
+    // Indistinguishable from a workspace that does not exist: 202 and a
+    // silent drop, never a 403/404 that would confirm the id.
+    const response = await app.request("/api/me/events", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        events: [{ type: "web.page_viewed", workspaceId: WORKSPACE_B.id }],
+      }),
+    });
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      data: { accepted: 0, dropped: 1 },
+    });
+    const stored = await new D1ActivityEventRepo(bindings.DB).listRecent(10);
+    expect(stored.filter((event) => event.workspaceId === WORKSPACE_B.id)).toEqual([]);
+    expect(stored).toEqual([]);
   });
 });

@@ -3,7 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Info } from "lucide-react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { getBilling, getBillingConfig } from "../../api/billing";
+import {
+  getBilling,
+  getBillingConfig,
+  startSubscriptionCheckout,
+} from "../../api/billing";
 import { listMembers } from "../../api/members";
 import type { Billing } from "../../api/types";
 import { getWorkspace } from "../../api/workspaces";
@@ -14,7 +18,6 @@ import { Spinner } from "../../components/ui/Spinner";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
-import { initPaddle, loadPaddle, openCheckout } from "../../lib/paddle";
 
 type ActivationPhase = "idle" | "opening" | "activating" | "timeout";
 
@@ -128,13 +131,17 @@ export default function BillingSetup() {
         setPhase("idle");
         return;
       }
-      await loadPaddle();
-      await initPaddle(config);
-      openCheckout({
+      const checkout = await startSubscriptionCheckout(wsId);
+      // Keep third-party payment code out of every non-checkout route and load
+      // Paddle.js only after an owner explicitly starts a checkout.
+      const paddle = await import("../../lib/paddle");
+      await paddle.initPaddle(config);
+      paddle.openCheckout({
+        customData: checkout.customData,
         email: user?.email ?? "",
         onCompleted: () => void checkActivation(),
-        priceId: config.priceId,
-        workspaceId: wsId,
+        priceId: checkout.priceId,
+        quantity: checkout.quantity,
       });
       setPhase("idle");
     } catch (error) {

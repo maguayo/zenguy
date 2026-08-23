@@ -8,6 +8,7 @@ import {
   FakeAuditRepo,
   FakeMemberRepo,
   FakeRefreshTokenRepo,
+  FakeSessionSecurityRepo,
   FakeUserRepo,
   FakeWorkspaceRepo,
   FakeWorkspaceState,
@@ -20,10 +21,13 @@ export function authTestDependencies() {
   const ids = new FakeIds();
   const audits = new FakeAuditRepo();
   const workspaceState = new FakeWorkspaceState();
+  const users = new FakeUserRepo();
+  const refreshTokens = new FakeRefreshTokenRepo();
   return {
-    users: new FakeUserRepo(),
+    users,
     emailTokens: new FakeEmailTokenRepo(),
-    refreshTokens: new FakeRefreshTokenRepo(),
+    refreshTokens,
+    sessionSecurity: new FakeSessionSecurityRepo(users, refreshTokens),
     workspaces: new FakeWorkspaceRepo(workspaceState),
     members: new FakeMemberRepo(workspaceState),
     audits,
@@ -45,6 +49,7 @@ export function testUser(overrides: Partial<User> = {}): User {
     email: "alice@example.com",
     passwordHash: "password-hash",
     emailVerifiedAt: null,
+    authVersion: 1,
     createdAt: TEST_NOW,
     updatedAt: TEST_NOW,
     ...overrides,

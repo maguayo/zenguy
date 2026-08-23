@@ -65,17 +65,21 @@ export class FakePushDeviceRepo implements PushDeviceRepo {
     return true;
   }
 
-  private memberDevices(workspaceId: string): PushDevice[] {
+  private memberDevices(workspaceId: string, activeSince = 0): PushDevice[] {
     const memberIds = new Set(this.members.get(workspaceId) ?? []);
     return [...this.devices.values()].filter(
-      (device) => device.enabled && memberIds.has(device.userId),
+      (device) =>
+        device.enabled &&
+        device.lastSeenAt >= activeSince &&
+        memberIds.has(device.userId),
     );
   }
 
   async listEnabledTokensForWorkspace(
     workspaceId: string,
+    activeSince: number,
   ): Promise<{ token: string; userId: string }[]> {
-    return this.memberDevices(workspaceId).map(({ token, userId }) => ({ token, userId }));
+    return this.memberDevices(workspaceId, activeSince).map(({ token, userId }) => ({ token, userId }));
   }
 
   async reachForWorkspace(workspaceId: string): Promise<PushReach> {

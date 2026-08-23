@@ -5,6 +5,9 @@ const NOW = 1_700_000_000_000;
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+const USER_ONE = "usr_00000000000000000000000001";
+const USER_TWO = "usr_00000000000000000000000002";
+const MISSING_USER = "usr_00000000000000000000000003";
 
 const TABLES = ["activity_events", "workspace_members", "workspaces", "users"] as const;
 
@@ -74,16 +77,16 @@ function insertEvent(event: EventSeed): D1PreparedStatement {
 async function seed(): Promise<void> {
   await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
   await env.DB.batch([
-    insertUser("usr_one", "One", "one@example.com"),
-    insertUser("usr_two", "Two", "two@example.com"),
+    insertUser(USER_ONE, "One", "one@example.com"),
+    insertUser(USER_TWO, "Two", "two@example.com"),
     env.DB.prepare(
       `INSERT INTO workspaces (id, name, slug, timezone, owner_user_id, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind("ws_acme", "Acme", "acme", "UTC", "usr_one", NOW - 2 * DAY, NOW),
+    ).bind("ws_acme", "Acme", "acme", "UTC", USER_ONE, NOW - 2 * DAY, NOW),
     insertEvent({
       id: "act_login",
       type: "user.logged_in",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: null,
       source: "web",
       occurredAt: NOW - 6 * HOUR,
@@ -91,7 +94,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_page",
       type: "web.page_viewed",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_acme",
       source: "web",
       properties: JSON.stringify({ route: "/tests" }),
@@ -100,7 +103,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_screen",
       type: "app.screen_viewed",
-      userId: "usr_two",
+      userId: USER_TWO,
       workspaceId: "ws_acme",
       source: "app",
       properties: JSON.stringify({ screen: "/(tabs)/tests" }),
@@ -110,7 +113,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_tie_a",
       type: "run.viewed",
-      userId: "usr_two",
+      userId: USER_TWO,
       workspaceId: "ws_acme",
       source: "app",
       resourceType: "run",
@@ -120,7 +123,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_tie_b",
       type: "run.viewed",
-      userId: "usr_two",
+      userId: USER_TWO,
       workspaceId: "ws_acme",
       source: "app",
       resourceType: "run",
@@ -130,7 +133,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_test_created",
       type: "browser_test.created",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_acme",
       source: "web",
       resourceType: "browser_test",
@@ -175,7 +178,7 @@ async function seed(): Promise<void> {
     insertEvent({
       id: "act_orphan",
       type: "web.page_viewed",
-      userId: "usr_missing",
+      userId: MISSING_USER,
       workspaceId: "ws_missing",
       source: "web",
       occurredAt: NOW - 5 * MINUTE,
@@ -213,7 +216,7 @@ describe("loadActivityFeed", () => {
       type: "web.page_viewed",
       occurredAt: NOW - 2 * HOUR,
       source: "web",
-      actor: { id: "usr_one", name: "One", email: "one@example.com" },
+      actor: { id: USER_ONE, name: "One", email: "one@example.com" },
       workspace: { id: "ws_acme", name: "Acme" },
       resourceType: null,
       resourceId: null,
@@ -232,7 +235,7 @@ describe("loadActivityFeed", () => {
     });
     expect(events[8]).toMatchObject({
       id: "act_login",
-      actor: { id: "usr_one", name: "One", email: "one@example.com" },
+      actor: { id: USER_ONE, name: "One", email: "one@example.com" },
       workspace: null,
       properties: null,
     });
@@ -243,7 +246,7 @@ describe("loadActivityFeed", () => {
     await insertEvent({
       id: "act_broken",
       type: "web.page_viewed",
-      userId: "usr_one",
+      userId: USER_ONE,
       workspaceId: "ws_acme",
       source: "web",
       properties: "{not json",

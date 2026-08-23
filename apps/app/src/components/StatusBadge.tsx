@@ -6,6 +6,7 @@ import { toneColors } from "@/theme";
 import { Badge } from "@/ui";
 
 const statusMap: Record<string, { label: string; pulse?: boolean; tone: Tone }> = {
+  AMBIGUOUS: { label: "Needs reconciliation", tone: "warn" },
   CHECKING: { label: "Checking", pulse: true, tone: "info" },
   DOWN: { label: "Down", tone: "danger" },
   FAILED: { label: "Failed", tone: "danger" },

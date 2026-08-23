@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { acceptInvitation, getInvitation } from "../../api/invitations";
@@ -11,6 +12,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
+import {
+  forgetPathCapability,
+  parseUrlCapability,
+  parseUrlCapabilityFragment,
+  pathCapability,
+  redactCurrentPath,
+  rememberPathCapability,
+} from "../../lib/url-capabilities";
 
 export type InvitationAccessMode = "signedOut" | "matching" | "different";
 
@@ -25,27 +34,53 @@ export function invitationAccessMode(
 }
 
 export default function AcceptInvitation() {
-  const { token = "" } = useParams();
+  const { token: routeToken = "" } = useParams();
+  const location = useLocation();
+  const hasFragmentCapability = location.hash !== "";
+  const fragmentToken = parseUrlCapabilityFragment(location.hash);
+  const continuationPath = "/invitations/accept";
+  const [token] = useState(() =>
+    routeToken
+      ? parseUrlCapability(routeToken)
+      : hasFragmentCapability
+        ? fragmentToken
+        : pathCapability(continuationPath),
+  );
   const { signOut, status, user } = useAuth();
   const toast = useToast();
-  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useLayoutEffect(() => {
+    if (!routeToken && !hasFragmentCapability) return;
+    const incomingToken = routeToken || fragmentToken;
+    rememberPathCapability(continuationPath, incomingToken);
+    redactCurrentPath(continuationPath);
+  }, [fragmentToken, hasFragmentCapability, routeToken]);
+
   const invitation = useQuery({
     enabled: Boolean(token),
+    gcTime: 0,
     queryFn: () => getInvitation(token),
-    queryKey: ["invitation", token],
+    queryKey: ["invitation-link"],
   });
 
   const accept = useMutation({
     mutationFn: () => acceptInvitation(token),
     onError: (error) => toast.error(apiErrorMessage(error)),
     onSuccess: async ({ workspaceId }) => {
+      forgetPathCapability(continuationPath);
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       toast.success(`Welcome to ${invitation.data?.workspaceName ?? "your workspace"}`);
       navigate(`/w/${workspaceId}/overview`, { replace: true });
     },
   });
+
+  useEffect(() => {
+    if (invitation.error instanceof ApiError && invitation.error.code === "GONE") {
+      forgetPathCapability(continuationPath);
+    }
+  }, [invitation.error]);
 
   if (!token || (invitation.isError && invitation.error instanceof ApiError && invitation.error.code === "GONE")) {
     return (
@@ -75,7 +110,7 @@ export default function AcceptInvitation() {
 
   const mode = invitationAccessMode(invitation.data, status === "signedIn" ? user : null);
   const role = invitation.data.role === "ADMIN" ? "Admin" : "Member";
-  const next = `${location.pathname}${location.search}`;
+  const next = continuationPath;
 
   return (
     <AuthShell

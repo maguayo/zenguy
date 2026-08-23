@@ -4,10 +4,14 @@ import type { ChannelRepo } from "../../domain/channels/repo";
 import { DEFAULT_PUSH_CHANNEL_NAME } from "../../domain/push/types";
 import type { MonitorRepo } from "../../domain/uptime/repo";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import {
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
 import { ensureAlertSettings } from "../alerts/settings";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 
 export interface DefaultPushChannelResult {
   created: boolean;
@@ -30,7 +34,7 @@ export class EnsureDefaultPushChannel {
     >,
     private readonly tests: Pick<BrowserTestRepo, "addChannelToAll">,
     private readonly monitors: Pick<MonitorRepo, "addChannelToAll">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -53,23 +57,31 @@ export class EnsureDefaultPushChannel {
       return { created: false, channelId: existing.id };
     }
     const channelId = this.ids.newId("ch");
-    await this.channels.insert({
-      id: channelId,
-      workspaceId: input.workspaceId,
-      name: DEFAULT_PUSH_CHANNEL_NAME,
-      type: "PUSH",
-      encryptedConfig: await encryptSecret(
-        JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }),
-        this.encryptionKey,
-      ),
-      enabled: true,
-      isDefault: true,
-      verifiedAt: null,
-      lastDeliveryStatus: null,
-      createdBy: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    await writeWithActiveDataKeyRetry(
+      async () => ({
+        id: channelId,
+        workspaceId: input.workspaceId,
+        name: DEFAULT_PUSH_CHANNEL_NAME,
+        type: "PUSH" as const,
+        encryptedConfig: await encryptSecret(
+          JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }),
+          this.encryptionKeys,
+          {
+            type: "notification_channel",
+            workspaceId: input.workspaceId,
+            recordId: channelId,
+          },
+        ),
+        enabled: true,
+        isDefault: true,
+        verifiedAt: null,
+        lastDeliveryStatus: null,
+        createdBy: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      (candidate) => this.channels.insert(candidate),
+    );
     await this.attachToAll(input.workspaceId, channelId);
     await this.markCreated(input.workspaceId, now);
     logEvent("default_push_channel_created", { workspaceId: input.workspaceId });

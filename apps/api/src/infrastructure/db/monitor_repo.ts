@@ -13,6 +13,7 @@ import type {
   MonitorStatusCounts,
   UptimeMonitor,
 } from "../../domain/uptime/types";
+import type { Cursor } from "../../shared/pagination";
 import { all, batch, one, run } from "./d1";
 
 interface MonitorRow {
@@ -144,6 +145,32 @@ export class D1MonitorRepo implements MonitorRepo {
            ORDER BY created_at DESC, id DESC`,
         )
         .bind(workspaceId),
+    );
+    return rows.map(toMonitor);
+  }
+
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<UptimeMonitor[]> {
+    const values: Array<string | number> = [workspaceId];
+    const cursorClause =
+      cursor === null || cursor === undefined
+        ? ""
+        : "AND (created_at < ? OR (created_at = ? AND id < ?))";
+    if (cursor !== null && cursor !== undefined) {
+      values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+    }
+    values.push(limit);
+    const rows = await all<MonitorRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM uptime_monitors
+           WHERE workspace_id = ? AND deleted_at IS NULL ${cursorClause}
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+        )
+        .bind(...values),
     );
     return rows.map(toMonitor);
   }
@@ -368,10 +395,46 @@ export class D1MonitorRepo implements MonitorRepo {
     return rows.map((row) => row.notification_channel_id);
   }
 
+  async getChannelIdsForMonitors(
+    workspaceId: string,
+    monitorIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const result = new Map(
+      monitorIds.map((monitorId) => [monitorId, [] as string[]]),
+    );
+    if (monitorIds.length === 0) return result;
+    const placeholders = monitorIds.map(() => "?").join(", ");
+    const rows = await all<{
+      uptime_monitor_id: string;
+      notification_channel_id: string;
+    }>(
+      this.database
+        .prepare(
+          `SELECT mc.uptime_monitor_id, mc.notification_channel_id
+           FROM uptime_monitor_channels mc
+           INNER JOIN uptime_monitors m ON m.id = mc.uptime_monitor_id
+           WHERE m.workspace_id = ? AND m.deleted_at IS NULL
+             AND mc.uptime_monitor_id IN (${placeholders})
+           ORDER BY mc.uptime_monitor_id, mc.notification_channel_id`,
+        )
+        .bind(workspaceId, ...monitorIds),
+    );
+    for (const row of rows) {
+      result.get(row.uptime_monitor_id)?.push(row.notification_channel_id);
+    }
+    return result;
+  }
+
   async recentChecksPerMonitor(
     workspaceId: string,
     limit: number,
+    monitorIds?: string[],
   ): Promise<Map<string, CheckTick[]>> {
+    if (monitorIds !== undefined && monitorIds.length === 0) return new Map();
+    const monitorClause =
+      monitorIds === undefined
+        ? ""
+        : `AND uptime_monitor_id IN (${monitorIds.map(() => "?").join(", ")})`;
     const rows = await all<{
       uptime_monitor_id: string;
       id: string;
@@ -387,11 +450,11 @@ export class D1MonitorRepo implements MonitorRepo {
                       PARTITION BY uptime_monitor_id ORDER BY checked_at DESC, id DESC
                     ) AS row_number
              FROM uptime_checks
-             WHERE workspace_id = ?
+             WHERE workspace_id = ? ${monitorClause}
            ) WHERE row_number <= ?
            ORDER BY uptime_monitor_id, row_number DESC`,
         )
-        .bind(workspaceId, limit),
+        .bind(workspaceId, ...(monitorIds ?? []), limit),
     );
     const ticks = new Map<string, CheckTick[]>();
     for (const row of rows) {

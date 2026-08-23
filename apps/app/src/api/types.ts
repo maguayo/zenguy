@@ -133,7 +133,7 @@ export interface Channel {
   createdAt: string;
   enabled: boolean;
   id: string;
-  lastDeliveryStatus: "SENT" | "FAILED" | null;
+  lastDeliveryStatus: "SENT" | "FAILED" | "AMBIGUOUS" | null;
   name: string;
   type: ChannelType;
   verifiedAt: string | null;
@@ -157,13 +157,39 @@ export interface Delivery {
   incidentId: string | null;
   providerMessageId: string | null;
   sentAt: string | null;
-  status: "PENDING" | "SENT" | "FAILED";
+  status: "PENDING" | "SENT" | "FAILED" | "AMBIGUOUS";
 }
 
 export type Device = "DESKTOP" | "MOBILE";
 export type RunSource = "VALIDATION" | "MANUAL" | "SCHEDULED";
 export type RunStatus = "QUEUED" | "RUNNING" | "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR";
 export type AttemptStatus = RunStatus | "STARTING";
+export type IrreversibleActionScope =
+  | {
+      kind: "DOM";
+      action: "CLICK";
+      origin: string;
+      path: string;
+      target: {
+        attribute: "data-testid" | "id" | "name" | "aria-label";
+        value: string;
+        tag: "BUTTON" | "INPUT";
+        type: "submit";
+        form: {
+          method: "POST";
+          origin: string;
+          path: string;
+        };
+      };
+      maxUses: number;
+    }
+  | {
+      kind: "HTTP";
+      method: "POST" | "PUT" | "PATCH" | "DELETE";
+      origin: string;
+      path: string;
+      maxUses: number;
+    };
 
 export type RunSummary = {
   createdAt: string;
@@ -184,6 +210,10 @@ export interface RunTick {
 }
 
 export interface BrowserTest {
+  allowedDomains?: string[];
+  writableDomains?: string[];
+  testDataAttested?: boolean;
+  irreversibleActionScopes?: IrreversibleActionScope[];
   channelIds: string[];
   createdAt: string;
   createdBy: UserRef;
@@ -203,6 +233,10 @@ export interface BrowserTest {
 }
 
 export interface BrowserTestInput {
+  allowedDomains: string[];
+  writableDomains: string[];
+  testDataAttested: boolean;
+  irreversibleActionScopes: IrreversibleActionScope[];
   channelIds: string[];
   device: Device;
   instructions: string;
@@ -227,6 +261,8 @@ export interface RunListItem {
 }
 
 export interface RunSnapshot {
+  allowedDomains?: string[];
+  writableDomains?: string[];
   channelIds: string[];
   device: Device;
   instructions: string;
@@ -436,7 +472,7 @@ export interface IncidentDelivery {
   eventType: "FAILURE" | "RECOVERY";
   id: string;
   sentAt: string | null;
-  status: "PENDING" | "SENT" | "FAILED";
+  status: "PENDING" | "SENT" | "FAILED" | "AMBIGUOUS";
 }
 
 export interface IncidentDetail extends Incident {

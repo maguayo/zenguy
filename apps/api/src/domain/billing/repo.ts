@@ -1,6 +1,7 @@
 import type {
   OverageReport,
   PendingOveragePeriod,
+  PaddleCheckoutIntent,
   Subscription,
   SubscriptionGrant,
   UsageEvent,
@@ -17,6 +18,22 @@ export interface SubscriptionRepo {
     limit: number,
     after?: { periodEnd: number; id: string },
   ): Promise<Subscription[]>;
+}
+
+export type ConsumeCheckoutIntentResult =
+  | "consumed"
+  | "replayed"
+  | "unavailable";
+
+export interface PaddleCheckoutIntentRepo {
+  insert(intent: PaddleCheckoutIntent): Promise<void>;
+  findById(id: string): Promise<PaddleCheckoutIntent | null>;
+  consume(
+    id: string,
+    providerReference: string,
+    at: number,
+  ): Promise<ConsumeCheckoutIntentResult>;
+  purgeExpired(before: number): Promise<number>;
 }
 
 export interface UsageEventRepo {

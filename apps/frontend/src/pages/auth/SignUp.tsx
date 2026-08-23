@@ -11,10 +11,12 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
-import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
-import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
+import {
+  isAcceptableNewPassword,
+  MIN_PASSWORD_LENGTH,
+} from "../../lib/password-policy";
 
 export const signUpSchema = z
   .object({
@@ -22,7 +24,16 @@ export const signUpSchema = z
     confirmPassword: z.string(),
     email: z.string().email("Enter a valid email address."),
     name: z.string().trim().min(1, "Name is required."),
-    password: z.string().min(8, "Password must be at least 8 characters."),
+    password: z
+      .string()
+      .min(
+        MIN_PASSWORD_LENGTH,
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      )
+      .refine(
+        isAcceptableNewPassword,
+        "Choose a password that is not commonly compromised.",
+      ),
   })
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords don't match.",
@@ -32,7 +43,6 @@ export const signUpSchema = z
 type SignUpValues = z.infer<typeof signUpSchema>;
 
 export default function SignUp() {
-  const { adoptSession } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const form = useForm<SignUpValues>({
@@ -49,16 +59,17 @@ export default function SignUp() {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
-      // The new account is signed in right away; the root resolver parks it on
-      // the verification screen until the emailed link is used.
-      adoptSession(await registerAccount(values.name, values.email, values.password));
-      navigate("/", { replace: true });
+      const pending = await registerAccount(
+        values.name,
+        values.email,
+        values.password,
+      );
+      navigate("/verify-pending", {
+        replace: true,
+        state: { email: pending.email },
+      });
     } catch (error) {
-      if (error instanceof ApiError && error.code === "CONFLICT") {
-        form.setError("root", { message: "An account with this email already exists." });
-      } else {
-        toast.error(apiErrorMessage(error));
-      }
+      toast.error(apiErrorMessage(error));
     }
   });
 
@@ -99,7 +110,7 @@ export default function SignUp() {
         </Field>
         <Field
           error={fieldError(form.formState, "password")}
-          hint="At least 8 characters."
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
           htmlFor="signup-password"
           label="Password"
           required

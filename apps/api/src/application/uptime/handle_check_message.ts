@@ -1,3 +1,4 @@
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import { buildNotificationMessage } from "../../domain/channels/templates";
 import type { IncidentEventRepo, IncidentRepo } from "../../domain/incidents/repo";
@@ -6,6 +7,7 @@ import type { CheckMessage } from "../../domain/queues";
 import type { MonitorConfig } from "../../domain/uptime/rules";
 import type { CheckRepo, MonitorRepo } from "../../domain/uptime/repo";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
+import { isMutableMonitorMethod } from "../../domain/uptime/types";
 import type { DurableWorkflowRepo } from "../../domain/durability/repo";
 import type { DurableJob } from "../../domain/durability/types";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
@@ -13,9 +15,11 @@ import type { Clock } from "../../shared/clock";
 import { RETRY_DELAY_SECONDS } from "../../shared/constants";
 import type { IdGenerator } from "../../shared/ids";
 import { truncate } from "../../shared/redact";
+import type { TrackEvent } from "../activity/track_event";
 import type { DispatchNotifications } from "../channels/dispatch_notifications";
 import type { CheckOutcome } from "./execute_check";
 import { decryptMonitorSensitive } from "./monitor_secrets";
+import type { EncryptionKeyring } from "../../shared/crypto";
 import { createDurableJob, createOutboxEntry } from "../durability/factory";
 import type { PublishQueueOutbox } from "../durability/publish_outbox";
 import { platformAlert } from "../../shared/log";
@@ -24,6 +28,7 @@ type NotificationDispatch = Pick<DispatchNotifications, "execute">;
 type CheckExecutor = (
   config: MonitorConfig,
   workspaceId: string,
+  execution: { idempotencyKey?: string },
 ) => Promise<CheckOutcome>;
 
 const CHECK_EXECUTION_LEASE_MS = 15 * 60_000;
@@ -39,10 +44,11 @@ export interface HandleCheckMessageDependencies {
   durable: DurableWorkflowRepo;
   outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   executeCheck: CheckExecutor;
-  encryptionKey: Uint8Array;
+  encryptionKeys: EncryptionKeyring;
   appUrl: string;
   clock: Clock;
   ids: IdGenerator;
+  track?: Pick<TrackEvent, "execute">;
 }
 
 interface CheckContinuationPayload {
@@ -92,7 +98,7 @@ export class HandleCheckMessage {
       claimedAt,
       staleBefore: claimedAt - CHECK_EXECUTION_LEASE_MS,
     });
-    if (claim !== "claimed") {
+    if (claim !== "claimed" && claim !== "reclaimed") {
       if (claim === "completed") {
         await this.resumePersistedCheck(message);
       }
@@ -100,16 +106,23 @@ export class HandleCheckMessage {
     }
 
     try {
-      await this.executeClaimed(message, monitor, claimToken);
+      await this.executeClaimed(
+        message,
+        monitor,
+        claimToken,
+        claim === "reclaimed",
+      );
     } catch (error) {
       // Ordinary failures release immediately so the Queue retry can run. A
       // Worker crash leaves the durable lease behind and is recovered only
       // after it is stale, fencing the abandoned execution.
-      await this.dependencies.durable.releaseCheckExecution({
-        cycleId: message.cycleId,
-        attemptIndex: message.attemptIndex,
-        claimToken,
-      });
+      if (!isMutableMonitorMethod(monitor.method)) {
+        await this.dependencies.durable.releaseCheckExecution({
+          cycleId: message.cycleId,
+          attemptIndex: message.attemptIndex,
+          claimToken,
+        });
+      }
       throw error;
     }
   }
@@ -118,14 +131,51 @@ export class HandleCheckMessage {
     message: CheckMessage,
     monitor: UptimeMonitor,
     claimToken: string,
+    reclaimed: boolean,
   ): Promise<void> {
-
+    if (reclaimed && isMutableMonitorMethod(monitor.method)) {
+      await this.persistOutcome(
+        message,
+        monitor,
+        claimToken,
+        this.ambiguousOutcome(
+          "A prior worker stopped after starting this mutable request",
+        ),
+      );
+      return;
+    }
     const [sensitive, channelIds] = await Promise.all([
-      decryptMonitorSensitive(monitor, this.dependencies.encryptionKey),
+      decryptMonitorSensitive(monitor, this.dependencies.encryptionKeys),
       this.dependencies.monitors.getChannelIds(monitor.id),
     ]);
     const config = this.executionConfig(monitor, sensitive, channelIds);
-    const outcome = await this.dependencies.executeCheck(config, monitor.workspaceId);
+    let outcome: CheckOutcome;
+    try {
+      outcome = await this.dependencies.executeCheck(
+        config,
+        monitor.workspaceId,
+        isMutableMonitorMethod(monitor.method)
+          ? { idempotencyKey: `zenguy:${message.cycleId}` }
+          : {},
+      );
+    } catch (error) {
+      if (!isMutableMonitorMethod(monitor.method)) throw error;
+      outcome = this.ambiguousOutcome(
+        error instanceof Error
+          ? `Mutable request failed after dispatch: ${error.message}`
+          : "Mutable request failed after dispatch",
+      );
+    }
+    await this.persistOutcome(message, monitor, claimToken, outcome);
+  }
+
+  private async persistOutcome(
+    message: CheckMessage,
+    monitor: UptimeMonitor,
+    claimToken: string,
+    outcome: CheckOutcome,
+  ): Promise<void> {
+    const channelIds = await this.dependencies.monitors.getChannelIds(monitor.id);
     const checkedAt = this.dependencies.clock.now();
     const check: UptimeCheck = {
       id: this.dependencies.ids.newId("chk"),
@@ -172,6 +222,17 @@ export class HandleCheckMessage {
       return;
     }
     await this.resumeCheckContinuation(job);
+  }
+
+  private ambiguousOutcome(detail: string): CheckOutcome {
+    return {
+      status: "FAILED",
+      httpStatus: null,
+      responseTimeMs: 0,
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+      responseExcerpt: null,
+      conditions: [{ type: "request", passed: false, detail }],
+    };
   }
 
   private async resumePersistedCheck(message: CheckMessage): Promise<void> {
@@ -235,7 +296,11 @@ export class HandleCheckMessage {
       );
       return;
     }
-    if (payload.attemptIndex < monitor.maxRetries) {
+    if (
+      payload.attemptIndex < monitor.maxRetries &&
+      check.failureReason !== "AMBIGUOUS_EXTERNAL_EFFECT" &&
+      check.failureReason !== "IDEMPOTENCY_KEY_REQUIRED"
+    ) {
       const nextAttemptIndex = payload.attemptIndex + 1;
       const delaySeconds = RETRY_DELAY_SECONDS[nextAttemptIndex] ?? 120;
       const now = this.dependencies.clock.now();
@@ -343,6 +408,18 @@ export class HandleCheckMessage {
       await this.dependencies.incidents.resolve(incident.id, check.checkedAt, {
         checkId: check.id,
       });
+      await this.dependencies.track?.execute({
+        type: ACTIVITY_EVENTS.incidentResolved,
+        userId: null,
+        workspaceId: monitor.workspaceId,
+        source: "server",
+        resourceId: incident.id,
+        properties: {
+          kind: "UPTIME_MONITOR",
+          uptimeMonitorId: monitor.id,
+          checkId: check.id,
+        },
+      });
     }
     await this.dependencies.events.insert(
       this.event(
@@ -428,6 +505,19 @@ export class HandleCheckMessage {
       await this.appendFailure(opened, check);
       return;
     }
+    // Only the call that actually inserted the incident records the transition.
+    await this.dependencies.track?.execute({
+      type: ACTIVITY_EVENTS.incidentOpened,
+      userId: null,
+      workspaceId: monitor.workspaceId,
+      source: "server",
+      resourceId: opened.id,
+      properties: {
+        kind: "UPTIME_MONITOR",
+        uptimeMonitorId: monitor.id,
+        checkId: check.id,
+      },
+    });
     await this.completeOpenedFailure(
       monitor,
       opened,

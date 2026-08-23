@@ -39,6 +39,27 @@ describe("D1RefreshTokenRepo", () => {
     });
   });
 
+  it("atomically creates only one child under concurrent rotation", async () => {
+    await repo.insert(TOKEN);
+    const replacements: RefreshToken[] = [
+      { ...TOKEN, id: "rft_child_a", tokenHash: "child-a", createdAt: 1_500 },
+      { ...TOKEN, id: "rft_child_b", tokenHash: "child-b", createdAt: 1_500 },
+    ];
+
+    const results = await Promise.all(
+      replacements.map((replacement) => repo.rotate(TOKEN.id, replacement, 1_500)),
+    );
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const children = await Promise.all(
+      replacements.map((replacement) => repo.findByHash(replacement.tokenHash)),
+    );
+    expect(children.filter((token) => token !== null)).toHaveLength(1);
+    const parent = await repo.findByHash(TOKEN.tokenHash);
+    expect(parent).toMatchObject({ revokedAt: 1_500 });
+    expect(children.find((token) => token !== null)?.id).toBe(parent?.replacedById);
+  });
+
   it("revokes every active token for a user", async () => {
     const second: RefreshToken = {
       ...TOKEN,

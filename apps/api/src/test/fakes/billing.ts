@@ -1,6 +1,7 @@
 import type { BillingCanceller } from "../../domain/billing/canceller";
 import type {
   BilledTransaction,
+  ApprovedPaddleAdjustment,
   PaddleClient,
   SubscriptionManagementUrls,
 } from "../../infrastructure/paddle/client";
@@ -31,6 +32,8 @@ export class RecordingPaddleClient implements PaddleClient {
   }[] = [];
   readonly managementUrlRequests: string[] = [];
   readonly invoiceRequests: string[] = [];
+  readonly adjustmentRequests: string[] = [];
+  adjustments: ApprovedPaddleAdjustment[] = [];
   chargeResult: { transactionId: string | null } = { transactionId: null };
   chargeFailure: Error | null = null;
   acceptChargeBeforeFailure = false;
@@ -118,5 +121,15 @@ export class RecordingPaddleClient implements PaddleClient {
     this.invoiceRequests.push(transactionId);
     this.failIfConfigured();
     return this.invoiceUrl;
+  }
+
+  async listApprovedAdjustments(
+    transactionId: string,
+  ): Promise<ApprovedPaddleAdjustment[]> {
+    this.adjustmentRequests.push(transactionId);
+    this.failIfConfigured();
+    return this.adjustments
+      .filter((adjustment) => adjustment.transactionId === transactionId)
+      .map((adjustment) => ({ ...adjustment }));
   }
 }

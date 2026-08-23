@@ -1,0 +1,14 @@
+# Security-sensitive deployment and trust-boundary changes require review by
+# the repository owner once branch/ruleset protection is enabled remotely.
+/.github/workflows/ @maguayo
+/.github/CODEOWNERS @maguayo
+/apps/api/migrations/ @maguayo
+/apps/api/scripts/ @maguayo
+/apps/api/wrangler.jsonc @maguayo
+/apps/api/wrangler.production-bootstrap.jsonc @maguayo
+/apps/admin/scripts/ @maguayo
+/apps/admin/wrangler.jsonc @maguayo
+/runner/ @maguayo
+/scripts/security/ @maguayo
+/security/ @maguayo
+/SECURITY.md @maguayo

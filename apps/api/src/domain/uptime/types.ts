@@ -6,6 +6,10 @@ export type MonitorMethod =
   | "DELETE"
   | "HEAD";
 
+export function isMutableMonitorMethod(method: MonitorMethod): boolean {
+  return method !== "GET" && method !== "HEAD";
+}
+
 export type BodyCondition =
   | "CONTAINS"
   | "NOT_CONTAINS"

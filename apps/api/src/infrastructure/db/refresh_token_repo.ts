@@ -1,6 +1,6 @@
 import type { RefreshTokenRepo } from "../../domain/users/repo";
 import type { RefreshToken } from "../../domain/users/types";
-import { one, run } from "./d1";
+import { batch, one, run } from "./d1";
 
 interface RefreshTokenRow {
   id: string;
@@ -54,6 +54,50 @@ export class D1RefreshTokenRepo implements RefreshTokenRepo {
         .bind(hash),
     );
     return row === null ? null : toRefreshToken(row);
+  }
+
+  async rotate(
+    currentId: string,
+    replacement: RefreshToken,
+    at: number,
+  ): Promise<boolean> {
+    const [claimed, inserted] = await batch(this.database, [
+      this.database
+        .prepare(
+          `UPDATE refresh_tokens
+           SET revoked_at = ?, replaced_by_id = ?
+           WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+             AND expires_at > ?`,
+        )
+        .bind(
+          at,
+          replacement.id,
+          currentId,
+          replacement.userId,
+          at,
+        ),
+      this.database
+        .prepare(
+          `INSERT INTO refresh_tokens
+            (id, user_id, token_hash, expires_at, revoked_at, replaced_by_id, created_at)
+           SELECT ?, user_id, ?, ?, NULL, NULL, ?
+           FROM refresh_tokens
+           WHERE id = ? AND user_id = ? AND revoked_at = ?
+             AND replaced_by_id = ?
+           LIMIT 1`,
+        )
+        .bind(
+          replacement.id,
+          replacement.tokenHash,
+          replacement.expiresAt,
+          replacement.createdAt,
+          currentId,
+          replacement.userId,
+          at,
+          replacement.id,
+        ),
+    ]);
+    return claimed?.meta.changes === 1 && inserted?.meta.changes === 1;
   }
 
   async revoke(

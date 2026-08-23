@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -15,12 +15,30 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
+import {
+  forgetPathCapability,
+  parseUrlCapability,
+  parseUrlCapabilityFragment,
+  pathCapability,
+  redactCurrentPath,
+  rememberPathCapability,
+} from "../../lib/url-capabilities";
 
 export default function RedeemGrant() {
-  const { token = "" } = useParams();
+  const { token: routeToken = "" } = useParams();
+  const location = useLocation();
+  const hasFragmentCapability = location.hash !== "";
+  const fragmentToken = parseUrlCapabilityFragment(location.hash);
+  const continuationPath = "/grants/redeem";
+  const [token] = useState(() =>
+    routeToken
+      ? parseUrlCapability(routeToken)
+      : hasFragmentCapability
+        ? fragmentToken
+        : pathCapability(continuationPath),
+  );
   const { status, user } = useAuth();
   const toast = useToast();
-  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [workspaceName, setWorkspaceName] = useState(
@@ -28,10 +46,18 @@ export default function RedeemGrant() {
   );
   const [selectedId, setSelectedId] = useState("");
 
+  useLayoutEffect(() => {
+    if (!routeToken && !hasFragmentCapability) return;
+    const incomingToken = routeToken || fragmentToken;
+    rememberPathCapability(continuationPath, incomingToken);
+    redactCurrentPath(continuationPath);
+  }, [fragmentToken, hasFragmentCapability, routeToken]);
+
   const grant = useQuery({
     enabled: Boolean(token),
+    gcTime: 0,
     queryFn: () => getSubscriptionGrant(token),
-    queryKey: ["subscription-grant", token],
+    queryKey: ["subscription-grant-link"],
   });
   const workspaces = useQuery({
     enabled: status === "signedIn",
@@ -55,11 +81,18 @@ export default function RedeemGrant() {
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
     onSuccess: async ({ workspaceId }) => {
+      forgetPathCapability(continuationPath);
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       toast.success("Complimentary access is active");
       navigate(`/w/${workspaceId}/overview`, { replace: true });
     },
   });
+
+  useEffect(() => {
+    if (grant.error instanceof ApiError && grant.error.code === "GONE") {
+      forgetPathCapability(continuationPath);
+    }
+  }, [grant.error]);
 
   if (!token || (grant.isError && grant.error instanceof ApiError && grant.error.code === "GONE")) {
     return (
@@ -89,7 +122,7 @@ export default function RedeemGrant() {
     );
   }
 
-  const next = `${location.pathname}${location.search}`;
+  const next = continuationPath;
   const eligible = complimentaryWorkspaces(workspaces.data ?? []);
 
   return (

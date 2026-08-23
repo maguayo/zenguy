@@ -199,6 +199,7 @@ async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
     ids,
     runFinalizedHandler: { handle: async () => undefined },
   });
+  const resolveSecrets = vi.fn(async () => new Map());
   const runner = new ExternalRunner({
     lifecycle,
     runs,
@@ -206,11 +207,12 @@ async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
     steps,
     artifacts,
     storage,
-    resolveSecrets: { execute: async () => new Map() },
+    resolveSecrets: { execute: resolveSecrets },
     clock,
     ids,
+    authorizationSigningSecret: "runner-authorization-test-secret".padEnd(32, "-"),
   });
-  return { runner, attempts, queue };
+  return { runner, attempts, queue, resolveSecrets };
 }
 
 describe("ExternalRunner.claimStale", () => {
@@ -226,7 +228,7 @@ describe("ExternalRunner.claimStale", () => {
     });
 
     await expect(
-      runner.claimStale({ deliveryId: "fallback-1" }),
+      runner.claimStale({ deliveryId: "fallback-1", workerId: "fallback" }),
     ).resolves.toBeNull();
     await expect(attempts.findById("att_fresh")).resolves.toMatchObject({
       status: "QUEUED",
@@ -263,7 +265,6 @@ describe("ExternalRunner.claimStale", () => {
         deliveryId: "fallback-1",
       },
       snapshot: { startUrl: TEST.startUrl },
-      secrets: [],
     });
     await expect(attempts.findById("att_older")).resolves.toMatchObject({
       status: "STARTING",
@@ -277,7 +278,7 @@ describe("ExternalRunner.claimStale", () => {
     });
   });
 
-  it("claims without recording a worker when the runner sends no id", async () => {
+  it("requires and records the fallback worker identity", async () => {
     const older = run("run_anonymous");
     const { runner, attempts } = await fixture({
       runs: [older],
@@ -285,12 +286,12 @@ describe("ExternalRunner.claimStale", () => {
     });
 
     await expect(
-      runner.claimStale({ deliveryId: "fallback-1" }),
+      runner.claimStale({ deliveryId: "fallback-1", workerId: "fallback" }),
     ).resolves.not.toBeNull();
     await expect(attempts.findById("att_anonymous")).resolves.toMatchObject({
       status: "STARTING",
     });
-    expect(attempts.claimedBy.get("att_anonymous")).toBeUndefined();
+    expect(attempts.claimedBy.get("att_anonymous")).toBe("fallback");
   });
 
   it("never claims an attempt already taken by the local worker", async () => {
@@ -306,7 +307,7 @@ describe("ExternalRunner.claimStale", () => {
     });
 
     await expect(
-      runner.claimStale({ deliveryId: "fallback-1" }),
+      runner.claimStale({ deliveryId: "fallback-1", workerId: "fallback" }),
     ).resolves.toBeNull();
     await expect(attempts.findById("att_taken")).resolves.toMatchObject({
       status: "RUNNING",
@@ -324,7 +325,7 @@ describe("ExternalRunner.claimStale", () => {
     });
 
     await expect(
-      runner.claimStale({ deliveryId: "fallback-1" }),
+      runner.claimStale({ deliveryId: "fallback-1", workerId: "fallback" }),
     ).resolves.toBeNull();
     await expect(attempts.findById("att_finished")).resolves.toMatchObject({
       status: "QUEUED",
@@ -348,7 +349,7 @@ describe("ExternalRunner.claimStale", () => {
     });
 
     await expect(
-      runner.claimStale({ deliveryId: "fallback-1" }),
+      runner.claimStale({ deliveryId: "fallback-1", workerId: "fallback" }),
     ).resolves.toBeNull();
     await expect(attempts.findById("att_abandoned")).resolves.toMatchObject({
       status: "QUEUED",
@@ -367,6 +368,82 @@ describe("ExternalRunner.claimStale", () => {
         delaySeconds: INFRA_RETRY_DELAY_SECONDS,
       },
     ]);
+  });
+});
+
+describe("ExternalRunner.start", () => {
+  it("releases the secret lease only on the STARTING to RUNNING transition", async () => {
+    const current = run("run_secret_lease");
+    const { runner, resolveSecrets } = await fixture({
+      runs: [current],
+      attempts: [attempt("att_secret_lease", current.id)],
+    });
+    resolveSecrets.mockResolvedValue(
+      new Map([
+        ["PASSWORD", { value: "secret-value", allowedDomains: ["example.com"] }],
+      ]),
+    );
+    const job = await runner.claimStale({
+      deliveryId: "fallback-secret-lease",
+      workerId: "fallback",
+    });
+    if (job === null) throw new Error("expected a claimed job");
+
+    await expect(runner.start(job.reference)).resolves.toMatchObject({
+      secrets: [
+        {
+          key: "PASSWORD",
+          value: "secret-value",
+          allowedDomains: ["example.com"],
+        },
+      ],
+    });
+    await expect(runner.start(job.reference)).resolves.toMatchObject({
+      secrets: [],
+    });
+    expect(resolveSecrets).toHaveBeenCalledTimes(1);
+  });
+
+  it("grants the secret lease once when two starts race", async () => {
+    const current = run("run_secret_race");
+    const { runner, resolveSecrets } = await fixture({
+      runs: [current],
+      attempts: [attempt("att_secret_race", current.id)],
+    });
+    resolveSecrets.mockResolvedValue(
+      new Map([
+        ["PASSWORD", { value: "secret-value", allowedDomains: ["example.com"] }],
+      ]),
+    );
+    const job = await runner.claimStale({
+      deliveryId: "fallback-secret-race",
+      workerId: "fallback",
+    });
+    if (job === null) throw new Error("expected a claimed job");
+
+    const results = await Promise.allSettled([
+      runner.start(job.reference),
+      runner.start(job.reference),
+    ]);
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    expect(
+      results.find((result) => result.status === "fulfilled"),
+    ).toMatchObject({
+      value: {
+        secrets: [
+          {
+            key: "PASSWORD",
+            value: "secret-value",
+            allowedDomains: ["example.com"],
+          },
+        ],
+      },
+    });
+    expect(resolveSecrets).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -390,7 +467,10 @@ describe("ExternalRunner.complete", () => {
       runs: [older],
       attempts: [attempt("att_older", older.id)],
     });
-    const job = await fixtureValue.runner.claimStale({ deliveryId: "fallback-1" });
+    const job = await fixtureValue.runner.claimStale({
+      deliveryId: "fallback-1",
+      workerId: "fallback",
+    });
     if (job === null) throw new Error("expected a claimed job");
     return { ...fixtureValue, reference: job.reference };
   }

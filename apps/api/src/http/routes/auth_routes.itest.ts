@@ -3,6 +3,7 @@ import { buildApp } from "../../app";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { loadConfig } from "../../shared/config";
 import { RATE_LIMITS } from "../../shared/constants";
+import { sha256Hex } from "../../shared/crypto";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import { RecordingEmailSender } from "../../test/fakes/email";
 import type { AppEnv } from "../env";
@@ -29,6 +30,13 @@ interface NativeSessionResponse {
   };
 }
 
+interface RegistrationPendingResponse {
+  data: {
+    registrationPending: true;
+    email: string;
+  };
+}
+
 function jsonRequest(body: object, headers: HeadersInit = {}): RequestInit {
   return {
     method: "POST",
@@ -45,9 +53,9 @@ function cookiePair(setCookie: string | null): string {
 function tokenFromMessage(text: string | undefined): string {
   const url = text?.match(/https?:\/\/\S+/u)?.[0];
   if (url === undefined) throw new Error("Expected token URL in email");
-  const token = new URL(url).searchParams.get("token");
-  if (token === null) throw new Error("Expected token query parameter");
-  return token;
+  const token = new URL(url).hash.slice(1);
+  if (token === "") throw new Error("Expected token URL fragment");
+  return decodeURIComponent(token);
 }
 
 async function registerUser(
@@ -79,37 +87,29 @@ describe("auth routes", () => {
   it("completes register, verify, login, me, refresh, and logout", async () => {
     const registerResponse = await registerUser(app, "198.51.100.10");
     expect(registerResponse.status).toBe(201);
-    const registered = (await registerResponse.json()) as SessionResponse;
-    expect(registered.data.user).toMatchObject({
-      name: "Alice",
+    expect(registerResponse.headers.get("Cache-Control")).toBe("no-store");
+    const registered =
+      (await registerResponse.json()) as RegistrationPendingResponse;
+    expect(registered.data).toEqual({
+      registrationPending: true,
       email: "alice@example.com",
-      emailVerified: false,
     });
-    expect(registered.data.user.createdAt).toEqual(expect.any(String));
-    expect(registered.data.user).not.toHaveProperty("passwordHash");
-    expect(registered.data.user).not.toHaveProperty("password_hash");
-    // Registration signs the new user in straight away; the verified-email
-    // gate keeps that session on the verification screen until the link is used.
-    expect(registered.data.expiresIn).toBe(1_800);
-    expect(registerResponse.headers.get("Set-Cookie")).toMatch(
-      /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
-    );
-    const unverifiedMe = await app.request("/api/auth/me", {
-      headers: { Authorization: `Bearer ${registered.data.accessToken}` },
-    });
-    expect(unverifiedMe.status).toBe(200);
-    await expect(unverifiedMe.json()).resolves.toMatchObject({
-      data: { user: { email: "alice@example.com", emailVerified: false } },
-    });
+    expect(registered.data).not.toHaveProperty("accessToken");
+    expect(registered.data).not.toHaveProperty("refreshToken");
+    expect(registerResponse.headers.get("Set-Cookie")).toBeNull();
 
     const verificationToken = tokenFromMessage(emails.messages[0]?.text);
     const verifyResponse = await app.request(
       "/api/auth/verify-email",
-      jsonRequest({ token: verificationToken }),
+      jsonRequest({
+        token: verificationToken,
+        password: "initial-password",
+      }),
     );
     expect(verifyResponse.status).toBe(200);
-    // Using the link proves control of the inbox: the device that opened it
-    // gets a session instead of the password form.
+    expect(verifyResponse.headers.get("Cache-Control")).toBe("no-store");
+    // The inbox link and registration password jointly activate the account;
+    // the device that proves both receives the new verified session.
     const verified = (await verifyResponse.json()) as SessionResponse & {
       data: { verified: boolean };
     };
@@ -120,9 +120,6 @@ describe("auth routes", () => {
     });
     expect(verifyResponse.headers.get("Set-Cookie")).toMatch(
       /^zenguy_rt=[A-Za-z0-9_-]+; Path=\/api\/auth; HttpOnly; SameSite=Lax; Max-Age=2592000$/u,
-    );
-    expect(cookiePair(verifyResponse.headers.get("Set-Cookie"))).not.toBe(
-      cookiePair(registerResponse.headers.get("Set-Cookie")),
     );
     const verifiedMe = await app.request("/api/auth/me", {
       headers: { Authorization: `Bearer ${verified.data.accessToken}` },
@@ -140,6 +137,7 @@ describe("auth routes", () => {
       ),
     );
     expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers.get("Cache-Control")).toBe("no-store");
     const login = (await loginResponse.json()) as SessionResponse;
     expect(login.data.user.emailVerified).toBe(true);
     expect(login.data.expiresIn).toBe(1_800);
@@ -163,6 +161,7 @@ describe("auth routes", () => {
       headers: { Cookie: firstCookie },
     });
     expect(refreshResponse.status).toBe(200);
+    expect(refreshResponse.headers.get("Cache-Control")).toBe("no-store");
     const refreshed = (await refreshResponse.json()) as SessionResponse;
     expect(refreshed.data.accessToken).toEqual(expect.any(String));
     const refreshCookie = refreshResponse.headers.get("Set-Cookie");
@@ -177,10 +176,123 @@ describe("auth routes", () => {
       headers: { Cookie: rotatedCookie },
     });
     expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.headers.get("Cache-Control")).toBe("no-store");
     expect(await logoutResponse.text()).toBe("");
     expect(logoutResponse.headers.get("Set-Cookie")).toBe(
       "zenguy_rt=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0",
     );
+    const accessAfterLogout = await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${login.data.accessToken}` },
+    });
+    expect(accessAfterLogout.status).toBe(401);
+    const refreshAfterLogout = await app.request("/api/auth/refresh", {
+      method: "POST",
+      headers: { Cookie: firstCookie },
+    });
+    expect(refreshAfterLogout.status).toBe(401);
+  });
+
+  it("does not reveal whether a registration email already exists", async () => {
+    const first = await registerUser(app, "198.51.100.14");
+    const firstBody = await first.json();
+    emails.messages.length = 0;
+    const duplicate = await registerUser(app, "198.51.100.15", {
+      name: "Different display name",
+      email: "ALICE@EXAMPLE.COM",
+      password: "different-password",
+    });
+
+    expect(duplicate.status).toBe(first.status);
+    const body = (await duplicate.json()) as RegistrationPendingResponse;
+    expect(body).toEqual(firstBody);
+    expect(body.data).toEqual({
+      registrationPending: true,
+      email: "alice@example.com",
+    });
+    expect(duplicate.headers.get("Set-Cookie")).toBeNull();
+    expect(emails.messages).toHaveLength(1);
+    expect(emails.messages[0]?.subject).toBe(
+      "A registration attempt used your email — Zenguy",
+    );
+  });
+
+  it("prevents verification-link pre-account takeover without consuming either factor", async () => {
+    const originalPassword = "attacker-chosen-password";
+    const registerResponse = await registerUser(app, "198.51.100.160", {
+      name: "Mailbox Victim",
+      email: "victim@example.com",
+      password: originalPassword,
+    });
+    expect(registerResponse.status).toBe(201);
+    const verificationToken = tokenFromMessage(emails.messages[0]?.text);
+
+    // Knowing the password chosen in an unsolicited registration is not
+    // enough without the inbox capability.
+    const passwordOnly = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest(
+        { token: "not-the-inbox-token", password: originalPassword },
+        { "CF-Connecting-IP": "198.51.100.161" },
+      ),
+    );
+    expect(passwordOnly.status).toBe(410);
+
+    // Conversely, opening the victim's real link cannot bless the password
+    // selected by somebody else. A failed password must leave the token live.
+    const tokenOnly = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest(
+        { token: verificationToken, password: "victim-does-not-know-it" },
+        { "CF-Connecting-IP": "198.51.100.162" },
+      ),
+    );
+    expect(tokenOnly.status).toBe(401);
+    await expect(tokenOnly.json()).resolves.toEqual({
+      error: { code: "INVALID_CREDENTIALS", message: "Incorrect password" },
+    });
+    const users = new D1UserRepo(testEnv().DB);
+    await expect(users.findByEmail("victim@example.com")).resolves.toMatchObject({
+      emailVerifiedAt: null,
+    });
+
+    // The legitimate pair remains usable, proving the wrong-password request
+    // did not consume or invalidate the single-use link.
+    const bothFactors = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest(
+        { token: verificationToken, password: originalPassword },
+        { "CF-Connecting-IP": "198.51.100.163" },
+      ),
+    );
+    expect(bothFactors.status).toBe(200);
+    await expect(users.findByEmail("victim@example.com")).resolves.toMatchObject({
+      emailVerifiedAt: expect.any(Number),
+    });
+  });
+
+  it("makes unknown-account and wrong-password login responses indistinguishable", async () => {
+    await registerUser(app, "198.51.100.16");
+    const wrongPassword = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "alice@example.com", password: "not-the-password" },
+        { "CF-Connecting-IP": "198.51.100.17" },
+      ),
+    );
+    const unknownAccount = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "missing@example.com", password: "not-the-password" },
+        { "CF-Connecting-IP": "198.51.100.18" },
+      ),
+    );
+
+    expect(unknownAccount.status).toBe(wrongPassword.status);
+    expect(unknownAccount.headers.get("Cache-Control")).toBe(
+      wrongPassword.headers.get("Cache-Control"),
+    );
+    expect(unknownAccount.headers.get("Set-Cookie")).toBeNull();
+    expect(await unknownAccount.json()).toEqual(await wrongPassword.json());
   });
 
   it("uses secure refresh cookies throughout the staging session lifecycle", async () => {
@@ -235,6 +347,7 @@ describe("auth routes", () => {
       ),
     );
     expect(wrongPassword.status).toBe(401);
+    expect(wrongPassword.headers.get("Cache-Control")).toBe("no-store");
     await expect(wrongPassword.json()).resolves.toEqual({
       error: {
         code: "INVALID_CREDENTIALS",
@@ -255,6 +368,7 @@ describe("auth routes", () => {
       jsonRequest({ name: "", email: "not-an-email", password: "short" }),
     );
     expect(response.status).toBe(400);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = (await response.json()) as {
       error: { code: string; details: { field: string }[] };
     };
@@ -274,6 +388,37 @@ describe("auth routes", () => {
         details: [{ field: "password" }],
       },
     });
+  });
+
+  it("uses Unicode code points consistently for password creation and login", async () => {
+    const password = "😀".repeat(60);
+    const registered = await registerUser(app, "198.51.100.22", {
+      name: "Unicode Password",
+      email: "unicode-password@example.com",
+      password,
+    });
+    expect(registered.status).toBe(201);
+
+    const login = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email: "unicode-password@example.com", password },
+        { "CF-Connecting-IP": "198.51.100.23" },
+      ),
+    );
+    expect(login.status).toBe(200);
+
+    const oversized = await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        {
+          email: "unicode-password@example.com",
+          password: "😀".repeat(101),
+        },
+        { "CF-Connecting-IP": "198.51.100.24" },
+      ),
+    );
+    expect(oversized.status).toBe(400);
   });
 
   it("rate limits login by IP after the configured allowance", async () => {
@@ -303,6 +448,60 @@ describe("auth routes", () => {
     });
   });
 
+  it("rate limits email verification by both source IP and token digest", async () => {
+    const sharedToken = "unknown-shared-verification-token";
+    for (
+      let attempt = 0;
+      attempt < RATE_LIMITS.verify_email.limit;
+      attempt += 1
+    ) {
+      const response = await app.request(
+        "/api/auth/verify-email",
+        jsonRequest(
+          { token: sharedToken, password: "candidate-password" },
+          { "CF-Connecting-IP": `198.51.100.${170 + attempt}` },
+        ),
+      );
+      expect(response.status).toBe(410);
+    }
+    const tokenLimited = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest(
+        { token: sharedToken, password: "candidate-password" },
+        { "CF-Connecting-IP": "198.51.100.180" },
+      ),
+    );
+    expect(tokenLimited.status).toBe(429);
+
+    const sharedIp = "198.51.100.181";
+    for (
+      let attempt = 0;
+      attempt < RATE_LIMITS.verify_email.limit;
+      attempt += 1
+    ) {
+      const response = await app.request(
+        "/api/auth/verify-email",
+        jsonRequest(
+          {
+            token: `unknown-verification-token-${attempt}`,
+            password: "candidate-password",
+          },
+          { "CF-Connecting-IP": sharedIp },
+        ),
+      );
+      expect(response.status).toBe(410);
+    }
+    const ipLimited = await app.request(
+      "/api/auth/verify-email",
+      jsonRequest(
+        { token: "one-more-token", password: "candidate-password" },
+        { "CF-Connecting-IP": sharedIp },
+      ),
+    );
+    expect(ipLimited.status).toBe(429);
+    expect(ipLimited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+  });
+
   it("rate limits login by normalized email across different IPs", async () => {
     const email = "email-scope@example.com";
     for (let attempt = 0; attempt < RATE_LIMITS.login.limit; attempt += 1) {
@@ -328,6 +527,28 @@ describe("auth routes", () => {
     await expect(limited.json()).resolves.toEqual({
       error: { code: "RATE_LIMITED", message: "Too many requests" },
     });
+  });
+
+  it("stores auth rate scopes as digests rather than submitted identifiers", async () => {
+    const email = "private-rate-scope@example.com";
+    const ip = "198.51.100.222";
+    await app.request(
+      "/api/auth/login",
+      jsonRequest(
+        { email, password: "wrong-password" },
+        { "CF-Connecting-IP": ip },
+      ),
+    );
+
+    const rows = await testEnv().DB.prepare(
+      "SELECT rate_key FROM rate_limit_windows ORDER BY rate_key ASC",
+    ).all<{ rate_key: string }>();
+    expect(rows.results.map((row) => row.rate_key)).toEqual([
+      `login:email:${await sha256Hex(email)}`,
+      `login:ip:${await sha256Hex(ip)}`,
+    ]);
+    expect(JSON.stringify(rows.results)).not.toContain(email);
+    expect(JSON.stringify(rows.results)).not.toContain(ip);
   });
 
   it("rate limits register, forgot-password, and resend-verification", async () => {
@@ -410,6 +631,69 @@ describe("auth routes", () => {
     });
   });
 
+  it("rate limits password reset by IP before handling random tokens", async () => {
+    const ip = "198.51.100.31";
+    for (
+      let attempt = 0;
+      attempt < RATE_LIMITS.reset_password.limit;
+      attempt += 1
+    ) {
+      const response = await app.request(
+        "/api/auth/reset-password",
+        jsonRequest(
+          {
+            token: `unknown-reset-token-${attempt}`,
+            password: "replacement-password",
+          },
+          { "CF-Connecting-IP": ip },
+        ),
+      );
+      expect(response.status).toBe(410);
+    }
+
+    const limited = await app.request(
+      "/api/auth/reset-password",
+      jsonRequest(
+        {
+          token: "another-unknown-reset-token",
+          password: "replacement-password",
+        },
+        { "CF-Connecting-IP": ip },
+      ),
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+    expect(limited.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("rate limits one reset capability across source addresses", async () => {
+    const token = "shared-unknown-reset-token";
+    for (
+      let attempt = 0;
+      attempt < RATE_LIMITS.reset_password.limit;
+      attempt += 1
+    ) {
+      const response = await app.request(
+        "/api/auth/reset-password",
+        jsonRequest(
+          { token, password: "replacement-password" },
+          { "CF-Connecting-IP": `198.51.100.${100 + attempt}` },
+        ),
+      );
+      expect(response.status).toBe(410);
+    }
+
+    const limited = await app.request(
+      "/api/auth/reset-password",
+      jsonRequest(
+        { token, password: "replacement-password" },
+        { "CF-Connecting-IP": "198.51.100.200" },
+      ),
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+  });
+
   it("supports quiet resend/forgot flows and revokes sessions on reset", async () => {
     await expect(
       app.request(
@@ -438,6 +722,8 @@ describe("auth routes", () => {
         { "CF-Connecting-IP": "198.51.100.53" },
       ),
     );
+    const oldAccess = ((await loginResponse.clone().json()) as SessionResponse)
+      .data.accessToken;
     const oldCookie = cookiePair(loginResponse.headers.get("Set-Cookie"));
     const forgotResponse = await app.request(
       "/api/auth/forgot-password",
@@ -453,6 +739,12 @@ describe("auth routes", () => {
       jsonRequest({ token: resetToken, password: "replacement-password" }),
     );
     expect(resetResponse.status).toBe(200);
+    expect(resetResponse.headers.get("Cache-Control")).toBe("no-store");
+
+    const staleAccess = await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${oldAccess}` },
+    });
+    expect(staleAccess.status).toBe(401);
 
     const staleRefresh = await app.request("/api/auth/refresh", {
       method: "POST",
@@ -485,21 +777,28 @@ describe("auth routes", () => {
     );
     expect(registerResponse.status).toBe(201);
     expect(registerResponse.headers.get("Set-Cookie")).toBeNull();
-    const registered = (await registerResponse.json()) as NativeSessionResponse;
-    expect(registered.data.user.emailVerified).toBe(false);
-    expect(registered.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
-    expect(registered.data.refreshExpiresIn).toBe(2_592_000);
+    const registered =
+      (await registerResponse.json()) as RegistrationPendingResponse;
+    expect(registered.data).toEqual({
+      registrationPending: true,
+      email: "alice@example.com",
+    });
 
     const verifyResponse = await app.request(
       "/api/auth/verify-email",
-      jsonRequest({ token: tokenFromMessage(emails.messages[0]?.text) }, native),
+      jsonRequest(
+        {
+          token: tokenFromMessage(emails.messages[0]?.text),
+          password: "initial-password",
+        },
+        native,
+      ),
     );
     expect(verifyResponse.status).toBe(200);
     expect(verifyResponse.headers.get("Set-Cookie")).toBeNull();
     const verified = (await verifyResponse.json()) as NativeSessionResponse;
     expect(verified.data.user.emailVerified).toBe(true);
     expect(verified.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
-    expect(verified.data.refreshToken).not.toBe(registered.data.refreshToken);
     expect(verified.data.refreshExpiresIn).toBe(2_592_000);
 
     const loginResponse = await app.request(

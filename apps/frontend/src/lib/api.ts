@@ -7,6 +7,69 @@ const API_ORIGIN = ((import.meta.env.VITE_API_ORIGIN as string | undefined) ?? "
   /\/+$/,
   "",
 );
+const LOGOUT_TOMBSTONE_KEY = "zenguy:logoutPending";
+
+let sessionEpoch = 0;
+let sessionController = new AbortController();
+let logoutPendingInMemory = false;
+
+/** A request completed after its principal was replaced or signed out. */
+export class SessionSupersededError extends Error {
+  constructor() {
+    super("The authenticated session changed while the request was in flight");
+    this.name = "SessionSupersededError";
+  }
+}
+
+function throwIfSessionChanged(epoch: number): void {
+  if (epoch !== sessionEpoch || sessionController.signal.aborted) {
+    throw new SessionSupersededError();
+  }
+}
+
+/** Abort and fence every operation that started under the previous principal. */
+export function supersedeSession(): void {
+  sessionEpoch += 1;
+  sessionController.abort();
+  sessionController = new AbortController();
+  refreshInFlight = null;
+  clearToken();
+}
+
+export function isTerminalLogoutPending(): boolean {
+  if (logoutPendingInMemory) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(LOGOUT_TOMBSTONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Prevent automatic cookie refresh until the server confirms revocation. */
+export function beginTerminalLogout(): void {
+  logoutPendingInMemory = true;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(LOGOUT_TOMBSTONE_KEY, "1");
+    } catch {
+      // The in-memory tombstone still protects the current page lifecycle.
+    }
+  }
+  supersedeSession();
+}
+
+/** Called only after /logout has cleared the HttpOnly refresh cookie. */
+export function confirmTerminalLogout(): void {
+  logoutPendingInMemory = false;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(LOGOUT_TOMBSTONE_KEY);
+    } catch {
+      // The server-side cookie has already been revoked.
+    }
+  }
+}
 
 function apiUrl(path: string): string {
   return `${API_ORIGIN}${path}`;
@@ -72,7 +135,7 @@ export interface ApiPage<T> {
   nextCursor: string | null;
 }
 
-let refreshInFlight: Promise<RefreshPayload> | null = null;
+let refreshInFlight: { epoch: number; promise: Promise<RefreshPayload> } | null = null;
 
 async function parseApiError(response: Response): Promise<ApiError> {
   let envelope: ErrorEnvelope = {};
@@ -97,37 +160,48 @@ function requestHeaders(includeJson: boolean): Headers {
 }
 
 function signOutAfterAuthFailure() {
-  clearToken();
+  supersedeSession();
   emitSignedOut();
 }
 
 export async function ensureFreshToken(): Promise<RefreshPayload> {
-  if (refreshInFlight) return refreshInFlight;
+  if (isTerminalLogoutPending()) {
+    throw new ApiError("Signed out", { code: "UNAUTHORIZED", status: 401 });
+  }
+  const epoch = sessionEpoch;
+  if (refreshInFlight?.epoch === epoch) return refreshInFlight.promise;
 
-  refreshInFlight = (async () => {
+  const promise = (async () => {
     const response = await fetch(apiUrl("/api/auth/refresh"), {
       credentials: "include",
       headers: requestHeaders(true),
       method: "POST",
+      signal: sessionController.signal,
     });
+    throwIfSessionChanged(epoch);
     if (!response.ok) throw await parseApiError(response);
     const envelope = (await response.json()) as SuccessEnvelope<RefreshPayload>;
+    throwIfSessionChanged(epoch);
     setToken(envelope.data.accessToken, envelope.data.expiresIn);
     return envelope.data;
   })();
+  refreshInFlight = { epoch, promise };
 
   try {
-    return await refreshInFlight;
+    return await promise;
   } finally {
-    refreshInFlight = null;
+    if (refreshInFlight?.promise === promise) refreshInFlight = null;
   }
 }
 
 async function refreshOrSignOut(): Promise<void> {
+  const epoch = sessionEpoch;
   try {
     await ensureFreshToken();
   } catch (error) {
-    signOutAfterAuthFailure();
+    if (epoch === sessionEpoch && !(error instanceof SessionSupersededError)) {
+      signOutAfterAuthFailure();
+    }
     throw error;
   }
 }
@@ -147,6 +221,7 @@ async function request<T>(
   body?: unknown,
   options: RequestOptions = {},
   retried = false,
+  epoch = sessionEpoch,
 ): Promise<T> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
   const response = await fetch(apiUrl(path), {
@@ -159,12 +234,15 @@ async function request<T>(
     credentials: "include",
     headers: requestHeaders(!options.rawText),
     method,
+    signal: sessionController.signal,
   });
+  throwIfSessionChanged(epoch);
 
   const isAuthPath = path.startsWith("/api/auth/");
   if (response.status === 401 && !isAuthPath && !retried) {
     await refreshOrSignOut();
-    return request<T>(method, path, body, options, true);
+    throwIfSessionChanged(epoch);
+    return request<T>(method, path, body, options, true, epoch);
   }
 
   if (!response.ok) {
@@ -174,6 +252,7 @@ async function request<T>(
   if (response.status === 204) return undefined as T;
 
   const envelope = (await response.json()) as SuccessEnvelope<unknown>;
+  throwIfSessionChanged(epoch);
   if (options.page) {
     return {
       items: envelope.data,
@@ -224,24 +303,33 @@ function filenameFromDisposition(value: string | null): string {
   return /filename="?([^";]+)"?/i.exec(value)?.[1] ?? "download";
 }
 
-async function requestBlob(path: string, retried = false): Promise<{ blob: Blob; filename: string }> {
+async function requestBlob(
+  path: string,
+  retried = false,
+  epoch = sessionEpoch,
+): Promise<{ blob: Blob; filename: string }> {
   if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
   const response = await fetch(apiUrl(path), {
     credentials: "include",
     headers: requestHeaders(false),
     method: "GET",
+    signal: sessionController.signal,
   });
+  throwIfSessionChanged(epoch);
   const isAuthPath = path.startsWith("/api/auth/");
   if (response.status === 401 && !isAuthPath && !retried) {
     await refreshOrSignOut();
-    return requestBlob(path, true);
+    throwIfSessionChanged(epoch);
+    return requestBlob(path, true, epoch);
   }
   if (!response.ok) {
     if (response.status === 401 && !isAuthPath && retried) signOutAfterAuthFailure();
     throw await parseApiError(response);
   }
+  const blob = await response.blob();
+  throwIfSessionChanged(epoch);
   return {
-    blob: await response.blob(),
+    blob,
     filename: filenameFromDisposition(response.headers.get("Content-Disposition")),
   };
 }

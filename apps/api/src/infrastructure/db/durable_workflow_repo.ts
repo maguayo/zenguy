@@ -71,10 +71,11 @@ function insertRunStatement(database: D1Database, value: TestRun) {
     .prepare(
       `INSERT INTO test_runs
         (id, workspace_id, browser_test_id, source, status, snapshot_json,
+         action_authorizations_json,
          scheduled_for, queued_at, started_at, finished_at, duration_ms,
          attempt_count, infra_attempts, passed_after_retry, billable,
          usage_event_id, triggered_by_user_id, incident_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       value.id,
@@ -83,6 +84,7 @@ function insertRunStatement(database: D1Database, value: TestRun) {
       value.source,
       value.status,
       JSON.stringify(value.snapshot),
+      JSON.stringify(value.actionAuthorizations ?? []),
       value.scheduledFor,
       value.queuedAt,
       value.startedAt,
@@ -587,8 +589,11 @@ export class D1DurableWorkflowRepo
     claimToken: string;
     claimedAt: number;
     staleBefore: number;
-  }): Promise<"claimed" | "busy" | "completed"> {
-    const claimed = await one<{ completed_at: number | null }>(
+  }): Promise<"claimed" | "reclaimed" | "busy" | "completed"> {
+    const claimed = await one<{
+      completed_at: number | null;
+      claim_generation: number;
+    }>(
       this.database
         .prepare(
           `INSERT INTO check_execution_claims
@@ -596,10 +601,11 @@ export class D1DurableWorkflowRepo
            VALUES (?, ?, ?, ?, NULL)
            ON CONFLICT(cycle_id, attempt_index) DO UPDATE SET
              claim_token = excluded.claim_token,
-             claimed_at = excluded.claimed_at
+             claimed_at = excluded.claimed_at,
+             claim_generation = check_execution_claims.claim_generation + 1
            WHERE check_execution_claims.completed_at IS NULL
              AND check_execution_claims.claimed_at <= ?
-           RETURNING completed_at`,
+           RETURNING completed_at, claim_generation`,
         )
         .bind(
           input.cycleId,
@@ -609,7 +615,9 @@ export class D1DurableWorkflowRepo
           input.staleBefore,
         ),
     );
-    if (claimed !== null) return "claimed";
+    if (claimed !== null) {
+      return claimed.claim_generation > 1 ? "reclaimed" : "claimed";
+    }
     const existing = await one<{ completed_at: number | null }>(
       this.database
         .prepare(
@@ -918,6 +926,21 @@ export class D1DurableWorkflowRepo
     return result.meta.changes;
   }
 
+  async purgeQuarantinedOutbox(before: number, limit: number): Promise<number> {
+    const result = await run(
+      this.database
+        .prepare(
+          `DELETE FROM queue_outbox WHERE id IN (
+             SELECT id FROM queue_outbox
+             WHERE quarantined_at IS NOT NULL AND quarantined_at < ?
+             ORDER BY quarantined_at ASC, id ASC LIMIT ?
+           )`,
+        )
+        .bind(before, limit),
+    );
+    return result.meta.changes;
+  }
+
   async purgeCompleted(before: number, limit: number): Promise<number> {
     const result = await run(
       this.database
@@ -926,6 +949,21 @@ export class D1DurableWorkflowRepo
              SELECT id FROM durable_jobs
              WHERE status = 'COMPLETED' AND completed_at < ?
              ORDER BY completed_at ASC, id ASC LIMIT ?
+           )`,
+        )
+        .bind(before, limit),
+    );
+    return result.meta.changes;
+  }
+
+  async purgeQuarantinedJobs(before: number, limit: number): Promise<number> {
+    const result = await run(
+      this.database
+        .prepare(
+          `DELETE FROM durable_jobs WHERE id IN (
+             SELECT id FROM durable_jobs
+             WHERE quarantined_at IS NOT NULL AND quarantined_at < ?
+             ORDER BY quarantined_at ASC, id ASC LIMIT ?
            )`,
         )
         .bind(before, limit),

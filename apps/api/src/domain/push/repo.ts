@@ -30,6 +30,7 @@ export interface PushDeviceRepo {
   delete(userId: string, id: string): Promise<boolean>;
   listEnabledTokensForWorkspace(
     workspaceId: string,
+    activeSince: number,
   ): Promise<{ token: string; userId: string }[]>;
   reachForWorkspace(workspaceId: string): Promise<PushReach>;
   disableTokens(tokens: string[], reason: string, at: number): Promise<void>;

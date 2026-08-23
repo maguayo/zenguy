@@ -2,15 +2,22 @@ import { Hono } from "hono";
 import type { AppEnv, Bindings, Clock } from "./env";
 import { systemClock } from "./env";
 import { AppError } from "./errors";
+import { MAX_ADMIN_API_REQUEST_BODY_BYTES } from "./constants";
+import { parseAdminUserIds } from "./allowlist";
 import { authRoutes } from "./routes/auth";
 import type { Loaders } from "./routes/data";
 import { dataRoutes } from "./routes/data";
+import { D1AdminSessionStore, type AdminSessionStore } from "./admin_sessions";
+import { cloudflareAccessVerifier, type AccessVerifier } from "./access";
+import { strictBodyLimit } from "./strict_body_limit";
 
 export interface AppOverrides {
   clock?: Clock;
   fetch?: typeof fetch;
   delay?: (milliseconds: number) => Promise<void>;
   loaders?: Partial<Loaders>;
+  sessions?: AdminSessionStore;
+  accessVerifier?: AccessVerifier;
 }
 
 const CSP = [
@@ -39,21 +46,33 @@ function withSecurityHeaders(response: Response): Response {
   });
 }
 
-const MIN_SESSION_SECRET_LENGTH = 32;
-
 export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppEnv> {
-  // Fail closed: a missing or short secret would sign sessions with a guessable
-  // key, so the Worker refuses to build and answers 500 to every request until
-  // the secret is set properly.
-  if ((env.ADMIN_SESSION_SECRET ?? "").length < MIN_SESSION_SECRET_LENGTH) {
-    throw new Error("ADMIN_SESSION_SECRET must be at least 32 characters");
-  }
+  // Parse once per Worker version and fail closed before any route or asset is
+  // reachable. Never include the secret binding's contents in an error/log.
+  const adminUserIds = parseAdminUserIds(env.ADMIN_USER_IDS);
   const app = new Hono<AppEnv>();
   const clock = overrides.clock ?? systemClock;
   const fetchImpl = overrides.fetch ?? fetch.bind(globalThis);
+  const sessions = overrides.sessions ?? new D1AdminSessionStore(env.DB);
+  const accessVerifier =
+    overrides.accessVerifier ??
+    cloudflareAccessVerifier({
+      teamDomain: env.CF_ACCESS_TEAM_DOMAIN,
+      audience: env.CF_ACCESS_AUD,
+    });
   const delay =
     overrides.delay ??
-    ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+      ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+
+  // Static Assets currently run through an internal router that does not pass
+  // ctx.access to the user Worker, so validate the signed assertion explicitly.
+  app.use("*", async (context, next) => {
+    const identity = await accessVerifier.verify(context.req.raw);
+    if (identity === null) throw new AppError("FORBIDDEN", "Cloudflare Access required");
+    context.set("accessEmail", identity.email);
+    context.set("accessSubject", identity.subject);
+    await next();
+  });
 
   // Hardens every successful response. Errors never come back through here --
   // a throw unwinds straight past the post-next() code to onError -- so onError
@@ -70,11 +89,35 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
     context.header("Cache-Control", "no-store");
   });
 
+  // Count every stream even when Content-Length is absent or understated.
+  // This runs before login's JSON validator, so an attacker cannot make the
+  // Worker materialize an arbitrarily large credential payload.
+  app.use(
+    "/api/*",
+    strictBodyLimit({
+      maxSize: MAX_ADMIN_API_REQUEST_BODY_BYTES,
+      onError: (context) =>
+        context.json(
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large" } },
+          413,
+        ),
+    }),
+  );
+
   app.onError((error, context) => {
     const appError =
       error instanceof AppError ? error : new AppError("INTERNAL", "Unexpected error");
     if (appError.code === "INTERNAL") {
-      console.error("admin_unhandled_error", error);
+      // Never serialize the raw exception: D1/fetch/parser messages may contain
+      // query values, URLs or credentials.
+      console.error(
+        JSON.stringify({
+          event: "admin_unhandled_error",
+          method: context.req.method,
+          path: context.req.path,
+          t: Date.now(),
+        }),
+      );
     }
     const response = context.json(
       {
@@ -93,8 +136,8 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
   app.route(
     "/api/auth",
     authRoutes({
-      adminEmails: env.ADMIN_EMAILS,
-      secret: env.ADMIN_SESSION_SECRET,
+      adminUserIds,
+      sessions,
       apiOrigin: env.ZENGUY_API_ORIGIN,
       fetch: fetchImpl,
       clock,
@@ -107,8 +150,8 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
     dataRoutes({
       db: env.DB,
       clock,
-      adminEmails: env.ADMIN_EMAILS,
-      secret: env.ADMIN_SESSION_SECRET,
+      adminUserIds,
+      sessions,
       loaders: overrides.loaders,
     }),
   );

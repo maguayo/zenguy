@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  extract-zip@2.0.1: e25cccb091aa7a69a1038e5b5408b389620b04664c92937e99b99d702b44bf57
+
 importers:
 
   .: {}
@@ -19,6 +22,9 @@ importers:
       hono:
         specifier: ^4.13.2
         version: 4.13.2
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -35,9 +41,6 @@ importers:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.21.3
         version: 0.21.3(@cloudflare/workers-types@5.20260817.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)))
-      '@cloudflare/workers-types':
-        specifier: ^5.20260817.1
-        version: 5.20260817.1
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -80,6 +83,9 @@ importers:
       hono:
         specifier: ^4.13.2
         version: 4.13.2
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
       ulid:
         specifier: ^3.0.2
         version: 3.0.2
@@ -93,9 +99,6 @@ importers:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.21.3
         version: 0.21.3(@cloudflare/workers-types@5.20260817.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)))
-      '@cloudflare/workers-types':
-        specifier: ^5.20260817.1
-        version: 5.20260817.1
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
@@ -1904,6 +1907,9 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
+  jose@6.2.10:
+    resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
+
   js-yaml@4.3.1:
     resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
@@ -3017,7 +3023,8 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20260811.1':
     optional: true
 
-  '@cloudflare/workers-types@5.20260817.1': {}
+  '@cloudflare/workers-types@5.20260817.1':
+    optional: true
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -3298,7 +3305,7 @@ snapshots:
   '@puppeteer/browsers@2.2.4(supports-color@10.2.2)':
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
-      extract-zip: 2.0.1(supports-color@10.2.2)
+      extract-zip: 2.0.1(patch_hash=e25cccb091aa7a69a1038e5b5408b389620b04664c92937e99b99d702b44bf57)(supports-color@10.2.2)
       progress: 2.0.3
       proxy-agent: 6.5.0(supports-color@10.2.2)
       semver: 7.8.5
@@ -4098,7 +4105,7 @@ snapshots:
 
   extend@3.0.2: {}
 
-  extract-zip@2.0.1(supports-color@10.2.2):
+  extract-zip@2.0.1(patch_hash=e25cccb091aa7a69a1038e5b5408b389620b04664c92937e99b99d702b44bf57)(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       get-stream: 5.2.0
@@ -4272,6 +4279,8 @@ snapshots:
   is-plain-obj@4.1.0: {}
 
   jiti@2.7.0: {}
+
+  jose@6.2.10: {}
 
   js-yaml@4.3.1:
     dependencies:

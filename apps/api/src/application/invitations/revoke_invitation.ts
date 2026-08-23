@@ -26,7 +26,9 @@ export class RevokeInvitation {
       (candidate) => candidate.id === input.invitationId,
     );
     if (invitation === undefined) throw notFound("Invitation");
-    await this.invitations.revoke(invitation.id, this.clock.now());
+    if (!(await this.invitations.revoke(invitation.id, this.clock.now()))) {
+      throw notFound("Invitation");
+    }
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,

@@ -5,17 +5,17 @@ import { signUpSchema } from "./SignUp";
 describe("sign-up schema", () => {
   const valid = {
     acceptedTerms: true,
-    confirmPassword: "Password123!",
+    confirmPassword: "Correct-horse-battery!",
     email: "maria@example.com",
     name: "María",
-    password: "Password123!",
+    password: "Correct-horse-battery!",
   };
 
   it("accepts a complete account", () => {
     expect(signUpSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("requires eight characters and matching confirmation", () => {
+  it("requires fifteen characters and matching confirmation", () => {
     const result = signUpSchema.safeParse({
       ...valid,
       confirmPassword: "different",
@@ -24,7 +24,7 @@ describe("sign-up schema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.map((issue) => issue.message)).toContain(
-        "Password must be at least 8 characters.",
+        "Password must be at least 15 characters.",
       );
       expect(result.error.issues.map((issue) => issue.message)).toContain(
         "Passwords don't match.",

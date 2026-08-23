@@ -34,6 +34,8 @@ function bodyOf(request: RecordedRequest): unknown {
 
 describe("HttpPaddleClient", () => {
   it("sends the documented requests and maps transaction totals", async () => {
+    const chargeResponse = jsonResponse({ data: { id: "sub_123" } });
+    const cancelResponse = jsonResponse({ data: { id: "sub_123", status: "canceled" } });
     const recorder = new RecordingFetch([
       jsonResponse({
         data: {
@@ -47,8 +49,8 @@ describe("HttpPaddleClient", () => {
           custom_data: { catalog_reference: "overage" },
         },
       }),
-      jsonResponse({ data: { id: "sub_123" } }),
-      jsonResponse({ data: { id: "sub_123", status: "canceled" } }),
+      chargeResponse,
+      cancelResponse,
       jsonResponse({
         data: {
           management_urls: {
@@ -171,13 +173,44 @@ describe("HttpPaddleClient", () => {
       "https://sandbox-api.paddle.com/transactions/txn_123/invoice",
     );
     expect(invoice?.init?.method).toBe("GET");
+    expect(chargeResponse.bodyUsed).toBe(true);
+    expect(cancelResponse.bodyUsed).toBe(true);
 
     for (const request of recorder.requests) {
       const headers = new Headers(request.init?.headers);
       expect(headers.get("Authorization")).toBe("Bearer pdl_test_key");
       expect(headers.get("Content-Type")).toBe("application/json");
       expect(headers.get("Paddle-Version")).toBe("1");
+      expect(request.init?.signal).toBeInstanceOf(AbortSignal);
     }
+  });
+
+  it("bounds provider-controlled pagination even when every next URL is unique", async () => {
+    let requests = 0;
+    const fetchFn: PaddleFetch = async () => {
+      requests += 1;
+      return jsonResponse({
+        data: [],
+        meta: {
+          pagination: {
+            has_more: true,
+            next: `https://sandbox-api.paddle.com/transactions?page=${requests}`,
+          },
+        },
+      });
+    };
+    const client = new HttpPaddleClient(
+      {
+        apiBase: "https://sandbox-api.paddle.com",
+        apiKey: "pdl_test_key",
+      },
+      fetchFn,
+    );
+
+    await expect(
+      client.findSubscriptionChargeByMarker("sub_123", "missing"),
+    ).rejects.toThrow("paddle response invalid");
+    expect(requests).toBe(10);
   });
 
   it("finds a marked subscription charge across every Paddle page", async () => {
@@ -411,6 +444,94 @@ describe("HttpPaddleClient", () => {
     expect(recorder.requests[0]?.url).toBe(
       "https://sandbox-api.paddle.com/subscriptions/sub%2Fmanual",
     );
+  });
+
+  it("lists approved adjustments with strict transaction and same-origin pagination", async () => {
+    const recorder = new RecordingFetch([
+      jsonResponse({
+        data: [
+          {
+            id: "adj_refund",
+            action: "refund",
+            status: "approved",
+            transaction_id: "txn_topup",
+            customer_id: "ctm_topup",
+            currency_code: "EUR",
+            totals: { total: "400" },
+          },
+        ],
+        meta: {
+          pagination: {
+            has_more: true,
+            next: "https://sandbox-api.paddle.com/adjustments?after=adj_refund&transaction_id=txn_topup",
+          },
+        },
+      }),
+      jsonResponse({
+        data: [
+          {
+            id: "adj_reverse",
+            action: "credit_reverse",
+            status: "approved",
+            transaction_id: "txn_topup",
+            customer_id: "ctm_topup",
+            currency_code: "EUR",
+            totals: { total: "-100" },
+          },
+        ],
+        meta: { pagination: { has_more: false, next: null } },
+      }),
+    ]);
+    const client = new HttpPaddleClient(
+      { apiBase: "https://sandbox-api.paddle.com", apiKey: "pdl_test_key" },
+      recorder.fetch,
+    );
+
+    await expect(client.listApprovedAdjustments("txn_topup")).resolves.toEqual([
+      {
+        id: "adj_refund",
+        action: "refund",
+        transactionId: "txn_topup",
+        customerId: "ctm_topup",
+        amountCents: 400,
+        currency: "EUR",
+      },
+      {
+        id: "adj_reverse",
+        action: "credit_reverse",
+        transactionId: "txn_topup",
+        customerId: "ctm_topup",
+        amountCents: -100,
+        currency: "EUR",
+      },
+    ]);
+    expect(recorder.requests[0]?.url).toContain(
+      "/adjustments?transaction_id=txn_topup&status=approved",
+    );
+    expect(recorder.requests[0]?.url).toContain("order_by=id%5BASC%5D");
+    expect(new Headers(recorder.requests[0]?.init?.headers).get("Skip-Count")).toBe("true");
+  });
+
+  it("reports adjustment.read on a sanitized list-adjustments 403", async () => {
+    const recorder = new RecordingFetch([
+      jsonResponse(
+        { error: { detail: "customer alice@example.com lacks access" } },
+        403,
+      ),
+    ]);
+    const client = new HttpPaddleClient(
+      { apiBase: "https://sandbox-api.paddle.com", apiKey: "pdl_test_key" },
+      recorder.fetch,
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(client.listApprovedAdjustments("txn_topup")).rejects.toThrow(
+      "paddle adjustment.read permission required",
+    );
+    const logged = String(log.mock.calls[0]?.[0]);
+    expect(logged).not.toContain("alice@example.com");
+    expect(logged).not.toContain("lacks access");
+    log.mockRestore();
   });
 
   it("throws a sanitized error and never logs the provider body", async () => {

@@ -27,7 +27,11 @@ export class DeleteBrowserTest {
     ip?: string;
   }): Promise<void> {
     if (!can(input.actorRole, "tests.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const test = await this.tests.findById(input.workspaceId, input.testId);
     if (test === null) throw notFound("Browser test");
     const now = this.clock.now();

@@ -11,15 +11,15 @@ describe("push helpers", () => {
     expect(isExpoPushToken(undefined)).toBe(false);
   });
 
-  it("maps zenguy:// incident links to in-app paths and rejects everything else", () => {
-    expect(pushLinkToPath("zenguy://w/ws_1/incidents/inc_1")).toBe("/w/ws_1/incidents/inc_1");
-    expect(pushLinkToPath("zenguy://w/ws_1/alerts")).toBe("/w/ws_1/alerts");
-    expect(pushLinkToPath("zenguy://w/ws_1/overview/")).toBe("/w/ws_1/overview");
+  it("maps verified Universal Links to in-app paths and rejects everything else", () => {
+    expect(pushLinkToPath("https://app.zenguy.com/w/ws_1/incidents/inc_1")).toBe("/w/ws_1/incidents/inc_1");
+    expect(pushLinkToPath("https://app.zenguy.com/w/ws_1/alerts")).toBe("/w/ws_1/alerts");
+    expect(pushLinkToPath("https://app.zenguy.com/w/ws_1/overview/")).toBe("/w/ws_1/overview");
     expect(pushLinkToPath("https://evil.example/w/ws_1/incidents/inc_1")).toBeNull();
     expect(pushLinkToPath("zenguy://settings")).toBeNull();
     expect(pushLinkToPath("zenguy://w/ws 1/incidents/x")).toBeNull();
     expect(pushLinkToPath(42)).toBeNull();
-    expect(notificationPath({ url: "zenguy://w/ws_1/incidents/inc_1", incidentId: "inc_1" })).toBe(
+    expect(notificationPath({ url: "https://app.zenguy.com/w/ws_1/incidents/inc_1", incidentId: "inc_1" })).toBe(
       "/w/ws_1/incidents/inc_1",
     );
     expect(notificationPath(null)).toBeNull();

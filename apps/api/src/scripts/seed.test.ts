@@ -1,11 +1,17 @@
 /// <reference types="node" />
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { verifyPassword } from "../shared/crypto";
+import {
+  createEncryptionKeyring,
+  decryptSecret,
+  type WorkspaceDataKeyRecord,
+  type WorkspaceDataKeyStore,
+  verifyPassword,
+} from "../shared/crypto";
 
 const SCRIPT = fileURLToPath(
   new URL("../../scripts/seed.mjs", import.meta.url),
@@ -20,8 +26,8 @@ describe("seed script", () => {
     varsFile = path.join(directory, ".dev.vars");
     writeFileSync(
       varsFile,
-      `ENCRYPTION_KEY=${Buffer.alloc(32, 7).toString("base64")}\n`,
-      "utf8",
+      `ENCRYPTION_KEY=${Buffer.alloc(32, 7).toString("base64")}\nENCRYPTION_KEY_ID=seed-test-key\n`,
+      { encoding: "utf8", mode: 0o600 },
     );
   });
 
@@ -107,41 +113,72 @@ describe("seed script", () => {
     expect(sql).not.toContain("demo-secret-value");
     expect(sql).not.toContain("zenguy-db");
 
-    const passwordHash = sql.match(/pbkdf2\$100000\$[^']+/u)?.[0];
+    const passwordHash = sql.match(
+      /pbkdf2-sha256\$v1\$600000\$[^']+/u,
+    )?.[0];
     expect(passwordHash).toBeDefined();
     await expect(
       verifyPassword("abc123456", passwordHash ?? ""),
     ).resolves.toBe(true);
+    const dataKeyMatch = sql.match(
+      /INSERT INTO workspace_data_encryption_keys .* VALUES \('ws_seed_aguayo', '(dek-[A-Za-z0-9_-]{24})', 1, 'seed-test-key', 1, '(w1:seed-test-key:[^']+)', 1, (\d+), \d+, NULL\);/u,
+    );
+    const dataKeyId = dataKeyMatch?.[1];
+    const wrappedKey = dataKeyMatch?.[2];
+    const createdAt = Number(dataKeyMatch?.[3]);
+    expect(dataKeyId).toBeDefined();
+    expect(wrappedKey).toBeDefined();
+    const encryptedDemo = sql.match(
+      /'sec_seed_demo', 'ws_seed_aguayo', 'DEMO_TOKEN', '(v4:dek-[A-Za-z0-9_-]{24}:[^']+)'/u,
+    )?.[1];
+    expect(encryptedDemo).toBeDefined();
+    const dataKeyRecord: WorkspaceDataKeyRecord = {
+      workspaceId: "ws_seed_aguayo",
+      id: dataKeyId ?? "",
+      generation: 1,
+      wrappingKeyId: "seed-test-key",
+      wrapVersion: 1,
+      wrappedKey: wrappedKey ?? "",
+      active: true,
+      createdAt,
+      retiredAt: null,
+    };
+    const workspaceDataKeys = {
+      findActive: async (workspaceId) =>
+        workspaceId === dataKeyRecord.workspaceId ? dataKeyRecord : null,
+      findById: async (workspaceId, id) =>
+        workspaceId === dataKeyRecord.workspaceId && id === dataKeyRecord.id
+          ? dataKeyRecord
+          : null,
+      insertActiveIfAbsent: async () => dataKeyRecord,
+      activate: async () => null,
+      replaceWrappedKeyIfUnchanged: async () => false,
+    } satisfies WorkspaceDataKeyStore;
+    await expect(
+      decryptSecret(
+        encryptedDemo ?? "",
+        createEncryptionKeyring(
+          {
+            id: "seed-test-key",
+            key: new Uint8Array(32).fill(7),
+          },
+          [],
+          { workspaceDataKeys },
+        ),
+        {
+          type: "workspace_secret",
+          workspaceId: "ws_seed_aguayo",
+          recordId: "sec_seed_demo",
+        },
+      ),
+    ).resolves.toBe("seed-demo-token");
   });
 
   it.each([
-    {
-      name: "an implicit target",
-      arguments: ["--remote", "--allow-remote", "--confirm-staging"],
-      message: "Remote seed target must be explicitly set with --env staging",
-    },
-    {
-      name: "the production environment",
-      arguments: [
-        "--remote",
-        "--env",
-        "production",
-        "--allow-remote",
-        "--confirm-staging",
-      ],
-      message: "production is never supported",
-    },
-    {
-      name: "only the allow flag",
-      arguments: ["--remote", "--env", "staging", "--allow-remote"],
-      message: "requires both --allow-remote and --confirm-staging",
-    },
-    {
-      name: "only the staging confirmation",
-      arguments: ["--remote", "--env", "staging", "--confirm-staging"],
-      message: "requires both --allow-remote and --confirm-staging",
-    },
-  ])("refuses remote seeding with $name", ({ arguments: arguments_, message }) => {
+    { arguments: ["--remote"] },
+    { arguments: ["--remote", "--env", "staging", "--allow-remote", "--confirm-staging"] },
+    { arguments: ["--remote", "--env", "production", "--allow-remote", "--confirm-staging"] },
+  ])("refuses every remote seed invocation: $arguments", ({ arguments: arguments_ }) => {
     const result = spawnSync(
       process.execPath,
       [SCRIPT, "--print-command", ...arguments_],
@@ -149,7 +186,7 @@ describe("seed script", () => {
     );
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain(message);
+    expect(result.stderr).toContain("Remote seed is disabled");
   });
 
   it("rejects a remote confirmation flag when remote mode is absent", () => {
@@ -165,39 +202,7 @@ describe("seed script", () => {
     );
   });
 
-  it("uses only the explicit staging database for an approved remote seed", () => {
-    const result = spawnSync(
-      process.execPath,
-      [
-        SCRIPT,
-        "--print-command",
-        "--remote",
-        "--env",
-        "staging",
-        "--allow-remote",
-        "--confirm-staging",
-      ],
-      { encoding: "utf8" },
-    );
-    expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({
-      executable: "npx",
-      arguments: [
-        "wrangler",
-        "d1",
-        "execute",
-        "zenguy-staging-db",
-        "--remote",
-        "--env",
-        "staging",
-        "--file",
-        "scripts/.seed.generated.sql",
-      ],
-    });
-    expect(result.stdout).not.toContain('"zenguy-db"');
-  });
-
-  it("keeps the production-named database local by default", () => {
+  it("targets only the explicitly local database by default", () => {
     const result = spawnSync(
       process.execPath,
       [SCRIPT, "--print-command"],
@@ -205,15 +210,33 @@ describe("seed script", () => {
     );
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({
+      executable: process.execPath,
       arguments: [
-        "wrangler",
+        expect.stringMatching(/node_modules\/wrangler\/bin\/wrangler\.js$/u),
         "d1",
         "execute",
-        "zenguy-db",
+        "zenguy-local-db",
         "--local",
         "--file",
-        "scripts/.seed.generated.sql",
+        "/dev/fd/3",
       ],
     });
+  });
+
+  it("requires an explicit private vars source and refuses broad permissions", () => {
+    const missing = spawnSync(process.execPath, [SCRIPT, "--dry-run"], {
+      encoding: "utf8",
+    });
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toContain("Keychain-backed package command");
+
+    chmodSync(varsFile, 0o644);
+    const broad = spawnSync(
+      process.execPath,
+      [SCRIPT, "--dry-run", "--vars-file", varsFile],
+      { encoding: "utf8" },
+    );
+    expect(broad.status).toBe(1);
+    expect(broad.stderr).toContain("must use mode 0600");
   });
 });

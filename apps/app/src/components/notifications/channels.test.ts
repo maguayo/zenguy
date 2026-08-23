@@ -88,6 +88,7 @@ describe("notification channels list", () => {
     expect(lastDeliveryText(null)).toBe("Never used");
     expect(lastDeliveryText("SENT")).toBe("Delivered");
     expect(lastDeliveryText("FAILED")).toBe("Failed");
+    expect(lastDeliveryText("AMBIGUOUS")).toBe("Needs reconciliation");
     expect(lastDeliveryText("SENT", delivery)).toBe("Delivered 1m ago");
     expect(lastDeliveryText("FAILED", delivery)).toBe("Failed 1m ago");
   });
@@ -97,6 +98,12 @@ describe("notification channels list", () => {
     expect(
       testDeliveryResult({ ...delivery, errorSanitized: "provider unavailable", status: "FAILED" }),
     ).toEqual({ message: "Test failed: provider unavailable", tone: "error" });
+    expect(
+      testDeliveryResult({ ...delivery, errorSanitized: "provider timeout", status: "AMBIGUOUS" }),
+    ).toEqual({
+      message: "Test outcome needs reconciliation: provider timeout",
+      tone: "error",
+    });
     expect(testDeliveryResult({ ...delivery, errorSanitized: null, status: "PENDING" })).toEqual({
       message: "Test failed: Unknown error",
       tone: "error",

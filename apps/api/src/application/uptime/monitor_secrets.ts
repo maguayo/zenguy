@@ -3,7 +3,11 @@ import type {
   MonitorHeader,
   UptimeMonitor,
 } from "../../domain/uptime/types";
-import { decryptSecret, encryptSecret } from "../../shared/crypto";
+import {
+  decryptSecret,
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
 
 export interface EncryptedMonitorSensitive {
   encryptedHeaders: string | null;
@@ -21,30 +25,50 @@ export interface MonitorSensitiveRead extends DecryptedMonitorSensitive {
 
 export async function encryptMonitorSensitive(
   input: { headers?: MonitorHeader[]; body?: string },
-  encryptionKey: Uint8Array,
+  encryptionKeys: EncryptionKeyring,
+  identity: { workspaceId: string; monitorId: string },
 ): Promise<EncryptedMonitorSensitive> {
   const [encryptedHeaders, encryptedBody] = await Promise.all([
     input.headers === undefined
       ? Promise.resolve(null)
-      : encryptSecret(JSON.stringify(input.headers), encryptionKey),
+      : encryptSecret(JSON.stringify(input.headers), encryptionKeys, {
+          type: "uptime_monitor_headers",
+          workspaceId: identity.workspaceId,
+          recordId: identity.monitorId,
+        }),
     input.body === undefined
       ? Promise.resolve(null)
-      : encryptSecret(input.body, encryptionKey),
+      : encryptSecret(input.body, encryptionKeys, {
+          type: "uptime_monitor_body",
+          workspaceId: identity.workspaceId,
+          recordId: identity.monitorId,
+        }),
   ]);
   return { encryptedHeaders, encryptedBody };
 }
 
 export async function decryptMonitorSensitive(
-  monitor: Pick<UptimeMonitor, "encryptedHeaders" | "encryptedBody">,
-  encryptionKey: Uint8Array,
+  monitor: Pick<
+    UptimeMonitor,
+    "id" | "workspaceId" | "encryptedHeaders" | "encryptedBody"
+  >,
+  encryptionKeys: EncryptionKeyring,
 ): Promise<DecryptedMonitorSensitive> {
   const [headersJson, body] = await Promise.all([
     monitor.encryptedHeaders === null
       ? Promise.resolve(null)
-      : decryptSecret(monitor.encryptedHeaders, encryptionKey),
+      : decryptSecret(monitor.encryptedHeaders, encryptionKeys, {
+          type: "uptime_monitor_headers",
+          workspaceId: monitor.workspaceId,
+          recordId: monitor.id,
+        }),
     monitor.encryptedBody === null
       ? Promise.resolve(null)
-      : decryptSecret(monitor.encryptedBody, encryptionKey),
+      : decryptSecret(monitor.encryptedBody, encryptionKeys, {
+          type: "uptime_monitor_body",
+          workspaceId: monitor.workspaceId,
+          recordId: monitor.id,
+        }),
   ]);
   return {
     headers:
@@ -56,8 +80,11 @@ export async function decryptMonitorSensitive(
 }
 
 export async function readMonitorSensitive(
-  monitor: Pick<UptimeMonitor, "encryptedHeaders" | "encryptedBody">,
-  encryptionKey: Uint8Array,
+  monitor: Pick<
+    UptimeMonitor,
+    "id" | "workspaceId" | "encryptedHeaders" | "encryptedBody"
+  >,
+  encryptionKeys: EncryptionKeyring,
   canReadSensitive: boolean,
 ): Promise<MonitorSensitiveRead> {
   if (!canReadSensitive) {
@@ -68,7 +95,7 @@ export async function readMonitorSensitive(
     };
   }
   return {
-    ...(await decryptMonitorSensitive(monitor, encryptionKey)),
+    ...(await decryptMonitorSensitive(monitor, encryptionKeys)),
     headersMasked: false,
   };
 }

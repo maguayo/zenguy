@@ -34,11 +34,14 @@ import {
   Small,
   Spinner,
   Toggle,
+  confirm,
 } from "@/ui";
 import { RunStatusPanel } from "./RunStatusPanel";
 import {
   defaultChannelIds,
+  browserTestInput,
   instructionsHint,
+  irreversibleApprovalCopy,
   intervalOptionLabel,
   intervalOptions,
   isTestFormField,
@@ -103,16 +106,39 @@ export function TestForm({ testId }: { testId?: string }) {
   }, [form, test.data]);
 
   const validation = useMutation({
-    mutationFn: (values: BrowserTestInput) => validateDraft(current.id, values),
+    mutationFn: (input: {
+      values: BrowserTestInput;
+      approveIrreversibleActions: boolean;
+    }) =>
+      validateDraft(
+        current.id,
+        input.values,
+        input.approveIrreversibleActions,
+      ),
   });
   const stopValidation = useCallback(() => setValidationRunning(false), []);
 
   const runValidation = async () => {
     const valid = await form.trigger();
     if (!valid || validationRunning) return;
+    const values = browserTestInput(form.getValues());
+    const approveIrreversibleActions = values.irreversibleActionScopes.length > 0;
+    if (
+      approveIrreversibleActions &&
+      !(await confirm({
+        confirmLabel: "Authorize run",
+        message: `Authorize ${values.irreversibleActionScopes.length} exact irreversible action scope(s) for this run? ${irreversibleApprovalCopy}`,
+        title: "Approve irreversible actions?",
+      }))
+    ) {
+      return;
+    }
     try {
       setValidationRunId(null);
-      const result = await validation.mutateAsync(form.getValues());
+      const result = await validation.mutateAsync({
+        values,
+        approveIrreversibleActions,
+      });
       setValidationRunId(result.runId);
       setValidationRunning(true);
     } catch (error) {
@@ -123,9 +149,10 @@ export function TestForm({ testId }: { testId?: string }) {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
+      const input = browserTestInput(values);
       const saved = editing
-        ? await updateTest(current.id, testId, values)
-        : await createTest(current.id, values);
+        ? await updateTest(current.id, testId, input)
+        : await createTest(current.id, input);
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
       toast.success(editing ? "Changes saved" : "Test created — first run scheduled");
       router.replace(`/w/${current.id}/tests/${saved.id}`);
@@ -134,8 +161,11 @@ export function TestForm({ testId }: { testId?: string }) {
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
         for (const detail of error.details) {
-          if (isTestFormField(detail.field)) {
-            form.setError(detail.field, { message: detail.message });
+          const field = detail.field.startsWith("irreversibleActionScopes")
+            ? "irreversibleActionScopesJson"
+            : detail.field;
+          if (isTestFormField(field)) {
+            form.setError(field, { message: detail.message });
             handled = true;
           }
         }
@@ -246,6 +276,108 @@ export function TestForm({ testId }: { testId?: string }) {
             </Small>
           </View>
           <Caption style={styles.note}>{tokenNoteCopy}</Caption>
+        </Card>
+
+        <Card eyebrow="Browser permissions">
+          <Controller
+            control={form.control}
+            name="allowedDomains"
+            render={({ field, fieldState }) => (
+              <Field
+                error={fieldState.error?.message}
+                hint="The starting hostname is included automatically. Separate checkout, OAuth, API, or asset hostnames with commas; *.example.com is supported."
+                label="Additional allowed domains"
+              >
+                <Input
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  invalid={Boolean(fieldState.error)}
+                  keyboardType="url"
+                  mono
+                  placeholder="checkout.example.com, *.login.example.com"
+                  value={field.value.join(", ")}
+                  onBlur={() => {
+                    field.onChange(field.value.filter(Boolean));
+                    field.onBlur();
+                  }}
+                  onChangeText={(value) =>
+                    field.onChange(
+                      value
+                        .split(",")
+                        .map((domain) => domain.trim())
+                    )
+                  }
+                />
+              </Field>
+            )}
+          />
+          <Controller
+            control={form.control}
+            name="writableDomains"
+            render={({ field, fieldState }) => (
+              <Field
+                error={fieldState.error?.message}
+                hint="Exact staging/test hosts only. Input, select, checkbox, and radio interactions are allowed there; submit, Enter/Space activation, and mutating HTTP requests remain blocked until exact human-approved action scope exists."
+                label="Writable staging/test domains"
+              >
+                <Input
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  invalid={Boolean(fieldState.error)}
+                  keyboardType="url"
+                  mono
+                  placeholder="staging.example.com, login-staging.example.net"
+                  value={field.value.join(", ")}
+                  onBlur={() => {
+                    field.onChange(field.value.filter(Boolean));
+                    field.onBlur();
+                  }}
+                  onChangeText={(value) =>
+                    field.onChange(
+                      value
+                        .split(",")
+                        .map((domain) => domain.trim())
+                    )
+                  }
+                />
+              </Field>
+            )}
+          />
+          <Controller
+            control={form.control}
+            name="irreversibleActionScopesJson"
+            render={({ field, fieldState }) => (
+              <Field
+                error={fieldState.error?.message}
+                hint={'JSON examples: {"kind":"HTTP","method":"POST","origin":"https://staging.example.com","path":"/orders","maxUses":1}. A DOM CLICK additionally requires one unique id/data-testid/name/aria-label submit target whose signed form.method/origin/path matches an HTTP POST scope.'}
+                label="Exact irreversible action scopes"
+              >
+                <Input
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  invalid={Boolean(fieldState.error)}
+                  mono
+                  multiline
+                  style={styles.instructions}
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChangeText={field.onChange}
+                />
+              </Field>
+            )}
+          />
+          <Controller
+            control={form.control}
+            name="testDataAttested"
+            render={({ field }) => (
+              <Toggle
+                description={irreversibleApprovalCopy}
+                label="Attest staging/test credentials and data"
+                value={field.value}
+                onValueChange={field.onChange}
+              />
+            )}
+          />
         </Card>
 
         <Card eyebrow="Device">

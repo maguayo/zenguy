@@ -47,7 +47,7 @@ const fixture: PageState = {
 describe("browser DOM serializer", () => {
   it("formats a compact, sanitized page-state snapshot for the model", () => {
     expect(formatPageState(fixture)).toMatchInlineSnapshot(`
-      "URL: https://shop.example.com/cart?session=redacted&locale=en
+      "URL: https://shop.example.com
       Title: Your cart
       Scroll: 440/2100 (viewport 900)
       Interactive elements (visible-first, [index] <tag> \"text\"):

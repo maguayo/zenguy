@@ -1,9 +1,11 @@
 import { Hono } from "hono";
+import type { TrackEvent } from "../../application/activity/track_event";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import { CreateBrowserTest } from "../../application/browser_tests/create_browser_test";
 import { CreateRun } from "../../application/browser_tests/create_run";
 import { DeleteBrowserTest } from "../../application/browser_tests/delete_browser_test";
 import { DownloadReport } from "../../application/browser_tests/download_report";
+import { ExportBrowserTests } from "../../application/browser_tests/export_browser_tests";
 import { GetAttempt } from "../../application/browser_tests/get_attempt";
 import { GetBrowserTest } from "../../application/browser_tests/get_browser_test";
 import { GetRun } from "../../application/browser_tests/get_run";
@@ -15,6 +17,7 @@ import { RunNow } from "../../application/browser_tests/run_now";
 import { UpdateBrowserTest } from "../../application/browser_tests/update_browser_test";
 import { ValidateDraft } from "../../application/browser_tests/validate_draft";
 import type { RunSecretResolver } from "../../application/browser_tests/redact_run_output";
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
   ArtifactRepo,
@@ -23,7 +26,10 @@ import type {
   RunRepo,
   StepRepo,
 } from "../../domain/browser_tests/repo";
-import { browserTestConfigSchema } from "../../domain/browser_tests/rules";
+import {
+  browserTestConfigSchema,
+  browserTestConfigUpdateSchema,
+} from "../../domain/browser_tests/rules";
 import { serializeTestsFile } from "../../domain/browser_tests/transfer";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import type { AttemptMessage } from "../../domain/queues";
@@ -38,6 +44,12 @@ import type { AppConfig } from "../../shared/config";
 import type { ArtifactStorage } from "../../infrastructure/storage/artifacts";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
+import {
+  collectionCreateRateLimit,
+  rateLimit,
+} from "../../shared/ratelimit";
+import { RATE_LIMITS } from "../../shared/constants";
+import { MAX_CURSOR_LENGTH } from "../../shared/pagination";
 import type { PublishQueueOutbox } from "../../application/durability/publish_outbox";
 import { z } from "zod";
 import type { AppEnv } from "../env";
@@ -51,6 +63,7 @@ import {
   presentRunListItem,
 } from "../presenters/run";
 import { zjson, zquery } from "../validate";
+import { validation } from "../../shared/errors";
 
 export interface BrowserTestRoutesDependencies {
   users: UserRepo;
@@ -69,22 +82,63 @@ export interface BrowserTestRoutesDependencies {
   outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
+  track?: Pick<TrackEvent, "execute">;
   resolveSecrets: RunSecretResolver;
   clock: Clock;
   ids: IdGenerator;
   config: Pick<
     AppConfig,
-    "jwtSecret" | "llmModel" | "artifactUrlSecret"
+    "jwtSecret" | "llmModel" | "artifactUrlSecret" | "runnerCapabilitySecret"
   >;
 }
 
-const updateSchema = browserTestConfigSchema.partial().refine(
+const updateSchema = browserTestConfigUpdateSchema.refine(
   (value) => Object.keys(value).length > 0,
   { message: "At least one field is required" },
 );
 
 const exportQuerySchema = z.object({
   format: z.enum(["yaml", "json"]).default("yaml"),
+});
+
+const runApprovalSchema = z
+  .object({ approveIrreversibleActions: z.literal(true).optional() })
+  .strict();
+
+const validateDraftRequestSchema = z.union([
+  browserTestConfigSchema.transform((config) => ({ config })),
+  z
+    .object({
+      config: browserTestConfigSchema,
+      approveIrreversibleActions: z.literal(true).optional(),
+    })
+    .strict(),
+]);
+
+async function optionalRunApproval(context: {
+  req: { json(): Promise<unknown> };
+}): Promise<{ approveIrreversibleActions?: true }> {
+  let raw: unknown = {};
+  try {
+    raw = await context.req.json();
+  } catch {
+    // An empty body is the legacy, explicitly unapproved mode.
+  }
+  const parsed = runApprovalSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw validation(
+      parsed.error.issues.map((issue) => ({
+        field: issue.path.map(String).join("."),
+        message: issue.message,
+      })),
+    );
+  }
+  return parsed.data;
+}
+
+const browserTestsQuerySchema = z.object({
+  cursor: z.string().max(MAX_CURSOR_LENGTH).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
 });
 
 const runStatusSchema = z.enum([
@@ -96,7 +150,7 @@ const runStatusSchema = z.enum([
   "SYSTEM_ERROR",
 ]);
 const runsQuerySchema = z.object({
-  cursor: z.string().optional(),
+  cursor: z.string().max(MAX_CURSOR_LENGTH).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(100),
   status: runStatusSchema.optional(),
 });
@@ -113,7 +167,10 @@ export function browserTestRoutes(
   const app = new Hono<AppEnv>();
   const auth = requireAuth(dependencies);
   const workspace = withWorkspace(dependencies);
-  const active = requireActiveSubscription(dependencies.subscriptions);
+  const active = requireActiveSubscription(
+    dependencies.subscriptions,
+    dependencies.clock,
+  );
   const createBrowserTest = new CreateBrowserTest(
     dependencies.tests,
     dependencies.channels,
@@ -148,6 +205,7 @@ export function browserTestRoutes(
     dependencies.runs,
     dependencies.users,
   );
+  const exportBrowserTests = new ExportBrowserTests(dependencies.tests);
   const listRuns = new ListRuns(
     dependencies.tests,
     dependencies.runs,
@@ -177,6 +235,7 @@ export function browserTestRoutes(
     dependencies.rateLimiter,
     dependencies.config,
     dependencies.clock,
+    dependencies.track,
   );
   const createRun = new CreateRun(
     dependencies.tests,
@@ -199,6 +258,8 @@ export function browserTestRoutes(
     createRun,
     dependencies.subscriptions,
     dependencies.rateLimiter,
+    dependencies.track,
+    dependencies.audit,
   );
   const importBrowserTests = new ImportBrowserTests(
     createBrowserTest,
@@ -207,6 +268,23 @@ export function browserTestRoutes(
     dependencies.channels,
     dependencies.subscriptions,
     dependencies.rateLimiter,
+    dependencies.track,
+  );
+  const createWorkspaceLimited = rateLimit(
+    dependencies.rateLimiter,
+    (context) =>
+      `browser_test_create:workspace:${context.get("workspace").id}`,
+    RATE_LIMITS.browser_test_create.limit,
+    RATE_LIMITS.browser_test_create.windowSeconds,
+  );
+  const createUserLimited = rateLimit(
+    dependencies.rateLimiter,
+    (context) => `browser_test_create:user:${context.get("user").id}`,
+    RATE_LIMITS.browser_test_create.limit,
+    RATE_LIMITS.browser_test_create.windowSeconds,
+  );
+  const commonCreateLimit = collectionCreateRateLimit(
+    dependencies.rateLimiter,
   );
 
   app.get(
@@ -214,11 +292,18 @@ export function browserTestRoutes(
     auth,
     requireVerifiedEmail,
     workspace,
+    zquery(browserTestsQuerySchema),
     async (context) => {
+      const query = context.req.valid("query");
       const result = await listBrowserTests.execute({
         workspaceId: context.get("workspace").id,
+        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        limit: query.limit,
       });
-      return context.json({ data: result.map(presentBrowserTest) });
+      return context.json({
+        data: result.tests.map(presentBrowserTest),
+        nextCursor: result.nextCursor,
+      });
     },
   );
 
@@ -229,7 +314,10 @@ export function browserTestRoutes(
     workspace,
     requireAction("tests.manage"),
     active,
+    commonCreateLimit,
     zjson(browserTestConfigSchema),
+    createWorkspaceLimited,
+    createUserLimited,
     async (context) => {
       const result = await createBrowserTest.execute({
         workspaceId: context.get("workspace").id,
@@ -252,23 +340,17 @@ export function browserTestRoutes(
     async (context) => {
       const workspaceEntity = context.get("workspace");
       const format = context.req.valid("query").format;
-      const result = await listBrowserTests.execute({
+      const entries = await exportBrowserTests.execute({
         workspaceId: workspaceEntity.id,
       });
-      const body = serializeTestsFile(
-        result.map((test) => ({
-          id: test.id,
-          name: test.name,
-          startUrl: test.startUrl,
-          instructions: test.instructions,
-          device: test.device,
-          intervalHours: test.intervalHours,
-          maxRetries: test.maxRetries,
-          notifyOnRecovery: test.notifyOnRecovery,
-          channelIds: test.channelIds,
-        })),
-        format,
-      );
+      const body = serializeTestsFile(entries, format);
+      await dependencies.track?.execute({
+        type: ACTIVITY_EVENTS.browserTestExported,
+        userId: context.get("user").id,
+        workspaceId: workspaceEntity.id,
+        source: "server",
+        properties: { count: entries.length, format },
+      });
       const date = new Date(dependencies.clock.now())
         .toISOString()
         .slice(0, 10);
@@ -342,6 +424,8 @@ export function browserTestRoutes(
       const result = await downloadReport.execute({
         workspaceId: context.get("workspace").id,
         runId: context.req.param("runId"),
+        actorId: context.get("user").id,
+        ip: requestIp(context),
       });
       return new Response(result.markdown, {
         headers: {
@@ -387,13 +471,19 @@ export function browserTestRoutes(
     workspace,
     requireAction("tests.run"),
     active,
-    zjson(browserTestConfigSchema),
+    zjson(validateDraftRequestSchema),
     async (context) => {
+      const request = context.req.valid("json");
       const run = await validateDraft.execute({
         workspaceId: context.get("workspace").id,
-        config: context.req.valid("json"),
+        config: request.config,
         actor: context.get("user"),
         actorRole: context.get("role"),
+        ip: requestIp(context),
+        ...("approveIrreversibleActions" in request &&
+        request.approveIrreversibleActions === true
+          ? { approveIrreversibleActions: true as const }
+          : {}),
       });
       return context.json({ data: { runId: run.id } }, 202);
     },
@@ -407,12 +497,14 @@ export function browserTestRoutes(
     requireAction("tests.run"),
     active,
     async (context) => {
+      const approval = await optionalRunApproval(context);
       const run = await runNow.execute({
         workspaceId: context.get("workspace").id,
         testId: context.req.param("testId"),
         actor: context.get("user"),
         actorRole: context.get("role"),
         ip: requestIp(context),
+        ...approval,
       });
       return context.json({ data: { runId: run.id } }, 202);
     },

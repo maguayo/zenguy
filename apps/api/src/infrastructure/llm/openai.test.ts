@@ -159,6 +159,28 @@ describe("OpenAiLlmClient", () => {
     expect(noWait.sleep.mock.calls).toEqual([[1_000], [4_000]]);
   });
 
+  it("cancels retryable response bodies before retrying", async () => {
+    const cancels = Array.from({ length: 3 }, () => vi.fn(async () => undefined));
+    let request = 0;
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      const cancel = cancels[request++];
+      if (cancel === undefined) throw new Error("Unexpected request");
+      return new Response(new ReadableStream<Uint8Array>({ cancel }), {
+        status: 500,
+      });
+    });
+    const client = new OpenAiLlmClient(config, fetchFn, noWait);
+
+    await expect(
+      client.decideAction({
+        system: "system",
+        userText: "state",
+        screenshotJpegBase64: null,
+      }),
+    ).rejects.toBeInstanceOf(LlmUnavailableError);
+    expect(cancels.every((cancel) => cancel.mock.calls.length === 1)).toBe(true);
+  });
+
   it("can recover after a rate limit or network failure", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()

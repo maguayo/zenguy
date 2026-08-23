@@ -1,19 +1,23 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { z } from "zod";
+import { MAX_BROWSER_TESTS_PER_WORKSPACE } from "../../shared/constants";
 import { validation } from "../../shared/errors";
 import { browserTestConfigSchema } from "./rules";
 
 export const TRANSFER_VERSION = 1;
-export const MAX_TRANSFER_TESTS = 100;
+// A workspace can hold 200 live browser tests. Transfer files use the same
+// ceiling so an export of a valid workspace never loses its second list page.
+export const MAX_TRANSFER_TESTS = MAX_BROWSER_TESTS_PER_WORKSPACE;
 export const MAX_TRANSFER_BYTES = 2_000_000;
 
 export type TransferFormat = "yaml" | "json";
 
-const transferEntrySchema = browserTestConfigSchema.extend({
+const transferEntrySchema = browserTestConfigSchema.safeExtend({
   id: z.string().optional(),
 });
 
-export type BrowserTestTransferEntry = z.infer<typeof transferEntrySchema>;
+export type BrowserTestTransferEntry = z.input<typeof transferEntrySchema>;
+export type ParsedBrowserTestTransferEntry = z.output<typeof transferEntrySchema>;
 
 const transferFileSchema = z
   .strictObject({
@@ -41,6 +45,12 @@ function orderedEntry(entry: BrowserTestTransferEntry) {
   return {
     ...(entry.id === undefined ? {} : { id: entry.id }),
     name: entry.name,
+    allowedDomains: [...(entry.allowedDomains ?? [])],
+    writableDomains: [...(entry.writableDomains ?? [])],
+    testDataAttested: entry.testDataAttested ?? false,
+    irreversibleActionScopes: structuredClone(
+      entry.irreversibleActionScopes ?? [],
+    ),
     startUrl: entry.startUrl,
     instructions: entry.instructions,
     device: entry.device,

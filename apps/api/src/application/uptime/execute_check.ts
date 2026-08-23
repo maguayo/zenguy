@@ -4,7 +4,10 @@ import {
   substitutePlaceholders,
 } from "../../domain/secrets/rules";
 import type { ResolvedSecrets } from "../../domain/secrets/types";
-import type { MonitorMethod } from "../../domain/uptime/types";
+import {
+  isMutableMonitorMethod,
+  type MonitorMethod,
+} from "../../domain/uptime/types";
 import { getJsonPath } from "../../shared/jsonpath";
 import {
   MAX_REDIRECTS,
@@ -30,7 +33,9 @@ export type FailureReason =
   | "RESPONSE_TOO_LARGE"
   | "BLOCKED_URL"
   | "SECRET_DOMAIN_NOT_ALLOWED"
-  | "UNKNOWN_SECRET";
+  | "UNKNOWN_SECRET"
+  | "IDEMPOTENCY_KEY_REQUIRED"
+  | "AMBIGUOUS_EXTERNAL_EFFECT";
 
 export interface CheckCondition {
   type: string;
@@ -56,6 +61,11 @@ export interface ExecuteCheckDependencies {
   fetchFn: UptimeFetch;
   clock: Clock;
   resolveSecrets: Pick<ResolveSecrets, "execute">;
+}
+
+export interface CheckExecutionContext {
+  /** Required for POST/PUT/PATCH/DELETE and stable for the whole cycle. */
+  idempotencyKey?: string;
 }
 
 type RequestMethod = MonitorMethod | "GET";
@@ -117,6 +127,10 @@ function substitute(
 
 function isRedirect(status: number): boolean {
   return [301, 302, 303, 307, 308].includes(status);
+}
+
+function isStandardHttpsOrigin(url: URL): boolean {
+  return url.protocol === "https:" && (url.port === "" || url.port === "443");
 }
 
 function isTimeout(error: unknown): boolean {
@@ -270,8 +284,18 @@ export async function executeCheck(
   dependencies: ExecuteCheckDependencies,
   monitorConfig: MonitorConfig,
   workspaceId: string,
+  execution: CheckExecutionContext = {},
 ): Promise<CheckOutcome> {
   const startedAt = dependencies.clock.now();
+  const mutable = isMutableMonitorMethod(monitorConfig.method);
+  if (mutable && execution.idempotencyKey === undefined) {
+    return failed({
+      reason: "IDEMPOTENCY_KEY_REQUIRED",
+      detail: "Mutable uptime requests require a cycle idempotency key",
+      clock: dependencies.clock,
+      startedAt,
+    });
+  }
   const monitorHost = hostOf(monitorConfig.url);
   const referencedKeys = extractPlaceholders(
     [
@@ -307,6 +331,9 @@ export async function executeCheck(
     }
     headers.append(header.key, result.value);
   }
+  if (mutable) {
+    headers.set("Idempotency-Key", execution.idempotencyKey ?? "");
+  }
   const bodyResult = substitute(monitorConfig.body ?? "", secrets, monitorHost);
   if (!bodyResult.ok) {
     return failed({
@@ -318,10 +345,17 @@ export async function executeCheck(
   }
 
   let currentUrl: URL;
+  const credentialed = referencedKeys.length > 0;
   try {
-    currentUrl = assertSafeExternalUrl(urlResult.value);
+    currentUrl = assertSafeExternalUrl(urlResult.value, {
+      denyZenguyOrigins: true,
+      requireHttps: credentialed,
+    });
+    if (credentialed && !isStandardHttpsOrigin(currentUrl)) {
+      throw new TypeError("Credentialed checks require the standard HTTPS origin");
+    }
   } catch (error) {
-    if (!isAppError(error)) throw error;
+    if (!isAppError(error) && !(error instanceof TypeError)) throw error;
     return failed({
       reason: "BLOCKED_URL",
       detail: "Request URL is blocked",
@@ -329,7 +363,6 @@ export async function executeCheck(
       startedAt,
     });
   }
-  const originalHost = currentUrl.hostname;
   let currentHeaders = headers;
   let currentBody = monitorConfig.body === undefined ? undefined : bodyResult.value;
   let method: RequestMethod = monitorConfig.method;
@@ -350,8 +383,10 @@ export async function executeCheck(
     } catch (error) {
       if (isTimeout(error)) {
         return failed({
-          reason: "TIMEOUT",
-          detail: "Request timed out",
+          reason: mutable ? "AMBIGUOUS_EXTERNAL_EFFECT" : "TIMEOUT",
+          detail: mutable
+            ? "Mutable request timed out after dispatch; outcome is ambiguous"
+            : "Request timed out",
           clock: dependencies.clock,
           startedAt,
         });
@@ -359,8 +394,12 @@ export async function executeCheck(
       // Workers cannot reliably distinguish DNS, TCP, and TLS failures.
       if (error instanceof TypeError) {
         return failed({
-          reason: "CONNECTION_ERROR",
-          detail: "Connection failed",
+          reason: mutable
+            ? "AMBIGUOUS_EXTERNAL_EFFECT"
+            : "CONNECTION_ERROR",
+          detail: mutable
+            ? "Mutable request connection failed after dispatch; outcome is ambiguous"
+            : "Connection failed",
           clock: dependencies.clock,
           startedAt,
         });
@@ -373,8 +412,12 @@ export async function executeCheck(
     if (redirectCount >= MAX_REDIRECTS) {
       await response.body?.cancel().catch(() => undefined);
       return failed({
-        reason: "TOO_MANY_REDIRECTS",
-        detail: `More than ${MAX_REDIRECTS} redirects`,
+        reason: mutable
+          ? "AMBIGUOUS_EXTERNAL_EFFECT"
+          : "TOO_MANY_REDIRECTS",
+        detail: mutable
+          ? "Mutable request entered a redirect loop after dispatch; outcome is ambiguous"
+          : `More than ${MAX_REDIRECTS} redirects`,
         clock: dependencies.clock,
         startedAt,
         httpStatus: response.status,
@@ -382,20 +425,43 @@ export async function executeCheck(
     }
     let nextUrl: URL;
     try {
-      nextUrl = assertSafeExternalUrl(new URL(location, currentUrl).href);
+      nextUrl = assertSafeExternalUrl(new URL(location, currentUrl).href, {
+        denyZenguyOrigins: true,
+        requireHttps: credentialed,
+      });
+      if (credentialed && !isStandardHttpsOrigin(nextUrl)) {
+        throw new TypeError("Credentialed redirects require the standard HTTPS origin");
+      }
     } catch (error) {
       if (!isAppError(error) && !(error instanceof TypeError)) throw error;
       await response.body?.cancel().catch(() => undefined);
       return failed({
-        reason: "UNSAFE_REDIRECT",
-        detail: "Redirect target is blocked",
+        reason: mutable
+          ? "AMBIGUOUS_EXTERNAL_EFFECT"
+          : "UNSAFE_REDIRECT",
+        detail: mutable
+          ? "Mutable request returned a blocked redirect after dispatch; outcome is ambiguous"
+          : "Redirect target is blocked",
+        clock: dependencies.clock,
+        startedAt,
+        httpStatus: response.status,
+      });
+    }
+    if (mutable && nextUrl.origin !== currentUrl.origin) {
+      await response.body?.cancel().catch(() => undefined);
+      return failed({
+        reason: "AMBIGUOUS_EXTERNAL_EFFECT",
+        detail:
+          "Mutable request returned a cross-origin redirect after dispatch; outcome is ambiguous",
         clock: dependencies.clock,
         startedAt,
         httpStatus: response.status,
       });
     }
     redirectCount += 1;
-    if (nextUrl.hostname !== originalHost) {
+    // Authorization, cookies, custom headers and bodies are capabilities for
+    // one exact origin. Scheme and port are part of that boundary too.
+    if (nextUrl.origin !== currentUrl.origin) {
       currentHeaders = new Headers();
       currentBody = undefined;
     }
@@ -423,8 +489,10 @@ export async function executeCheck(
     } catch (error) {
       if (isTimeout(error)) {
         return failed({
-          reason: "TIMEOUT",
-          detail: "Response body timed out",
+          reason: mutable ? "AMBIGUOUS_EXTERNAL_EFFECT" : "TIMEOUT",
+          detail: mutable
+            ? "Mutable response body timed out after dispatch; outcome is ambiguous"
+            : "Response body timed out",
           clock: dependencies.clock,
           startedAt,
           httpStatus: response.status,
@@ -433,8 +501,12 @@ export async function executeCheck(
       }
       if (error instanceof TypeError) {
         return failed({
-          reason: "CONNECTION_ERROR",
-          detail: "Connection failed while reading response",
+          reason: mutable
+            ? "AMBIGUOUS_EXTERNAL_EFFECT"
+            : "CONNECTION_ERROR",
+          detail: mutable
+            ? "Mutable response stream failed after dispatch; outcome is ambiguous"
+            : "Connection failed while reading response",
           clock: dependencies.clock,
           startedAt,
           httpStatus: response.status,
@@ -463,10 +535,18 @@ export async function executeCheck(
     const evaluated = bodyCondition(monitorConfig, bodyText, redactor);
     conditions.push(evaluated.condition);
     bodyFailure = evaluated.failureReason;
+  } else {
+    // A status-only monitor deliberately ignores the payload, but Workers
+    // still require the outgoing body to be consumed or cancelled so the
+    // connection is released for subsequent subrequests.
+    await response.body?.cancel().catch(() => undefined);
   }
 
   const failureReason: FailureReason | null = !statusPassed
-    ? "UNEXPECTED_STATUS"
+    ? mutable &&
+      (response.status >= 500 || [408, 425, 429].includes(response.status))
+      ? "AMBIGUOUS_EXTERNAL_EFFECT"
+      : "UNEXPECTED_STATUS"
     : bodyFailure;
   if (failureReason !== null) {
     return failed({

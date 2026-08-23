@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Share, StyleSheet, View } from "react-native";
 
 import { getBillingConfig } from "@/api/billing";
 import {
@@ -9,7 +9,6 @@ import {
   listSubscriptionGrants,
   type IssuedSubscriptionGrant,
 } from "@/api/grants";
-import { CopyButton } from "@/components/CopyButton";
 import { AccessDenied } from "@/components/more/AccessDenied";
 import { issueDescription, issuedGrantSummary } from "@/components/more/grants";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,7 +26,6 @@ import {
   IconTile,
   Input,
   ListRow,
-  Mono,
   Muted,
   Screen,
   Spinner,
@@ -101,10 +99,21 @@ export default function ComplimentaryLinksScreen() {
             />
             {latest ? (
               <View style={styles.latest}>
-                <Mono color={colors.accentInk} numberOfLines={1} selectable style={styles.latestUrl}>
-                  {latest.redeemUrl}
-                </Mono>
-                <CopyButton label="Copy link" text={latest.redeemUrl} />
+                <Muted color={colors.accentInk} style={styles.latestMessage}>
+                  One-time link ready. Share it only with the intended recipient.
+                </Muted>
+                <Button
+                  size="sm"
+                  title="Share link"
+                  variant="ghost"
+                  onPress={() => {
+                    void Share.share({
+                      message: latest.redeemUrl,
+                      title: "Complimentary Zenguy access",
+                      url: latest.redeemUrl,
+                    }).catch(() => toast.error("Couldn't open the share sheet."));
+                  }}
+                />
               </View>
             ) : null}
           </Card>
@@ -161,6 +170,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     padding: spacing.md,
   },
-  latestUrl: { flex: 1 },
+  latestMessage: { flex: 1 },
   stack: { gap: spacing.lg },
 });

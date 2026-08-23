@@ -1,12 +1,13 @@
 import { defaultAlertSettings } from "../../domain/alerts/types";
 import type { ChannelType } from "../../domain/channels/types";
 import { FixedClock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import { createEncryptionKeyring, encryptSecret } from "../../shared/crypto";
 import { FakeAlertRepo } from "../../test/fakes/alerts";
 import { FakeChannelRepo } from "../../test/fakes/repos";
 import { GetAlertsOverview } from "./get_alerts_overview";
 
 const KEY = new Uint8Array(32).fill(3);
+const KEYS = createEncryptionKeyring({ id: "test-alerts-overview", key: KEY });
 const NOW = 1_700_000_000_000;
 
 async function insertChannel(
@@ -21,7 +22,11 @@ async function insertChannel(
     workspaceId: "ws_1",
     name: id,
     type,
-    encryptedConfig: await encryptSecret(JSON.stringify(config), KEY),
+    encryptedConfig: await encryptSecret(JSON.stringify(config), KEYS, {
+      type: "notification_channel",
+      workspaceId: "ws_1",
+      recordId: id,
+    }),
     enabled,
     verifiedAt: null,
     lastDeliveryStatus: null,
@@ -70,7 +75,7 @@ describe("GetAlertsOverview", () => {
     const overview = new GetAlertsOverview(
       alerts,
       channels,
-      KEY,
+      KEYS,
       true,
       new FixedClock(NOW),
     );
@@ -119,7 +124,7 @@ describe("GetAlertsOverview", () => {
     const overview = new GetAlertsOverview(
       alerts,
       channels,
-      KEY,
+      KEYS,
       false,
       new FixedClock(NOW),
     );

@@ -29,6 +29,7 @@ export const ID_PREFIXES = {
   durableJob: "job",
   apiKey: "ak",
   alertCreditEntry: "ace",
+  paddleCheckoutIntent: "pci",
   pushDevice: "pd",
   activityEvent: "act",
 } as const;

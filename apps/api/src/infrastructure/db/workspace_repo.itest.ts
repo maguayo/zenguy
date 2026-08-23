@@ -15,6 +15,7 @@ const USER: User = {
   email: "owner@example.com",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1_000,
   updatedAt: 1_000,
 };
@@ -105,5 +106,52 @@ describe("D1WorkspaceRepo", () => {
     expect(slug.startsWith(occupied.slug.slice(0, 35))).toBe(true);
     expect(slug).toHaveLength(40);
     expect(slug).not.toBe(occupied.slug);
+  });
+
+  it("allows exactly one concurrent ownership transfer", async () => {
+    const database = testEnv().DB;
+    const users = new D1UserRepo(database);
+    const candidateA: User = {
+      ...USER,
+      id: "usr_owner_candidate_a",
+      email: "candidate-a@example.com",
+      name: "Candidate A",
+    };
+    const candidateB: User = {
+      ...USER,
+      id: "usr_owner_candidate_b",
+      email: "candidate-b@example.com",
+      name: "Candidate B",
+    };
+    await users.insert(candidateA);
+    await users.insert(candidateB);
+    await workspaces.insert(WORKSPACE);
+    await members.insert(MEMBER);
+    await members.insert({
+      ...MEMBER,
+      id: "mem_owner_candidate_a",
+      userId: candidateA.id,
+      role: "ADMIN",
+    });
+    await members.insert({
+      ...MEMBER,
+      id: "mem_owner_candidate_b",
+      userId: candidateB.id,
+      role: "ADMIN",
+    });
+
+    const results = await Promise.all([
+      workspaces.transferOwnership(WORKSPACE.id, USER.id, candidateA.id, 2_000),
+      workspaces.transferOwnership(WORKSPACE.id, USER.id, candidateB.id, 2_000),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const workspace = await workspaces.findById(WORKSPACE.id);
+    expect([candidateA.id, candidateB.id]).toContain(workspace?.ownerUserId);
+    const currentMembers = await members.list(WORKSPACE.id);
+    expect(currentMembers.filter((member) => member.role === "OWNER")).toEqual([
+      expect.objectContaining({ userId: workspace?.ownerUserId }),
+    ]);
+    expect(currentMembers.find((member) => member.userId === USER.id)?.role).toBe("ADMIN");
   });
 });

@@ -9,15 +9,17 @@ import type { User } from "../../domain/users/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { Clock } from "../../shared/clock";
-import { forbidden } from "../../shared/errors";
+import { forbidden, throwIfCollectionCap } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import type { RateLimiter } from "../../shared/ratelimit";
+import type { EncryptionKeyring } from "../../shared/crypto";
 import {
   parseMonitorConfig,
   validateMonitorChannelIds,
 } from "./input";
 import { encryptMonitorSensitive } from "./monitor_secrets";
 import { enforceMonitorCreateRate } from "./rate";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { monitorOutput, type MonitorOutput } from "./types";
 
 export class CreateMonitor {
@@ -27,7 +29,7 @@ export class CreateMonitor {
     private readonly subscriptions: SubscriptionRepo,
     private readonly rateLimiter: RateLimiter,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -40,43 +42,67 @@ export class CreateMonitor {
     ip?: string;
   }): Promise<MonitorOutput> {
     if (!can(input.actorRole, "uptime.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
+    await enforceMonitorCreateRate(
+      this.rateLimiter,
+      input.workspaceId,
+      input.actor.id,
+      input.ip,
+    );
     const config = parseMonitorConfig(input.config);
     const channelIds = await validateMonitorChannelIds(
       this.channels,
       input.workspaceId,
       config.channelIds,
     );
-    await enforceMonitorCreateRate(this.rateLimiter, input.workspaceId);
-    const encrypted = await encryptMonitorSensitive(config, this.encryptionKey);
     const now = this.clock.now();
-    const monitor: UptimeMonitor = {
-      id: this.ids.newId("mon"),
-      workspaceId: input.workspaceId,
-      name: config.name,
-      url: config.url,
-      method: config.method,
-      ...encrypted,
-      expectedStatus: config.expectedStatus,
-      bodyCondition: config.bodyCondition ?? null,
-      bodyExpectedValue: config.bodyExpectedValue ?? null,
-      bodyConditionPath: config.bodyConditionPath ?? null,
-      frequencySeconds: config.frequencySeconds,
-      timeoutSeconds: config.timeoutSeconds,
-      maxRetries: config.maxRetries,
-      notifyOnRecovery: config.notifyOnRecovery,
-      nextCheckAt: now + config.frequencySeconds * 1_000,
-      currentStatus: "UNKNOWN",
-      currentCycleId: null,
-      cycleStartedAt: null,
-      lastCheckAt: null,
-      lastResponseTimeMs: null,
-      createdBy: input.actor.id,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    };
-    await this.monitors.insert(monitor);
+    const monitorId = this.ids.newId("mon");
+    let monitor: UptimeMonitor;
+    try {
+      monitor = await writeWithActiveDataKeyRetry(
+        async () => {
+          const encrypted = await encryptMonitorSensitive(
+            config,
+            this.encryptionKeys,
+            { workspaceId: input.workspaceId, monitorId },
+          );
+          return {
+            id: monitorId,
+            workspaceId: input.workspaceId,
+            name: config.name,
+            url: config.url,
+            method: config.method,
+            ...encrypted,
+            expectedStatus: config.expectedStatus,
+            bodyCondition: config.bodyCondition ?? null,
+            bodyExpectedValue: config.bodyExpectedValue ?? null,
+            bodyConditionPath: config.bodyConditionPath ?? null,
+            frequencySeconds: config.frequencySeconds,
+            timeoutSeconds: config.timeoutSeconds,
+            maxRetries: config.maxRetries,
+            notifyOnRecovery: config.notifyOnRecovery,
+            nextCheckAt: now + config.frequencySeconds * 1_000,
+            currentStatus: "UNKNOWN" as const,
+            currentCycleId: null,
+            cycleStartedAt: null,
+            lastCheckAt: null,
+            lastResponseTimeMs: null,
+            createdBy: input.actor.id,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          };
+        },
+        (candidate) => this.monitors.insert(candidate),
+      );
+    } catch (error) {
+      throwIfCollectionCap(error);
+      throw error;
+    }
     await this.monitors.setChannels(monitor.id, channelIds);
     await this.audit.execute({
       workspaceId: input.workspaceId,
@@ -93,7 +119,7 @@ export class CreateMonitor {
       creator: input.actor,
       incident: null,
       role: input.actorRole,
-      encryptionKey: this.encryptionKey,
+      encryptionKeys: this.encryptionKeys,
     });
   }
 }

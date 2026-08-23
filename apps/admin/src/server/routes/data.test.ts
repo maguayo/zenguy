@@ -1,6 +1,11 @@
 import type { Loaders } from "./data";
 import { buildApp } from "../app";
-import { fakeBindings } from "../../test/fakes";
+import {
+  FakeAdminSessionStore,
+  allowAdminAccess,
+  fakeBindings,
+  verifiedLoginBody,
+} from "../../test/fakes";
 import type {
   Overview,
   RecentRun,
@@ -12,7 +17,7 @@ const NOW = 1_700_000_000_000;
 const clock = { now: () => NOW };
 const noDelay = async () => {};
 const okFetch = (async () =>
-  new Response(JSON.stringify({ data: {} }), {
+  new Response(JSON.stringify(verifiedLoginBody()), {
     status: 200,
     headers: { "content-type": "application/json" },
   })) as typeof fetch;
@@ -42,7 +47,7 @@ const overview: Overview = {
 const workers: WorkersResponse = { workers: [], now: NOW };
 const users: UserSummary[] = [
   {
-    id: "usr_one",
+    id: "usr_00000000000000000000000001",
     email: "one@example.com",
     name: "One",
     createdAt: 1,
@@ -78,7 +83,15 @@ function fakeLoaders(): Loaders {
 
 async function loggedIn(loaders: Loaders) {
   const bindings = fakeBindings();
-  const app = buildApp(bindings, { fetch: okFetch, delay: noDelay, clock, loaders });
+  const sessions = new FakeAdminSessionStore();
+  const app = buildApp(bindings, {
+    fetch: okFetch,
+    delay: noDelay,
+    clock,
+    loaders,
+    sessions,
+    accessVerifier: allowAdminAccess,
+  });
   const response = await app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -87,6 +100,7 @@ async function loggedIn(loaders: Loaders) {
   const cookie = (response.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
   return {
     bindings,
+    sessions,
     cookie,
     get: (path: string) => app.request(path, { headers: { Cookie: cookie } }),
     anonymous: (path: string) => app.request(path),
@@ -158,17 +172,23 @@ describe("admin data routes", () => {
     }
   });
 
-  it("refuses a still-valid cookie once the email leaves the allowlist", async () => {
+  it("refuses a still-valid cookie once the user id leaves the allowlist", async () => {
     const session = await loggedIn(fakeLoaders());
     const cookie = session.cookie;
 
-    // Same signing secret, so the cookie still verifies; only ADMIN_EMAILS moved on.
+    // The server-side row still exists; only the stable-id allowlist changed.
     const revoked = buildApp(
       fakeBindings({
-        ADMIN_EMAILS: "someone-else@example.com",
-        ADMIN_SESSION_SECRET: session.bindings.ADMIN_SESSION_SECRET,
+        ADMIN_USER_IDS: "usr_00000000000000000000000003",
       }),
-      { fetch: okFetch, delay: noDelay, clock, loaders: fakeLoaders() },
+      {
+        fetch: okFetch,
+        delay: noDelay,
+        clock,
+        loaders: fakeLoaders(),
+        sessions: session.sessions,
+        accessVerifier: allowAdminAccess,
+      },
     );
 
     for (const path of PATHS) {

@@ -18,8 +18,63 @@ export type AttemptStatus =
 export type StepResult = "OK" | "ERROR";
 export type ArtifactType = "SCREENSHOT" | "MARKDOWN_REPORT";
 
+export type IrreversibleActionScope =
+  | {
+      kind: "DOM";
+      action: "CLICK";
+      origin: string;
+      path: string;
+      target: {
+        attribute: "data-testid" | "id" | "name" | "aria-label";
+        value: string;
+        tag: "BUTTON" | "INPUT";
+        type: "submit";
+        form: {
+          method: "POST";
+          origin: string;
+          path: string;
+        };
+      };
+      maxUses: number;
+    }
+  | {
+      kind: "HTTP";
+      method: "POST" | "PUT" | "PATCH" | "DELETE";
+      origin: string;
+      path: string;
+      maxUses: number;
+    };
+
+export type IrreversibleActionRequest =
+  | Omit<Extract<IrreversibleActionScope, { kind: "DOM" }>, "maxUses">
+  | Omit<Extract<IrreversibleActionScope, { kind: "HTTP" }>, "maxUses">;
+
+export interface IrreversibleRunAuthorization {
+  version: 2;
+  runId: string;
+  workspaceId: string;
+  originalInstructionsSha256: string;
+  testDataAttested: true;
+  approvedByUserId: string;
+  approvedAt: number;
+  scopes: IrreversibleActionScope[];
+  signature: string;
+}
+
+export interface ActionAuthorizationState {
+  scope: IrreversibleActionScope;
+  remainingUses: number;
+}
+
 export interface RunSnapshot {
   name: string;
+  /** Absent on immutable runs created before browser-policy version 1. */
+  allowedDomains?: string[];
+  /**
+   * Exact hosts where local form-state interactions are authorized. Absent
+   * means read-only for legacy immutable snapshots.
+   */
+  writableDomains?: string[];
   startUrl: string;
   instructions: string;
   device: Device;
@@ -30,12 +85,22 @@ export interface RunSnapshot {
   viewport: { width: number; height: number };
   modelName: string;
   runnerVersion: string;
+  /** Present only after an explicit per-run human confirmation. */
+  irreversibleAuthorization?: IrreversibleRunAuthorization;
 }
 
 export interface BrowserTest {
   id: string;
   workspaceId: string;
   name: string;
+  /** Repositories normalize migrated rows; optional only for legacy fixtures. */
+  allowedDomains?: string[];
+  /** Exact, non-wildcard hosts authorized for local form-state interactions. */
+  writableDomains?: string[];
+  /** Explicit statement that credentials and data are staging/test-only. */
+  testDataAttested?: boolean;
+  /** Exact capabilities; inert until separately approved for one run. */
+  irreversibleActionScopes?: IrreversibleActionScope[];
   startUrl: string;
   instructions: string;
   device: Device;
@@ -61,6 +126,8 @@ export interface TestRun {
   source: RunSource;
   status: RunStatus;
   snapshot: RunSnapshot;
+  /** Mutable one-shot ledger, kept outside the immutable signed snapshot. */
+  actionAuthorizations?: ActionAuthorizationState[];
   scheduledFor: number | null;
   queuedAt: number;
   startedAt: number | null;

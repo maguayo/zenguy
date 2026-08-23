@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { listChannels } from "../../api/channels";
 import { createTest, getTest, updateTest, validateDraft } from "../../api/tests";
-import type { BrowserTestInput } from "../../api/types";
+import type { BrowserTestInput, IrreversibleActionScope } from "../../api/types";
 import { ChannelPicker, defaultChannelIds } from "../../components/ChannelPicker";
 import { RecoveryToggle } from "../../components/RecoveryToggle";
 import { RunStatusPanel } from "../../components/RunStatusPanel";
@@ -21,6 +21,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { Spinner } from "../../components/ui/Spinner";
 import { Textarea } from "../../components/ui/Textarea";
+import { Toggle } from "../../components/ui/Toggle";
 import { fieldError } from "../../components/ui/form";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
@@ -35,8 +36,111 @@ export const timeoutHelpCopy =
   "Each attempt can run for up to 5 minutes. If it takes longer, it ends with a Timeout status and may be retried according to your settings.";
 export const tokenNoteCopy =
   "Tests are designed for a nominal maximum of 200,000 tokens. If a test is very large, split it into smaller tests.";
+export const irreversibleApprovalCopy =
+  "I attest that every credential and record used by these actions is staging/test-only. Each run still requires a separate human confirmation.";
+
+const actionScopeSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("DOM"),
+    action: z.literal("CLICK"),
+    origin: z.string().url().startsWith("https://"),
+    path: z.string().startsWith("/"),
+    target: z.object({
+      attribute: z.enum(["data-testid", "id", "name", "aria-label"]),
+      value: z.string().min(1).max(120),
+      tag: z.enum(["BUTTON", "INPUT"]),
+      type: z.literal("submit"),
+      form: z.object({
+        method: z.literal("POST"),
+        origin: z.string().url().startsWith("https://"),
+        path: z.string().startsWith("/"),
+      }),
+    }),
+    maxUses: z.number().int().min(1).max(3),
+  }),
+  z.object({
+    kind: z.literal("HTTP"),
+    method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
+    origin: z.string().url().startsWith("https://"),
+    path: z.string().startsWith("/"),
+    maxUses: z.number().int().min(1).max(3),
+  }),
+]);
+
+const actionScopesSchema = z
+  .array(actionScopeSchema)
+  .max(20)
+  .superRefine((scopes, context) => {
+    const locators = new Set<string>();
+    scopes.forEach((scope, index) => {
+      if (scope.kind !== "DOM") return;
+      const linked = scopes.some(
+        (candidate) =>
+          candidate.kind === "HTTP" &&
+          candidate.method === scope.target.form.method &&
+          candidate.origin === scope.target.form.origin &&
+          candidate.path === scope.target.form.path &&
+          candidate.maxUses >= scope.maxUses,
+      );
+      const locator = JSON.stringify({
+        origin: scope.origin,
+        path: scope.path,
+        attribute: scope.target.attribute,
+        value: scope.target.value,
+      });
+      if (!linked || locators.has(locator)) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "target"],
+          message:
+            "DOM targets must be unique and link to an equal-or-larger HTTP POST scope.",
+        });
+      }
+      locators.add(locator);
+    });
+  });
+
+export function parseActionScopesJson(value: string): IrreversibleActionScope[] {
+  const parsed: unknown = JSON.parse(value);
+  return actionScopesSchema.parse(parsed);
+}
 
 export const testFormSchema = z.object({
+  allowedDomains: z
+    .array(z.string())
+    .max(20, "Use at most 20 additional domains.")
+    .superRefine((domains, context) => {
+      const domainPattern = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/u;
+      if (domains.some((domain) => !domainPattern.test(domain))) {
+        context.addIssue({
+          code: "custom",
+          message: "Use lowercase hostnames such as checkout.example.com or *.example.com.",
+        });
+      }
+    }),
+  writableDomains: z
+    .array(z.string())
+    .max(20, "Use at most 20 writable domains.")
+    .superRefine((domains, context) => {
+      const exactDomainPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/u;
+      if (domains.some((domain) => !exactDomainPattern.test(domain))) {
+        context.addIssue({
+          code: "custom",
+          message: "Use exact lowercase hostnames; writable wildcards are not allowed.",
+        });
+      }
+    }),
+  testDataAttested: z.boolean(),
+  irreversibleActionScopesJson: z.string().superRefine((value, context) => {
+    try {
+      parseActionScopesJson(value);
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message: "Enter a valid JSON array of at most 20 exact action scopes.",
+      });
+    }
+  }),
   channelIds: z.array(z.string()),
   device: z.enum(["DESKTOP", "MOBILE"]),
   instructions: z.string().trim().min(1, "Instructions are required."),
@@ -52,6 +156,42 @@ export const testFormSchema = z.object({
     .string()
     .url("Enter a valid URL.")
     .refine((value) => /^https?:\/\//iu.test(value), "URL must start with http:// or https://."),
+}).superRefine((config, context) => {
+  let startHost: string | null = null;
+  try {
+    startHost = new URL(config.startUrl).hostname.toLowerCase();
+  } catch {
+    // startUrl owns its validation message.
+  }
+  config.writableDomains.forEach((writable, index) => {
+    const allowed =
+      writable === startHost ||
+      config.allowedDomains.some((domain) =>
+        domain.startsWith("*.")
+          ? writable.endsWith(`.${domain.slice(2)}`)
+          : writable === domain,
+      );
+    if (!allowed) {
+      context.addIssue({
+        code: "custom",
+        path: ["writableDomains", index],
+        message: "Writable host must also be the starting or an allowed domain.",
+      });
+    }
+  });
+  let scopes: IrreversibleActionScope[] = [];
+  try {
+    scopes = parseActionScopesJson(config.irreversibleActionScopesJson);
+  } catch {
+    return;
+  }
+  if (scopes.length > 0 && !config.testDataAttested) {
+    context.addIssue({
+      code: "custom",
+      path: ["testDataAttested"],
+      message: "Staging/test data attestation is required for action scopes.",
+    });
+  }
 });
 
 type TestFormValues = z.infer<typeof testFormSchema>;
@@ -65,6 +205,10 @@ export function retryOptionLabel(retries: number): string {
 }
 
 const defaults: TestFormValues = {
+  allowedDomains: [],
+  writableDomains: [],
+  testDataAttested: false,
+  irreversibleActionScopesJson: "[]",
   channelIds: [],
   device: "DESKTOP",
   instructions: "",
@@ -112,6 +256,14 @@ export default function TestFormPage() {
   useEffect(() => {
     if (!test.data) return;
     form.reset({
+      allowedDomains: test.data.allowedDomains ?? [],
+      writableDomains: test.data.writableDomains ?? [],
+      testDataAttested: test.data.testDataAttested ?? false,
+      irreversibleActionScopesJson: JSON.stringify(
+        test.data.irreversibleActionScopes ?? [],
+        null,
+        2,
+      ),
       channelIds: test.data.channelIds,
       device: test.data.device,
       instructions: test.data.instructions,
@@ -124,15 +276,46 @@ export default function TestFormPage() {
   }, [form, test.data]);
 
   const validation = useMutation({
-    mutationFn: (values: BrowserTestInput) => validateDraft(current.id, values),
+    mutationFn: (input: {
+      values: BrowserTestInput;
+      approveIrreversibleActions: boolean;
+    }) =>
+      validateDraft(
+        current.id,
+        input.values,
+        input.approveIrreversibleActions,
+      ),
   });
+
+  const browserTestInput = (values: TestFormValues): BrowserTestInput => {
+    const { irreversibleActionScopesJson, ...config } = values;
+    return {
+      ...config,
+      irreversibleActionScopes: parseActionScopesJson(
+        irreversibleActionScopesJson,
+      ),
+    };
+  };
 
   const runValidation = async () => {
     const valid = await form.trigger();
     if (!valid || validationRunning) return;
+    const values = browserTestInput(form.getValues());
+    const approveIrreversibleActions = values.irreversibleActionScopes.length > 0;
+    if (
+      approveIrreversibleActions &&
+      !window.confirm(
+        `Authorize ${values.irreversibleActionScopes.length} exact irreversible action scope(s) for this run? ${irreversibleApprovalCopy}`,
+      )
+    ) {
+      return;
+    }
     try {
       setValidationRunId(null);
-      const result = await validation.mutateAsync(form.getValues());
+      const result = await validation.mutateAsync({
+        values,
+        approveIrreversibleActions,
+      });
       setValidationRunId(result.runId);
       setValidationRunning(true);
     } catch (error) {
@@ -143,9 +326,10 @@ export default function TestFormPage() {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
+      const input = browserTestInput(values);
       const saved = editing
-        ? await updateTest(current.id, testId ?? "", values)
-        : await createTest(current.id, values);
+        ? await updateTest(current.id, testId ?? "", input)
+        : await createTest(current.id, input);
       await queryClient.invalidateQueries({ queryKey: ["ws", current.id, "tests"] });
       toast.success(editing ? "Changes saved" : "Test created — first run scheduled");
       navigate(`/w/${current.id}/tests/${saved.id}`);
@@ -154,8 +338,11 @@ export default function TestFormPage() {
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
         for (const detail of error.details) {
-          if (detail.field in defaults) {
-            form.setError(detail.field as keyof TestFormValues, { message: detail.message });
+          const field = detail.field.startsWith("irreversibleActionScopes")
+            ? "irreversibleActionScopesJson"
+            : detail.field;
+          if (field in defaults) {
+            form.setError(field as keyof TestFormValues, { message: detail.message });
             handled = true;
           }
         }
@@ -243,6 +430,100 @@ export default function TestFormPage() {
           <p>{stagingCredentialsCopy}</p>
         </div>
         <p className="mt-3 text-xs text-zinc-500">{tokenNoteCopy}</p>
+      </Card>
+
+      <Card title="Browser permissions">
+        <Field
+          error={fieldError(form.formState, "allowedDomains")}
+          hint="The starting hostname is always included. Add comma-separated external hostnames needed for checkout, OAuth, APIs, or assets. Wildcards such as *.example.com are supported."
+          htmlFor="test-allowed-domains"
+          label="Additional allowed domains"
+        >
+          <Controller
+            control={form.control}
+            name="allowedDomains"
+            render={({ field }) => (
+              <Input
+                id="test-allowed-domains"
+                invalid={Boolean(form.formState.errors.allowedDomains)}
+                placeholder="checkout.example.com, *.login.example.com"
+                value={field.value.join(", ")}
+                onBlur={() => {
+                  field.onChange(field.value.filter(Boolean));
+                  field.onBlur();
+                }}
+                onChange={(event) =>
+                  field.onChange(
+                    event.target.value
+                      .split(",")
+                      .map((domain) => domain.trim())
+                  )
+                }
+              />
+            )}
+          />
+        </Field>
+        <Field
+          error={fieldError(form.formState, "writableDomains")}
+          hint="Exact staging/test hosts only. This authorizes local input, select, checkbox, and radio interactions. Submit buttons, Enter/Space activation, and mutating HTTP requests remain blocked until per-run human approval and exact action scope exist."
+          htmlFor="test-writable-domains"
+          label="Writable staging/test domains"
+        >
+          <Controller
+            control={form.control}
+            name="writableDomains"
+            render={({ field }) => (
+              <Input
+                id="test-writable-domains"
+                invalid={Boolean(form.formState.errors.writableDomains)}
+                placeholder="staging.example.com, login-staging.example.net"
+                value={field.value.join(", ")}
+                onBlur={() => {
+                  field.onChange(field.value.filter(Boolean));
+                  field.onBlur();
+                }}
+                onChange={(event) =>
+                  field.onChange(
+                    event.target.value
+                      .split(",")
+                      .map((domain) => domain.trim())
+                  )
+                }
+              />
+            )}
+          />
+        </Field>
+        <Field
+          error={fieldError(form.formState, "irreversibleActionScopesJson")}
+          hint={'JSON examples: {"kind":"HTTP","method":"POST","origin":"https://staging.example.com","path":"/orders","maxUses":1}. A DOM CLICK additionally requires one unique id/data-testid/name/aria-label submit target whose signed form.method/origin/path matches an HTTP POST scope.'}
+          htmlFor="test-action-scopes"
+          label="Exact irreversible action scopes"
+        >
+          <Textarea
+            id="test-action-scopes"
+            invalid={Boolean(form.formState.errors.irreversibleActionScopesJson)}
+            rows={7}
+            {...form.register("irreversibleActionScopesJson")}
+          />
+        </Field>
+        <Controller
+          control={form.control}
+          name="testDataAttested"
+          render={({ field }) => (
+            <div className="flex items-start gap-3 rounded-md border border-warn-600/20 bg-warn-50 p-3">
+              <Toggle
+                aria-label="Attest staging and test data only"
+                checked={field.value}
+                id="test-data-attested"
+                onBlur={field.onBlur}
+                onCheckedChange={field.onChange}
+              />
+              <label className="text-sm text-zinc-700" htmlFor="test-data-attested">
+                {irreversibleApprovalCopy}
+              </label>
+            </div>
+          )}
+        />
       </Card>
 
       <Card title="Device">

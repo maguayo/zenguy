@@ -1,5 +1,16 @@
 import { logEvent } from "../../shared/log";
 import { truncate } from "../../shared/redact";
+import {
+  providerAmbiguous,
+  providerRejected,
+} from "../../domain/channels/notifier";
+import {
+  externalProviderSignal,
+  readLimitedJsonResponse,
+  readLimitedResponseText,
+} from "../../shared/limited_response";
+
+const MAX_TWILIO_RESPONSE_BYTES = 64 * 1_024;
 
 export type TwilioFetch = (
   input: string,
@@ -51,6 +62,7 @@ export class TwilioApi {
   private async post(
     resource: "Messages" | "Calls",
     fields: Record<string, string>,
+    _idempotencyKey: string,
   ): Promise<string | null> {
     const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(this.accountSid)}/${resource}.json`;
     let response: Response;
@@ -62,40 +74,57 @@ export class TwilioApi {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams(fields).toString(),
+        signal: externalProviderSignal(),
       });
-    } catch {
-      throw new Error("twilio error network");
+    } catch (error) {
+      throw providerAmbiguous("twilio error network", { cause: error });
     }
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
+      const body = await readLimitedResponseText(
+        response,
+        MAX_TWILIO_RESPONSE_BYTES,
+      ).catch(() => "");
       logEvent("twilio_error", {
         status: response.status,
         body: sanitizeTwilioBody(body),
       });
-      throw new Error(`twilio error ${response.status}`);
+      const message = `twilio error ${response.status}`;
+      if (response.status >= 500 || [408, 425, 429].includes(response.status)) {
+        throw providerAmbiguous(message);
+      }
+      throw providerRejected(message);
     }
-    const body: unknown = await response.json().catch(() => null);
-    return responseSid(body);
+    const body = await readLimitedJsonResponse(
+      response,
+      MAX_TWILIO_RESPONSE_BYTES,
+    ).catch(() => null);
+    const sid = responseSid(body);
+    if (sid === null) {
+      throw providerAmbiguous("twilio outcome missing provider id");
+    }
+    return sid;
   }
 
   sendSms(
     to: string,
     from: string,
     body: string,
+    idempotencyKey = "",
   ): Promise<string | null> {
-    return this.post("Messages", { To: to, From: from, Body: body });
+    return this.post("Messages", { To: to, From: from, Body: body }, idempotencyKey);
   }
 
   sendWhatsapp(
     to: string,
     from: string,
     body: string,
+    idempotencyKey = "",
   ): Promise<string | null> {
     return this.post("Messages", {
       To: `whatsapp:${to}`,
       From: `whatsapp:${from}`,
       Body: body,
-    });
+    }, idempotencyKey);
   }
 
   startCall(
@@ -103,12 +132,13 @@ export class TwilioApi {
     from: string,
     twiml: string,
     timeLimitSeconds: number = CALL_TIME_LIMIT_SECONDS,
+    idempotencyKey = "",
   ): Promise<string | null> {
     return this.post("Calls", {
       To: to,
       From: from,
       Twiml: twiml,
       TimeLimit: String(timeLimitSeconds),
-    });
+    }, idempotencyKey);
   }
 }

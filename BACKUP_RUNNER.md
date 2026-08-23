@@ -1,7 +1,7 @@
 # Plan B: worker de respaldo (fallback runner)
 
 **Fecha:** 20 de agosto de 2026
-**Estado (actualizado 23-08-2026):** **activo en producción y en staging.** El servidor dedicado (`142.132.220.44`, repo en `/opt/projects/zenguy` siguiendo `main`, Google Chrome headless, Python 3.12) corre dos unidades systemd con el mismo runner: `zenguy-fallback` (producción: `--fallback`, credenciales en `/etc/zenguy/fallback.env` con el `RUNNER_API_TOKEN` de producción) y `zenguy-fallback-staging` (`--fallback --staging`, `/etc/zenguy/fallback-staging.env`). Hasta el 23-08 solo existía la unidad de staging, así que un run de producción creado con el worker local apagado se quedaba en `QUEUED` indefinidamente (la cola `zenguy-runs` de producción no tiene consumidor push; solo la drena el worker local por pull). El primer run de producción ejecutado por el plan B fue `run_01m0nqgdbh8s1kf3kww9819pkh` (`PASSED`, 64 s, gpt-5-mini, `runnerVersion zenguy-fallback-runner/2.0.0`). En staging quedó validado extremo a extremo el 21-08 con runs reales de gpt-5-mini: un fallo funcional legítimo con retry y un `PASSED` limpio. Los errores del proveedor LLM (cuota/auth/conexión) se reportan como `SYSTEM_ERROR/LLM_UNAVAILABLE`, no como `FAILED`. Los tests seed de staging se siembran aparcados (`next_run_at` 2030) para que el daemon no ejecute basura tras cada reseed; para un run real en staging, adelanta `next_run_at` de `bt_seed_homepage`. Actualizar el VPS: `git -C /opt/projects/zenguy pull --ff-only && systemctl restart zenguy-fallback zenguy-fallback-staging`.
+**Estado de seguridad (verificado 23-08-2026):** **los dos servicios remotos deben considerarse en cuarentena.** La inspección del VPS confirmó que `zenguy-fallback` y `zenguy-fallback-staging` siguen ejecutando Python y Chrome directamente en el host desde una revisión antigua, sin contenedor efímero ni `ZENGUY_EGRESS_PROXY`. Esa topología no cumple SEC-01/SEC-12 y no debe aceptar jobs no confiables. Detén las unidades antiguas hasta publicar, verificar y desplegar por digest las dos imágenes descritas en `runner/README.md`; no basta con hacer `git pull` y reiniciar. Los resultados históricos siguientes se conservan como trazabilidad del protocolo, no como evidencia de aislamiento.
 
 ## Qué pediste
 
@@ -10,8 +10,8 @@
 ## Qué hay ahora
 
 - La marca de **"cogido" ya existía** y la he reutilizado tal cual: el claim del runner transiciona el attempt `QUEUED → STARTING` de forma atómica en D1 y guarda el lease `runner_delivery_id` (migración `0016`). No inventé una segunda marca.
-- **Nuevo endpoint** `POST /api/runner/attempts/claim-stale` (mismo token `RUNNER_API_TOKEN`): entrega el attempt **más antiguo** que lleve **≥ 10 segundos** reclamable y siga sin coger. Si no hay nada, responde `SKIP`.
-- **Nuevo modo del worker Python**: `./browser_worker.py --fallback [--staging]`. Es el mismo ejecutor `browser-use` de siempre, pero:
+- **Nuevo endpoint** `POST /api/runner/attempts/claim-stale` (token dedicado `RUNNER_FALLBACK_API_TOKEN`): entrega el attempt **más antiguo** que lleve **≥ 10 segundos** reclamable y siga sin coger. Si no hay nada, responde `SKIP`; si entrega trabajo, devuelve una capability de seis minutos ligada a ese worker/attempt.
+- **Modo fallback del worker Python**, invocable únicamente por el contenedor Compose firmado con `--fallback --recycle-after-attempt`. Es el mismo ejecutor `browser-use` de siempre, pero:
   - no toca Cloudflare Queues (ni necesita Wrangler ni credenciales de Cloudflare);
   - sondea `claim-stale` cada 5 segundos;
   - usa la **API de OpenAI** con `gpt-5-mini` por defecto, en headless.
@@ -33,9 +33,9 @@
 
 7. **Adaptador nativo, no el de Bionic.** OpenAI sí compila el `json_schema` dinámico de browser-use, así que el fallback usa el `ChatOpenAI` de serie con structured output nativo. El adaptador de texto `BionicChatOpenAI` queda solo para el modo local.
 
-8. **El VPS no tiene credenciales de Cloudflare.** Solo necesita `ZENGUY_RUNNER_TOKEN` (el mismo secret del entorno) y `OPENAI_API_KEY`, por variables de entorno. Menos superficie de ataque que replicar el perfil de Wrangler fuera de casa. En el Mac también puedes guardarlos en `runner/.browser_worker.local.json` (`openai_api_key` + los `*_runner_token` de siempre).
+8. **El VPS no tiene credenciales de Queue ni OAuth personal de Cloudflare.** Recibe mediante `LoadCredential` un bootstrap fallback, una clave OpenAI y un Access service token exclusivos de ese runner/entorno. El claim no incluye secretos: se liberan en `start` sólo tras validar la capability por job. El código rechaza ya toda ejecución real directa en el host.
 
-9. **Misma seguridad que el modo local.** SSRF/DNS-check en cada navegación, secretos solo vía `sensitive_data` con ámbito por dominio (nunca en el prompt), screenshots desactivados si el attempt usa secretos, redaction en steps y outcome. La única diferencia consciente: el DOM y las capturas viajan a OpenAI por HTTPS — es el precio explícito del plan B y está forzado a TLS.
+9. **Objetivo de seguridad, no estado remoto actual.** La topología versionada exige proxy de egreso, contenedor efímero y controles CDP en cada intento. El despliegue inspeccionado todavía no usa esa topología; por tanto, ninguna validación histórica del runner demuestra que el VPS esté aislado. Los secretos sólo deben sustituirse sobre HTTPS y con ámbito por dominio, y el DOM/capturas enviados a OpenAI siguen siendo una transferencia explícita a un tercero.
 
 10. **Índice nuevo para el poll**: migración `0017_fallback_claim_index.sql` (`test_attempts(status, queued_at)`), porque `claim-stale` se consulta cada pocos segundos.
 
@@ -73,18 +73,28 @@
 
 ```bash
 # 1. Migración nueva (0017) y deploy de la API con el endpoint
-pnpm --filter @zenguy/api exec wrangler d1 migrations apply zenguy-staging-db --remote --env staging --profile zenguy-personal
-pnpm --filter @zenguy/api exec wrangler deploy --env staging --profile zenguy-personal
+pnpm --filter @zenguy/api exec wrangler d1 migrations apply zenguy-staging-db --remote --env staging
+pnpm --filter @zenguy/api exec wrangler deploy --env staging
 
-# 2. Smoke con el worker local APAGADO: crea un run de prueba en staging y ~10-15 s después:
-ZENGUY_RUNNER_TOKEN=<staging_runner_token> OPENAI_API_KEY=<tu key> \
-  ./browser_worker.py --fallback --staging --once
-# Debe cogerlo, ejecutarlo con gpt-5-mini y dejar el run PASSED/FAILED con runnerVersion "zenguy-fallback-runner/...".
+# 2. Publica las imágenes runner-v* desde main, fija en la unidad aislada de
+# staging los dos digests firmados, su ZENGUY_RUNNER_RELEASE_TAG y el
+# ZENGUY_RUNNER_RELEASE_SHA común de 40 caracteres; después arráncala.
+# Con el worker primario APAGADO, crea un run de prueba: debe cogerlo ~10-15 s
+# después y dejar runnerVersion "zenguy-fallback-runner/...".
 
 # 3. Con el worker local ENCENDIDO, repite: el fallback debe quedarse en SKIP (log "fallback_runner_started" y nada más).
 ```
 
-### VPS (Debian/Ubuntu)
+Estos comandos requieren `CLOUDFLARE_API_TOKEN` cargado desde el gestor de
+secretos en el entorno del proceso. Usa un token efímero, distinto para staging
+y limitado a la operación concreta; no crees ni actives un perfil OAuth personal.
+
+### VPS (Debian/Ubuntu) — procedimiento histórico prohibido
+
+> No uses el procedimiento directo siguiente. Se conserva únicamente para
+> explicar el despliegue que debe retirarse. El procedimiento vigente está en
+> `runner/README.md`: imagen preconstruida y firmada, referencia por digest,
+> verificación con cosign, proxy de egreso y `docker compose run --rm` por job.
 
 ```bash
 apt-get install -y python3.11 python3.11-venv chromium
@@ -97,6 +107,7 @@ runner/.venv/bin/pip install -r runner/requirements.txt
 mkdir -p /etc/zenguy && cat > /etc/zenguy/fallback.env <<'EOF'
 ZENGUY_RUNNER_TOKEN=...
 OPENAI_API_KEY=...
+ZENGUY_EGRESS_PROXY=http://127.0.0.1:3128
 ZENGUY_FALLBACK_CHROME=/usr/bin/chromium
 EOF
 chmod 600 /etc/zenguy/fallback.env
@@ -106,9 +117,9 @@ systemctl daemon-reload && systemctl enable --now zenguy-fallback
 journalctl -u zenguy-fallback -f   # logs JSON del worker
 ```
 
-### Producción
+### Producción — evidencia histórica, no aprobación de seguridad
 
-**Hecho el 23-08-2026**: migraciones aplicadas, `RUNNER_API_TOKEN` configurado en producción y la unidad `zenguy-fallback` del VPS apuntando a `app.zenguy.com` (la de staging pasó a `zenguy-fallback-staging`). El texto siguiente describe el plan original.
+El 23-08-2026 se verificó que la unidad antigua de producción estaba activa. Eso demuestra disponibilidad histórica, no aislamiento: debe detenerse o reemplazarse por el despliegue firmado y efímero antes de aceptar jobs no confiables. El texto siguiente describe el plan original.
 
 Los mismos tres pasos de staging, **después** de completar los gates de release ya documentados en `BIONIC.md` (producción sigue con las migraciones 0009-0017 pendientes y sin consumidor HTTP en la cola). Ojo: el fallback de producción funciona aunque la cola de producción siga sin consumidor HTTP — le basta con que la API esté desplegada con `claim-stale` y las migraciones aplicadas; de hecho serviría como primer ejecutor de producción si algún día lo quieres así.
 
@@ -128,10 +139,13 @@ Orientativo (precios de gpt-5-mini que conozco: ~0,25 $/M tokens de entrada, ~2 
 
 Los tests nuevos cubren específicamente: la frontera exacta de los 10 s (antes `SKIP`, después `EXECUTE`), que el fallback nunca roba un attempt ya cogido, que un claim tardío del local tras el robo legítimo recibe `SKIP`, la recuperación `WORKER_LOST` con su infra-retry reencolado con 30 s de delay, el orden/filtrado/límite de la query en D1 real, y en Python la configuración por entorno, el HTTPS obligatorio, el adaptador nativo y el bucle de poll con delivery ids únicos.
 
-## Límites conocidos / siguientes pasos (no bloqueantes)
+## Límites conocidos / siguientes pasos
+
+El reemplazo del despliegue directo por la topología aislada y la rotación de
+credenciales son **bloqueantes de seguridad**, no mejoras opcionales.
 
 - **"Cogido" es cogido**: si el local reclama un run y luego tarda 4 minutos con Bionic frío, el fallback no se lo quita (es el comportamiento que pediste; el timeout de 5 min sigue mandando).
-- El fallback ejecuta **en serie** (1 run a la vez), igual que el local. Si necesitas más caudal, arranca N procesos `--fallback`; el claim atómico reparte sin duplicar.
+- El fallback de referencia ejecuta **en serie** (1 run a la vez). No arranques procesos host ni copias que compartan identidad/credenciales; el escalado horizontal requiere stacks aislados e identidades/tokens separados.
 - La recuperación de un fallback muerto tarda ~7-8 min (timeout 5 min + gracia 2 min + poll). Se puede acortar bajando la gracia, pero preferí no tocar la semántica existente de `WORKER_LOST`.
 - Queda a tu criterio: alerta/notificación interna cuando el fallback ejecute algo (señal de que el local está caído). Hoy se ve en `runnerVersion` y en los logs del VPS.
 - No he desplegado nada ni commiteado (tree con trabajo de otras sesiones). Cuando lo actives en staging, el paso 2 de la checklist es el smoke real de extremo a extremo que falta.

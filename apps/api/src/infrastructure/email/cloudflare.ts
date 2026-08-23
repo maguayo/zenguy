@@ -30,6 +30,7 @@ export class CloudflareEmailSender implements EmailSender {
         subject: message.subject,
         html: message.html,
         text: message.text,
+        ...(message.headers === undefined ? {} : { headers: message.headers }),
       });
       return { providerMessageId: result.messageId };
     } catch {

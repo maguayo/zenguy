@@ -72,6 +72,15 @@ export function validation(details: ValidationDetail[]): AppError {
   return new AppError("VALIDATION_ERROR", "Invalid request", details);
 }
 
+export function throwIfCollectionCap(error: unknown): void {
+  if (error instanceof Error && error.message.includes("ZENGUY_COLLECTION_CAP_")) {
+    throw new AppError(
+      "RATE_LIMITED",
+      "The workspace collection limit has been reached",
+    );
+  }
+}
+
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }

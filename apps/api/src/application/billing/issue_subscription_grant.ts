@@ -72,7 +72,9 @@ export class IssueSubscriptionGrant {
     return {
       id: grant.id,
       token,
-      redeemUrl: `${this.config.appUrl}/grants/${encodeURIComponent(token)}`,
+      // The fragment is delivered to the web/iOS client without entering CDN,
+      // origin or Referer logs and is immediately replaced client-side.
+      redeemUrl: `${this.config.appUrl}/grants/redeem#${encodeURIComponent(token)}`,
       note,
       expiresAt: grant.expiresAt,
       createdAt: grant.createdAt,

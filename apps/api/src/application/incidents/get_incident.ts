@@ -57,7 +57,10 @@ export class GetIncident {
         channelName: delivery.channelName,
         channelType: delivery.channelType,
         eventType: delivery.eventType,
-        status: delivery.status,
+        status:
+          delivery.dispatchState === "AMBIGUOUS"
+            ? "AMBIGUOUS"
+            : delivery.status,
         attemptCount: delivery.attemptCount,
         errorSanitized: delivery.errorSanitized,
         sentAt: delivery.sentAt,

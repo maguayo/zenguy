@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "zenguy-api-integration-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["notifications@zenguy.com"]
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zenguy-integration-test-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../migrations"
+    }
+  ],
+  "kv_namespaces": [
+    { "binding": "KV", "id": "00000000000000000000000000000001" }
+  ],
+  "r2_buckets": [
+    { "binding": "ARTIFACTS", "bucket_name": "zenguy-integration-test-artifacts" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "RUN_QUEUE", "queue": "zenguy-integration-test-runs" },
+      { "binding": "CHECK_QUEUE", "queue": "zenguy-integration-test-checks" },
+      { "binding": "NOTIFY_QUEUE", "queue": "zenguy-integration-test-notify" }
+    ]
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_URL": "http://localhost:5173",
+    "ENCRYPTION_KEY_ID": "test-key-current",
+    "LLM_MODEL": "gpt-5-mini",
+    "PADDLE_ENVIRONMENT": "sandbox",
+    "EMAIL_FROM": "Zenguy <notifications@zenguy.com>"
+  }
+}

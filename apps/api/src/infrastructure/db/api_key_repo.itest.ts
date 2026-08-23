@@ -1,4 +1,5 @@
 import type { WorkspaceApiKey } from "../../domain/api_keys/types";
+import { DEFAULT_API_KEY_SCOPES } from "../../domain/api_keys/types";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1ApiKeyRepo } from "./api_key_repo";
 
@@ -8,6 +9,8 @@ const API_KEY: WorkspaceApiKey = {
   name: "Status dashboard",
   keyPrefix: "zgk_abcd1234",
   keyHash: "hash-primary",
+  scopes: [...DEFAULT_API_KEY_SCOPES],
+  expiresAt: 10_000,
   createdBy: "usr_owner",
   createdAt: 1_000,
   lastUsedAt: null,
@@ -67,9 +70,10 @@ describe("D1ApiKeyRepo", () => {
       { id: "ak_newer" },
       { id: "ak_primary" },
     ]);
-    await expect(repo.countActive("ws_primary")).resolves.toBe(2);
-    await expect(repo.countActive("ws_other")).resolves.toBe(1);
-    await expect(repo.countActive("ws_empty")).resolves.toBe(0);
+    await expect(repo.countActive("ws_primary", 4_000)).resolves.toBe(2);
+    await expect(repo.countActive("ws_other", 4_000)).resolves.toBe(1);
+    await expect(repo.countActive("ws_empty", 4_000)).resolves.toBe(0);
+    await expect(repo.countActive("ws_primary", 10_000)).resolves.toBe(0);
   });
 
   it("revokes once and keeps the original revocation timestamp", async () => {

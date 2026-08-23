@@ -1,4 +1,13 @@
-import { apiGet, apiPost, ensureFreshToken } from "../lib/api";
+import {
+  ApiError,
+  apiGet,
+  apiPost,
+  beginTerminalLogout,
+  confirmTerminalLogout,
+  ensureFreshToken,
+  isTerminalLogoutPending,
+  supersedeSession,
+} from "../lib/api";
 import { clearToken, setToken } from "../lib/auth-token";
 import type { User } from "./types";
 
@@ -12,29 +21,68 @@ export interface VerifiedSession extends AuthSession {
   verified: true;
 }
 
+export interface RegistrationPending {
+  registrationPending: true;
+  email: string;
+}
+
 function keepSession<T extends AuthSession>(session: T): T {
   setToken(session.accessToken, session.expiresIn);
   return session;
 }
 
-/** Registration signs the new account in; it stays on the verification screen until the emailed link is used. */
-export async function register(name: string, email: string, password: string): Promise<AuthSession> {
-  return keepSession(await apiPost<AuthSession>("/api/auth/register", { email, name, password }));
+/** Persists a session only after AuthContext has removed the previous principal's data. */
+export function activateSession<T extends AuthSession>(session: T): T {
+  supersedeSession();
+  confirmTerminalLogout();
+  return keepSession(session);
+}
+
+async function retryPendingLogout(): Promise<void> {
+  if (!isTerminalLogoutPending()) return;
+  await apiPost<void>("/api/auth/logout");
+  confirmTerminalLogout();
+}
+
+async function prepareForNewSession(): Promise<void> {
+  if (isTerminalLogoutPending()) await retryPendingLogout();
+}
+
+/** Registration is deliberately token-free until inbox + password verification. */
+export function register(
+  name: string,
+  email: string,
+  password: string,
+): Promise<RegistrationPending> {
+  return apiPost<RegistrationPending>("/api/auth/register", {
+    email,
+    name,
+    password,
+  });
 }
 
 export async function login(email: string, password: string): Promise<AuthSession> {
-  return keepSession(await apiPost<AuthSession>("/api/auth/login", { email, password }));
+  await prepareForNewSession();
+  return apiPost<AuthSession>("/api/auth/login", { email, password });
 }
 
 export async function logout(): Promise<void> {
+  beginTerminalLogout();
   try {
     await apiPost<void>("/api/auth/logout");
+    confirmTerminalLogout();
   } finally {
     clearToken();
   }
 }
 
 export async function refresh(): Promise<AuthSession> {
+  if (isTerminalLogoutPending()) {
+    // Stay signed out even if the retry is offline; never turn the surviving
+    // HttpOnly cookie back into a local session.
+    await retryPendingLogout().catch(() => undefined);
+    throw new ApiError("Signed out", { code: "UNAUTHORIZED", status: 401 });
+  }
   const session = await ensureFreshToken();
   return session as AuthSession;
 }
@@ -44,9 +92,13 @@ export async function me(): Promise<User> {
   return result.user;
 }
 
-/** Using the emailed link proves control of the inbox, so it also signs this browser in. */
-export async function verifyEmail(token: string): Promise<VerifiedSession> {
-  return keepSession(await apiPost<VerifiedSession>("/api/auth/verify-email", { token }));
+/** The inbox token and original registration password jointly verify the account. */
+export async function verifyEmail(
+  token: string,
+  password: string,
+): Promise<VerifiedSession> {
+  await prepareForNewSession();
+  return apiPost<VerifiedSession>("/api/auth/verify-email", { password, token });
 }
 
 export function resendVerification(email: string): Promise<{ sent: true }> {

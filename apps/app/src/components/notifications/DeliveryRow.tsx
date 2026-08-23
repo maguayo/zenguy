@@ -58,7 +58,8 @@ export function DeliveryRow({
             {delivery.providerMessageId}
           </Mono>
         ) : null}
-        {delivery.status === "FAILED" && delivery.errorSanitized ? (
+        {(delivery.status === "FAILED" || delivery.status === "AMBIGUOUS") &&
+        delivery.errorSanitized ? (
           <Mono style={styles.error}>{delivery.errorSanitized}</Mono>
         ) : null}
         {incidentHref ? (

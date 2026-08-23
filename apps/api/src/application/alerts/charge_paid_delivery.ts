@@ -120,28 +120,27 @@ export class ChargePaidDelivery implements PaidDeliveryCharger {
         message: "Skipped: SMS & calls are turned off for this workspace",
       };
     }
-    const recentCharges = await this.alerts.countCharges(
-      input.workspaceId,
+    const debit = await this.alerts.debitWithinDailyLimit(
+      {
+        id: this.ids.newId("ace"),
+        workspaceId: input.workspaceId,
+        amountCents: costCents,
+        idempotencyKey,
+        description: `${alertLabel(input.channelType)} to ${quote.destination.name}`,
+        deliveryId: input.deliveryId,
+        at: now,
+      },
+      settings.dailyPaidAlertLimit,
       now - DAY_MS,
     );
-    if (recentCharges >= settings.dailyPaidAlertLimit) {
+    if (debit.status === "daily_limit") {
       return {
         ok: false,
         reason: "DAILY_LIMIT",
         message: `Skipped: daily limit of ${settings.dailyPaidAlertLimit} paid alerts reached`,
       };
     }
-
-    const written = await this.alerts.debit({
-      id: this.ids.newId("ace"),
-      workspaceId: input.workspaceId,
-      amountCents: costCents,
-      idempotencyKey,
-      description: `${alertLabel(input.channelType)} to ${quote.destination.name}`,
-      deliveryId: input.deliveryId,
-      at: now,
-    });
-    if (written === null) {
+    if (debit.status === "insufficient_credit") {
       const balanceCents = await this.alerts.getBalanceCents(input.workspaceId);
       await this.notifyCredit(input.workspaceId, settings, balanceCents, "exhausted");
       return {
@@ -150,6 +149,7 @@ export class ChargePaidDelivery implements PaidDeliveryCharger {
         message: `Skipped: not enough alert credit (${formatEuroCents(costCents)} needed, ${formatEuroCents(balanceCents)} left)`,
       };
     }
+    const written = debit.write;
     if (written.entry.balanceAfterCents < LOW_BALANCE_THRESHOLD_CENTS) {
       await this.notifyCredit(
         input.workspaceId,

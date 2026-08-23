@@ -1,5 +1,11 @@
-import { buildApp } from "../app";
-import { fakeBindings } from "../../test/fakes";
+import { buildApp, type AppOverrides } from "../app";
+import {
+  ADMIN_EMAIL,
+  FakeAdminSessionStore,
+  allowAdminAccess,
+  fakeBindings,
+  verifiedLoginBody,
+} from "../../test/fakes";
 
 function fetchReturning(status: number, body: unknown = {}) {
   const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -24,23 +30,34 @@ async function login(app: ReturnType<typeof buildApp>, body: unknown) {
   });
 }
 
+function buildTestApp(
+  bindings = fakeBindings(),
+  overrides: AppOverrides = {},
+): ReturnType<typeof buildApp> {
+  return buildApp(bindings, {
+    sessions: new FakeAdminSessionStore(),
+    accessVerifier: allowAdminAccess,
+    ...overrides,
+  });
+}
+
 describe("admin auth", () => {
   it("logs in an allowlisted account validated by the production API and sets the cookie", async () => {
-    const { calls, fetchImpl } = fetchReturning(200, { data: { accessToken: "discarded" } });
-    const app = buildApp(fakeBindings(), { fetch: fetchImpl, delay: noDelay, clock });
+    const { calls, fetchImpl } = fetchReturning(200, verifiedLoginBody());
+    const app = buildTestApp(fakeBindings(), { fetch: fetchImpl, delay: noDelay, clock });
 
     const response = await login(app, { email: " Marcos@Aguayo.es ", password: "abc123456" });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ data: { email: "marcos@aguayo.es" } });
-    expect(calls[0]?.url).toBe("https://api.zenguy.test/api/auth/login");
+    expect(calls[0]?.url).toBe("https://api.zenguy.com/api/auth/login");
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
       email: "marcos@aguayo.es",
       password: "abc123456",
     });
     const cookie = response.headers.get("Set-Cookie") ?? "";
     expect(cookie).toMatch(
-      /^zenguy_admin_session=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+; Max-Age=604800; Path=\/; HttpOnly; Secure; SameSite=Lax$/u,
+      /^__Host-zenguy_admin_session=[A-Za-z0-9_-]{43}; Max-Age=1800; Path=\/; HttpOnly; Secure; SameSite=Strict$/u,
     );
 
     const me = await app.request("/api/auth/me", {
@@ -49,10 +66,23 @@ describe("admin auth", () => {
     await expect(me.json()).resolves.toEqual({ data: { email: "marcos@aguayo.es" } });
   });
 
-  it("rejects non-admin emails without contacting the API, with a generic error and a delay", async () => {
-    const { calls, fetchImpl } = fetchReturning(200);
+  it("rejects a valid account whose stable user id is not allowlisted", async () => {
+    const { calls, fetchImpl } = fetchReturning(
+      200,
+      verifiedLoginBody({
+        id: "usr_00000000000000000000000003",
+        email: "intruder@example.com",
+      }),
+    );
     const delay = vi.fn(async () => {});
-    const app = buildApp(fakeBindings(), { fetch: fetchImpl, delay, clock });
+    const app = buildTestApp(fakeBindings(), {
+      fetch: fetchImpl,
+      delay,
+      clock,
+      accessVerifier: {
+        verify: async () => ({ email: "intruder@example.com", subject: "access-intruder" }),
+      },
+    });
 
     const response = await login(app, { email: "intruder@example.com", password: "whatever" });
 
@@ -60,7 +90,7 @@ describe("admin auth", () => {
     await expect(response.json()).resolves.toEqual({
       error: { code: "UNAUTHORIZED", message: "Invalid credentials" },
     });
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     expect(delay).toHaveBeenCalledWith(300);
     expect(response.headers.get("Set-Cookie")).toBeNull();
   });
@@ -68,7 +98,7 @@ describe("admin auth", () => {
   it("rejects wrong passwords with the same generic error and the same delay", async () => {
     const { fetchImpl } = fetchReturning(401, { error: { code: "INVALID_CREDENTIALS" } });
     const delay = vi.fn(async () => {});
-    const app = buildApp(fakeBindings(), { fetch: fetchImpl, delay, clock });
+    const app = buildTestApp(fakeBindings(), { fetch: fetchImpl, delay, clock });
     const response = await login(app, { email: "marcos@aguayo.es", password: "nope" });
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({
@@ -78,15 +108,34 @@ describe("admin auth", () => {
     expect(response.headers.get("Set-Cookie")).toBeNull();
   });
 
+  it("rejects an allowlisted id when the API account is unverified or the identity is inconsistent", async () => {
+    for (const body of [
+      verifiedLoginBody({ emailVerified: false }),
+      verifiedLoginBody({ email: "different@example.com" }),
+      { data: { accessToken: "token-without-an-identity" } },
+    ]) {
+      const sessions = new FakeAdminSessionStore();
+      const app = buildTestApp(fakeBindings(), {
+        fetch: fetchReturning(200, body).fetchImpl,
+        delay: noDelay,
+        clock,
+        sessions,
+      });
+      const response = await login(app, { email: ADMIN_EMAIL, password: "correct" });
+      expect(response.status).toBe(401);
+      expect(sessions.sessions.size).toBe(0);
+    }
+  });
+
   it("surfaces API rate limiting and unavailability", async () => {
-    const limited = buildApp(fakeBindings(), {
+    const limited = buildTestApp(fakeBindings(), {
       fetch: fetchReturning(429).fetchImpl,
       delay: noDelay,
       clock,
     });
     expect((await login(limited, { email: "marcos@aguayo.es", password: "x" })).status).toBe(429);
 
-    const down = buildApp(fakeBindings(), {
+    const down = buildTestApp(fakeBindings(), {
       fetch: (async () => {
         throw new TypeError("fetch failed");
       }) as typeof fetch,
@@ -102,7 +151,7 @@ describe("admin auth", () => {
 
   it("bounds the upstream call and reports a timeout as unavailable", async () => {
     const inits: (RequestInit | undefined)[] = [];
-    const app = buildApp(fakeBindings(), {
+    const app = buildTestApp(fakeBindings(), {
       fetch: (async (_input: RequestInfo | URL, init?: RequestInit) => {
         inits.push(init);
         throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
@@ -120,9 +169,35 @@ describe("admin auth", () => {
     expect(inits[0]?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("rejects and cancels an oversized upstream login response", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const app = buildTestApp(fakeBindings(), {
+      fetch: (async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(64 * 1_024 + 1));
+            },
+            cancel,
+          }),
+          { status: 200 },
+        )) as typeof fetch,
+      delay: noDelay,
+      clock,
+    });
+
+    const response = await login(app, {
+      email: "marcos@aguayo.es",
+      password: "x",
+    });
+
+    expect(response.status).toBe(503);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("treats an API error status as unavailable rather than a bad password", async () => {
     for (const status of [500, 502, 503]) {
-      const app = buildApp(fakeBindings(), {
+      const app = buildTestApp(fakeBindings(), {
         fetch: fetchReturning(status).fetchImpl,
         delay: noDelay,
         clock,
@@ -136,28 +211,56 @@ describe("admin auth", () => {
   });
 
   it("validates the body", async () => {
-    const app = buildApp(fakeBindings(), {
-      fetch: fetchReturning(200).fetchImpl,
+    const app = buildTestApp(fakeBindings(), {
+      fetch: fetchReturning(200, verifiedLoginBody()).fetchImpl,
       delay: noDelay,
       clock,
     });
     expect((await login(app, { email: "not-an-email", password: "" })).status).toBe(400);
   });
 
-  it("stops honouring a signed cookie once the email leaves the allowlist", async () => {
-    const { fetchImpl } = fetchReturning(200, { data: {} });
-    const secret = fakeBindings().ADMIN_SESSION_SECRET;
-    const allowed = buildApp(fakeBindings(), { fetch: fetchImpl, delay: noDelay, clock });
+  it("fails closed before accepting passwords when the API origin drifts", () => {
+    for (const origin of [
+      "https://api.zenguy.com.evil.test",
+      "https://api.zenguy.com/path",
+      "https://user@api.zenguy.com",
+      "http://api.zenguy.com",
+    ]) {
+      expect(() =>
+        buildTestApp(fakeBindings({ ZENGUY_API_ORIGIN: origin }), {
+          fetch: fetchReturning(200, verifiedLoginBody()).fetchImpl,
+        }),
+      ).toThrow("ZENGUY_API_ORIGIN must be the production API origin");
+    }
+  });
+
+  it("allows the documented loopback origin for local development", () => {
+    expect(() =>
+      buildTestApp(
+        fakeBindings({ ZENGUY_API_ORIGIN: "http://127.0.0.1:8799" }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("stops honouring an opaque cookie once the user id leaves the allowlist", async () => {
+    const { fetchImpl } = fetchReturning(200, verifiedLoginBody());
+    const sessions = new FakeAdminSessionStore();
+    const allowed = buildTestApp(fakeBindings(), {
+      fetch: fetchImpl,
+      delay: noDelay,
+      clock,
+      sessions,
+    });
     const cookie = (
       (
         await login(allowed, { email: "marcos@aguayo.es", password: "abc123456" })
       ).headers.get("Set-Cookie") ?? ""
     ).split(";")[0] as string;
 
-    // Same secret, so the signature still verifies; only ADMIN_EMAILS changed.
-    const revoked = buildApp(
-      fakeBindings({ ADMIN_EMAILS: "someone-else@example.com", ADMIN_SESSION_SECRET: secret }),
-      { fetch: fetchImpl, delay: noDelay, clock },
+    // The D1 row still exists; only the stable-id allowlist changed.
+    const revoked = buildTestApp(
+      fakeBindings({ ADMIN_USER_IDS: "usr_00000000000000000000000003" }),
+      { fetch: fetchImpl, delay: noDelay, clock, sessions },
     );
     expect((await allowed.request("/api/auth/me", { headers: { Cookie: cookie } })).status).toBe(
       200,
@@ -169,21 +272,66 @@ describe("admin auth", () => {
     });
   });
 
-  it("requires a valid session for /me and clears it on logout", async () => {
-    const app = buildApp(fakeBindings(), {
-      fetch: fetchReturning(200).fetchImpl,
+  it("binds an admin cookie to the stable Access subject, not only its email", async () => {
+    const { fetchImpl } = fetchReturning(200, verifiedLoginBody());
+    const sessions = new FakeAdminSessionStore();
+    const original = buildTestApp(fakeBindings(), {
+      fetch: fetchImpl,
       delay: noDelay,
       clock,
+      sessions,
+      accessVerifier: {
+        verify: async () => ({ email: ADMIN_EMAIL, subject: "access-original" }),
+      },
+    });
+    const cookie = (
+      (
+        await login(original, { email: ADMIN_EMAIL, password: "abc123456" })
+      ).headers.get("Set-Cookie") ?? ""
+    ).split(";")[0] as string;
+    expect(
+      (await original.request("/api/auth/me", { headers: { Cookie: cookie } })).status,
+    ).toBe(200);
+
+    const reassigned = buildTestApp(fakeBindings(), {
+      fetch: fetchImpl,
+      delay: noDelay,
+      clock,
+      sessions,
+      accessVerifier: {
+        verify: async () => ({ email: ADMIN_EMAIL, subject: "access-reassigned" }),
+      },
+    });
+    const response = await reassigned.request("/api/auth/me", {
+      headers: { Cookie: cookie },
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("requires a valid session for /me and clears it on logout", async () => {
+    const sessions = new FakeAdminSessionStore();
+    const app = buildTestApp(fakeBindings(), {
+      fetch: fetchReturning(200, verifiedLoginBody()).fetchImpl,
+      delay: noDelay,
+      clock,
+      sessions,
     });
     expect((await app.request("/api/auth/me")).status).toBe(401);
     expect(
-      (await app.request("/api/auth/me", { headers: { Cookie: "zenguy_admin_session=bad.token" } }))
+      (await app.request("/api/auth/me", { headers: { Cookie: "__Host-zenguy_admin_session=bad.token" } }))
         .status,
     ).toBe(401);
-    const logout = await app.request("/api/auth/logout", { method: "POST" });
+    const loggedIn = await login(app, { email: ADMIN_EMAIL, password: "abc123456" });
+    const cookie = (loggedIn.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
+    expect((await app.request("/api/auth/me", { headers: { Cookie: cookie } })).status).toBe(200);
+    const logout = await app.request("/api/auth/logout", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
     expect(logout.status).toBe(204);
     expect(logout.headers.get("Set-Cookie")).toBe(
-      "zenguy_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax",
+      "__Host-zenguy_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict",
     );
+    expect((await app.request("/api/auth/me", { headers: { Cookie: cookie } })).status).toBe(401);
   });
 });

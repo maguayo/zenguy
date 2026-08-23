@@ -1,0 +1,5 @@
+**
+!browser_worker.py
+!requirements.lock
+!deploy
+!deploy/Dockerfile

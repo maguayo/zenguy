@@ -80,6 +80,73 @@ describe("RedriveDeadLetter", () => {
     expect([...value.durable.outboxEntries.values()][0]?.publishedAt).toBe(NOW);
   });
 
+  it.each([
+    {
+      queue: "zenguy-local-runs-dlq",
+      body: {
+        kind: "attempt",
+        runId: "run_local",
+        attemptId: "att_local",
+        attemptIndex: 0,
+        executionGeneration: NOW,
+      },
+      kind: "RUN" as const,
+    },
+    {
+      queue: "zenguy-local-checks-dlq",
+      body: {
+        kind: "check",
+        monitorId: "mon_local",
+        workspaceId: "ws_local",
+        cycleId: "cyc_local",
+        attemptIndex: 0,
+      },
+      kind: "CHECK" as const,
+    },
+    {
+      queue: "zenguy-local-notify-dlq",
+      body: {
+        kind: "notify",
+        deliveryId: "del_local",
+        workspaceId: "ws_local",
+        channelId: "ch_local",
+        message: {
+          eventType: "TEST",
+          title: "Local",
+          lines: ["Local"],
+          link: "https://app.zenguy.test",
+          speakText: "Local",
+          shortText: "Local",
+          color: "gray",
+        },
+      },
+      kind: "NOTIFY" as const,
+    },
+  ])("redrives configured local queue $queue as $kind", async ({ queue, body, kind }) => {
+    const value = fixture();
+    const queued = message(`msg_${kind}`, body);
+
+    await value.redriver.execute(queue, queued);
+
+    expect(queued.ack).toHaveBeenCalledOnce();
+    expect(value.queues[kind].calls).toHaveLength(1);
+  });
+
+  it("does not acknowledge an unsupported DLQ name", async () => {
+    const value = fixture();
+    const queued = message("msg_unknown", { kind: "unknown" });
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      value.redriver.execute("zenguy-partner-runs-dlq", queued),
+    ).rejects.toThrow("Unsupported dead-letter queue");
+
+    expect(queued.ack).not.toHaveBeenCalled();
+    expect(value.durable.outboxEntries.size).toBe(0);
+    expect(alert.mock.calls.join(" ")).toContain('"event":"unsupported_dlq"');
+    alert.mockRestore();
+  });
+
   it("acknowledges after persistence when immediate publish fails", async () => {
     const value = fixture();
     value.queues.CHECK.failures = 1;

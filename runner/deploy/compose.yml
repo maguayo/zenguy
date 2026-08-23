@@ -1,0 +1,81 @@
+services:
+  runner:
+    image: ${ZENGUY_RUNNER_IMAGE:?Set a signed ghcr.io/maguayo/zenguy-runner@sha256 reference}
+    command: ["--fallback", "--recycle-after-attempt"]
+    user: "10001:10001"
+    env_file:
+      - ${ZENGUY_RUNNER_ENV_FILE:-/etc/zenguy/fallback.env}
+    environment:
+      ZENGUY_EGRESS_PROXY: http://egress-proxy:3128
+      ZENGUY_ISOLATED_RUNNER: "1"
+      ZENGUY_RUNNER_ENVIRONMENT: ${ZENGUY_RUNNER_ENVIRONMENT:-production}
+      ZENGUY_WORKER_ID: ${ZENGUY_WORKER_ID:?Set zenguy-production-fallback or zenguy-staging-fallback}
+      ZENGUY_API_URL: ${ZENGUY_API_URL:-https://app.zenguy.com}
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      NO_PROXY: ""
+      ZENGUY_FALLBACK_CHROME: /usr/bin/chromium
+    depends_on:
+      - egress-proxy
+    init: true
+    networks:
+      runner_internal:
+        ipv4_address: 172.30.0.3
+    read_only: true
+    tmpfs:
+      - /tmp:size=768m,mode=1777
+      - /home/runner:size=64m,mode=0700,uid=10001,gid=10001
+    shm_size: 512m
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=/opt/zenguy/runner/deploy/seccomp/chromium-moby-v0.2.1.json
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2.0
+    # systemd launches this service with `compose run --rm`. Once a job
+    # finishes, the whole container (including tmpfs and namespaces) is removed
+    # before systemd creates the next one.
+    restart: "no"
+    stop_grace_period: 30s
+
+  egress-proxy:
+    image: ${ZENGUY_EGRESS_PROXY_IMAGE:?Set a signed ghcr.io/maguayo/zenguy-egress-proxy@sha256 reference}
+    user: "13:13"
+    networks:
+      runner_internal:
+        ipv4_address: 172.30.0.2
+      proxy_egress: {}
+    init: true
+    read_only: true
+    volumes:
+      - type: bind
+        source: ${ZENGUY_HOST_EGRESS_DENY_FILE:?Set /etc/zenguy/host-egress-deny.conf}
+        target: /etc/squid/host-egress-deny.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /run:size=8m,mode=0755,uid=13,gid=13
+      - /tmp:size=8m,mode=1777
+      - /var/log/squid:size=16m,mode=0750,uid=13,gid=13
+      - /var/spool/squid:size=16m,mode=0750,uid=13,gid=13
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+networks:
+  runner_internal:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  proxy_egress: {}

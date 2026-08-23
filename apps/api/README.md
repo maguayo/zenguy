@@ -19,21 +19,77 @@ says otherwise.
 
 ## Local development
 
-Install dependencies and create the ignored local secrets file:
+Local API credentials live in a dedicated macOS login-Keychain service. The
+default development and seed commands do not read `.dev.vars`, do not inherit
+the shell's environment into the Worker, and do not create a temporary secrets
+file with persisted bytes. Install dependencies and inspect the credential
+inventory:
 
     pnpm install
-    cp apps/api/.dev.vars.example apps/api/.dev.vars
+    pnpm --filter @zenguy/api secrets:list
+    pnpm --filter @zenguy/api secrets:status
+    pnpm --filter @zenguy/api secrets:audit-local
 
-Replace every placeholder in apps/api/.dev.vars. Generate independent values
-for the four local cryptographic/runner secrets:
+Add one value at a time. `/usr/bin/security` prompts for the value because the
+loader deliberately never puts it in argv, stdout, shell history, or an
+environment variable:
 
-    openssl rand -hex 32
-    openssl rand -base64 32
-    openssl rand -hex 32
-    openssl rand -hex 32
+    pnpm --filter @zenguy/api secrets:set -- JWT_SECRET
 
-Use those outputs for JWT_SECRET, ENCRYPTION_KEY, ARTIFACT_URL_SECRET, and
-RUNNER_API_TOKEN, respectively. Keep apps/api/.dev.vars out of source control.
+Repeat for the required names printed by `secrets:list`, then validate the
+whole group without printing values:
+
+    pnpm --filter @zenguy/api secrets:verify
+
+For a fresh setup, generate six independent values in a password manager:
+JWT_SECRET, ENCRYPTION_KEY (canonical base64 for exactly 32 bytes),
+ARTIFACT_URL_SECRET, RUNNER_API_TOKEN, RUNNER_FALLBACK_API_TOKEN and
+RUNNER_CAPABILITY_SECRET. The five non-encryption values need at least 32
+characters. Use a unique `ENCRYPTION_KEY_ID`, local-only Twilio credentials and
+senders, and never reuse any value in staging or production. Paddle's six core
+items are optional but all-or-none; the alert-credit product/price IDs are also
+a pair.
+
+If an ignored `.dev.vars` already exists, migrate each value through the same
+interactive `secrets:set` command. Do not automate that copy through command
+arguments. Keep the legacy file untouched until `secrets:verify`, the seed and
+an API decrypt smoke all pass against every retained local D1 state. Archiving
+or deleting it, retiring `ENCRYPTION_PREVIOUS_KEYS`, and rotating provider
+credentials are separate, explicitly approved operations.
+
+`secrets:audit-local` checks only `lstat` metadata for the fixed inventory of
+ignored local credential files. Every present entry must be a regular,
+non-symlink file owned by the current user with exact mode `0600`; dangling
+symlinks, directories, foreign owners and broader modes fail closed. The audit
+never opens a file or prints a value, and reports the legacy `.dev.vars` as a
+pending manual migration instead of deleting or rotating it.
+
+Treat every key ever published in an example as compromised. A copy may remain
+temporarily in `ENCRYPTION_PREVIOUS_KEYS` only to decrypt and rewrite retained
+local data; it is not a safe write key. Do not retire that dual-read entry until
+all retained D1 states and approved backups pass the documented rotation and
+decrypt smoke.
+
+`secrets:set` refuses to overwrite an existing item. `--replace` is available
+only for an intentional, coordinated rotation. `.dev.vars.example` is an
+assignment-free pointer to this workflow, and direct remote/named-environment
+development is blocked so local credentials cannot be mixed with deployed
+resources. The wrapper accepts only an optional `--port` argument for
+`wrangler dev`; its API and inspector binds are fixed to `127.0.0.1`, and
+caller-selected tunnels, IPs, inspector ports, configs, state roots, env files,
+and entrypoints fail closed. The loader also gives its child processes an
+explicit environment allowlist, so `CLOUDFLARE_INCLUDE_PROCESS_ENV`,
+`NODE_OPTIONS`, provider tokens, and unrelated shell secrets cannot silently
+become Worker bindings.
+
+At runtime the seed receives its two encryption bindings over anonymous
+descriptor `/dev/fd/3`. Wrangler must read its env file more than once, so the
+development command instead creates a mode-0600 FIFO inside a fresh mode-0700
+temporary directory. A supervised helper retains the payload only in memory
+and serves one exact copy per FIFO open; the FIFO inode contains no persisted
+bytes. The wrapper zeroes mutable transport buffers and removes only its own
+validated temporary directory when Wrangler exits.
+
 `LLM_MODEL` records the requested local model in each immutable run snapshot.
 The one-command Python worker fixes the matching Bionic model locally.
 
@@ -74,17 +130,60 @@ Preview the SQL without executing it:
 
     pnpm --filter @zenguy/api seed -- --dry-run
 
-Remote seeding is supported only for the isolated staging D1 database. It
-requires the explicit staging environment and both confirmation flags:
+Remote seeding is intentionally disabled. The deterministic accounts,
+passwords, API keys and fixtures above are local-only; staging data must be
+provisioned with one-time random credentials through the normal product flows
+and a secret manager.
 
-    pnpm --filter @zenguy/api seed -- --remote --env staging --allow-remote --confirm-staging
+## Password hashing and new-password policy
 
-The script hardcodes `zenguy-staging-db` for that remote form and rejects any
-other environment. It never executes a remote seed against `zenguy-db` or
-production. Preview the exact Wrangler command without executing or generating
-SQL with:
+New password records use the explicit
+`pbkdf2-sha256$v1$<iterations>$<salt>$<digest>` format, NFC-normalized UTF-8,
+a random 16-byte salt, a 32-byte digest, and 600,000 PBKDF2-HMAC-SHA256
+iterations. Cloudflare Workers Web Crypto supports PBKDF2 but not Argon2id, so
+this is the supported-runtime baseline from the
+[OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
+The verifier bounds encoded cost and field sizes before deriving. Historical
+`pbkdf2$<iterations>$...` records remain readable and are compare-and-swap
+rehashed after a successful login; a concurrent password reset/change always
+wins rather than being overwritten by that migration.
 
-    pnpm --filter @zenguy/api seed -- --print-command --remote --env staging --allow-remote --confirm-staging
+Before changing the work factor or releasing on materially different
+hardware, run the reproducible local calibration under the repository-pinned
+Node version:
+
+    pnpm --filter @zenguy/api benchmark:password-kdf -- --samples=7
+
+It exits non-zero when p95 exceeds the one-second ceiling. This local result is
+not a substitute for checking authentication latency and Worker CPU in staging;
+record both with the release evidence before raising the factor.
+
+New registrations and password resets require 15–100 Unicode code points and
+apply the same authoritative server policy. The offline blocklist vendors the
+NCSC 100k most-used-password corpus through SecLists commit
+`1a7bb9127eca9e6ff2fc0301c597fe6e16a0cb56`, filters it to values that can pass
+the historical 12-character minimum, normalizes it with NFKC/lowercase, and
+adds Zenguy-specific/common variants. The source and generated-subset SHA-256
+values are pinned beside the corpus. This avoids sending even a k-anonymous
+password hash prefix to a third party during account creation. Review and
+refresh the pinned corpus deliberately; never follow a mutable branch in a
+release build.
+
+Registration and login do not disclose whether an email already exists:
+duplicate registration performs the same current KDF work, returns the same
+token-free `{ registrationPending: true, email }` result, and sends a safe
+notice only to the existing mailbox. Registration signs no JWT, persists no
+refresh token, and sets no cookie for either branch;
+unknown-account login verifies a fixed current-format dummy hash. Email
+activation requires both the live inbox token and the exact password chosen in
+that registration. The server checks a cheap token lookup before PBKDF2, does
+not consume the token on a wrong password, and atomically claims it only after
+both factors pass. Verification attempts are bounded independently by source
+IP and by a digest of the token. Password/auth-version checks around session
+insertion ensure a concurrent password reset wins and revokes any just-created
+refresh token. This prevents a mailbox owner from
+accidentally activating an attacker-selected password after an unsolicited
+registration while preserving existing pending accounts and legacy hashes.
 
 ## Workspace API keys and the public read API
 
@@ -118,6 +217,36 @@ public surface is scoped to the key's workspace, rate limited per key
 credential and no cookies are involved. Revoked keys and keys of deleted
 workspaces are rejected with a uniform 401.
 
+Strict application rate limits use `rate_limit_windows`, created by migration
+`0027_atomic_limits.sql`; Workers KV is not an admission counter. A single D1
+statement conditionally consumes every workspace/actor/IP/destination scope
+for a rule, so concurrent isolates admit at most the configured limit and a
+blocked request does not partially charge sibling scopes. The remaining KV use
+in Paddle handling is only a best-effort replay cache layered over D1
+idempotency constraints. The versioned Cloudflare edge rate-limit policy in
+`security/cloudflare-edge-policy.json` remains a separate pre-limit and must be
+deployed and verified remotely before public production traffic.
+
+## Browser-run allowances, safety ceilings, and test export
+
+The 300 included browser-test runs belong to each workspace independently.
+They are usage/billing allowance, not an owner-wide hard stop: paid run 301 is
+overage, and run 301 stays available without a usage charge during the free
+launch. Migration `0043_workspace_run_allowance_scope.sql` removes the old
+complimentary-account trigger that incorrectly pooled 300 runs across an
+owner's workspaces. The atomic D1 controls from migration 0036 remain separate:
+active, UTC-day, and UTC-month ceilings are reserved for workspace, triggering
+user, owner, and global scopes. Those operational circuit breakers limit abuse
+and platform cost without changing how any workspace's 300 included runs are
+calculated.
+
+The normal browser-test list remains keyset-paginated at 1–100 items per
+request. A workspace can contain at most 200 live tests. Export walks that same
+ordering internally in at most two 100-item pages (plus one bounded sentinel
+row), batches channel lookups, and emits all 200 permitted tests. A 201st legacy
+row fails closed instead of silently truncating the file. Transfer files remain
+limited to 200 entries and imports retain the 2 MB request/body ceiling.
+
 ## Provider setup
 
 ### Paddle Billing
@@ -134,19 +263,25 @@ The official catalog workflow is documented in
 https://developer.paddle.com/build/products/create-products-prices/.
 
 1. Create product **Zenguy** and a recurring monthly price of **EUR 39.00**.
-   Copy its price ID to PADDLE_PRICE_ID.
+   Copy its product ID to PADDLE_PRODUCT_ID and its price ID to
+   PADDLE_PRICE_ID. Both are pinned into server-issued checkout intents and
+   verified against every subscription webhook item.
 2. Create product **Zenguy extra runs** and a one-time price of **EUR 0.20**.
    Copy its price ID to PADDLE_OVERAGE_PRICE_ID.
 3. Create a sandbox client-side token for PADDLE_CLIENT_TOKEN and an API key
-   for PADDLE_API_KEY. For overage billing, the API key must include
-   `price.read`, `subscription.write`, and `transaction.read`. It also needs
-   subscription read access and Customer portal session write access so owners
-   receive fresh, short-lived payment and cancellation links; those links are
-   never persisted from webhooks.
+   for PADDLE_API_KEY. The API key must include `price.read`,
+   `subscription.write`, `transaction.read`, and `adjustment.read`; the last
+   permission is required to list approved top-up adjustments during
+   reconciliation. It also needs subscription read access and Customer portal
+   session write access so owners receive fresh, short-lived payment and
+   cancellation links; those links are never persisted from webhooks. Paddle's
+   current permission contract is documented at
+   https://developer.paddle.com/api-reference/about/permissions/.
 4. Under Developer tools > Notifications, create the sandbox destination at
    https://staging-app.zenguy.com/api/webhooks/paddle. Select exactly
-   `subscription.created`, `subscription.updated`, `subscription.canceled`, and
-   `subscription.past_due`. Copy that destination's secret to the staging
+   `subscription.created`, `subscription.updated`, `subscription.canceled`,
+   `subscription.past_due`, `transaction.completed`, `adjustment.created`, and
+   `adjustment.updated`. Copy that destination's secret to the staging
    PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
    https://developer.paddle.com/webhooks/about/notification-destinations/.
 5. Keep PADDLE_ENVIRONMENT=sandbox locally and in staging. Recreate the catalog,
@@ -154,6 +289,20 @@ https://developer.paddle.com/build/products/create-products-prices/.
    for production. The production webhook URL is
    https://app.zenguy.com/api/webhooks/paddle. Sandbox and live IDs and secrets
    are not interchangeable.
+
+`transaction.completed` is required for one-time alert-credit top-ups. The
+handler persists Paddle's transaction and customer IDs only after the signed
+custom-data reference resolves to the matching server-issued checkout intent.
+For adjustments, `pending_approval`, `rejected`, and unrelated records do not
+move credit. `adjustment.created` covers records that are approved immediately
+and the initial pending notification; `adjustment.updated` covers a later
+approval. Every six hours, reconciliation lists approved adjustments using
+`adjustment.read`, checks both the pinned transaction and customer, and applies
+the same idempotency key as the webhook path. Debit/restoration direction comes
+from Paddle's action (`refund`/`chargeback`/`chargeback_warning` versus their
+reverse actions), while the ledger limits every restoration to prior debits on
+the same provider transaction. Unknown actions, missing or mismatched customer
+identity fail closed and the top-up remains unreconciled for operator review.
 
 The overage price is checked immediately before charging and must remain
 exactly EUR 0.20 with no country-specific overrides. Overage settlement starts
@@ -168,29 +317,33 @@ an operator warning when unresolved; it never sends a second POST.
 
 Zenguy sends transactional email through the Worker's native `EMAIL` binding;
 there is no email-provider API key. The sending domain is `zenguy.com` in the
-personal Cloudflare account.
+reviewed Cloudflare account.
 
-1. Create and activate the directory-scoped personal profile if it is not
-   already present:
+1. Use the dashboard for ordinary status checks. For an approved CLI inspection
+   or one-time onboarding change, create a short-lived API token limited to the
+   exact account/domain and Email Sending operation (the mutating command needs
+   `Email Sending: Edit`). Load it from the approved secret manager into
+   `CLOUDFLARE_API_TOKEN` for this process only, then verify the target:
 
-       pnpm --filter @zenguy/api exec wrangler auth create zenguy-personal
-       pnpm --filter @zenguy/api exec wrangler auth activate zenguy-personal
        pnpm --filter @zenguy/api exec wrangler whoami
 
-   `whoami` must report the active profile `zenguy-personal` and
-   `marcosaguayomora@gmail.com` before any Cloudflare mutation or deployment.
+   `whoami` must report API-token authentication and the expected account before
+   any Cloudflare mutation. Do not use a personal OAuth profile.
 
 2. Confirm the domain is enabled:
 
-       pnpm --filter @zenguy/api exec wrangler email sending settings zenguy.com --profile zenguy-personal
+       pnpm --filter @zenguy/api exec wrangler email sending settings zenguy.com
 
 3. If it is not enabled, onboard it once:
 
-       pnpm --filter @zenguy/api exec wrangler email sending enable zenguy.com --profile zenguy-personal
+       pnpm --filter @zenguy/api exec wrangler email sending enable zenguy.com
 
-4. Keep `EMAIL_FROM="Zenguy <notifications@zenguy.com>"`. The
+4. Revoke the temporary token immediately after the inspection/change. Never
+   store it in a profile, dotenv file, shell startup file, command line or this
+   repository.
+5. Keep `EMAIL_FROM="Zenguy <notifications@zenguy.com>"`. The
    `send_email` binding restricts the Worker to this sender.
-5. The development binding has `remote: true`, so `wrangler dev` sends real
+6. The development binding has `remote: true`, so `wrangler dev` sends real
    email. Use only recipient inboxes you control. A deployed environment's
    binding omits `remote` because it already runs on Cloudflare.
 
@@ -228,7 +381,8 @@ Worker: EAS manages them for the app. Set `EXPO_PUSH_ACCESS_TOKEN` only if
 ### Local browser/model runner
 
 The API has no OpenAI credential and no Browser Rendering binding. Configure a
-Cloudflare Queue HTTP pull consumer, a dedicated `RUNNER_API_TOKEN`, the pinned
+Cloudflare Queue HTTP pull consumer, independent primary/fallback bootstrap
+tokens plus a capability-signing secret, the pinned
 `browser-use` local worker, Google Chrome, and an OpenAI-compatible local model endpoint by following
 `../../runner/README.md`. The configured model id is `qwen/qwen3.8-27b`; use the exact id
 installed in Ollama, LM Studio, or the selected local server.
@@ -252,7 +406,7 @@ preserving relative API requests and same-origin cookies.
 
 | Environment | Worker | Application / Pages origin | Worker Route | Billing | Status |
 |---|---|---|---|---|---|
-| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` | Free; Paddle deferred | Operational |
+| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` and `api-staging.zenguy.com` | Free; Paddle deferred | Code guard ready; Access app/AUD pending |
 | Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` | Free; Paddle deferred | Operational |
 
 Production owns both `app.zenguy.com/api/*` and `api.zenguy.com`. Paddle is not a
@@ -265,13 +419,16 @@ the `/api/*` path.
 
 ### 1. Confirm the Cloudflare account
 
-All mutations must use the directory-scoped personal profile:
-
-    pnpm --filter @zenguy/api exec wrangler whoami
-
-Continue only when it reports `zenguy-personal`,
-`marcosaguayomora@gmail.com`, and account
-`ec11e46fe3c39a5eac9951db9c91244a`.
+Staging and production deployments and migrations run through their protected
+GitHub Environments with separate, resource-scoped API tokens. A manual fallback
+is allowed only in an approved change window while its automation is unavailable;
+it uses a separate short-lived token with the exact permissions needed. Personal
+OAuth profiles are forbidden. During an approved one-off inspection or fallback,
+load the matching token from the secret manager into
+`CLOUDFLARE_API_TOKEN`, run
+`pnpm --filter @zenguy/api exec wrangler whoami`, confirm account
+`ec11e46fe3c39a5eac9951db9c91244a`, then revoke the token when the inspection
+ends. Never persist it in Wrangler state, dotenv files or shell configuration.
 
 ### 2. Keep resources isolated
 
@@ -300,14 +457,208 @@ Wrangler secrets are also environment-specific. Put each Appendix A secret in
 both environments, using independent cryptographic values and the appropriate
 provider credentials:
 
+Run these interactive writes only in an approved change window with a temporary
+token limited to the selected Worker/environment; revoke it immediately after
+the binding-name preflight succeeds.
+
     pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env staging
     pnpm --filter @zenguy/api exec wrangler secret put <NAME> --env production
 
-Repeat those commands for `JWT_SECRET`, `ENCRYPTION_KEY`,
-`ARTIFACT_URL_SECRET`, `RUNNER_API_TOKEN`, all five `TWILIO_*` values, all
-five `PADDLE_*` values, and — once alert-credit top-ups should open — the
-optional `PADDLE_ALERT_CREDIT_PRICE_ID` (see `docs/alerts-paid-channels.md`). Do not paste secret values into shell history,
-documentation, `wrangler.jsonc`, or Git.
+`security/required-worker-secrets.json` declares the release inventory for each
+named environment. CI lists Wrangler's remote secret metadata and runs the
+matching preflight before it is allowed to migrate D1; values are never
+returned or logged. Staging's inventory additionally requires
+`CF_ACCESS_AUD`.
+
+#### Mandatory Cloudflare Access boundary for staging
+
+Before deploying staging, create one self-hosted Cloudflare Access application
+whose public hostnames cover both `staging-app.zenguy.com/*` (including Pages
+assets and the `/api/*` Worker Route) and `api-staging.zenguy.com/*`. Its allow
+policy must be limited to the intended test identities and require MFA. Do not
+add a broad Bypass policy: the API Worker independently rejects staging HTTP
+requests unless Cloudflare has injected a cryptographically valid
+`Cf-Access-Jwt-Assertion` application token. The sole provider exception is
+the exact Paddle callback described below.
+
+The exact team origin, `https://bugfer.cloudflareaccess.com`, is pinned as the
+non-secret staging variable `CF_ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. No
+application exists yet, so the repository deliberately does not invent or
+commit an audience. After creating the application, copy its exact AUD tag into
+the staging-only Worker binding; this command prompts without putting the value
+in the command line:
+
+    pnpm --filter @zenguy/api exec wrangler secret put CF_ACCESS_AUD --env staging
+
+`CF_ACCESS_AUD` must be the audience of the application covering both staging
+hostnames. Until it exists, staging deliberately fails closed. Missing or
+malformed bindings,
+an absent header on protected routes, a cookie without the assertion header, a
+non-RS256 signature,
+or a token with the wrong issuer, audience, JOSE/payload type, subject, issuance
+time, expiration, or not-before time all produce the same non-cacheable HTTP
+403 response. Development and production do not consult these staging-only
+bindings.
+
+The Worker guard protects API requests only; it cannot protect Pages assets
+which never enter the Worker. The remote Access application is therefore still
+required for the full staging SPA. Likewise, every ordinary non-browser caller
+(runner, smoke monitor, and CLI) must first authenticate to Access so
+Cloudflare can inject the application assertion.
+
+Paddle cannot supply Access credentials. Create a separate, most-specific
+Access application for exactly
+`staging-app.zenguy.com/api/webhooks/paddle` with a Bypass policy, leaving every
+broader staging path under the MFA application. The code-side exception is
+narrower than the edge policy: it accepts only `POST` on that exact HTTPS
+origin/path, with no query string and a non-empty `Paddle-Signature` header,
+then applies the 256 KiB stream cap and timestamped Paddle HMAC verification.
+Every other host, path, method, missing signature, oversized body, or invalid
+HMAC remains denied. Do not configure a wildcard webhook bypass.
+
+The canonical remote release inventory is
+`security/required-worker-secrets.json`. Its `core` group covers boot-critical
+auth, encryption, runner and Twilio bindings; `releaseFeatures` additionally
+requires all five `TWILIO_*` values, the complete Paddle catalog/API/webhook
+set (including both alert-credit IDs), and `EXPO_PUSH_ACCESS_TOKEN`. Staging
+also requires `CF_ACCESS_AUD`; production additionally requires
+`CF_RUNNER_ACCESS_AUD` for the service-only runner application. The staging and production deployment
+preflights check every name before migration without reading or printing any
+value. Do not paste secret values into shell history, documentation,
+`wrangler.jsonc`, or Git.
+
+`ENCRYPTION_KEY_ID` is a non-secret identifier stored in `wrangler.jsonc`.
+`ENCRYPTION_PREVIOUS_KEYS` is an optional secret containing a JSON object from
+old key IDs to their base64-encoded 32-byte keys. It must be absent outside an
+active rotation window.
+
+#### Rotate encrypted application data
+
+Every new workspace secret, notification-channel config, and uptime header/body
+is written as an AES-256-GCM v4 envelope. The first write for a workspace
+creates a cryptographically random 32-byte data-encryption key (DEK) and stores
+only its authenticated wrapping in `workspace_data_encryption_keys`. The DEK is
+wrapped with AES-256-GCM under the versioned environment key-encryption key
+(KEK); ciphertext AAD binds the format, DEK ID, record type, workspace ID, and
+record ID. Key-wrap AAD separately binds the wrap version, KEK ID, workspace,
+and DEK ID. v1-v3 remain read-only migration formats.
+
+Apply migrations `0039_workspace_data_encryption_keys.sql` and
+`0040_encrypted_write_fence.sql`, in that order, before deploying a Worker that
+writes v4. Migration 0040 installs D1 `BEFORE INSERT/UPDATE` fences for secrets,
+notification channels, and both uptime sensitive fields. The fence checks the
+embedded DEK ID against the workspace's active generation inside the same SQL
+statement and rejects every new or changed non-null v1-v3 value. Existing
+legacy rows remain readable for the bounded migration only. For secrets, the
+same statement requires `encryption_version = 4`; encrypted record IDs and
+workspace IDs are immutable because both participate in AAD. Encrypted writes
+therefore fail closed during the short interval between applying 0040 and
+deploying the v4 Worker. A request paused across a rotation is re-encrypted and
+retried at most three times; repeated rotation returns HTTP 409 before audit
+records, queueing, or other post-write effects run.
+
+In staging and production, v4 DEKs are not wrapped with `ENCRYPTION_KEY`.
+`KEY_WRAPPING` is a private Service Binding to `zenguy-kms-<environment>` and
+the KMS entrypoint accepts only structured DEK wrap/unwrap RPC calls. It has no
+public `fetch`, route, `workers.dev` subdomain, preview URL, cron, or queue. Each
+KEK is provisioned through Cloudflare's official `secret_key` API as an
+AES-256-GCM `CryptoKey` with only `encrypt`/`decrypt` usages. Workerd's
+`CryptoKey` binding defaults `extractable` to false, and the KMS rejects a key
+that is exportable, has another algorithm/size/usage, or is not in the
+versioned key-ID/binding allowlist. See the official
+[secret_key API schema](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/update/),
+[workerd CryptoKey configuration](https://github.com/cloudflare/workerd/blob/main/src/workerd/server/workerd.capnp),
+and [Service Binding RPC documentation](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/).
+
+`ENCRYPTION_KEY` and `ENCRYPTION_PREVIOUS_KEYS` remain temporarily required for
+read-only v1-v3 migration. Cloudflare Worker Secrets and Secrets Store expose
+their text to Worker code, so neither is accepted as the effective remote v4
+KEK. Local development deliberately retains the in-process provider.
+
+#### Bootstrap the private key-wrapping Worker
+
+This is a remote change and is not performed by repository tests or preflight:
+
+1. In the protected target Environment, deploy the unreachable KMS shell with
+   `pnpm --filter @zenguy/api deploy:kms:bootstrap:staging` or the exact
+   `:production` variant. Do not bind the API to it yet.
+2. Generate an independent 32-byte KEK in the approved secret manager. Using a
+   narrowly scoped `Workers Scripts Write` token, call Cloudflare's documented
+   `PUT /accounts/{account_id}/workers/scripts/zenguy-kms-<environment>/secrets`
+   endpoint once. Stream the request from the secret manager; do not put the
+   key in argv, an environment variable, a file, logs, or Git. The request must
+   have `name` equal to the reviewed `KMS_KEY_*` binding and metadata equivalent
+   to `type: secret_key`, `format: raw`, `algorithm: {name: AES-GCM}`, and
+   `usages: [encrypt, decrypt]`; `key_base64` is the transient input only.
+3. Run `pnpm --filter @zenguy/api deploy:preflight:<environment>`. It calls
+   `wrangler secret list --format json` for both Workers and validates names,
+   type, format, algorithm and usages. It rejects any value-bearing response and
+   never fetches or prints key bytes.
+4. Deploy the KMS first, then the API. Normal CI enforces this order. The API
+   fails at configuration load in a named environment if `KEY_WRAPPING` or
+   `KEY_WRAPPING_KEY_ID` is absent/malformed; it never falls back to
+   `ENCRYPTION_KEY` for v4.
+
+The initial `secret_key` creation and the first two remote Worker deployments
+are the remaining operator-controlled SEC-23 actions. Repository code cannot
+perform them without the KEK and Cloudflare deployment authority.
+
+#### Rotate a non-exportable v4 KEK
+
+Use a three-version-safe transition; never switch the KMS and API IDs in one
+unsequenced edit:
+
+1. Provision a new `KMS_KEY_*` secret_key binding, leaving the old one intact.
+   Add both IDs/bindings to `KEY_WRAPPING_KEY_SET`, set `activeKeyId` to the new
+   ID, and temporarily set `writeKeyIds` to `[old, new]` (at most two). Deploy
+   the KMS. The still-old API continues writing with old while new is ready.
+2. Change `KEY_WRAPPING_KEY_ID` in the target API environment (and matching
+   bootstrap config) to new. Preflight and deploy the API. Responses whose key
+   ID differs from the requested ID are rejected.
+3. Reduce KMS `writeKeyIds` to `[new]` but retain both entries in `keys`; deploy
+   the KMS. Old envelopes remain read-only. For each workspace, call
+   `POST /api/workspaces/:workspaceId/security/encryption/rotate?limit=50`
+   until `hasMore` is false. Re-wrapping is compare-and-swap and preserves data
+   ciphertext; v1-v3/retired-DEK records are rewritten to v4.
+4. Use a metadata-only D1 count grouped by `wrapping_key_id` to prove no live DEK
+   references old. Retain old while any approved backup can restore it. Only
+   after the retention window may a separate approved change remove old from
+   `keys`, deploy the KMS, and delete its remote binding. Unknown IDs fail
+   closed.
+
+Rollback before old is retired: keep `[old, new]` writable, restore the API's
+`KEY_WRAPPING_KEY_ID` to old and deploy the API first; then restore old as KMS
+`activeKeyId`/sole writer. Preserve both read bindings until all new envelopes
+are re-wrapped or the rollback is abandoned. Never roll back by restoring v4
+wrapping to `ENCRYPTION_KEY`.
+
+To rotate a workspace DEK, first call the endpoint normally and retain its
+`activeDataKeyId`. Then call it once with
+`?rotateDataKeyFrom=<activeDataKeyId>&limit=50`; the optimistic precondition
+prevents a retried request from creating a second generation. Continue calling
+the endpoint without `rotateDataKeyFrom` until `hasMore` is false. Retired DEKs
+remain available for dual-read during the migration and backup-retention
+window; never delete them before every referencing ciphertext and retained
+backup has expired.
+
+Never deploy an API version whose `KEY_WRAPPING_KEY_ID` is outside the KMS
+`writeKeyIds` allowlist. A gradual API deployment is safe only during the
+explicit two-write-ID transition above; do not reduce the KMS to new-only until
+all old API traffic is gone. Legacy text-secret rotation remains a separate
+versioned change; see the
+[Workers secrets documentation](https://developers.cloudflare.com/workers/configuration/secrets/).
+
+For local development, keep the current key and its ID available while placing
+the replacement key/ID in the dedicated Keychain service with the interactive
+`secrets:set -- NAME --replace` flow. First add the former key to the
+`ENCRYPTION_PREVIOUS_KEYS` Keychain item, complete the same per-workspace
+rotation endpoint, and prove that every retained local D1 database and approved
+backup has no dependency on it. Removing that item or the retired entry is a
+destructive follow-up and is never performed by the development wrapper.
+
+The KMS rollout changes only the DEK wrapping provider. Migrations 0039/0040 and
+the existing `w1:<keyId>:<iv>:<ciphertext>` envelope remain compatible; no new
+D1 migration is required.
 
 Environment variables are fixed as follows:
 
@@ -315,6 +666,12 @@ Environment variables are fixed as follows:
 |---|---|---|
 | `ENVIRONMENT` | `staging` | `production` |
 | `APP_URL` | `https://staging-app.zenguy.com` | `https://app.zenguy.com` |
+| `CF_ACCESS_TEAM_DOMAIN` | `https://bugfer.cloudflareaccess.com` | `https://bugfer.cloudflareaccess.com` |
+| `CF_ACCESS_AUD` | exact staging Access application AUD (required binding) | not used |
+| `CF_RUNNER_ACCESS_AUD` | not used | exact service-only runner Access AUD (required binding) |
+| `ENCRYPTION_KEY_ID` | unique staging key ID | unique production key ID |
+| `KEY_WRAPPING_KEY_ID` | active staging KMS key ID | active production KMS key ID |
+| `KEY_WRAPPING` | `zenguy-kms-staging` named RPC entrypoint | `zenguy-kms-production` named RPC entrypoint |
 | `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
 | `LLM_MODEL` | `qwen/qwen3.8-27b` | `qwen/qwen3.8-27b` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
@@ -328,7 +685,9 @@ enabled `zenguy.com` sending domain.
 
 ### 4. Migrate and deploy the selected environment
 
-Apply migrations before its Worker deployment:
+The protected workflows execute these exact environment-specific targets. If an
+automation is unavailable, apply them only in its approved fallback change window
+with a temporary token scoped to that environment:
 
     # Staging
     pnpm --filter @zenguy/api db:migrate:staging
@@ -348,9 +707,8 @@ HTTP pull consumer enabled as documented in `../../runner/README.md`. Do not use
 production as a harmless first upload.
 
 A push to the `staging` branch runs `.github/workflows/staging.yml`: it
-migrates `zenguy-staging-db`, deploys `zenguy-api-staging`, then wipes and
-reseeds application data through `scripts/reseed-staging.mjs`. That wrapper
-hardcodes `--remote --env staging --allow-remote --confirm-staging` and cannot
+migrates `zenguy-staging-db` and deploys `zenguy-api-staging`. It never wipes
+or seeds remote application data. The local seed script rejects `--remote` and cannot
 target `zenguy-db` or production. Keep production CI disabled until every
 production release gate listed above is complete.
 
@@ -383,18 +741,31 @@ covering `/*` would incorrectly hide the frontend.
 
 ### 6. Configure webhook destinations and R2 retention
 
-Create separate Paddle notification destinations:
+Create separate Paddle notification destinations only after their ingress
+meets the environment's authentication boundary:
 
-    Sandbox (active):    https://staging-app.zenguy.com/api/webhooks/paddle
+    Sandbox (blocked pending the exact path-specific Access Bypass app):
+      https://staging-app.zenguy.com/api/webhooks/paddle
     Live (release gate): https://app.zenguy.com/api/webhooks/paddle
 
 Subscribe each destination to exactly `subscription.created`,
-`subscription.updated`, `subscription.canceled`, and `subscription.past_due`.
-Do not subscribe transaction events. Store each destination's signing secret
-only in its matching Worker environment.
+`subscription.updated`, `subscription.canceled`, `subscription.past_due`,
+`transaction.completed`, `adjustment.created`, and `adjustment.updated`. Do not
+subscribe any other event. Store each destination's signing secret only in its
+matching Worker environment.
+
+An initial `adjustment.created` refund may be `pending_approval`; it is ignored
+until an `adjustment.updated` event reports `approved`. Immediately approved
+credits, refunds, chargebacks, early chargeback warnings, and their reversals
+are handled from `adjustment.created`. Reconciliation requests adjustment IDs
+in ascending order so an original debit precedes its reversal, including
+repeated cycles. The periodic `adjustment.read` reconciliation is the safety
+net for missed or delayed notifications, and ledger idempotency makes it safe
+to race the webhook.
 
 The cleanup cron expires operational data after 30 days. Add a 35-day R2
-lifecycle safety net to each bucket:
+lifecycle safety net to each bucket in an approved change window with a temporary
+token limited to R2 configuration for the selected bucket:
 
     pnpm --filter @zenguy/api exec wrangler r2 bucket lifecycle add zenguy-staging-artifacts retention-safety-net --expire-days 35
     pnpm --filter @zenguy/api exec wrangler r2 bucket lifecycle add zenguy-artifacts retention-safety-net --expire-days 35
@@ -404,9 +775,10 @@ lifecycle safety net to each bucket:
 Run the full functional smoke in staging first and stop the release on the
 first failure:
 
-1. Call `https://staging-app.zenguy.com/api/health`; expect HTTP 200 and a JSON
-   data envelope with `ok=true`. Load the hostname without `/api` and confirm
-   Pages returns the React application.
+1. Call `https://staging-app.zenguy.com/api/health` without Access and expect
+   the generic HTTP 403 envelope. Authenticate through the staging Access app,
+   call it again, and expect HTTP 200 with `data.ok=true`. Load the hostname
+   without `/api` and confirm the Access-protected Pages application is served.
 2. Register an address you control, receive the real Cloudflare Email Service
    verification email from `notifications@zenguy.com`, verify it, and log in.
    Confirm refresh and secure cookies stay on `staging-app.zenguy.com`.

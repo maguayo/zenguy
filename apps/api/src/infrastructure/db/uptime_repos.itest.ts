@@ -2,13 +2,13 @@ import { decryptMonitorSensitive, encryptMonitorSensitive } from "../../applicat
 import type { Incident } from "../../domain/incidents/types";
 import type { DurableJob } from "../../domain/durability/types";
 import type { UptimeCheck, UptimeMonitor } from "../../domain/uptime/types";
+import { loadConfig } from "../../shared/config";
 import { freshDb, testEnv } from "../../test/helpers";
 import { D1CheckRepo } from "./check_repo";
 import { D1IncidentRepo } from "./incident_repo";
 import { D1MonitorRepo } from "./monitor_repo";
 import { D1DurableWorkflowRepo } from "./durable_workflow_repo";
 
-const KEY = new Uint8Array(32).fill(5);
 const RAW_HEADER = "Bearer database-secret";
 const RAW_BODY = '{"token":"body-secret"}';
 
@@ -73,6 +73,17 @@ function check(input: {
   };
 }
 
+async function insertWorkspace(): Promise<void> {
+  await testEnv()
+    .DB.prepare(
+      `INSERT INTO workspaces
+        (id, name, slug, timezone, owner_user_id, created_at, updated_at, deleted_at)
+       VALUES ('ws_uptime_repo', 'Uptime Repo', 'uptime-repo', 'UTC',
+               'usr_uptime_repo', 1, 1, NULL)`,
+    )
+    .run();
+}
+
 describe("D1 uptime repositories", () => {
   beforeEach(freshDb);
 
@@ -100,17 +111,37 @@ describe("D1 uptime repositories", () => {
       { id: "chk_a3", status: "PASSED", checkedAt: 300 },
     ]);
     expect(recent.get("mon_b")).toEqual([{ id: "chk_b1", status: "PASSED", checkedAt: 150 }]);
+    expect(
+      await monitors.recentChecksPerMonitor("ws_uptime_repo", 2, ["mon_b"]),
+    ).toEqual(
+      new Map([
+        ["mon_b", [{ id: "chk_b1", status: "PASSED", checkedAt: 150 }]],
+      ]),
+    );
     expect(await monitors.recentChecksPerMonitor("ws_other", 2)).toEqual(new Map());
+    await expect(monitors.listPage("ws_uptime_repo", null, 1)).resolves.toEqual([
+      monitor("mon_b"),
+    ]);
+    await expect(
+      monitors.listPage(
+        "ws_uptime_repo",
+        { createdAt: 100, id: "mon_b" },
+        1,
+      ),
+    ).resolves.toEqual([monitor("mon_a")]);
   });
 
   it("encrypts config at rest, claims due monitors without overlapping cycles, and joins incident names", async () => {
+    await insertWorkspace();
+    const encryptionKeys = loadConfig(testEnv()).encryptionKeys;
     const repo = new D1MonitorRepo(testEnv().DB);
     const encrypted = await encryptMonitorSensitive(
       {
         headers: [{ key: "Authorization", value: RAW_HEADER }],
         body: RAW_BODY,
       },
-      KEY,
+      encryptionKeys,
+      { workspaceId: "ws_uptime_repo", monitorId: "mon_due" },
     );
     const due = monitor("mon_due", {
       ...encrypted,
@@ -135,10 +166,12 @@ describe("D1 uptime repositories", () => {
     await expect(
       decryptMonitorSensitive(
         {
+          id: due.id,
+          workspaceId: due.workspaceId,
           encryptedHeaders: raw?.encrypted_headers ?? null,
           encryptedBody: raw?.encrypted_body ?? null,
         },
-        KEY,
+        encryptionKeys,
       ),
     ).resolves.toEqual({
       headers: [{ key: "Authorization", value: RAW_HEADER }],
@@ -151,6 +184,17 @@ describe("D1 uptime repositories", () => {
     await expect(repo.claimDue(1_000, 10)).resolves.toEqual([]);
     await repo.setChannels(due.id, ["ch_b", "ch_a", "ch_b"]);
     await expect(repo.getChannelIds(due.id)).resolves.toEqual(["ch_a", "ch_b"]);
+    await expect(
+      repo.getChannelIdsForMonitors(due.workspaceId, [due.id, busy.id]),
+    ).resolves.toEqual(
+      new Map([
+        [due.id, ["ch_a", "ch_b"]],
+        [busy.id, []],
+      ]),
+    );
+    await expect(
+      repo.getChannelIdsForMonitors("ws_other", [due.id]),
+    ).resolves.toEqual(new Map([[due.id, []]]));
 
     const uptimeIncident: Incident = {
       id: "inc_uptime_name",
@@ -170,6 +214,12 @@ describe("D1 uptime repositories", () => {
     };
     const incidents = new D1IncidentRepo(testEnv().DB);
     await incidents.insertOpen(uptimeIncident);
+    await expect(
+      incidents.findOpenForMonitors(due.workspaceId, [due.id, busy.id]),
+    ).resolves.toEqual(new Map([[due.id, uptimeIncident]]));
+    await expect(
+      incidents.findOpenForMonitors("ws_other", [due.id]),
+    ).resolves.toEqual(new Map());
     await expect(incidents.list(due.workspaceId, {}, null, 10)).resolves.toMatchObject([
       { id: uptimeIncident.id, resourceName: due.name },
     ]);
@@ -246,6 +296,14 @@ describe("D1 uptime repositories", () => {
     await expect(
       durable.claimCheckExecution({ ...claim, claimToken: "job_concurrent" }),
     ).resolves.toBe("busy");
+    await expect(
+      durable.claimCheckExecution({
+        ...claim,
+        claimToken: "job_takeover",
+        claimedAt: 2_000,
+        staleBefore: 1_000,
+      }),
+    ).resolves.toBe("reclaimed");
 
     const persistedCheck = check({
       id: "chk_leased",
@@ -273,6 +331,9 @@ describe("D1 uptime repositories", () => {
     };
     await expect(
       durable.insertCheckWithJob(persistedCheck, job, "job_owner"),
+    ).resolves.toBe("duplicate");
+    await expect(
+      durable.insertCheckWithJob(persistedCheck, job, "job_takeover"),
     ).resolves.toBe("inserted");
     await expect(
       durable.claimCheckExecution({

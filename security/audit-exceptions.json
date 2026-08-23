@@ -1,0 +1,29 @@
+[
+  {
+    "expires": "2026-09-23",
+    "id": "GHSA-jmr9-qjv8-65gv",
+    "package": "extract-zip",
+    "patch": "patches/extract-zip@2.0.1.patch",
+    "reason": "No fixed upstream release exists; the pinned local patch rejects absolute and out-of-root symlink targets.",
+    "version": "2.0.1",
+    "workspace": "."
+  },
+  {
+    "expires": "2026-09-23",
+    "id": "GHSA-w3rx-r6r6-pgpr",
+    "package": "image-size",
+    "patch": "apps/app/patches/image-size@1.2.1.patch",
+    "reason": "No fixed upstream release exists; the pinned local patch rejects zero/invalid ICNS entry lengths.",
+    "version": "1.2.1",
+    "workspace": "apps/app"
+  },
+  {
+    "expires": "2026-09-23",
+    "id": "GHSA-5p2g-fcmc-qvqq",
+    "package": "image-size",
+    "patch": "apps/app/patches/image-size@1.2.1.patch",
+    "reason": "No fixed upstream release exists; the pinned local patch rejects zero/undersized JXL and HEIF boxes.",
+    "version": "1.2.1",
+    "workspace": "apps/app"
+  }
+]

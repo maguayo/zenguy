@@ -25,15 +25,24 @@ export class RunNow {
     actor: User;
     actorRole: Role;
     ip?: string;
+    approveIrreversibleActions?: true;
   }): Promise<TestRun> {
     if (!can(input.actorRole, "tests.run")) throw forbidden();
     await ensureActiveSubscription(this.subscriptions, input.workspaceId);
-    await enforceRunCreateRate(this.rateLimiter, input.workspaceId);
+    await enforceRunCreateRate(
+      this.rateLimiter,
+      input.workspaceId,
+      input.actor.id,
+      input.ip,
+    );
     const run = await this.createRun.execute({
       workspaceId: input.workspaceId,
       source: "MANUAL",
       testId: input.testId,
       triggeredByUserId: input.actor.id,
+      ...(input.approveIrreversibleActions === true
+        ? { approveIrreversibleActions: true as const }
+        : {}),
     });
     await this.audit.execute({
       workspaceId: input.workspaceId,
@@ -41,7 +50,16 @@ export class RunNow {
       action: AUDIT_ACTIONS.testRunManual,
       resourceType: "browser_test",
       resourceId: input.testId,
-      metadata: { runId: run.id },
+      metadata: {
+        runId: run.id,
+        irreversibleActionsApproved:
+          run.snapshot.irreversibleAuthorization !== undefined,
+        irreversibleActionScopeCount:
+          run.snapshot.irreversibleAuthorization?.scopes.length ?? 0,
+        originalInstructionsSha256:
+          run.snapshot.irreversibleAuthorization?.originalInstructionsSha256 ??
+          null,
+      },
       ip: input.ip,
     });
     return run;

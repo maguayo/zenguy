@@ -71,6 +71,7 @@ function testRun(input: {
     source: input.scheduledFor === undefined ? "MANUAL" : "SCHEDULED",
     status: input.status,
     snapshot: structuredClone(SNAPSHOT),
+    actionAuthorizations: [],
     scheduledFor: input.scheduledFor ?? null,
     queuedAt: input.createdAt,
     startedAt: terminal ? input.createdAt : null,
@@ -138,6 +139,62 @@ function runUsage(
 describe("D1 browser test repositories", () => {
   beforeEach(freshDb);
 
+  it("atomically consumes exact action uses and rejects an inflated ledger", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    const scope = {
+      kind: "HTTP" as const,
+      method: "POST" as const,
+      origin: "https://example.com",
+      path: "/orders",
+      maxUses: 1,
+    };
+    const authorized = testRun({
+      id: "run_action_scope",
+      testId: null,
+      status: "RUNNING",
+      createdAt: 100,
+    });
+    authorized.snapshot.irreversibleAuthorization = {
+      version: 2,
+      runId: authorized.id,
+      workspaceId: authorized.workspaceId,
+      originalInstructionsSha256: "digest",
+      testDataAttested: true,
+      approvedByUserId: "usr_1",
+      approvedAt: 100,
+      scopes: [scope],
+      signature: "signature",
+    };
+    authorized.actionAuthorizations = [{ scope, remainingUses: 1 }];
+    await runs.insert(authorized);
+
+    const action = {
+      kind: "HTTP" as const,
+      method: "POST" as const,
+      origin: "https://example.com",
+      path: "/orders",
+    };
+    const raced = await Promise.all([
+      runs.consumeActionAuthorization(authorized.id, action),
+      runs.consumeActionAuthorization(authorized.id, action),
+    ]);
+    expect(raced.filter(Boolean)).toHaveLength(1);
+
+    await database
+      .prepare(
+        "UPDATE test_runs SET action_authorizations_json = ? WHERE id = ?",
+      )
+      .bind(
+        JSON.stringify([{ scope, remainingUses: scope.maxUses + 1 }]),
+        authorized.id,
+      )
+      .run();
+    await expect(
+      runs.consumeActionAuthorization(authorized.id, action),
+    ).resolves.toBe(false);
+  });
+
   it("lists the recent runs per test oldest first, capped per test", async () => {
     const tests = new D1BrowserTestRepo(testEnv().DB);
     const runs = new D1RunRepo(testEnv().DB);
@@ -162,11 +219,19 @@ describe("D1 browser test repositories", () => {
     expect(recent.get("bt_b")).toEqual([{ id: "run_b1", status: "TIMEOUT", finishedAt: 160 }]);
     expect(recent.has("bt_other")).toBe(false);
     expect(await runs.recentRunsPerTest("ws_empty", 3)).toEqual(new Map());
+    expect(await runs.recentRunsPerTest("ws_1", 3, ["bt_b"])).toEqual(
+      new Map([
+        ["bt_b", [{ id: "run_b1", status: "TIMEOUT", finishedAt: 160 }]],
+      ]),
+    );
+    expect(await runs.recentRunsPerTest("ws_1", 3, [])).toEqual(new Map());
   });
 
   it("round-trips tests, channels, soft deletion, and optimistic due claims", async () => {
     const repo = new D1BrowserTestRepo(testEnv().DB);
     const due = browserTest("bt_due", 500, "ws_1", 1);
+    due.allowedDomains = ["checkout.example.net"];
+    due.writableDomains = ["checkout.example.net"];
     const future = browserTest("bt_future", 5_000, "ws_1", 2);
     const other = browserTest("bt_other", 5_000, "ws_2", 3);
     await repo.insert(due);
@@ -176,6 +241,8 @@ describe("D1 browser test repositories", () => {
       due.id,
       {
         name: "Renamed",
+        allowedDomains: ["*.login.example.org"],
+        writableDomains: ["auth.login.example.org"],
         device: "MOBILE",
         notifyOnRecovery: false,
         updatedBy: "usr_2",
@@ -184,6 +251,8 @@ describe("D1 browser test repositories", () => {
     );
     await expect(repo.findById("ws_1", due.id)).resolves.toMatchObject({
       name: "Renamed",
+      allowedDomains: ["*.login.example.org"],
+      writableDomains: ["auth.login.example.org"],
       device: "MOBILE",
       notifyOnRecovery: false,
       updatedBy: "usr_2",
@@ -215,6 +284,59 @@ describe("D1 browser test repositories", () => {
     await expect(repo.list("ws_1")).resolves.toEqual([
       expect.objectContaining({ id: future.id }),
     ]);
+  });
+
+  it("never treats the retired global write flag as execution authority", async () => {
+    const repo = new D1BrowserTestRepo(testEnv().DB);
+    const legacy = browserTest("bt_legacy_write_flag", 5_000);
+    await repo.insert(legacy);
+    await testEnv().DB.prepare(
+      `UPDATE browser_tests
+       SET allow_reversible_writes = 1, writable_domains_json = '[]'
+       WHERE id = ?`,
+    )
+      .bind(legacy.id)
+      .run();
+
+    await expect(repo.findById("ws_1", legacy.id)).resolves.toMatchObject({
+      writableDomains: [],
+    });
+    expect(await repo.findById("ws_1", legacy.id)).not.toHaveProperty(
+      "allowReversibleWrites",
+    );
+  });
+
+  it("pages tests by created_at and id and batches channel links within the workspace", async () => {
+    const repo = new D1BrowserTestRepo(testEnv().DB);
+    for (const test of [
+      browserTest("bt_old", 500, "ws_1", 10),
+      browserTest("bt_tie_b", 500, "ws_1", 20),
+      browserTest("bt_tie_c", 500, "ws_1", 20),
+      browserTest("bt_other", 500, "ws_2", 30),
+    ]) {
+      await repo.insert(test);
+    }
+    await repo.setChannels("bt_tie_c", ["ch_2", "ch_1"]);
+    await repo.setChannels("bt_tie_b", ["ch_3"]);
+
+    const first = await repo.listPage("ws_1", null, 2);
+    expect(first.map(({ id }) => id)).toEqual(["bt_tie_c", "bt_tie_b"]);
+    const last = first.at(-1);
+    const second = await repo.listPage(
+      "ws_1",
+      last === undefined ? null : { createdAt: last.createdAt, id: last.id },
+      2,
+    );
+    expect(second.map(({ id }) => id)).toEqual(["bt_old"]);
+    await expect(
+      repo.getChannelIdsForTests("ws_1", ["bt_tie_c", "bt_tie_b", "bt_other"]),
+    ).resolves.toEqual(
+      new Map([
+        ["bt_tie_c", ["ch_1", "ch_2"]],
+        ["bt_tie_b", ["ch_3"]],
+        ["bt_other", []],
+      ]),
+    );
   });
 
   it("enforces run uniqueness and supports state, summaries, and keyset lists", async () => {
@@ -343,6 +465,9 @@ describe("D1 browser test repositories", () => {
       id: active.id,
       status: "PASSED",
     });
+    expect(await runs.lastRunSummaryPerTest("ws_1", ["bt_missing"])).toEqual(
+      new Map(),
+    );
     expect(summaries.has("bt_2")).toBe(false);
 
     const atomicAttempts = new D1AttemptRepo(testEnv().DB);

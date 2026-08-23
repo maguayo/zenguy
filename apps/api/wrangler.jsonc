@@ -3,60 +3,100 @@
   "name": "zenguy-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": false,
+  "preview_urls": false,
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
+  "secrets": {
+    "required": [
+      "JWT_SECRET",
+      "ENCRYPTION_KEY",
+      "ARTIFACT_URL_SECRET",
+      "RUNNER_API_TOKEN",
+      "RUNNER_FALLBACK_API_TOKEN",
+      "RUNNER_CAPABILITY_SECRET",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_FROM_SMS",
+      "TWILIO_FROM_CALL",
+      "TWILIO_FROM_WHATSAPP",
+      "PADDLE_API_KEY",
+      "PADDLE_WEBHOOK_SECRET",
+      "PADDLE_CLIENT_TOKEN",
+      "PADDLE_PRODUCT_ID",
+      "PADDLE_PRICE_ID",
+      "PADDLE_OVERAGE_PRICE_ID",
+      "PADDLE_ALERT_CREDIT_PRODUCT_ID",
+      "PADDLE_ALERT_CREDIT_PRICE_ID",
+      "EXPO_PUSH_ACCESS_TOKEN"
+    ]
+  },
   "send_email": [
     {
       "name": "EMAIL",
-      "remote": true,
       "allowed_sender_addresses": ["notifications@zenguy.com"]
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "zenguy-db",
-      "database_id": "82cdd9c1-591f-45c4-a115-17fcdc18950b",
+      "database_name": "zenguy-local-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
       "migrations_dir": "migrations"
     }
   ],
   "kv_namespaces": [
-    { "binding": "KV", "id": "ac526acc3190422292f9f7d76ef93456" }
+    { "binding": "KV", "id": "00000000000000000000000000000001" }
   ],
   "r2_buckets": [
-    { "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }
+    { "binding": "ARTIFACTS", "bucket_name": "zenguy-local-artifacts" }
   ],
   "queues": {
     "producers": [
-      { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
-      { "binding": "CHECK_QUEUE", "queue": "zenguy-checks" },
-      { "binding": "NOTIFY_QUEUE", "queue": "zenguy-notify" }
+      { "binding": "RUN_QUEUE", "queue": "zenguy-local-runs" },
+      { "binding": "CHECK_QUEUE", "queue": "zenguy-local-checks" },
+      { "binding": "NOTIFY_QUEUE", "queue": "zenguy-local-notify" }
     ],
     "consumers": [
       {
-        "queue": "zenguy-checks",
+        "queue": "zenguy-local-checks",
         "max_batch_size": 5,
         "max_concurrency": 10,
         "max_retries": 3,
-        "dead_letter_queue": "zenguy-checks-dlq"
+        "dead_letter_queue": "zenguy-local-checks-dlq"
       },
       {
-        "queue": "zenguy-notify",
+        "queue": "zenguy-local-notify",
         "max_batch_size": 5,
         "max_concurrency": 5,
         "max_retries": 3,
-        "dead_letter_queue": "zenguy-notify-dlq"
+        "dead_letter_queue": "zenguy-local-notify-dlq"
       },
-      { "queue": "zenguy-runs-dlq", "max_batch_size": 10, "max_retries": 0 },
-      { "queue": "zenguy-checks-dlq", "max_batch_size": 10, "max_retries": 0 },
-      { "queue": "zenguy-notify-dlq", "max_batch_size": 10, "max_retries": 0 }
+      {
+        "queue": "zenguy-local-runs-dlq",
+        "max_batch_size": 10,
+        "max_retries": 5,
+        "dead_letter_queue": "zenguy-local-runs-quarantine"
+      },
+      {
+        "queue": "zenguy-local-checks-dlq",
+        "max_batch_size": 10,
+        "max_retries": 5,
+        "dead_letter_queue": "zenguy-local-checks-quarantine"
+      },
+      {
+        "queue": "zenguy-local-notify-dlq",
+        "max_batch_size": 10,
+        "max_retries": 5,
+        "dead_letter_queue": "zenguy-local-notify-quarantine"
+      }
     ]
   },
-  "triggers": { "crons": ["*/5 * * * *", "0 3 * * *", "30 * * * *"] },
   "vars": {
     "ENVIRONMENT": "development",
     "APP_URL": "http://localhost:5173",
+    "ENCRYPTION_KEY_ID": "primary",
     "LLM_MODEL": "qwen/qwen3.8-27b",
     "PADDLE_ENVIRONMENT": "sandbox",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
@@ -74,6 +114,31 @@
           "zone_name": "zenguy.com"
         }
       ],
+      "secrets": {
+        "required": [
+          "JWT_SECRET",
+          "ENCRYPTION_KEY",
+          "ARTIFACT_URL_SECRET",
+          "RUNNER_API_TOKEN",
+          "RUNNER_FALLBACK_API_TOKEN",
+          "RUNNER_CAPABILITY_SECRET",
+          "TWILIO_ACCOUNT_SID",
+          "TWILIO_AUTH_TOKEN",
+          "TWILIO_FROM_SMS",
+          "TWILIO_FROM_CALL",
+          "TWILIO_FROM_WHATSAPP",
+          "PADDLE_API_KEY",
+          "PADDLE_WEBHOOK_SECRET",
+          "PADDLE_CLIENT_TOKEN",
+          "PADDLE_PRODUCT_ID",
+          "PADDLE_PRICE_ID",
+          "PADDLE_OVERAGE_PRICE_ID",
+          "PADDLE_ALERT_CREDIT_PRODUCT_ID",
+          "PADDLE_ALERT_CREDIT_PRICE_ID",
+          "EXPO_PUSH_ACCESS_TOKEN",
+          "CF_ACCESS_AUD"
+        ]
+      },
       "send_email": [
         {
           "name": "EMAIL",
@@ -95,6 +160,13 @@
         {
           "binding": "ARTIFACTS",
           "bucket_name": "zenguy-staging-artifacts"
+        }
+      ],
+      "services": [
+        {
+          "binding": "KEY_WRAPPING",
+          "service": "zenguy-kms-staging",
+          "entrypoint": "KeyWrappingService"
         }
       ],
       "queues": {
@@ -121,17 +193,20 @@
           {
             "queue": "zenguy-staging-runs-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-staging-runs-quarantine"
           },
           {
             "queue": "zenguy-staging-checks-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-staging-checks-quarantine"
           },
           {
             "queue": "zenguy-staging-notify-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-staging-notify-quarantine"
           }
         ]
       },
@@ -141,6 +216,9 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_URL": "https://staging-app.zenguy.com",
+        "CF_ACCESS_TEAM_DOMAIN": "https://bugfer.cloudflareaccess.com",
+        "ENCRYPTION_KEY_ID": "primary",
+        "KEY_WRAPPING_KEY_ID": "primary",
         "LLM_MODEL": "qwen/qwen3.8-27b",
         "PADDLE_ENVIRONMENT": "sandbox",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
@@ -158,6 +236,31 @@
           "zone_name": "zenguy.com"
         }
       ],
+      "secrets": {
+        "required": [
+          "JWT_SECRET",
+          "ENCRYPTION_KEY",
+          "ARTIFACT_URL_SECRET",
+          "RUNNER_API_TOKEN",
+          "RUNNER_FALLBACK_API_TOKEN",
+          "RUNNER_CAPABILITY_SECRET",
+          "TWILIO_ACCOUNT_SID",
+          "TWILIO_AUTH_TOKEN",
+          "TWILIO_FROM_SMS",
+          "TWILIO_FROM_CALL",
+          "TWILIO_FROM_WHATSAPP",
+          "PADDLE_API_KEY",
+          "PADDLE_WEBHOOK_SECRET",
+          "PADDLE_CLIENT_TOKEN",
+          "PADDLE_PRODUCT_ID",
+          "PADDLE_PRICE_ID",
+          "PADDLE_OVERAGE_PRICE_ID",
+          "PADDLE_ALERT_CREDIT_PRODUCT_ID",
+          "PADDLE_ALERT_CREDIT_PRICE_ID",
+          "EXPO_PUSH_ACCESS_TOKEN",
+          "CF_RUNNER_ACCESS_AUD"
+        ]
+      },
       "send_email": [
         {
           "name": "EMAIL",
@@ -177,6 +280,13 @@
       ],
       "r2_buckets": [
         { "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }
+      ],
+      "services": [
+        {
+          "binding": "KEY_WRAPPING",
+          "service": "zenguy-kms-production",
+          "entrypoint": "KeyWrappingService"
+        }
       ],
       "queues": {
         "producers": [
@@ -202,17 +312,20 @@
           {
             "queue": "zenguy-runs-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-runs-quarantine"
           },
           {
             "queue": "zenguy-checks-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-checks-quarantine"
           },
           {
             "queue": "zenguy-notify-dlq",
             "max_batch_size": 10,
-            "max_retries": 0
+            "max_retries": 5,
+            "dead_letter_queue": "zenguy-notify-quarantine"
           }
         ]
       },
@@ -222,6 +335,9 @@
       "vars": {
         "ENVIRONMENT": "production",
         "APP_URL": "https://app.zenguy.com",
+        "CF_ACCESS_TEAM_DOMAIN": "https://bugfer.cloudflareaccess.com",
+        "ENCRYPTION_KEY_ID": "primary",
+        "KEY_WRAPPING_KEY_ID": "primary",
         "LLM_MODEL": "qwen/qwen3.8-27b",
         "PADDLE_ENVIRONMENT": "production",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",

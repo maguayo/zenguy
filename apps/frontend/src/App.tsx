@@ -14,19 +14,22 @@ import {
   useLocation,
 } from "react-router-dom";
 import {
-  QueryClient,
   QueryClientProvider,
   useQuery,
 } from "@tanstack/react-query";
 
 import type { Workspace } from "./api/types";
+import { ActivityTracker } from "./components/ActivityTracker";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorState } from "./components/ui/ErrorState";
 import { Spinner } from "./components/ui/Spinner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
-import { ApiError, apiGet } from "./lib/api";
+import { apiGet } from "./lib/api";
+import { queryClient } from "./lib/query-client";
+
+export { queryClient, shouldRetryQuery } from "./lib/query-client";
 
 const stub = (title: string) =>
   lazy(async () => {
@@ -67,20 +70,6 @@ const Privacy = lazy(() => import("./pages/legal/Privacy"));
 const Terms = lazy(() => import("./pages/legal/Terms"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-export function shouldRetryQuery(count: number, error: unknown): boolean {
-  return !(error instanceof ApiError && error.status < 500) && count < 2;
-}
-
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: true,
-      retry: shouldRetryQuery,
-      staleTime: 10_000,
-    },
-  },
-});
-
 export function RequireAuth({ children }: { children?: ReactNode }) {
   const { status, user } = useAuth();
   const location = useLocation();
@@ -90,7 +79,12 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
   if (user && !user.emailVerified && location.pathname !== "/verify-pending") {
     return <Navigate replace to="/verify-pending" />;
   }
-  return <>{children ?? <Outlet />}</>;
+  return (
+    <>
+      <ActivityTracker />
+      {children ?? <Outlet />}
+    </>
+  );
 }
 
 export function PublicOnly({ children }: { children?: ReactNode }) {
@@ -150,6 +144,7 @@ function RootResolver() {
   return <Navigate replace to={`/w/${workspace.id}/overview`} />;
 }
 
+// New authenticated routes must also be listed in src/lib/activity/route-events.ts.
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoading />}>
@@ -161,13 +156,15 @@ function AppRoutes() {
           <Route element={<ResetPassword />} path="/reset-password" />
         </Route>
         <Route element={<VerifyEmail />} path="/verify-email" />
+        <Route element={<VerifyPending />} path="/verify-pending" />
+        <Route element={<AcceptInvitation />} path="/invitations/accept" />
         <Route element={<AcceptInvitation />} path="/invitations/:token" />
+        <Route element={<RedeemGrant />} path="/grants/redeem" />
         <Route element={<RedeemGrant />} path="/grants/:token" />
         <Route element={<Privacy />} path="/privacy" />
         <Route element={<Terms />} path="/terms" />
 
         <Route element={<RequireAuth />}>
-          <Route element={<VerifyPending />} path="/verify-pending" />
           <Route element={<IssueGrants />} path="/complimentary" />
           <Route element={<CreateWorkspace />} path="/onboarding/workspace" />
           <Route element={<BillingSetup />} path="/w/:wsId/setup/billing" />

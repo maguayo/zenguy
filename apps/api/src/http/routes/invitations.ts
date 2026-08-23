@@ -16,9 +16,13 @@ import type {
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import { RATE_LIMITS } from "../../shared/constants";
-import { AppError } from "../../shared/errors";
+import { sha256Hex } from "../../shared/crypto";
 import type { IdGenerator } from "../../shared/ids";
-import type { RateLimiter } from "../../shared/ratelimit";
+import {
+  enforceRateLimitScopes,
+  normalizeRateLimitAddress,
+  type RateLimiter,
+} from "../../shared/ratelimit";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireAction, withWorkspace } from "../middleware/workspace";
@@ -45,6 +49,9 @@ const inviteSchema = z.object({
   email: z.email(),
   role: z.enum(["ADMIN", "MEMBER"]),
 });
+const publicTokenSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{1,512}$/u),
+});
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -55,20 +62,24 @@ function requestIp(context: {
 async function enforceInvitationRate(
   limiter: RateLimiter,
   workspaceId: string,
+  actorId: string,
+  destinationEmail: string,
+  ip?: string,
 ): Promise<void> {
-  const result = await limiter.hit(
-    `invitations:${workspaceId}`,
-    RATE_LIMITS.invitations.limit,
-    RATE_LIMITS.invitations.windowSeconds,
+  const [addressHash, destinationHash] = await Promise.all([
+    sha256Hex(normalizeRateLimitAddress(ip)),
+    sha256Hex(destinationEmail.trim().toLowerCase()),
+  ]);
+  await enforceRateLimitScopes(
+    limiter,
+    [
+      `invitations:workspace:${workspaceId}`,
+      `invitations:actor:${actorId}`,
+      `invitations:ip:${addressHash}`,
+      `invitations:destination:${destinationHash}`,
+    ],
+    RATE_LIMITS.invitations,
   );
-  if (!result.allowed) {
-    throw new AppError(
-      "RATE_LIMITED",
-      "Too many requests",
-      undefined,
-      result.retryAfterSeconds,
-    );
-  }
 }
 
 export function workspaceInvitationRoutes(
@@ -97,11 +108,19 @@ export function workspaceInvitationRoutes(
     zjson(inviteSchema),
     async (context) => {
       const workspaceId = context.get("workspace").id;
-      await enforceInvitationRate(dependencies.rateLimiter, workspaceId);
-      const result = await inviteMember.execute({
-        ...context.req.valid("json"),
+      const actor = context.get("user");
+      const input = context.req.valid("json");
+      await enforceInvitationRate(
+        dependencies.rateLimiter,
         workspaceId,
-        actor: context.get("user"),
+        actor.id,
+        input.email,
+        requestIp(context),
+      );
+      const result = await inviteMember.execute({
+        ...input,
+        workspaceId,
+        actor,
         actorRole: context.get("role"),
         ip: requestIp(context),
       });
@@ -163,20 +182,21 @@ export function publicInvitationRoutes(
     dependencies.ids,
   );
 
-  app.get("/:token", async (context) => {
+  app.post("/preview", zjson(publicTokenSchema), async (context) => {
     const result = await getInvitation.execute({
-      tokenPlain: context.req.param("token"),
+      tokenPlain: context.req.valid("json").token,
     });
     return context.json({ data: presentPublicInvitation(result) });
   });
 
   app.post(
-    "/:token/accept",
+    "/accept",
     requireAuth(dependencies),
     requireVerifiedEmail,
+    zjson(publicTokenSchema),
     async (context) => {
       const result = await acceptInvitation.execute({
-        tokenPlain: context.req.param("token"),
+        tokenPlain: context.req.valid("json").token,
         actor: context.get("user"),
         ip: requestIp(context),
       });

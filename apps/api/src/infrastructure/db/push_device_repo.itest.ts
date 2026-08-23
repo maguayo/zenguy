@@ -80,6 +80,7 @@ describe("D1PushDeviceRepo", () => {
         email: `${id}@push.test`,
         passwordHash: "hash",
         emailVerifiedAt: 1,
+        authVersion: 1,
         createdAt: 1,
         updatedAt: 1,
       });
@@ -112,11 +113,12 @@ describe("D1PushDeviceRepo", () => {
     await repo.insert(device("pd_b_off", "usr_b", T("boff"), false));
     await repo.insert(device("pd_c", "usr_c", T("c")));
 
-    await expect(repo.listEnabledTokensForWorkspace("ws_push")).resolves.toEqual([
+    await expect(repo.listEnabledTokensForWorkspace("ws_push", 0)).resolves.toEqual([
       { token: T("a1"), userId: "usr_a" },
       { token: T("a2"), userId: "usr_a" },
       { token: T("b"), userId: "usr_b" },
     ]);
+    await expect(repo.listEnabledTokensForWorkspace("ws_push", 11)).resolves.toEqual([]);
     await expect(repo.reachForWorkspace("ws_push")).resolves.toEqual({ devices: 3, members: 2 });
     await expect(repo.reachForWorkspace("ws_other")).resolves.toEqual({ devices: 0, members: 0 });
 

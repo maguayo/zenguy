@@ -68,6 +68,10 @@ describe("incident detail", () => {
     expect(incidentDeliveryEvent("RECOVERY")).toBe("Recovery");
     expect(incidentDeliveryStatus("SENT")).toEqual({ label: "Sent", tone: "ok" });
     expect(incidentDeliveryStatus("FAILED")).toEqual({ label: "Failed", tone: "danger" });
+    expect(incidentDeliveryStatus("AMBIGUOUS")).toEqual({
+      label: "Needs reconciliation",
+      tone: "warn",
+    });
     expect(incidentDeliveryStatus("PENDING")).toEqual({ label: "Pending", tone: "neutral" });
     expect(incidentDeliveryCost(delivery)).toBeNull();
     expect(incidentDeliveryCost({ ...delivery, costCents: null } as IncidentDelivery)).toBeNull();

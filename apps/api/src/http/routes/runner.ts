@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ExternalRunner } from "../../application/execution/external_runner";
 import {
   runnerClaimSchema,
+  runnerAuthorizeActionSchema,
   runnerCompleteSchema,
   runnerHeartbeatSchema,
   runnerStaleClaimSchema,
@@ -14,12 +15,24 @@ import { timingSafeEqualText } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
 import type { AppEnv } from "../env";
 import { zjson } from "../validate";
+import {
+  issueRunnerCapability,
+  verifyRunnerCapability,
+} from "../runner_capability";
 
 export interface RunnerRoutesDependencies {
-  token: string;
+  environment: "development" | "staging" | "production";
+  primaryToken: string;
+  fallbackToken: string;
+  capabilitySecret: string;
   runner: Pick<
     ExternalRunner,
-    "claim" | "claimStale" | "start" | "recordStep" | "complete"
+    | "claim"
+    | "claimStale"
+    | "start"
+    | "authorizeAction"
+    | "recordStep"
+    | "complete"
   >;
   workers: Pick<RunnerWorkerRepo, "recordHeartbeat">;
   clock: Clock;
@@ -36,29 +49,97 @@ export function runnerRoutes(
   const app = new Hono<AppEnv>();
 
   app.use("*", async (context, next) => {
-    const provided = bearerToken(context.req.header("Authorization"));
-    if (!(await timingSafeEqualText(provided, dependencies.token))) {
-      throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
-    }
     await next();
     context.header("Cache-Control", "no-store");
   });
 
-  app.post("/heartbeat", zjson(runnerHeartbeatSchema), async (context) => {
-    await dependencies.workers.recordHeartbeat(
-      context.req.valid("json"),
-      dependencies.clock.now(),
+  async function requireBootstrap(
+    provided: string,
+    expected: string,
+  ): Promise<void> {
+    if (!(await timingSafeEqualText(provided, expected))) {
+      throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
+    }
+  }
+
+  async function requireCapability(
+    provided: string,
+    reference: Parameters<typeof verifyRunnerCapability>[2],
+    workerId: string,
+  ): Promise<void> {
+    if (
+      !(await verifyRunnerCapability(
+        provided,
+        dependencies.capabilitySecret,
+        reference,
+        workerId,
+        dependencies.clock,
+      ))
+    ) {
+      throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
+    }
+  }
+
+  function requireWorkerIdentity(
+    workerId: string,
+    mode: "local" | "fallback",
+  ): void {
+    if (dependencies.environment === "development") return;
+    const expected = `zenguy-${dependencies.environment}-${
+      mode === "local" ? "primary" : "fallback"
+    }`;
+    if (workerId !== expected) {
+      throw new AppError("UNAUTHORIZED", "Invalid runner identity");
+    }
+  }
+
+  app.use("/attempts/claim", async (context, next) => {
+    await requireBootstrap(
+      bearerToken(context.req.header("Authorization")),
+      dependencies.primaryToken,
     );
+    await next();
+  });
+
+  app.use("/attempts/claim-stale", async (context, next) => {
+    await requireBootstrap(
+      bearerToken(context.req.header("Authorization")),
+      dependencies.fallbackToken,
+    );
+    await next();
+  });
+
+  app.post("/heartbeat", zjson(runnerHeartbeatSchema), async (context) => {
+    const heartbeat = context.req.valid("json");
+    await requireBootstrap(
+      bearerToken(context.req.header("Authorization")),
+      heartbeat.mode === "local"
+        ? dependencies.primaryToken
+        : dependencies.fallbackToken,
+    );
+    requireWorkerIdentity(heartbeat.workerId, heartbeat.mode);
+    await dependencies.workers.recordHeartbeat(heartbeat, dependencies.clock.now());
     return context.json({ data: { ok: true } });
   });
 
   app.post("/attempts/claim", zjson(runnerClaimSchema), async (context) => {
-    const job = await dependencies.runner.claim(context.req.valid("json"));
+    const input = context.req.valid("json");
+    requireWorkerIdentity(input.workerId, "local");
+    const job = await dependencies.runner.claim(input);
+    const capability =
+      job === null
+        ? null
+        : await issueRunnerCapability(
+            dependencies.capabilitySecret,
+            job.reference,
+            input.workerId,
+            dependencies.clock,
+          );
     return context.json({
       data:
         job === null
           ? { disposition: "SKIP" as const }
-          : { disposition: "EXECUTE" as const, job },
+          : { disposition: "EXECUTE" as const, job: { ...job, capability } },
     });
   });
 
@@ -66,20 +147,35 @@ export function runnerRoutes(
     "/attempts/claim-stale",
     zjson(runnerStaleClaimSchema),
     async (context) => {
-      const job = await dependencies.runner.claimStale(
-        context.req.valid("json"),
-      );
+      const input = context.req.valid("json");
+      requireWorkerIdentity(input.workerId, "fallback");
+      const job = await dependencies.runner.claimStale(input);
+      const capability =
+        job === null
+          ? null
+          : await issueRunnerCapability(
+              dependencies.capabilitySecret,
+              job.reference,
+              input.workerId,
+              dependencies.clock,
+            );
       return context.json({
         data:
           job === null
             ? { disposition: "SKIP" as const }
-            : { disposition: "EXECUTE" as const, job },
+            : { disposition: "EXECUTE" as const, job: { ...job, capability } },
       });
     },
   );
 
   app.post("/attempts/:attemptId/start", zjson(runnerStartSchema), async (context) => {
     const { reference } = context.req.valid("json");
+    const workerId = context.req.header("X-Zenguy-Worker-Id") ?? "";
+    await requireCapability(
+      bearerToken(context.req.header("Authorization")),
+      reference,
+      workerId,
+    );
     if (reference.attemptId !== context.req.param("attemptId")) {
       throw new AppError("CONFLICT", "Attempt reference does not match route");
     }
@@ -92,8 +188,39 @@ export function runnerRoutes(
     });
   });
 
+  app.post(
+    "/attempts/:attemptId/actions/authorize",
+    zjson(runnerAuthorizeActionSchema),
+    async (context) => {
+      const input = context.req.valid("json");
+      const workerId = context.req.header("X-Zenguy-Worker-Id") ?? "";
+      await requireCapability(
+        bearerToken(context.req.header("Authorization")),
+        input.reference,
+        workerId,
+      );
+      if (input.reference.attemptId !== context.req.param("attemptId")) {
+        throw new AppError("CONFLICT", "Attempt reference does not match route");
+      }
+      const authorized = await dependencies.runner.authorizeAction(input);
+      return context.json({
+        data: {
+          disposition: authorized
+            ? ("AUTHORIZED" as const)
+            : ("BLOCKED" as const),
+        },
+      });
+    },
+  );
+
   app.post("/attempts/:attemptId/steps", zjson(runnerStepSchema), async (context) => {
     const input = context.req.valid("json");
+    const workerId = context.req.header("X-Zenguy-Worker-Id") ?? "";
+    await requireCapability(
+      bearerToken(context.req.header("Authorization")),
+      input.reference,
+      workerId,
+    );
     if (input.reference.attemptId !== context.req.param("attemptId")) {
       throw new AppError("CONFLICT", "Attempt reference does not match route");
     }
@@ -108,6 +235,12 @@ export function runnerRoutes(
     zjson(runnerCompleteSchema),
     async (context) => {
       const { reference, outcome } = context.req.valid("json");
+      const workerId = context.req.header("X-Zenguy-Worker-Id") ?? "";
+      await requireCapability(
+        bearerToken(context.req.header("Authorization")),
+        reference,
+        workerId,
+      );
       if (reference.attemptId !== context.req.param("attemptId")) {
         throw new AppError("CONFLICT", "Attempt reference does not match route");
       }

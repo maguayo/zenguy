@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { EmailSender } from "./domain/email/sender";
+import type { ActivityEventRepo } from "./domain/activity/repo";
 import type { AuditRepo } from "./domain/audit/repo";
 import type { BillingCanceller } from "./domain/billing/canceller";
 import type { ChannelSender } from "./domain/channels/notifier";
@@ -29,8 +30,10 @@ import type { CheckOutcome } from "./application/uptime/execute_check";
 import { executeCheck } from "./application/uptime/execute_check";
 import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import type { SecretRepo } from "./domain/secrets/repo";
+import type { EncryptionRotationRepo } from "./domain/security/encryption";
 import type {
   OverageReportRepo,
+  PaddleCheckoutIntentRepo,
   PendingOveragePeriodRepo,
   SubscriptionGrantRepo,
   SubscriptionRepo,
@@ -40,6 +43,7 @@ import type { PeriodOverageReporter } from "./application/billing/handle_paddle_
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
+  SessionSecurityRepo,
   UserRepo,
 } from "./domain/users/repo";
 import type {
@@ -48,6 +52,8 @@ import type {
   WorkspaceRepo,
 } from "./domain/workspaces/repo";
 import type { AppEnv } from "./http/env";
+import type { WorkspaceDeletionCoordinator } from "./application/workspaces/delete_workspace";
+import { WorkspaceDeletionSaga } from "./application/workspaces/workspace_deletion_saga";
 import { errorHandler } from "./http/middleware/error_handler";
 import { requestId } from "./http/middleware/request_id";
 import { securityHeaders } from "./http/middleware/security_headers";
@@ -58,15 +64,20 @@ import {
   workspaceInvitationRoutes,
 } from "./http/routes/invitations";
 import { memberRoutes } from "./http/routes/members";
+import { TrackEvent } from "./application/activity/track_event";
 import { WriteAudit } from "./application/audit/write_audit";
+import { D1ActivityEventRepo } from "./infrastructure/db/activity_event_repo";
 import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
 import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
+import { D1SessionSecurityRepo } from "./infrastructure/db/session_security_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
 import { D1WorkspaceRepo } from "./infrastructure/db/workspace_repo";
+import { D1WorkspaceDeletionRepo } from "./infrastructure/db/workspace_deletion_repo";
 import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
+import { D1PaddleCheckoutIntentRepo } from "./infrastructure/db/paddle_checkout_intent_repo";
 import { D1SubscriptionGrantRepo } from "./infrastructure/db/subscription_grant_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
@@ -74,6 +85,7 @@ import {
   D1PendingOveragePeriodRepo,
 } from "./infrastructure/db/pending_overage_period_repo";
 import { D1SecretRepo } from "./infrastructure/db/secret_repo";
+import { D1EncryptionRotationRepo } from "./infrastructure/db/encryption_rotation_repo";
 import { D1ChannelRepo } from "./infrastructure/db/channel_repo";
 import { D1DeliveryRepo } from "./infrastructure/db/delivery_repo";
 import { D1BrowserTestRepo } from "./infrastructure/db/browser_test_repo";
@@ -123,6 +135,14 @@ import { alertRoutes } from "./http/routes/alerts";
 import type { PushDeviceRepo } from "./domain/push/repo";
 import { D1PushDeviceRepo } from "./infrastructure/db/push_device_repo";
 import { EnsureDefaultPushChannel } from "./application/push/ensure_default_push_channel";
+import {
+  MAX_API_REQUEST_BODY_BYTES,
+  MAX_BROWSER_TEST_IMPORT_BODY_BYTES,
+  MAX_PADDLE_WEBHOOK_BODY_BYTES,
+  MAX_STANDARD_API_REQUEST_BODY_BYTES,
+} from "./shared/constants";
+import { strictBodyLimit } from "./http/middleware/strict_body_limit";
+import { activityRoutes } from "./http/routes/activity";
 import { pushDeviceRoutes } from "./http/routes/push_devices";
 import { D1ApiKeyRepo } from "./infrastructure/db/api_key_repo";
 import { buildChannelSender } from "./infrastructure/notify";
@@ -139,7 +159,7 @@ import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
 import type { IdGenerator } from "./shared/ids";
 import { realIds } from "./shared/ids";
-import { KvRateLimiter, type RateLimiter } from "./shared/ratelimit";
+import { D1RateLimiter, type RateLimiter } from "./shared/ratelimit";
 import { PublishQueueOutbox } from "./application/durability/publish_outbox";
 
 export interface AppOverrides {
@@ -148,18 +168,22 @@ export interface AppOverrides {
   users?: UserRepo;
   emailTokens?: EmailTokenRepo;
   refreshTokens?: RefreshTokenRepo;
+  sessionSecurity?: SessionSecurityRepo;
   emailSender?: EmailSender;
   rateLimiter?: RateLimiter;
   workspaces?: WorkspaceRepo;
   members?: MemberRepo;
   audits?: AuditRepo;
+  activityEvents?: ActivityEventRepo;
   invitations?: InvitationRepo;
   subscriptions?: SubscriptionRepo;
+  checkoutIntents?: PaddleCheckoutIntentRepo;
   subscriptionGrants?: SubscriptionGrantRepo;
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
   pendingOveragePeriods?: PendingOveragePeriodRepo;
   secrets?: SecretRepo;
+  encryptionRotation?: EncryptionRotationRepo;
   channels?: ChannelRepo;
   deliveries?: DeliveryRepo;
   channelSender?: ChannelSender;
@@ -177,18 +201,25 @@ export interface AppOverrides {
   uptimeCheckExecutor?: (
     config: MonitorConfig,
     workspaceId: string,
+    execution?: { idempotencyKey?: string },
   ) => Promise<CheckOutcome>;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   runQueue?: Pick<Queue<AttemptMessage>, "send">;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
+  workspaceDeletion?: WorkspaceDeletionCoordinator;
   apiKeys?: ApiKeyRepo;
   alerts?: AlertRepo;
   pushDevices?: PushDeviceRepo;
   externalRunner?: Pick<
     ExternalRunner,
-    "claim" | "claimStale" | "start" | "recordStep" | "complete"
+    | "claim"
+    | "claimStale"
+    | "start"
+    | "authorizeAction"
+    | "recordStep"
+    | "complete"
   >;
   runnerWorkers?: RunnerWorkerRepo;
 }
@@ -205,17 +236,28 @@ export function buildApp(
     overrides.emailTokens ?? new D1EmailTokenRepo(env.DB);
   const refreshTokens =
     overrides.refreshTokens ?? new D1RefreshTokenRepo(env.DB);
+  const sessionSecurity =
+    overrides.sessionSecurity ?? new D1SessionSecurityRepo(env.DB);
   const emailSender =
     overrides.emailSender ?? buildEmailSender(config, env.EMAIL);
   const rateLimiter =
-    overrides.rateLimiter ?? new KvRateLimiter(env.KV, clock);
+    overrides.rateLimiter ?? new D1RateLimiter(env.DB, clock);
   const workspaces = overrides.workspaces ?? new D1WorkspaceRepo(env.DB);
   const members = overrides.members ?? new D1MemberRepo(env.DB);
   const audits = overrides.audits ?? new D1AuditRepo(env.DB);
+  const activityEvents =
+    overrides.activityEvents ?? new D1ActivityEventRepo(env.DB);
+  const track = new TrackEvent({
+    activity: activityEvents,
+    clock,
+    ids: overrides.ids ?? realIds,
+  });
   const invitations =
     overrides.invitations ?? new D1InvitationRepo(env.DB);
   const subscriptions =
     overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
+  const checkoutIntents =
+    overrides.checkoutIntents ?? new D1PaddleCheckoutIntentRepo(env.DB);
   const subscriptionGrants =
     overrides.subscriptionGrants ?? new D1SubscriptionGrantRepo(env.DB);
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
@@ -225,7 +267,9 @@ export function buildApp(
     overrides.pendingOveragePeriods ??
     new D1PendingOveragePeriodRepo(env.DB);
   const secrets = overrides.secrets ?? new D1SecretRepo(env.DB);
-  const resolveSecrets = new ResolveSecrets(secrets, config.encryptionKey);
+  const encryptionRotation =
+    overrides.encryptionRotation ?? new D1EncryptionRotationRepo(env.DB);
+  const resolveSecrets = new ResolveSecrets(secrets, config.encryptionKeys);
   const channels = overrides.channels ?? new D1ChannelRepo(env.DB);
   const deliveries = overrides.deliveries ?? new D1DeliveryRepo(env.DB);
   const pushDevices = overrides.pushDevices ?? new D1PushDeviceRepo(env.DB);
@@ -267,7 +311,7 @@ export function buildApp(
   const defaultEmailChannel = new EnsureDefaultEmailChannel(
     channels,
     alerts,
-    config.encryptionKey,
+    config.encryptionKeys,
     clock,
     overrides.ids ?? realIds,
   );
@@ -276,7 +320,7 @@ export function buildApp(
     alerts,
     browserTests,
     monitors,
-    config.encryptionKey,
+    config.encryptionKeys,
     clock,
     overrides.ids ?? realIds,
   );
@@ -295,7 +339,11 @@ export function buildApp(
   );
   const uptimeCheckExecutor =
     overrides.uptimeCheckExecutor ??
-    ((monitorConfig: MonitorConfig, workspaceId: string) =>
+    ((
+      monitorConfig: MonitorConfig,
+      workspaceId: string,
+      execution?: { idempotencyKey?: string },
+    ) =>
       executeCheck(
         {
           fetchFn: (input, init) => globalThis.fetch(input, init),
@@ -304,6 +352,7 @@ export function buildApp(
         },
         monitorConfig,
         workspaceId,
+        execution,
       ));
   const incidentCloserOnTestDelete =
     overrides.incidentCloserOnTestDelete ??
@@ -334,8 +383,17 @@ export function buildApp(
     (config.paddle === null
       ? new NoopBillingCanceller()
       : new PaddleBillingCanceller(subscriptions, paddleClient, clock));
+  const workspaceDeletion =
+    overrides.workspaceDeletion ??
+    new WorkspaceDeletionSaga(
+      new D1WorkspaceDeletionRepo(env.DB),
+      billingCanceller,
+      artifactStorage,
+      clock,
+    );
   const audit = new WriteAudit({
     audits,
+    activity: track,
     clock,
     ids: overrides.ids ?? realIds,
   });
@@ -358,6 +416,7 @@ export function buildApp(
         reverseUsage: new ReverseRunUsage(usageEvents, clock),
         durable: durableWorkflows,
         outboxPublisher,
+        track,
         clock,
         ids: overrides.ids ?? realIds,
         runFinalizedHandler: new HandleRunFinalized({
@@ -385,6 +444,7 @@ export function buildApp(
             ids: overrides.ids ?? realIds,
           }),
           appUrl: config.appUrl,
+          track,
           clock,
           ids: overrides.ids ?? realIds,
         }),
@@ -397,10 +457,43 @@ export function buildApp(
       resolveSecrets,
       clock,
       ids: overrides.ids ?? realIds,
+      authorizationSigningSecret: config.runnerCapabilitySecret,
     });
 
   app.use("*", requestId);
   app.use("*", securityHeaders);
+  // Cloudflare accepts request bodies far larger than an isolate can safely
+  // materialize. Count every stream before any JSON/raw-body parser runs;
+  // Content-Length is only an early-rejection hint, never the enforcement.
+  // Route selection is deterministic and fail-closed: ordinary JSON and the
+  // unauthenticated Paddle webhook receive 256 KiB, imports receive their
+  // domain limit, and only a runner step carrying one bounded JPEG receives
+  // the absolute 3.2 MB allowance.
+  app.use(
+    "/api/*",
+    strictBodyLimit({
+      maxSize: (context) => {
+        const path = context.req.path;
+        if (path === "/api/webhooks/paddle") {
+          return MAX_PADDLE_WEBHOOK_BODY_BYTES;
+        }
+        if (
+          /^\/api\/workspaces\/[^/]+\/browser-tests\/import$/u.test(path)
+        ) {
+          return MAX_BROWSER_TEST_IMPORT_BODY_BYTES;
+        }
+        if (/^\/api\/runner\/attempts\/[^/]+\/steps$/u.test(path)) {
+          return MAX_API_REQUEST_BODY_BYTES;
+        }
+        return MAX_STANDARD_API_REQUEST_BODY_BYTES;
+      },
+      onError: (context) =>
+        context.json(
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large" } },
+          413,
+        ),
+    }),
+  );
   // The SPA calls the API cross-origin (api.zenguy.com from app.zenguy.com);
   // only the configured application origin may send credentialed requests.
   // /api/v1 is the key-authenticated public read API: no cookies are ever
@@ -435,6 +528,19 @@ export function buildApp(
       workspaces,
       pushDevices,
       defaultPushChannel,
+      track,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/me",
+    activityRoutes({
+      users,
+      members,
+      activityEvents,
+      rateLimiter,
       clock,
       ids: overrides.ids ?? realIds,
       config,
@@ -443,7 +549,10 @@ export function buildApp(
   app.route(
     "/api/runner",
     runnerRoutes({
-      token: config.runnerApiToken,
+      environment: config.environment,
+      primaryToken: config.runnerApiToken,
+      fallbackToken: config.runnerFallbackApiToken,
+      capabilitySecret: config.runnerCapabilitySecret,
       runner: externalRunner,
       workers: runnerWorkers,
       clock,
@@ -470,8 +579,10 @@ export function buildApp(
       users,
       emailTokens,
       refreshTokens,
+      sessionSecurity,
       workspaces,
       audit,
+      track,
       emailSender,
       rateLimiter,
       clock,
@@ -497,7 +608,16 @@ export function buildApp(
   );
   app.route(
     "/api/workspaces",
-    memberRoutes({ users, workspaces, members, audit, config }),
+    memberRoutes({
+      users,
+      workspaces,
+      members,
+      invitations,
+      apiKeys,
+      audit,
+      clock,
+      config,
+    }),
   );
   app.route(
     "/api/invitations",
@@ -510,7 +630,7 @@ export function buildApp(
       workspaces,
       members,
       invitations,
-      billingCanceller,
+      workspaceDeletion,
       subscriptions,
       defaultEmailChannel,
       defaultPushChannel,
@@ -528,8 +648,11 @@ export function buildApp(
       members,
       channels,
       alerts,
+      checkoutIntents,
       audit,
+      track,
       clock,
+      ids: overrides.ids ?? realIds,
       config,
     }),
   );
@@ -541,8 +664,11 @@ export function buildApp(
       members,
       subscriptions,
       usageEvents,
+      checkoutIntents,
       paddle: paddleClient,
+      track,
       clock,
+      ids: overrides.ids ?? realIds,
       config,
     }),
   );
@@ -569,6 +695,8 @@ export function buildApp(
       members,
       subscriptions,
       secrets,
+      encryptionRotation,
+      rateLimiter,
       audit,
       clock,
       ids: overrides.ids ?? realIds,
@@ -639,6 +767,7 @@ export function buildApp(
       attempts,
       rateLimiter,
       resolveSecrets,
+      track,
       clock,
       config,
     }),
@@ -670,6 +799,7 @@ export function buildApp(
       incidentEvents,
       rateLimiter,
       audit,
+      track,
       executeCheck: uptimeCheckExecutor,
       clock,
       ids: overrides.ids ?? realIds,
@@ -695,6 +825,7 @@ export function buildApp(
       outboxPublisher,
       rateLimiter,
       audit,
+      track,
       resolveSecrets,
       clock,
       ids: overrides.ids ?? realIds,
@@ -708,13 +839,18 @@ export function buildApp(
         webhookSecret: config.paddle.webhookSecret,
         kv: env.KV,
         subscriptions,
+        checkoutIntents,
+        workspaces,
         pendingOveragePeriods,
         overageReporter,
         audit,
         clock,
         ids: overrides.ids ?? realIds,
         alerts,
+        alertCreditProductId: config.paddle.alertCreditProductId,
         alertCreditPriceId: config.paddle.alertCreditPriceId,
+        subscriptionProductId: config.paddle.productId,
+        subscriptionPriceId: config.paddle.priceId,
       }),
     );
   }

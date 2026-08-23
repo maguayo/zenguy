@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearToken, getToken, setToken } from "../lib/auth-token";
+import { confirmTerminalLogout, isTerminalLogoutPending, supersedeSession } from "../lib/api";
 import {
+  activateSession,
   forgotPassword,
   login,
   logout,
@@ -30,41 +32,54 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 describe("auth API", () => {
-  beforeEach(() => clearToken());
+  beforeEach(() => {
+    confirmTerminalLogout();
+    supersedeSession();
+    clearToken();
+  });
   afterEach(() => {
+    confirmTerminalLogout();
+    supersedeSession();
     clearToken();
     vi.unstubAllGlobals();
   });
 
-  it("registers, stores the access token and returns the new session", async () => {
-    const unverified = { ...user, emailVerified: false };
-    const session = { accessToken: "register-token", expiresIn: 1_800, user: unverified };
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(session, 201));
+  it("returns token-free registration state without activating a principal", async () => {
+    const pending = {
+      registrationPending: true as const,
+      email: user.email,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(pending, 201));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(register("María", user.email, "Password123!")).resolves.toEqual(session);
+    await expect(register("María", user.email, "Password123!")).resolves.toEqual(pending);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/register");
-    expect(getToken().accessToken).toBe("register-token");
+    expect(getToken().accessToken).toBeNull();
   });
 
-  it("stores the access token handed out with email verification", async () => {
+  it("does not activate email-verification sessions before principal teardown", async () => {
     const session = { accessToken: "verify-token", expiresIn: 1_800, user, verified: true };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(session));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(verifyEmail("token")).resolves.toEqual(session);
+    await expect(verifyEmail("token", "original password")).resolves.toEqual(session);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/verify-email");
-    expect(getToken().accessToken).toBe("verify-token");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      body: JSON.stringify({ password: "original password", token: "token" }),
+    });
+    expect(getToken().accessToken).toBeNull();
   });
 
-  it("stores access tokens after login and refresh", async () => {
+  it("activates login sessions explicitly and stores refresh responses", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ accessToken: "login-token", expiresIn: 1_800, user }))
       .mockResolvedValueOnce(jsonResponse({ accessToken: "refresh-token", expiresIn: 1_800, user }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await login(user.email, "Password123!");
+    const session = await login(user.email, "Password123!");
+    expect(getToken().accessToken).toBeNull();
+    activateSession(session);
     expect(getToken().accessToken).toBe("login-token");
     await refresh();
     expect(getToken().accessToken).toBe("refresh-token");
@@ -82,6 +97,29 @@ describe("auth API", () => {
     );
 
     await expect(logout()).rejects.toMatchObject({ code: "INTERNAL" });
+    expect(getToken().accessToken).toBeNull();
+    expect(isTerminalLogoutPending()).toBe(true);
+  });
+
+  it("never refreshes a surviving cookie after failed logout", async () => {
+    setToken("access", 1_800);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "INTERNAL", message: "Failed" } }), {
+          status: 500,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(logout()).rejects.toMatchObject({ code: "INTERNAL" });
+    await expect(refresh()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/api/auth/logout",
+      "/api/auth/logout",
+    ]);
+    expect(isTerminalLogoutPending()).toBe(false);
     expect(getToken().accessToken).toBeNull();
   });
 

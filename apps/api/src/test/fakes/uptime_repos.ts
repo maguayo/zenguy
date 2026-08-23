@@ -58,6 +58,22 @@ export class FakeMonitorRepo implements MonitorRepo {
       .map(copy);
   }
 
+  async listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<UptimeMonitor[]> {
+    return (await this.list(workspaceId))
+      .filter(
+        (monitor) =>
+          cursor === null ||
+          cursor === undefined ||
+          monitor.createdAt < cursor.createdAt ||
+          (monitor.createdAt === cursor.createdAt && monitor.id < cursor.id),
+      )
+      .slice(0, limit);
+  }
+
   async update(
     id: string,
     changes: MonitorUpdate,
@@ -189,14 +205,34 @@ export class FakeMonitorRepo implements MonitorRepo {
     return [...(this.channelIds.get(monitorId) ?? [])];
   }
 
+  async getChannelIdsForMonitors(
+    workspaceId: string,
+    monitorIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    for (const monitorId of monitorIds) {
+      const monitor = this.monitors.get(monitorId);
+      result.set(
+        monitorId,
+        monitor?.workspaceId === workspaceId && monitor.deletedAt === null
+          ? [...(this.channelIds.get(monitorId) ?? [])]
+          : [],
+      );
+    }
+    return result;
+  }
+
   async recentChecksPerMonitor(
     workspaceId: string,
     limit: number,
+    monitorIds?: string[],
   ): Promise<Map<string, CheckTick[]>> {
+    const wanted = monitorIds === undefined ? null : new Set(monitorIds);
     const ticks = new Map<string, CheckTick[]>();
     for (const [monitorId, list] of this.recentChecks) {
       const monitor = this.monitors.get(monitorId);
       if (monitor === undefined || monitor.workspaceId !== workspaceId) continue;
+      if (wanted !== null && !wanted.has(monitorId)) continue;
       ticks.set(monitorId, list.slice(-limit).map((tick) => ({ ...tick })));
     }
     return ticks;

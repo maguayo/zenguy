@@ -1,0 +1,11 @@
+-- The 300 runs in the product contract are an included allowance owned by
+-- each workspace, not an owner-wide hard stop. Paid workspaces may create
+-- overage runs and the free-launch contract deliberately keeps run 301
+-- available without billing it. Migration 0027 incorrectly shared a hard
+-- cap across every complimentary workspace owned by the same user.
+--
+-- Cost protection remains atomic and independent: migration 0036 reserves
+-- active, daily and monthly counters for WORKSPACE, USER, OWNER and GLOBAL
+-- scopes before every run insert. Those safety ceilings do not change or
+-- pool the 300-run allowance reported by the workspace usage ledger.
+DROP TRIGGER enforce_complimentary_run_cap;

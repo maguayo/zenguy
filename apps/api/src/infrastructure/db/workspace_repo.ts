@@ -66,7 +66,9 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
         .prepare(
           includeDeleted
             ? "SELECT * FROM workspaces WHERE id = ?"
-            : "SELECT * FROM workspaces WHERE id = ? AND deleted_at IS NULL",
+            : `SELECT * FROM workspaces
+               WHERE id = ? AND deleted_at IS NULL
+                 AND deletion_state = 'ACTIVE'`,
         )
         .bind(id),
     );
@@ -98,7 +100,7 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
                timezone = COALESCE(?, timezone),
                owner_user_id = COALESCE(?, owner_user_id),
                updated_at = ?
-           WHERE id = ? AND deleted_at IS NULL`,
+           WHERE id = ? AND deleted_at IS NULL AND deletion_state = 'ACTIVE'`,
         )
         .bind(
           changes.name ?? null,
@@ -114,7 +116,8 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
     await run(
       this.database
         .prepare(
-          "UPDATE workspaces SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+          `UPDATE workspaces SET deleted_at = ?, updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL AND deletion_state = 'ACTIVE'`,
         )
         .bind(at, at, id),
     );
@@ -125,24 +128,68 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
     oldOwnerUserId: string,
     newOwnerUserId: string,
     at: number,
-  ): Promise<void> {
-    await batch(this.database, [
+  ): Promise<boolean> {
+    const [claimed] = await batch(this.database, [
       this.database
         .prepare(
-          "UPDATE workspaces SET owner_user_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+          `UPDATE workspaces SET owner_user_id = ?, updated_at = ?
+           WHERE id = ? AND owner_user_id = ?
+             AND deleted_at IS NULL AND deletion_state = 'ACTIVE'
+             AND EXISTS (
+               SELECT 1 FROM workspace_members current_owner
+               WHERE current_owner.workspace_id = workspaces.id
+                 AND current_owner.user_id = ? AND current_owner.role = 'OWNER'
+             )
+             AND EXISTS (
+               SELECT 1 FROM workspace_members next_owner
+               WHERE next_owner.workspace_id = workspaces.id
+                 AND next_owner.user_id = ?
+             )`,
         )
-        .bind(newOwnerUserId, at, id),
+        .bind(
+          newOwnerUserId,
+          at,
+          id,
+          oldOwnerUserId,
+          oldOwnerUserId,
+          newOwnerUserId,
+        ),
       this.database
         .prepare(
-          "UPDATE workspace_members SET role = 'OWNER' WHERE workspace_id = ? AND user_id = ?",
+          `UPDATE workspace_members SET role = 'ADMIN'
+           WHERE workspace_id = ? AND user_id = ? AND role = 'OWNER'
+             AND EXISTS (
+               SELECT 1 FROM workspaces workspace
+               WHERE workspace.id = workspace_members.workspace_id
+                 AND workspace.owner_user_id = ?
+             )`,
         )
-        .bind(id, newOwnerUserId),
+        .bind(id, oldOwnerUserId, newOwnerUserId),
       this.database
         .prepare(
-          "UPDATE workspace_members SET role = 'ADMIN' WHERE workspace_id = ? AND user_id = ?",
+          `UPDATE workspace_members SET role = 'OWNER'
+           WHERE workspace_id = ? AND user_id = ?
+             AND EXISTS (
+               SELECT 1 FROM workspaces workspace
+               WHERE workspace.id = workspace_members.workspace_id
+                 AND workspace.owner_user_id = ?
+             )`,
         )
-        .bind(id, oldOwnerUserId),
+        .bind(id, newOwnerUserId, newOwnerUserId),
+      this.database
+        .prepare(
+          `UPDATE workspace_invitations SET revoked_at = ?
+           WHERE workspace_id = ? AND invited_by = ? AND role = 'ADMIN'
+             AND accepted_at IS NULL AND revoked_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM workspaces workspace
+               WHERE workspace.id = workspace_invitations.workspace_id
+                 AND workspace.owner_user_id = ?
+             )`,
+        )
+        .bind(at, id, oldOwnerUserId, newOwnerUserId),
     ]);
+    return claimed?.meta.changes === 1;
   }
 
   async listForUser(
@@ -155,6 +202,7 @@ export class D1WorkspaceRepo implements WorkspaceRepo {
            FROM workspaces w
            JOIN workspace_members wm ON wm.workspace_id = w.id
            WHERE wm.user_id = ? AND w.deleted_at IS NULL
+             AND w.deletion_state = 'ACTIVE'
            ORDER BY w.created_at DESC, w.id DESC`,
         )
         .bind(userId),

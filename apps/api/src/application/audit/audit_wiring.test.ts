@@ -14,6 +14,7 @@ const ACTION_USE_CASES = {
   secretCreated: "../secrets/create_secret.ts",
   secretUpdated: "../secrets/replace_secret.ts",
   secretDeleted: "../secrets/delete_secret.ts",
+  encryptionRotated: "../security/rotate_workspace_encryption.ts",
   channelCreated: "../channels/create_channel.ts",
   channelUpdated: "../channels/update_channel.ts",
   channelDeleted: "../channels/delete_channel.ts",
@@ -33,6 +34,7 @@ const ACTION_USE_CASES = {
   apiKeyRevoked: "../api_keys/revoke_api_key.ts",
   alertsSettingsUpdated: "../alerts/update_alert_settings.ts",
   alertsCreditTopup: "../billing/handle_paddle_webhook.ts",
+  alertsCreditAdjusted: "../billing/handle_paddle_webhook.ts",
 } as const satisfies Record<keyof typeof AUDIT_ACTIONS, string>;
 
 describe("audit action wiring", () => {

@@ -15,10 +15,15 @@ import type {
   TestAttempt,
   TestRun,
   RunnerKind,
+  IrreversibleActionRequest,
 } from "./types";
 
 export interface BrowserTestUpdate {
   name?: string;
+  allowedDomains?: string[];
+  writableDomains?: string[];
+  testDataAttested?: boolean;
+  irreversibleActionScopes?: BrowserTest["irreversibleActionScopes"];
   startUrl?: string;
   instructions?: string;
   device?: Device;
@@ -33,6 +38,11 @@ export interface BrowserTestRepo {
   insert(test: BrowserTest): Promise<void>;
   findById(workspaceId: string, id: string): Promise<BrowserTest | null>;
   list(workspaceId: string): Promise<BrowserTest[]>;
+  listPage(
+    workspaceId: string,
+    cursor: Cursor | null | undefined,
+    limit: number,
+  ): Promise<BrowserTest[]>;
   update(id: string, changes: BrowserTestUpdate, at: number): Promise<void>;
   softDelete(id: string, at: number): Promise<void>;
   setNextRunAt(id: string, at: number): Promise<void>;
@@ -41,6 +51,10 @@ export interface BrowserTestRepo {
   /** Links a channel to every live test of the workspace (idempotent). */
   addChannelToAll(workspaceId: string, channelId: string): Promise<void>;
   getChannelIds(testId: string): Promise<string[]>;
+  getChannelIdsForTests(
+    workspaceId: string,
+    testIds: string[],
+  ): Promise<Map<string, string[]>>;
 }
 
 export interface RunFinalize {
@@ -84,11 +98,13 @@ export interface RunRepo {
   incrementInfraAttempts(runId: string): Promise<number>;
   lastRunSummaryPerTest(
     workspaceId: string,
+    testIds?: string[],
   ): Promise<Map<string, RunSummaryRow>>;
   /** Last `limit` runs per test (oldest first), including queued and running ones. */
   recentRunsPerTest(
     workspaceId: string,
     limit: number,
+    testIds?: string[],
   ): Promise<Map<string, RunTick[]>>;
   scheduledOccurrenceExists(
     testId: string,
@@ -96,6 +112,11 @@ export interface RunRepo {
   ): Promise<boolean>;
   activeRunExists(testId: string): Promise<boolean>;
   countRunning(workspaceId: string): Promise<number>;
+  /** Atomically consumes one exact run capability; false is fail-closed. */
+  consumeActionAuthorization(
+    runId: string,
+    action: IrreversibleActionRequest,
+  ): Promise<boolean>;
 }
 
 export interface AttemptUpdate {
@@ -163,6 +184,7 @@ export interface StepRepo {
 export interface ArtifactRepo {
   insert(artifact: RunArtifact): Promise<void>;
   findById(id: string): Promise<RunArtifact | null>;
+  findByIds(ids: string[]): Promise<RunArtifact[]>;
   listForAttempt(attemptId: string): Promise<RunArtifact[]>;
   listForRun(runId: string): Promise<RunArtifact[]>;
   findReportForRun(runId: string): Promise<RunArtifact | null>;

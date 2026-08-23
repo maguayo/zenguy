@@ -40,7 +40,7 @@ export function isWebhookChannelType(type: ChannelType | null): boolean {
 }
 
 export const smsConsentCopy =
-  "I confirm that this recipient explicitly agreed to receive recurring operational SMS alerts from Zenguy. Frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. See the Terms and Privacy Policy.";
+  "I confirm that this recipient explicitly agreed to receive recurring operational alerts through this channel from Zenguy. Frequency varies. Carrier charges may apply. For SMS, reply STOP to opt out or HELP for help.";
 
 export function phoneHint(type: ChannelType | null): string {
   return type === "WHATSAPP"
@@ -91,10 +91,10 @@ export function channelFormSchema(editing = false) {
       });
     }
 
-    if (values.type === "SMS" && !values.smsConsent) {
+    if (isPaidChannelType(values.type) && !values.smsConsent) {
       context.addIssue({
         code: "custom",
-        message: "Confirm the recipient's SMS consent.",
+        message: "Confirm the recipient's explicit consent.",
         path: ["smsConsent"],
       });
     }
@@ -132,7 +132,8 @@ export function channelFormDefaults(channel?: Channel): ChannelFormValues {
     emails: channel.configPreview.emails ?? [],
     name: channel.name,
     phoneNumber: channel.configPreview.phoneNumber ?? "",
-    smsConsent: channel.type === "SMS",
+    // Consent is deliberately write-only and must be reconfirmed on edits.
+    smsConsent: false,
     type: channel.type,
     webhookUrl: "",
   };
@@ -142,13 +143,12 @@ export function channelConfigFromValues(values: ChannelFormValues): ChannelConfi
   switch (values.type) {
     case "EMAIL":
       return { emails: values.emails };
-    case "SMS": {
-      if (!values.smsConsent) throw new Error("SMS consent is required");
+    case "SMS":
+    case "WHATSAPP":
+    case "CALL": {
+      if (!values.smsConsent) throw new Error("Recipient consent is required");
       return { consent: true, phoneNumber: values.phoneNumber.trim() };
     }
-    case "WHATSAPP":
-    case "CALL":
-      return { phoneNumber: values.phoneNumber.trim() };
     case "SLACK":
     case "DISCORD":
       return { webhookUrl: values.webhookUrl.trim() };

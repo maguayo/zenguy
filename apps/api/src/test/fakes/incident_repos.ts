@@ -76,6 +76,26 @@ export class FakeIncidentRepo implements IncidentRepo {
     return incident === undefined ? null : copy(incident);
   }
 
+  async findOpenForMonitors(
+    workspaceId: string,
+    monitorIds: string[],
+  ): Promise<Map<string, Incident>> {
+    const wanted = new Set(monitorIds);
+    const result = new Map<string, Incident>();
+    for (const incident of this.incidents.values()) {
+      if (
+        incident.workspaceId !== workspaceId ||
+        incident.status !== "OPEN" ||
+        incident.uptimeMonitorId === null ||
+        !wanted.has(incident.uptimeMonitorId)
+      ) {
+        continue;
+      }
+      result.set(incident.uptimeMonitorId, copy(incident));
+    }
+    return result;
+  }
+
   async findByRunSource(runId: string): Promise<Incident | null> {
     const incident = [...this.incidents.values()].find(
       (candidate) =>

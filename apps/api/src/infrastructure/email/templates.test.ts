@@ -1,6 +1,7 @@
 import {
   renderBasicEmail,
   renderInvitationEmail,
+  renderRegistrationAttemptEmail,
   renderResetPasswordEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
@@ -54,7 +55,10 @@ describe("email templates", () => {
     expect(welcome.html).not.toContain("<Team>");
     expect(welcome.text).toContain("Welcome to Zenguy, Ana & <Team>.");
     expect(welcome.text).toContain(
-      "https://app.zenguy.example/verify-email?token=token%20%2B%2F",
+      "https://app.zenguy.example/verify-email#token%20%2B%2F",
+    );
+    expect(welcome.text).toContain(
+      "You will be asked for the password chosen during registration.",
     );
     expect(new TextEncoder().encode(welcome.html).byteLength).toBeLessThan(
       30_000,
@@ -77,19 +81,36 @@ describe("email templates", () => {
       "Hi Ana, confirm your email address to start using your Zenguy account.",
     );
     expect(verify.text).toContain(
-      "https://app.zenguy.example/verify-email?token=token%20%2B%2F",
+      "https://app.zenguy.example/verify-email#token%20%2B%2F",
     );
     expect(verify.text).toContain(
-      "This link expires in 24 hours. If you didn't create an account, ignore this email.",
+      "This link expires in 24 hours. If you didn't create an account, do not continue; ignore this email.",
     );
     expect(reset.subject).toBe("Reset your password — Zenguy");
     expect(reset.html).toContain("Reset password&nbsp;&nbsp;→</a>");
     expect(reset.text).toContain(
-      "https://app.zenguy.example/reset-password?token=reset-token",
+      "https://app.zenguy.example/reset-password#reset-token",
     );
     expect(reset.text).toContain(
       "This link expires in 1 hour. If you didn't request this, ignore this email.",
     );
+  });
+
+  it("renders a safe existing-account registration notification", () => {
+    const attempt = renderRegistrationAttemptEmail(
+      "https://app.zenguy.example/",
+      "Ana & <Team>",
+    );
+
+    expect(attempt.subject).toBe(
+      "A registration attempt used your email — Zenguy",
+    );
+    expect(attempt.html).toContain("Hi Ana &amp; &lt;Team&gt;");
+    expect(attempt.html).not.toContain("<Team>");
+    expect(attempt.text).toContain("Your account was not changed.");
+    expect(attempt.text).toContain("sign in or reset your password");
+    expect(attempt.text).toContain("https://app.zenguy.example");
+    expect(attempt.text).not.toMatch(/verify-email|#[A-Za-z0-9_-]{16,}/u);
   });
 
   it("renders the exact workspace invitation copy", () => {
@@ -106,7 +127,7 @@ describe("email templates", () => {
       'Alice invited you to join the workspace "Acme" as ADMIN.',
     );
     expect(invitation.text).toContain(
-      "https://app.zenguy.example/invitations/invite-token",
+      "https://app.zenguy.example/invitations/accept#invite-token",
     );
     expect(invitation.text).toContain("This invitation expires in 7 days.");
   });

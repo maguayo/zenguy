@@ -1,19 +1,18 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
-import type { BillingCanceller } from "../../domain/billing/canceller";
 import { can } from "../../domain/workspaces/permissions";
-import type { InvitationRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
 import type { Role, Workspace } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
 import { forbidden, validation } from "../../shared/errors";
-import { logEvent } from "../../shared/log";
 import type { WriteAudit } from "../audit/write_audit";
+
+export interface WorkspaceDeletionCoordinator {
+  request(workspaceId: string): Promise<boolean>;
+}
 
 export class DeleteWorkspace {
   constructor(
-    private readonly workspaces: WorkspaceRepo,
-    private readonly invitations: InvitationRepo,
-    private readonly billing: BillingCanceller,
+    private readonly deletion: WorkspaceDeletionCoordinator,
     private readonly audit: Pick<WriteAudit, "execute">,
     private readonly clock: Clock,
   ) {}
@@ -47,12 +46,6 @@ export class DeleteWorkspace {
       metadata: { name: input.workspace.name },
       ip: input.ip,
     });
-    await this.workspaces.softDelete(input.workspace.id, now);
-    await this.invitations.revokeAllForWorkspace(input.workspace.id, now);
-    try {
-      await this.billing.cancelForWorkspace(input.workspace.id);
-    } catch {
-      logEvent("billing_cancel_failed", { workspaceId: input.workspace.id });
-    }
+    await this.deletion.request(input.workspace.id);
   }
 }

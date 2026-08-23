@@ -15,8 +15,8 @@ describe("email-link auth schemas", () => {
   it("requires a strong matching reset password", () => {
     expect(
       resetPasswordSchema.safeParse({
-        confirmPassword: "Password123!",
-        password: "Password123!",
+        confirmPassword: "Correct-horse-battery!",
+        password: "Correct-horse-battery!",
       }).success,
     ).toBe(true);
     const result = resetPasswordSchema.safeParse({
@@ -26,7 +26,7 @@ describe("email-link auth schemas", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.map((issue) => issue.message)).toEqual([
-        "Password must be at least 8 characters.",
+        "Password must be at least 15 characters.",
         "Passwords don't match.",
       ]);
     }

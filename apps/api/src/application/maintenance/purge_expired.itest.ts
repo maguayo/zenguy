@@ -9,6 +9,11 @@ const DAY_MS = 86_400_000;
 const NOW = 100 * DAY_MS;
 const RETENTION_EDGE = NOW - 30 * DAY_MS;
 const EMAIL_EDGE = NOW - 7 * DAY_MS;
+const DATA_KEY_IDS = {
+  ws_ops: "dek-EEEEEEEEEEEEEEEEEEEEEEEE",
+  ws_deleted_old: "dek-AAAAAAAAAAAAAAAAAAAAAAAA",
+  ws_deleted_edge: "dek-CCCCCCCCCCCCCCCCCCCCCCCC",
+} as const;
 
 class RecordingStorage {
   readonly deleted: string[][] = [];
@@ -22,15 +27,15 @@ function statement(sql: string, ...values: unknown[]): D1PreparedStatement {
   return testEnv().DB.prepare(sql).bind(...values);
 }
 
-function workspace(id: string, deletedAt: number | null): D1PreparedStatement {
+function workspace(id: string, _deletedAt: number | null): D1PreparedStatement {
   return statement(
     `INSERT INTO workspaces
-      (id, name, slug, timezone, owner_user_id, created_at, updated_at, deleted_at)
-     VALUES (?, ?, ?, 'UTC', 'usr_cleanup', 0, 0, ?)`,
+      (id, name, slug, timezone, owner_user_id, created_at, updated_at,
+       deleted_at, deletion_state)
+     VALUES (?, ?, ?, 'UTC', 'usr_cleanup', 0, 0, NULL, 'ACTIVE')`,
     id,
     id,
     id,
-    deletedAt,
   );
 }
 
@@ -61,13 +66,16 @@ function monitor(id: string, workspaceId: string): D1PreparedStatement {
 }
 
 function channel(id: string, workspaceId: string): D1PreparedStatement {
+  const dataKeyId = DATA_KEY_IDS[workspaceId as keyof typeof DATA_KEY_IDS];
+  if (dataKeyId === undefined) throw new Error("Missing synthetic data key");
   return statement(
     `INSERT INTO notification_channels
       (id, workspace_id, name, type, encrypted_config, created_at, updated_at)
-     VALUES (?, ?, ?, 'EMAIL', 'ciphertext', 0, 0)`,
+     VALUES (?, ?, ?, 'EMAIL', ?, 0, 0)`,
     id,
     workspaceId,
     id,
+    `v4:${dataKeyId}:AAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB`,
   );
 }
 
@@ -165,6 +173,21 @@ describe("PurgeExpired with D1", () => {
       workspace("ws_ops", null),
       workspace("ws_deleted_old", RETENTION_EDGE - 1),
       workspace("ws_deleted_edge", RETENTION_EDGE),
+      statement(
+        `INSERT INTO workspace_data_encryption_keys
+          (workspace_id, data_key_id, generation, wrapping_key_id, wrap_version,
+           wrapped_key, active, created_at, updated_at, retired_at)
+         VALUES
+          ('ws_ops', 'dek-EEEEEEEEEEEEEEEEEEEEEEEE', 1, 'key-cleanup', 1,
+           'w1:key-cleanup:EEEEEEEEEEEEEEEE:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+           1, 0, 0, NULL),
+          ('ws_deleted_old', 'dek-AAAAAAAAAAAAAAAAAAAAAAAA', 1, 'key-cleanup', 1,
+           'w1:key-cleanup:AAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+           1, 0, 0, NULL),
+          ('ws_deleted_edge', 'dek-CCCCCCCCCCCCCCCCCCCCCCCC', 1, 'key-cleanup', 1,
+           'w1:key-cleanup:CCCCCCCCCCCCCCCC:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
+           1, 0, 0, NULL)`,
+      ),
       browserTest("bt_ops", "ws_ops"),
       browserTest("bt_deleted_old", "ws_deleted_old"),
       browserTest("bt_deleted_edge", "ws_deleted_edge"),
@@ -176,9 +199,15 @@ describe("PurgeExpired with D1", () => {
       channel("ch_deleted_edge", "ws_deleted_edge"),
       statement(
         `INSERT INTO workspace_secrets
-          (id, workspace_id, key, encrypted_value, allowed_domains, created_at, updated_at)
-         VALUES ('sec_old', 'ws_deleted_old', 'OLD', 'cipher', '[]', 0, 0),
-                ('sec_edge', 'ws_deleted_edge', 'EDGE', 'cipher', '[]', 0, 0)`,
+          (id, workspace_id, key, encrypted_value, encryption_version,
+           allowed_domains, created_at, updated_at)
+         VALUES
+          ('sec_old', 'ws_deleted_old', 'OLD',
+           'v4:dek-AAAAAAAAAAAAAAAAAAAAAAAA:AAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+           4, '[]', 0, 0),
+          ('sec_edge', 'ws_deleted_edge', 'EDGE',
+           'v4:dek-CCCCCCCCCCCCCCCCCCCCCCCC:CCCCCCCCCCCCCCCC:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
+           4, '[]', 0, 0)`,
       ),
       statement(
         `INSERT INTO workspace_members (id, workspace_id, user_id, role, joined_at)
@@ -280,6 +309,27 @@ describe("PurgeExpired with D1", () => {
         RETENTION_EDGE,
       ),
       statement(
+        `INSERT INTO admin_sessions
+          (id_hash, user_id, email, auth_version, created_at, expires_at, revoked_at)
+         VALUES ('admin_expired', 'usr_cleanup', 'cleanup@example.com', 1, 0, ?, NULL),
+                ('admin_expiry_edge', 'usr_cleanup', 'cleanup@example.com', 1, 0, ?, NULL),
+                ('admin_revoked', 'usr_cleanup', 'cleanup@example.com', 1, 0, ?, ?),
+                ('admin_active', 'usr_cleanup', 'cleanup@example.com', 1, 0, ?, NULL)`,
+        NOW - 1,
+        NOW,
+        NOW + DAY_MS,
+        NOW - 1,
+        NOW + DAY_MS,
+      ),
+      statement(
+        `INSERT INTO rate_limit_windows
+          (rate_key, window_start, request_count, expires_at)
+         VALUES ('expired', 0, 1, ?), ('edge', 1, 1, ?), ('future', 2, 1, ?)`,
+        NOW - 1,
+        NOW,
+        NOW + 1,
+      ),
+      statement(
         `INSERT INTO subscriptions
           (id, workspace_id, status, created_at, updated_at)
          VALUES ('sub_keep', 'ws_ops', 'ACTIVE', 0, 0)`,
@@ -301,6 +351,20 @@ describe("PurgeExpired with D1", () => {
          VALUES ('aud_keep', 'ws_ops', 'test.created', 0)`,
       ),
     ]);
+    // The legacy retention fallback only handles sagas that have completed;
+    // active/cancellation-pending tombstones belong to WorkspaceDeletionSaga.
+    await testEnv().DB.batch([
+      statement(
+        `UPDATE workspaces SET deleted_at = ?, deletion_state = 'COMPLETED'
+         WHERE id = 'ws_deleted_old'`,
+        RETENTION_EDGE - 1,
+      ),
+      statement(
+        `UPDATE workspaces SET deleted_at = ?, deletion_state = 'COMPLETED'
+         WHERE id = 'ws_deleted_edge'`,
+        RETENTION_EDGE,
+      ),
+    ]);
 
     const storage = new RecordingStorage();
     const purge = new PurgeExpired(
@@ -319,7 +383,9 @@ describe("PurgeExpired with D1", () => {
       artifacts: 2,
       checks: 1,
       deliveries: 1,
-      tokens: 5,
+      rateLimits: 2,
+      activityEvents: 0,
+      tokens: 8,
     });
     expect(storage.deleted.flat()).toEqual([
       "key-run-old",
@@ -336,11 +402,31 @@ describe("PurgeExpired with D1", () => {
       "refresh_expired_edge",
       "refresh_revoked_edge",
     ]);
+    const adminSessions = await testEnv().DB.prepare(
+      "SELECT id_hash FROM admin_sessions ORDER BY id_hash ASC",
+    ).all<{ id_hash: string }>();
+    expect(adminSessions.results.map((row) => row.id_hash)).toEqual([
+      "admin_active",
+    ]);
+    const rateLimits = await testEnv().DB.prepare(
+      "SELECT rate_key FROM rate_limit_windows ORDER BY rate_key ASC",
+    ).all<{ rate_key: string }>();
+    expect(rateLimits.results.map((row) => row.rate_key)).toEqual(["future"]);
     expect(await ids("workspace_invitations")).toEqual([
       "inv_auth_edge",
       "inv_workspace_edge",
     ]);
     expect(await ids("workspace_secrets")).toEqual(["sec_edge"]);
+    const retainedDataKeys = await testEnv()
+      .DB.prepare(
+        `SELECT workspace_id FROM workspace_data_encryption_keys
+         ORDER BY workspace_id ASC`,
+      )
+      .all<{ workspace_id: string }>();
+    expect(retainedDataKeys.results).toEqual([
+      { workspace_id: "ws_deleted_edge" },
+      { workspace_id: "ws_ops" },
+    ]);
     expect(await ids("notification_channels")).toEqual([
       "ch_deleted_edge",
       "ch_ops",
@@ -387,6 +473,8 @@ describe("PurgeExpired with D1", () => {
       artifacts: 0,
       checks: 0,
       deliveries: 0,
+      rateLimits: 0,
+      activityEvents: 0,
       tokens: 0,
     });
   });

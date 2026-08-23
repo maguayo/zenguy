@@ -5,6 +5,7 @@ import type {
 import {
   discordChannelConfigSchema,
   emailChannelConfigSchema,
+  hasRecipientConsent,
   phoneChannelConfigSchema,
   pushChannelConfigSchema,
   smsChannelConfigSchema,
@@ -54,12 +55,18 @@ export function buildChannelSender(
         );
 
   return {
-    async send(channel, message: NotificationMessage) {
+    async send(channel, message: NotificationMessage, context) {
+      // Defense in depth at the irreversible provider boundary. Application
+      // commands also enforce this, but no future caller may bypass opt-in.
+      if (!hasRecipientConsent(channel.type, channel.config)) {
+        throw new Error("Explicit recipient consent is required");
+      }
       switch (channel.type) {
         case "EMAIL":
           return email.send(
             emailChannelConfigSchema.parse(channel.config),
             message,
+            context.idempotencyKey,
           );
         case "SMS": {
           const parsed = smsChannelConfigSchema.parse(channel.config);
@@ -68,6 +75,7 @@ export function buildChannelSender(
               parsed.phoneNumber,
               config.twilio.fromSms,
               smsBody(message.shortText),
+              context.idempotencyKey,
             ),
           };
         }
@@ -81,6 +89,7 @@ export function buildChannelSender(
               parsed.phoneNumber,
               config.twilio.fromWhatsapp,
               message.shortText,
+              context.idempotencyKey,
             ),
           };
         }
@@ -91,6 +100,8 @@ export function buildChannelSender(
               parsed.phoneNumber,
               config.twilio.fromCall,
               speechTwiml(message.speakText),
+              undefined,
+              context.idempotencyKey,
             ),
           };
         }
@@ -101,8 +112,9 @@ export function buildChannelSender(
         }
         case "DISCORD": {
           const parsed = discordChannelConfigSchema.parse(channel.config);
-          await discord.send(parsed.webhookUrl, message);
-          return { providerMessageId: null };
+          return {
+            providerMessageId: await discord.send(parsed.webhookUrl, message),
+          };
         }
         case "PUSH": {
           pushChannelConfigSchema.parse(channel.config);
@@ -110,7 +122,11 @@ export function buildChannelSender(
           if (channel.workspaceId === undefined) {
             throw new Error("Push delivery needs a workspace");
           }
-          return expoPush.send(channel.workspaceId, message);
+          return expoPush.send(
+            channel.workspaceId,
+            message,
+            context.idempotencyKey,
+          );
         }
       }
     },

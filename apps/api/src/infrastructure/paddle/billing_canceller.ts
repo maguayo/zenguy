@@ -14,6 +14,10 @@ export class PaddleBillingCanceller implements BillingCanceller {
   async cancelForWorkspace(workspaceId: string): Promise<void> {
     const subscription = await this.subscriptions.findByWorkspace(workspaceId);
     if (subscription === null) return;
+    // The deletion saga may be redelivered after the local commit (or after a
+    // subscription.canceled webhook). Never issue a second provider mutation
+    // once local state proves cancellation completed.
+    if (subscription.status === "CANCELED") return;
 
     if (subscription.providerSubscriptionId !== null) {
       await this.paddle.cancelSubscription(

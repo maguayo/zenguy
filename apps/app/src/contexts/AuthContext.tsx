@@ -4,14 +4,33 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { login, logout, me, refresh, type AuthSession } from "@/api/auth";
+import {
+  activateSession,
+  login,
+  logout,
+  me,
+  refresh,
+  retryPendingLogout,
+  type AuthSession,
+} from "@/api/auth";
 import type { User } from "@/api/types";
-import { authEvents, clearSession, hasStoredSession, isAuthRejection } from "@/lib/api";
-import { queryClient } from "@/lib/query-client";
+import { Image } from "expo-image";
+import * as Notifications from "expo-notifications";
+import {
+  authEvents,
+  clearSession,
+  hasStoredSession,
+  isAuthRejection,
+  isTerminalLogoutPending,
+  supersedeSession,
+} from "@/lib/api";
+import { clearPrincipalCache, setQueryPrincipal } from "@/lib/query-client";
+import { secureStorage, storageKeys } from "@/lib/secure-storage";
 import { runBeforeSignOut } from "@/lib/session-hooks";
 
 /**
@@ -22,8 +41,8 @@ import { runBeforeSignOut } from "@/lib/session-hooks";
 export type AuthStatus = "loading" | "signedIn" | "signedOut" | "unavailable";
 
 export interface AuthContextValue {
-  /** Adopts a session already kept by the API layer (sign-up, email verification). */
-  adoptSession: (session: Pick<AuthSession, "user">) => void;
+  /** Tears down the old principal, persists the replacement, then adopts it. */
+  adoptSession: (session: AuthSession) => Promise<void>;
   refreshUser: () => Promise<User>;
   retry: () => void;
   signIn: (email: string, password: string) => Promise<User>;
@@ -38,30 +57,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const principalRef = useRef<string | null>(null);
 
-  const becomeSignedOut = useCallback(() => {
-    queryClient.clear();
+  const clearPrincipalData = useCallback(async (nextPrincipalId: string | null = null) => {
+    await clearPrincipalCache(nextPrincipalId);
+    await Promise.allSettled([
+      secureStorage.deleteItem(storageKeys.lastWorkspace),
+      secureStorage.deleteItem(storageKeys.pushDevice),
+      Image.clearDiskCache(),
+      Notifications.dismissAllNotificationsAsync(),
+      Notifications.setBadgeCountAsync(0),
+    ]);
+  }, []);
+
+  const becomeSignedOut = useCallback(async () => {
+    supersedeSession();
+    await clearPrincipalData();
+    principalRef.current = null;
     setUser(null);
     setStatus("signedOut");
-  }, []);
+  }, [clearPrincipalData]);
 
   useEffect(() => {
     let active = true;
     void (async () => {
+      if (await isTerminalLogoutPending()) {
+        await retryPendingLogout().catch(() => undefined);
+        if (active) await becomeSignedOut();
+        return;
+      }
       if (!(await hasStoredSession())) {
-        if (active) becomeSignedOut();
+        if (active) await becomeSignedOut();
         return;
       }
       try {
         const session = await refresh();
         if (!active) return;
+        setQueryPrincipal(session.user.id);
+        principalRef.current = session.user.id;
         setUser(session.user);
         setStatus("signedIn");
       } catch (error) {
         if (!active) return;
         if (isAuthRejection(error)) {
           await clearSession();
-          becomeSignedOut();
+          await becomeSignedOut();
         } else {
           setStatus("unavailable");
         }
@@ -72,17 +112,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [attempt, becomeSignedOut]);
 
-  useEffect(() => authEvents.onSignedOut(becomeSignedOut), [becomeSignedOut]);
+  useEffect(
+    () => authEvents.onSignedOut(() => void becomeSignedOut()),
+    [becomeSignedOut],
+  );
 
-  const adoptSession = useCallback((session: Pick<AuthSession, "user">) => {
-    setUser(session.user);
-    setStatus("signedIn");
-  }, []);
+  const adoptSession = useCallback(
+    async (session: AuthSession) => {
+      if (principalRef.current !== null && principalRef.current !== session.user.id) {
+        // Push must be detached while the old access token is still active.
+        await runBeforeSignOut({ required: true });
+        supersedeSession();
+        await clearPrincipalData(null);
+        principalRef.current = null;
+        setUser(null);
+        setStatus("signedOut");
+      }
+      await activateSession(session);
+      setQueryPrincipal(session.user.id);
+      principalRef.current = session.user.id;
+      setUser(session.user);
+      setStatus("signedIn");
+    },
+    [clearPrincipalData],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string) => {
       const session = await login(email, password);
-      adoptSession(session);
+      await adoptSession(session);
       return session.user;
     },
     [adoptSession],
@@ -94,16 +152,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await logout();
     } finally {
-      becomeSignedOut();
+      await becomeSignedOut();
     }
   }, [becomeSignedOut]);
 
   const refreshUser = useCallback(async () => {
     const nextUser = await me();
+    if (principalRef.current !== null && principalRef.current !== nextUser.id) {
+      await becomeSignedOut();
+      throw new Error("Authenticated principal changed unexpectedly");
+    }
+    setQueryPrincipal(nextUser.id);
+    principalRef.current = nextUser.id;
     setUser(nextUser);
     setStatus("signedIn");
     return nextUser;
-  }, []);
+  }, [becomeSignedOut]);
 
   const retry = useCallback(() => {
     setStatus("loading");
@@ -115,7 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [adoptSession, refreshUser, retry, signIn, signOut, status, user],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Remount every descendant on A→B so native listeners and view-local state
+  // cannot survive alongside the new principal.
+  return (
+    <AuthContext.Provider key={user?.id ?? status} value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

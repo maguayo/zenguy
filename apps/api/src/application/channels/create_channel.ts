@@ -6,14 +6,21 @@ import { isPaidChannelType } from "../../domain/alerts/types";
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { ChannelRepo } from "../../domain/channels/repo";
-import type { ChannelType } from "../../domain/channels/types";
+import type {
+  ChannelType,
+  NotificationChannel,
+} from "../../domain/channels/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
-import { forbidden, validation } from "../../shared/errors";
+import {
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
+import { forbidden, throwIfCollectionCap, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { channelName, parseChannelConfig } from "./input";
 import { channelOutput, type ChannelOutput } from "./types";
 
@@ -30,7 +37,7 @@ export class CreateChannel {
     private readonly subscriptions: SubscriptionRepo,
     private readonly alerts: Pick<AlertRepo, "findSettings" | "getBalanceCents">,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -46,7 +53,17 @@ export class CreateChannel {
     ip?: string;
   }): Promise<ChannelOutput> {
     if (!can(input.actorRole, "channels.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    if (
+      isPaidChannelType(input.type) &&
+      !can(input.actorRole, "paid_alerts.manage")
+    ) {
+      throw forbidden();
+    }
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const name = channelName(input.name);
     const config = parseChannelConfig(input.type, input.config);
     const paid = await loadPaidChannelContext(this.alerts, input.workspaceId);
@@ -62,24 +79,38 @@ export class CreateChannel {
       throw validation([{ field: "type", message: PUSH_CHANNEL_EXISTS_MESSAGE }]);
     }
     const now = this.clock.now();
-    const channel = {
-      id: this.ids.newId("ch"),
-      workspaceId: input.workspaceId,
-      name,
-      type: input.type,
-      encryptedConfig: await encryptSecret(
-        JSON.stringify(config),
-        this.encryptionKey,
-      ),
-      enabled: true,
-      isDefault: input.type === "PUSH" || input.isDefault === true,
-      verifiedAt: null,
-      lastDeliveryStatus: null,
-      createdBy: input.actor.id,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.channels.insert(channel);
+    const channelId = this.ids.newId("ch");
+    let channel: NotificationChannel;
+    try {
+      channel = await writeWithActiveDataKeyRetry(
+        async () => ({
+          id: channelId,
+          workspaceId: input.workspaceId,
+          name,
+          type: input.type,
+          encryptedConfig: await encryptSecret(
+            JSON.stringify(config),
+            this.encryptionKeys,
+            {
+              type: "notification_channel",
+              workspaceId: input.workspaceId,
+              recordId: channelId,
+            },
+          ),
+          enabled: true,
+          isDefault: input.type === "PUSH" || input.isDefault === true,
+          verifiedAt: null,
+          lastDeliveryStatus: null,
+          createdBy: input.actor.id,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        (candidate) => this.channels.insert(candidate),
+      );
+    } catch (error) {
+      throwIfCollectionCap(error);
+      throw error;
+    }
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,
@@ -89,10 +120,10 @@ export class CreateChannel {
       metadata: {
         name: channel.name,
         type: channel.type,
-        isDefault: channel.isDefault,
+        isDefault: channel.isDefault === true,
       },
       ip: input.ip,
     });
-    return channelOutput(channel, this.encryptionKey, paid);
+    return channelOutput(channel, this.encryptionKeys, paid);
   }
 }

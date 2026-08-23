@@ -74,4 +74,18 @@ describe("PaddleBillingCanceller", () => {
     expect(paddle.cancellations).toEqual([]);
     expect(subscriptions.subscriptions.size).toBe(0);
   });
+
+  it("is idempotent after local or webhook-confirmed cancellation", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      status: "CANCELED",
+    });
+    const paddle = new RecordingPaddleClient();
+    const canceller = new PaddleBillingCanceller(subscriptions, paddle);
+
+    await canceller.cancelForWorkspace(SUBSCRIPTION.workspaceId);
+
+    expect(paddle.cancellations).toEqual([]);
+  });
 });

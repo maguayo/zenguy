@@ -10,6 +10,7 @@ import type {
 } from "../../domain/uptime/types";
 import type { Role } from "../../domain/workspaces/types";
 import { readMonitorSensitive } from "./monitor_secrets";
+import type { EncryptionKeyring } from "../../shared/crypto";
 
 export interface MonitorOutput {
   id: string;
@@ -47,11 +48,11 @@ export async function monitorOutput(input: {
   incident: Incident | null;
   recentChecks?: CheckTick[];
   role: Role;
-  encryptionKey: Uint8Array;
+  encryptionKeys: EncryptionKeyring;
 }): Promise<MonitorOutput> {
   const sensitive = await readMonitorSensitive(
     input.monitor,
-    input.encryptionKey,
+    input.encryptionKeys,
     input.role === "OWNER" || input.role === "ADMIN",
   );
   return {

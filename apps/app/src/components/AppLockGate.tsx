@@ -22,7 +22,12 @@ export function AppLockGate() {
 
   if (!ready || !locked) return null;
   return (
-    <View style={styles.cover}>
+    <View
+      accessibilityLabel="Zenguy is locked"
+      accessibilityViewIsModal
+      importantForAccessibility="yes"
+      style={styles.cover}
+    >
       <Wordmark dark size={28} />
       <View style={styles.body}>
         <IconTile size={56} style={styles.tile}>

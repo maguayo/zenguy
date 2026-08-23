@@ -23,6 +23,7 @@ const statusMap: Record<
   SYSTEM_ERROR: { label: "System error", tone: "neutral" },
   UNKNOWN: { label: "Unknown", tone: "neutral" },
   PENDING: { label: "Pending", tone: "neutral" },
+  AMBIGUOUS: { label: "Needs reconciliation", tone: "warn" },
 };
 
 function fallbackLabel(status: string): string {

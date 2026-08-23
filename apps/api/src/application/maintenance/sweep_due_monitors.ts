@@ -8,6 +8,7 @@ import type { DurableWorkflowRepo } from "../../domain/durability/repo";
 import { createOutboxEntry } from "../durability/factory";
 import type { PublishQueueOutbox } from "../durability/publish_outbox";
 import { platformAlert } from "../../shared/log";
+import { subscriptionAllowsExecution } from "../billing/ensure_active_subscription";
 
 const SWEEP_LIMIT = 200;
 
@@ -46,8 +47,7 @@ export class SweepDueMonitors {
       ]);
       if (
         workspace === null ||
-        (subscription?.status !== "ACTIVE" &&
-          subscription?.status !== "PAST_DUE")
+        !subscriptionAllowsExecution(subscription, now)
       ) {
         result.skipped += 1;
         continue;

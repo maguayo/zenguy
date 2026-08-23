@@ -35,6 +35,7 @@ export interface OutboxRepo {
     reason: string,
   ): Promise<"retry" | "quarantined">;
   purgePublished(before: number, limit: number): Promise<number>;
+  purgeQuarantinedOutbox(before: number, limit: number): Promise<number>;
 }
 
 export interface DurableWorkflowRepo {
@@ -91,7 +92,7 @@ export interface DurableWorkflowRepo {
     claimToken: string;
     claimedAt: number;
     staleBefore: number;
-  }): Promise<"claimed" | "busy" | "completed">;
+  }): Promise<"claimed" | "reclaimed" | "busy" | "completed">;
   releaseCheckExecution(input: {
     cycleId: string;
     attemptIndex: number;
@@ -115,4 +116,5 @@ export interface DurableWorkflowRepo {
   }): Promise<void>;
   completeJob(jobId: string, at: number): Promise<void>;
   purgeCompleted(before: number, limit: number): Promise<number>;
+  purgeQuarantinedJobs(before: number, limit: number): Promise<number>;
 }

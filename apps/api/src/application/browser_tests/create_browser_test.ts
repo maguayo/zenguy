@@ -9,7 +9,7 @@ import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
-import { forbidden } from "../../shared/errors";
+import { forbidden, throwIfCollectionCap } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import {
   parseBrowserTestConfig,
@@ -35,7 +35,11 @@ export class CreateBrowserTest {
     ip?: string;
   }): Promise<BrowserTestOutput> {
     if (!can(input.actorRole, "tests.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const config = parseBrowserTestConfig(input.config);
     const channelIds = await validateChannelIds(
       this.channels,
@@ -47,6 +51,12 @@ export class CreateBrowserTest {
       id: this.ids.newId("bt"),
       workspaceId: input.workspaceId,
       name: config.name,
+      allowedDomains: [...config.allowedDomains],
+      writableDomains: [...config.writableDomains],
+      testDataAttested: config.testDataAttested,
+      irreversibleActionScopes: structuredClone(
+        config.irreversibleActionScopes,
+      ),
       startUrl: config.startUrl,
       instructions: config.instructions,
       device: config.device,
@@ -60,7 +70,12 @@ export class CreateBrowserTest {
       updatedAt: now,
       deletedAt: null,
     };
-    await this.tests.insert(test);
+    try {
+      await this.tests.insert(test);
+    } catch (error) {
+      throwIfCollectionCap(error);
+      throw error;
+    }
     await this.tests.setChannels(test.id, channelIds);
     await this.audit.execute({
       workspaceId: input.workspaceId,

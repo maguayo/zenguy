@@ -161,7 +161,7 @@ describe("queue routing", () => {
     alert.mockRestore();
   });
 
-  it("routes every staging queue and acknowledges every staging dead-letter queue", async () => {
+  it("routes staging queues and retries their dead letters when the redriver is unavailable", async () => {
     const attemptBody = {
       kind: "attempt",
       runId: "run_staging",
@@ -225,14 +225,14 @@ describe("queue routing", () => {
         configured,
         CONTEXT,
       );
-      expect(deadLetterMessage.ackCount).toBe(1);
-      expect(deadLetterMessage.retryOptions).toEqual([]);
+      expect(deadLetterMessage.ackCount).toBe(0);
+      expect(deadLetterMessage.retryOptions).toEqual([{ delaySeconds: 30 }]);
     }
-    expect(alert).toHaveBeenCalledTimes(3);
+    expect(alert).toHaveBeenCalledTimes(6);
     alert.mockRestore();
   });
 
-  it("alerts and acknowledges every dead-letter message with a bounded body", async () => {
+  it("alerts and retries unhandled dead letters without logging their payload", async () => {
     const message = new RecordingMessage("msg_dlq", { value: "x".repeat(400) });
     const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -242,15 +242,15 @@ describe("queue routing", () => {
       CONTEXT,
     );
 
-    expect(message.ackCount).toBe(1);
-    expect(message.retryOptions).toEqual([]);
+    expect(message.ackCount).toBe(0);
+    expect(message.retryOptions).toEqual([{ delaySeconds: 30 }]);
     const logged = alert.mock.calls.join(" ");
     expect(logged).toContain('"event":"dlq_message"');
     expect(logged).toContain('"queue":"zenguy-runs-dlq"');
-    const parsed = JSON.parse(String(alert.mock.calls[0]?.[0])) as {
-      body: string;
-    };
-    expect(parsed.body.length).toBe(200);
+    const parsed = JSON.parse(String(alert.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(parsed.messageId).toBe("msg_dlq");
+    expect(parsed).not.toHaveProperty("body");
+    expect(logged).not.toContain("xxxxxxxx");
     alert.mockRestore();
   });
 });
@@ -263,6 +263,7 @@ function scheduledJobs(): {
     tests: vi.fn(async () => undefined),
     monitors: vi.fn(async () => undefined),
     durability: vi.fn(async () => undefined),
+    deletions: vi.fn(async () => undefined),
     retention: vi.fn(async () => undefined),
     hourly: vi.fn(async () => undefined),
   };
@@ -272,6 +273,7 @@ function scheduledJobs(): {
       tests: { execute: calls.tests },
       monitors: { execute: calls.monitors },
       durability: { execute: calls.durability },
+      deletions: { execute: calls.deletions },
       retention: { execute: calls.retention },
       hourly: { execute: calls.hourly },
     },
@@ -285,6 +287,7 @@ describe("scheduled routing", () => {
     expect(scheduler.calls.tests).toHaveBeenCalledOnce();
     expect(scheduler.calls.monitors).toHaveBeenCalledOnce();
     expect(scheduler.calls.durability).toHaveBeenCalledOnce();
+    expect(scheduler.calls.deletions).toHaveBeenCalledOnce();
     expect(scheduler.calls.retention).not.toHaveBeenCalled();
     expect(scheduler.calls.hourly).not.toHaveBeenCalled();
 

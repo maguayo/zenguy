@@ -105,6 +105,14 @@ describe("channel form", () => {
     ).toBe(true);
     expect(
       createSchema.safeParse({ ...values, phoneNumber: "+34612345678", type: "WHATSAPP" }).success,
+    ).toBe(false);
+    expect(
+      createSchema.safeParse({
+        ...values,
+        phoneNumber: "+34612345678",
+        smsConsent: true,
+        type: "WHATSAPP",
+      }).success,
     ).toBe(true);
     expect(
       createSchema.safeParse({
@@ -134,9 +142,13 @@ describe("channel form", () => {
         ...values,
         name: "Phone",
         phoneNumber: " +34612345678 ",
+        smsConsent: true,
         type: "CALL",
       }),
-    ).toMatchObject({ config: { phoneNumber: "+34612345678" }, type: "CALL" });
+    ).toMatchObject({
+      config: { consent: true, phoneNumber: "+34612345678" },
+      type: "CALL",
+    });
     expect(
       createChannelInput({
         ...values,
@@ -151,7 +163,7 @@ describe("channel form", () => {
     });
     expect(() =>
       channelConfigFromValues({ ...values, phoneNumber: "+34612345678", type: "SMS" }),
-    ).toThrow("SMS consent is required");
+    ).toThrow("Recipient consent is required");
   });
 
   it("never reads back or resends a masked webhook during an ordinary edit", () => {

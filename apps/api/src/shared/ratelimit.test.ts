@@ -1,58 +1,75 @@
-import { FixedClock } from "./clock";
-import { KvRateLimiter } from "./ratelimit";
-import { FakeKv } from "../test/fakes/kv";
+import {
+  enforceRateLimitScopes,
+  normalizeRateLimitAddress,
+  type RateLimiter,
+} from "./ratelimit";
 
-describe("KvRateLimiter", () => {
-  it("allows requests below the limit and blocks at the limit", async () => {
-    const clock = new FixedClock(10_000);
-    const limiter = new KvRateLimiter(new FakeKv(clock), clock);
+describe("rate-limit scopes", () => {
+  it("prefers one atomic multi-scope consumption when available", async () => {
+    const hit = vi.fn(async () => ({ allowed: true, retryAfterSeconds: 1 }));
+    const hitMany = vi.fn(async () => ({ allowed: true, retryAfterSeconds: 12 }));
 
-    await expect(limiter.hit("login:ip", 2, 60)).resolves.toMatchObject({
-      allowed: true,
-    });
-    await expect(limiter.hit("login:ip", 2, 60)).resolves.toMatchObject({
-      allowed: true,
-    });
-    await expect(limiter.hit("login:ip", 2, 60)).resolves.toEqual({
-      allowed: false,
-      retryAfterSeconds: 50,
-    });
+    await enforceRateLimitScopes(
+      { hit, hitMany },
+      ["scope:workspace", "scope:actor", "scope:ip"],
+      { limit: 4, windowSeconds: 60 },
+    );
+
+    expect(hit).not.toHaveBeenCalled();
+    expect(hitMany).toHaveBeenCalledOnce();
+    expect(hitMany).toHaveBeenCalledWith(
+      ["scope:workspace", "scope:actor", "scope:ip"],
+      4,
+      60,
+    );
   });
 
-  it("keeps independent keys independent", async () => {
-    const clock = new FixedClock(0);
-    const limiter = new KvRateLimiter(new FakeKv(clock), clock);
+  it("charges every independent scope", async () => {
+    const hit = vi.fn(async () => ({ allowed: true, retryAfterSeconds: 1 }));
 
-    await limiter.hit("login:first", 1, 60);
-    await expect(limiter.hit("login:first", 1, 60)).resolves.toMatchObject({
-      allowed: false,
-    });
-    await expect(limiter.hit("login:second", 1, 60)).resolves.toMatchObject({
-      allowed: true,
-    });
+    await enforceRateLimitScopes(
+      { hit },
+      ["scope:workspace", "scope:actor", "scope:ip"],
+      { limit: 4, windowSeconds: 60 },
+    );
+
+    expect(hit.mock.calls).toEqual([
+      ["scope:workspace", 4, 60],
+      ["scope:actor", 4, 60],
+      ["scope:ip", 4, 60],
+    ]);
   });
 
-  it("resets on the next fixed window", async () => {
-    const clock = new FixedClock(59_500);
-    const limiter = new KvRateLimiter(new FakeKv(clock), clock);
+  it("returns a stable rate-limit error when any scope is exhausted", async () => {
+    const limiter: RateLimiter = {
+      hit: vi.fn(async (key) => ({
+        allowed: key !== "scope:actor",
+        retryAfterSeconds: key === "scope:actor" ? 19 : 1,
+      })),
+    };
 
-    await limiter.hit("register:ip", 1, 60);
-    const blocked = await limiter.hit("register:ip", 1, 60);
-    expect(blocked).toEqual({ allowed: false, retryAfterSeconds: 1 });
-
-    clock.advance(500);
-    await expect(limiter.hit("register:ip", 1, 60)).resolves.toMatchObject({
-      allowed: true,
+    await expect(
+      enforceRateLimitScopes(
+        limiter,
+        ["scope:workspace", "scope:actor", "scope:ip"],
+        { limit: 4, windowSeconds: 60 },
+      ),
+    ).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      message: "Too many requests",
+      retryAfterSeconds: 19,
     });
   });
+});
 
-  it("honors KV expiration TTL in the fake", async () => {
-    const clock = new FixedClock(0);
-    const kv = new FakeKv(clock);
-    await kv.put("temporary", "1", { expirationTtl: 2 });
-
-    await expect(kv.get("temporary")).resolves.toBe("1");
-    clock.advance(2_000);
-    await expect(kv.get("temporary")).resolves.toBeNull();
+describe("normalizeRateLimitAddress", () => {
+  it.each([
+    [" 203.0.113.42 ", "203.0.113.42"],
+    ["2001:DB8::1", "2001:db8::1"],
+    [undefined, "unknown"],
+    ["forwarded.example", "invalid"],
+    ["203.0.113.42, 10.0.0.1", "invalid"],
+  ])("normalizes %s without accepting forwarded lists", (value, expected) => {
+    expect(normalizeRateLimitAddress(value)).toBe(expected);
   });
 });

@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
 import { webcrypto } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildSafeChildEnvironment } from "./local-secrets.mjs";
 
-const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_ITERATIONS = 600_000;
+const PASSWORD_HASH_SCHEME = "pbkdf2-sha256";
+const PASSWORD_HASH_VERSION = "v1";
 const OWNER_EMAIL = "marcos@aguayo.es";
 const OWNER_PASSWORD = "abc123456";
 const ADMIN_EMAIL = "ana@zenguy.dev";
@@ -12,9 +15,7 @@ const MEMBER_EMAIL = "luis@zenguy.dev";
 const MEMBER_TWO_EMAIL = "marta@zenguy.dev";
 const MEMBER_THREE_EMAIL = "diego@zenguy.dev";
 const MEMBER_PASSWORD = "Password123!";
-const LOCAL_DATABASE = "zenguy-db";
-const STAGING_DATABASE = "zenguy-staging-db";
-const STAGING_ENVIRONMENT = "staging";
+const LOCAL_DATABASE = "zenguy-local-db";
 const RUNNER_VERSION = "zenguy-runner/1.0.0";
 const MODEL_NAME = "gpt-5-mini";
 const MINUTE_MS = 60_000;
@@ -23,7 +24,12 @@ const DAY_MS = 24 * HOUR_MS;
 const SEED_TEST_PARKED_UNTIL_MS = Date.parse("2030-01-01T00:00:00Z");
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const API_DIRECTORY = path.resolve(SCRIPT_DIRECTORY, "..");
-const GENERATED_SQL_PATH = path.join(SCRIPT_DIRECTORY, ".seed.generated.sql");
+const WRANGLER_ENTRYPOINT = path.resolve(
+  API_DIRECTORY,
+  "node_modules/wrangler/bin/wrangler.js",
+);
+const ANONYMOUS_DESCRIPTOR_PATH = "/dev/fd/3";
+const MAX_GENERATED_SQL_BYTES = 8 * 1024 * 1024;
 const encoder = new TextEncoder();
 
 function parseArguments(argv) {
@@ -34,7 +40,7 @@ function parseArguments(argv) {
     allowRemote: false,
     confirmStaging: false,
     environment: null,
-    varsFile: path.join(API_DIRECTORY, ".dev.vars"),
+    varsFile: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -63,16 +69,9 @@ function parseArguments(argv) {
     }
   }
   if (options.remote) {
-    if (options.environment !== STAGING_ENVIRONMENT) {
-      throw new Error(
-        "Remote seed target must be explicitly set with --env staging; production is never supported",
-      );
-    }
-    if (!options.allowRemote || !options.confirmStaging) {
-      throw new Error(
-        "Remote staging seed requires both --allow-remote and --confirm-staging",
-      );
-    }
+    throw new Error(
+      "Remote seed is disabled: deterministic fixtures are local-only and must never be published",
+    );
   } else if (
     options.environment !== null ||
     options.allowRemote ||
@@ -83,6 +82,23 @@ function parseArguments(argv) {
     );
   }
   return options;
+}
+
+async function assertPrivateVarsSource(varsFile) {
+  // The Keychain wrapper owns fd 3 and sends only the two validated seed
+  // bindings through an anonymous pipe. It is intentionally not a pathname
+  // whose inode can be inspected with the regular-file policy below.
+  if (varsFile === ANONYMOUS_DESCRIPTOR_PATH) return;
+  const stat = await lstat(varsFile);
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error("The seed vars source must be a regular file, not a symlink");
+  }
+  if (typeof process.getuid === "function" && stat.uid !== process.getuid()) {
+    throw new Error("The seed vars source must be owned by the current user");
+  }
+  if ((stat.mode & 0o077) !== 0) {
+    throw new Error("The seed vars source must use mode 0600");
+  }
 }
 
 function parseVars(contents) {
@@ -126,7 +142,7 @@ async function hashPassword(password) {
   const salt = randomBytes(16);
   const material = await webcrypto.subtle.importKey(
     "raw",
-    encoder.encode(password),
+    encoder.encode(password.normalize("NFC")),
     "PBKDF2",
     false,
     ["deriveBits"],
@@ -141,26 +157,97 @@ async function hashPassword(password) {
     material,
     256,
   );
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${base64(salt)}$${base64(
+  return `${PASSWORD_HASH_SCHEME}$${PASSWORD_HASH_VERSION}$${PBKDF2_ITERATIONS}$${base64(salt)}$${base64(
     new Uint8Array(bits),
   )}`;
 }
 
-async function encryptSecret(plaintext, encryptionKey) {
+function encryptionAad(context, dataKeyId) {
+  return encoder.encode(
+    JSON.stringify([
+      "zenguy",
+      4,
+      dataKeyId,
+      context.type,
+      context.workspaceId,
+      context.recordId,
+    ]),
+  );
+}
+
+function keyWrapAad(workspaceId, dataKeyId, wrappingKeyId) {
+  return encoder.encode(
+    JSON.stringify([
+      "zenguy",
+      "workspace-data-key-wrap",
+      1,
+      wrappingKeyId,
+      workspaceId,
+      dataKeyId,
+    ]),
+  );
+}
+
+async function createWorkspaceDataKey(
+  workspaceId,
+  encryptionKey,
+  encryptionKeyId,
+  createdAt,
+) {
+  const plaintext = randomBytes(32);
+  const id = `dek-${Buffer.from(randomBytes(18)).toString("base64url")}`;
   const iv = randomBytes(12);
-  const key = await webcrypto.subtle.importKey(
+  const wrappingKey = await webcrypto.subtle.importKey(
     "raw",
     exactBuffer(encryptionKey),
     { name: "AES-GCM" },
     false,
     ["encrypt"],
   );
+  const wrapped = await webcrypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv: exactBuffer(iv),
+      additionalData: exactBuffer(
+        keyWrapAad(workspaceId, id, encryptionKeyId),
+      ),
+      tagLength: 128,
+    },
+    wrappingKey,
+    exactBuffer(plaintext),
+  );
+  return {
+    plaintext,
+    id,
+    workspaceId,
+    wrappingKeyId: encryptionKeyId,
+    wrappedKey: `w1:${encryptionKeyId}:${base64(iv)}:${base64(
+      new Uint8Array(wrapped),
+    )}`,
+    createdAt,
+  };
+}
+
+async function encryptSecret(plaintext, dataKey, context) {
+  const iv = randomBytes(12);
+  const key = await webcrypto.subtle.importKey(
+    "raw",
+    exactBuffer(dataKey.plaintext),
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"],
+  );
   const ciphertext = await webcrypto.subtle.encrypt(
-    { name: "AES-GCM", iv: exactBuffer(iv) },
+    {
+      name: "AES-GCM",
+      iv: exactBuffer(iv),
+      additionalData: exactBuffer(encryptionAad(context, dataKey.id)),
+      tagLength: 128,
+    },
     key,
     encoder.encode(plaintext),
   );
-  return `v1:${base64(iv)}:${base64(new Uint8Array(ciphertext))}`;
+  return `v4:${dataKey.id}:${base64(iv)}:${base64(new Uint8Array(ciphertext))}`;
 }
 
 async function sha256Hex(value) {
@@ -268,6 +355,7 @@ const WIPE_STATEMENTS = [
   "DELETE FROM notification_channels;",
   "DELETE FROM workspace_secrets;",
   "DELETE FROM workspace_api_keys;",
+  "DELETE FROM workspace_data_encryption_keys;",
   "DELETE FROM pending_overage_periods;",
   "DELETE FROM overage_reports;",
   "DELETE FROM usage_events;",
@@ -283,11 +371,11 @@ const WIPE_STATEMENTS = [
 ];
 
 const IDS = {
-  owner: "usr_seed_marcos",
-  admin: "usr_seed_ana",
-  member: "usr_seed_luis",
-  memberTwo: "usr_seed_marta",
-  memberThree: "usr_seed_diego",
+  owner: "usr_00000000000000000000000001",
+  admin: "usr_00000000000000000000000002",
+  member: "usr_00000000000000000000000003",
+  memberTwo: "usr_00000000000000000000000004",
+  memberThree: "usr_00000000000000000000000005",
   workspace: "ws_seed_aguayo",
   ownerMember: "mem_seed_owner",
   adminMember: "mem_seed_admin",
@@ -773,7 +861,7 @@ function stepsForAttempt(attemptId, test, status, startedAt) {
   }));
 }
 
-async function generateSql(encryptionKey) {
+async function generateSql(encryptionKey, encryptionKeyId) {
   const now = Date.now();
   const workspaceCreated = now - 40 * DAY_MS;
   const periodStart = monthStartUtc(now);
@@ -798,6 +886,12 @@ async function generateSql(encryptionKey) {
     channelIds.whatsapp,
     channelIds.push,
   ];
+  const workspaceDataKey = await createWorkspaceDataKey(
+    IDS.workspace,
+    encryptionKey,
+    encryptionKeyId,
+    workspaceCreated,
+  );
 
   const [
     ownerHash,
@@ -831,47 +925,124 @@ async function generateSql(encryptionKey) {
     hashPassword(MEMBER_PASSWORD),
     hashPassword(MEMBER_PASSWORD),
     hashPassword(MEMBER_PASSWORD),
-    encryptSecret("seed-demo-token", encryptionKey),
-    encryptSecret("checkout.demo@example.com", encryptionKey),
-    encryptSecret("seed-checkout-password", encryptionKey),
-    encryptSecret("sk_test_seed_stripe_key", encryptionKey),
-    encryptSecret("seed-session-cookie", encryptionKey),
-    encryptSecret("seed-admin-otp", encryptionKey),
+    encryptSecret("seed-demo-token", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_demo",
+    }),
+    encryptSecret("checkout.demo@example.com", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_checkout_user",
+    }),
+    encryptSecret("seed-checkout-password", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_checkout_password",
+    }),
+    encryptSecret("sk_test_seed_stripe_key", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_stripe",
+    }),
+    encryptSecret("seed-session-cookie", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_session",
+    }),
+    encryptSecret("seed-admin-otp", workspaceDataKey, {
+      type: "workspace_secret",
+      workspaceId: IDS.workspace,
+      recordId: "sec_seed_otp",
+    }),
     encryptSecret(
       JSON.stringify({ emails: [OWNER_EMAIL, ADMIN_EMAIL] }),
-      encryptionKey,
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.email,
+      },
     ),
     encryptSecret(
       JSON.stringify({ phoneNumber: "+34600111222", consent: true }),
-      encryptionKey,
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.sms,
+      },
     ),
     encryptSecret(
       JSON.stringify({
         webhookUrl: "https://hooks.slack.com/services/T000/B000/SEED",
       }),
-      encryptionKey,
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.slack,
+      },
     ),
     encryptSecret(
       JSON.stringify({
         webhookUrl:
           "https://discord.com/api/webhooks/123456789012345678/seedtoken",
       }),
-      encryptionKey,
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.discord,
+      },
     ),
-    encryptSecret(JSON.stringify({ phoneNumber: "+34600999888" }), encryptionKey),
-    encryptSecret(JSON.stringify({ phoneNumber: "+34600111000" }), encryptionKey),
-    encryptSecret(JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }), encryptionKey),
+    encryptSecret(
+      JSON.stringify({ phoneNumber: "+34600999888" }),
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.whatsapp,
+      },
+    ),
+    encryptSecret(
+      JSON.stringify({ phoneNumber: "+34600111000" }),
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.call,
+      },
+    ),
+    encryptSecret(
+      JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }),
+      workspaceDataKey,
+      {
+        type: "notification_channel",
+        workspaceId: IDS.workspace,
+        recordId: channelIds.push,
+      },
+    ),
     encryptSecret(
       JSON.stringify([{ key: "Authorization", value: "Bearer {{DEMO_TOKEN}}" }]),
-      encryptionKey,
+      workspaceDataKey,
+      {
+        type: "uptime_monitor_headers",
+        workspaceId: IDS.workspace,
+        recordId: "mon_seed_checkout_api",
+      },
     ),
-    encryptSecret('{"probe":true}', encryptionKey),
+    encryptSecret('{"probe":true}', workspaceDataKey, {
+      type: "uptime_monitor_body",
+      workspaceId: IDS.workspace,
+      recordId: "mon_seed_checkout_api",
+    }),
     sha256Hex("seed-invite-pending-noelia"),
     sha256Hex("seed-invite-pending-sofia"),
     sha256Hex("seed-invite-revoked-intern"),
     sha256Hex("zgk_seedstatusdashboard00000000000001"),
     sha256Hex("zgk_seedrevokedlegacykey0000000000002"),
-  ]);
+  ]).finally(() => workspaceDataKey.plaintext.fill(0));
 
   const statements = [
     "-- Generated by scripts/seed.mjs. Do not edit or commit.",
@@ -934,6 +1105,18 @@ async function generateSql(encryptionKey) {
       created_at: workspaceCreated,
       updated_at: now,
       deleted_at: null,
+    }),
+    insertRow("workspace_data_encryption_keys", {
+      workspace_id: workspaceDataKey.workspaceId,
+      data_key_id: workspaceDataKey.id,
+      generation: 1,
+      wrapping_key_id: workspaceDataKey.wrappingKeyId,
+      wrap_version: 1,
+      wrapped_key: workspaceDataKey.wrappedKey,
+      active: 1,
+      created_at: workspaceDataKey.createdAt,
+      updated_at: workspaceDataKey.createdAt,
+      retired_at: null,
     }),
     insertRow("workspace_members", {
       id: IDS.ownerMember,
@@ -1033,6 +1216,8 @@ async function generateSql(encryptionKey) {
       name: "Status dashboard",
       key_prefix: "zgk_seedstat",
       key_hash: apiKeyHash,
+      scopes_json: '["workspace:read","uptime:read","tests:read","runs:read"]',
+      expires_at: now + 90 * DAY_MS,
       created_by: IDS.owner,
       created_at: now - 12 * DAY_MS,
       last_used_at: now - 18 * MINUTE_MS,
@@ -1044,6 +1229,8 @@ async function generateSql(encryptionKey) {
       name: "Legacy CLI",
       key_prefix: "zgk_seedrevo",
       key_hash: revokedKeyHash,
+      scopes_json: '["workspace:read"]',
+      expires_at: now + 30 * DAY_MS,
       created_by: IDS.admin,
       created_at: now - 28 * DAY_MS,
       last_used_at: now - 20 * DAY_MS,
@@ -1114,7 +1301,7 @@ async function generateSql(encryptionKey) {
         workspace_id: IDS.workspace,
         key: secret.key,
         encrypted_value: secret.value,
-        encryption_version: 1,
+        encryption_version: 4,
         allowed_domains: secret.domains,
         description: secret.description,
         created_by: secret.createdBy,
@@ -2146,78 +2333,124 @@ async function generateSql(encryptionKey) {
   return statements.join("\n");
 }
 
-function wranglerArguments(remote) {
+function wranglerArguments(sqlPath = ANONYMOUS_DESCRIPTOR_PATH) {
   return [
-    "wrangler",
     "d1",
     "execute",
-    remote ? STAGING_DATABASE : LOCAL_DATABASE,
-    remote ? "--remote" : "--local",
-    ...(remote ? ["--env", STAGING_ENVIRONMENT] : []),
+    LOCAL_DATABASE,
+    "--local",
     "--file",
-    "scripts/.seed.generated.sql",
+    sqlPath,
   ];
 }
 
-async function executeSql(remote) {
-  const arguments_ = wranglerArguments(remote);
-  await new Promise((resolve, reject) => {
-    const child = spawn("npx", arguments_, {
+async function executeSql(sqlPayload) {
+  if (
+    !Buffer.isBuffer(sqlPayload) ||
+    sqlPayload.byteLength === 0 ||
+    sqlPayload.byteLength > MAX_GENERATED_SQL_BYTES
+  ) {
+    sqlPayload?.fill?.(0);
+    throw new Error("Generated seed SQL is empty or too large");
+  }
+  const child = spawn(
+    process.execPath,
+    [WRANGLER_ENTRYPOINT, ...wranglerArguments()],
+    {
       cwd: API_DIRECTORY,
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else {
-        reject(
-          new Error(
-            signal === null
-              ? `Wrangler exited with code ${String(code)}`
-              : `Wrangler was terminated by ${signal}`,
-          ),
-        );
-      }
-    });
+      env: buildSafeChildEnvironment(),
+      stdio: ["inherit", "inherit", "inherit", "pipe"],
+    },
+  );
+  const descriptor = child.stdio[3];
+  descriptor.on("error", (error) => {
+    if (error?.code !== "EPIPE") child.kill("SIGTERM");
   });
+  descriptor.end(sqlPayload, () => sqlPayload.fill(0));
+  try {
+    await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code, signal) => {
+        if (code === 0) resolve();
+        else {
+          reject(
+            new Error(
+              signal === null
+                ? `Wrangler exited with code ${String(code)}`
+                : `Wrangler was terminated by ${signal}`,
+            ),
+          );
+        }
+      });
+    });
+  } finally {
+    sqlPayload.fill(0);
+  }
 }
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.printCommand) {
     process.stdout.write(`${JSON.stringify({
-      executable: "npx",
-      arguments: wranglerArguments(options.remote),
+      executable: process.execPath,
+      arguments: [WRANGLER_ENTRYPOINT, ...wranglerArguments()],
     })}\n`);
     return;
   }
+  if (options.varsFile === null) {
+    throw new Error(
+      "Seed credentials require --vars-file; use the Keychain-backed package command",
+    );
+  }
+  await assertPrivateVarsSource(options.varsFile);
   let varsContents;
   try {
     varsContents = await readFile(options.varsFile, "utf8");
   } catch (error) {
     throw new Error(
-      `Cannot read ${options.varsFile}; create apps/api/.dev.vars first`,
+      "Cannot read the private seed vars source",
       { cause: error },
     );
   }
-  const encryptionKeyValue = parseVars(varsContents).get("ENCRYPTION_KEY");
+  const vars = parseVars(varsContents);
+  varsContents = "";
+  const encryptionKeyValue = vars.get("ENCRYPTION_KEY");
   if (encryptionKeyValue === undefined || encryptionKeyValue === "") {
-    throw new Error(`ENCRYPTION_KEY is missing from ${options.varsFile}`);
+    vars.clear();
+    throw new Error("ENCRYPTION_KEY is missing from the private seed vars source");
   }
   const encryptionKey = new Uint8Array(
     Buffer.from(encryptionKeyValue, "base64"),
   );
   if (encryptionKey.byteLength !== 32) {
+    encryptionKey.fill(0);
+    vars.clear();
     throw new Error("ENCRYPTION_KEY must decode to exactly 32 bytes");
   }
-  const sql = await generateSql(encryptionKey);
+  const encryptionKeyId = vars.get("ENCRYPTION_KEY_ID");
+  vars.clear();
+  if (
+    encryptionKeyId === undefined ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(encryptionKeyId)
+  ) {
+    encryptionKey.fill(0);
+    throw new Error(
+      "ENCRYPTION_KEY_ID is missing or invalid in the private seed vars source",
+    );
+  }
+  let sql;
+  try {
+    sql = await generateSql(encryptionKey, encryptionKeyId);
+  } finally {
+    encryptionKey.fill(0);
+  }
   if (options.dryRun) {
     process.stdout.write(sql);
     return;
   }
-  await writeFile(GENERATED_SQL_PATH, sql, "utf8");
-  await executeSql(options.remote);
+  const sqlPayload = Buffer.from(sql, "utf8");
+  sql = "";
+  await executeSql(sqlPayload);
 }
 
 main().catch((error) => {

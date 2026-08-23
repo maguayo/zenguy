@@ -27,7 +27,14 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, context) => {
     );
   }
 
-  logEvent("unhandled_error", { message: error.message });
+  // Error messages from runtimes, providers, parsers or future code may embed
+  // URLs, SQL values or credentials. Keep the platform log correlated without
+  // serializing attacker/provider-controlled exception text.
+  logEvent("unhandled_error", {
+    requestId: context.get("requestId"),
+    method: context.req.method,
+    path: context.req.path,
+  });
   return context.json(
     { error: { code: "INTERNAL", message: "Internal error" } },
     500,

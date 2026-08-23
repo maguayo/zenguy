@@ -1,16 +1,22 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import { can } from "../../domain/workspaces/permissions";
 import type { MemberRepo } from "../../domain/workspaces/repo";
+import type { InvitationRepo } from "../../domain/workspaces/repo";
+import type { ApiKeyRepo } from "../../domain/api_keys/repo";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import { forbidden, notFound } from "../../shared/errors";
 import type { WriteAudit } from "../audit/write_audit";
+import type { Clock } from "../../shared/clock";
 import { memberOutput, type MemberOutput } from "./types";
 
 export class ChangeMemberRole {
   constructor(
     private readonly members: MemberRepo,
+    private readonly invitations: InvitationRepo,
+    private readonly apiKeys: ApiKeyRepo,
     private readonly audit: Pick<WriteAudit, "execute">,
+    private readonly clock: Clock,
   ) {}
 
   async execute(input: {
@@ -31,11 +37,28 @@ export class ChangeMemberRole {
       throw forbidden("The owner's role cannot be changed");
     }
 
+    const now = this.clock.now();
     await this.members.updateRole(
       input.workspaceId,
       input.targetUserId,
       input.role,
+      now,
     );
+    if (input.role === "MEMBER" && target.role !== "MEMBER") {
+      await Promise.all([
+        this.invitations.revokeUnauthorizedByInviter(
+          input.workspaceId,
+          input.targetUserId,
+          "MEMBER",
+          now,
+        ),
+        this.apiKeys.revokeAllCreatedBy(
+          input.workspaceId,
+          input.targetUserId,
+          now,
+        ),
+      ]);
+    }
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,

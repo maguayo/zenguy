@@ -5,19 +5,18 @@ import { useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Pressable, StyleSheet, View, type TextInput } from "react-native";
 
-import { SessionStorageError, register as registerAccount } from "@/api/auth";
+import { register as registerAccount } from "@/api/auth";
 import { signUpSchema, type SignUpValues } from "@/components/auth/sign-up";
 import { AuthShell } from "@/components/AuthShell";
 import { FormError } from "@/components/FormError";
-import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
+import { setPendingRegistrationEmail } from "@/lib/registration-pending";
 import { colors, spacing } from "@/theme";
 import { Button, Caption, Field, Input, Label, Muted, PasswordInput, Small } from "@/ui";
 
 export default function SignUp() {
-  const { adoptSession } = useAuth();
   const router = useRouter();
   const toast = useToast();
   const emailRef = useRef<TextInput>(null);
@@ -37,20 +36,15 @@ export default function SignUp() {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
-      // The new account is signed in right away; the root resolver parks it on
-      // the verification screen until the emailed link is used.
-      adoptSession(await registerAccount(values.name, values.email, values.password));
-      router.replace("/");
+      const pending = await registerAccount(
+        values.name,
+        values.email,
+        values.password,
+      );
+      setPendingRegistrationEmail(pending.email);
+      router.replace("/verify-pending");
     } catch (error) {
-      if (error instanceof ApiError && error.code === "CONFLICT") {
-        form.setError("root", { message: "An account with this email already exists." });
-      } else if (error instanceof SessionStorageError) {
-        // The account exists; only this device could not keep its session.
-        toast.error(error.message);
-        router.replace("/(auth)/sign-in");
-      } else {
-        toast.error(apiErrorMessage(error));
-      }
+      toast.error(apiErrorMessage(error));
     }
   });
 
@@ -119,7 +113,7 @@ export default function SignUp() {
           render={({ field, fieldState }) => (
             <Field
               error={fieldState.error?.message}
-              hint="At least 8 characters."
+              hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
               label="Password"
               required
             >

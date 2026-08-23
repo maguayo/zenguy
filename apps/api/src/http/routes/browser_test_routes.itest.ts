@@ -17,6 +17,7 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
+import { RATE_LIMITS } from "../../shared/constants";
 import { encryptSecret } from "../../shared/crypto";
 import { FakeIds } from "../../test/fakes/ids";
 import { freshDb, testEnv } from "../../test/helpers";
@@ -31,6 +32,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@tests.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -40,6 +42,7 @@ const USERS: Record<Actor, User> = {
     email: "admin@tests.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -49,6 +52,7 @@ const USERS: Record<Actor, User> = {
     email: "member@tests.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -168,11 +172,25 @@ describe("browser test routes", () => {
     const channels = new D1ChannelRepo(bindings.DB);
     const encryptedEmail = await encryptSecret(
       JSON.stringify({ emails: ["ops@example.com"] }),
-      config.encryptionKey,
+      config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "ch_tests",
+      },
     );
     await channels.insert(channel("ch_tests", WORKSPACE.id, encryptedEmail));
+    const encryptedOtherEmail = await encryptSecret(
+      JSON.stringify({ emails: ["ops@example.com"] }),
+      config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: OTHER_WORKSPACE.id,
+        recordId: "ch_other_workspace",
+      },
+    );
     await channels.insert(
-      channel("ch_other_workspace", OTHER_WORKSPACE.id, encryptedEmail),
+      channel("ch_other_workspace", OTHER_WORKSPACE.id, encryptedOtherEmail),
     );
     tests = new D1BrowserTestRepo(bindings.DB);
     runs = new D1RunRepo(bindings.DB);
@@ -239,11 +257,15 @@ describe("browser test routes", () => {
     const created = await create({
       ...CONFIG,
       name: " Checkout ",
+      allowedDomains: ["checkout.example.net", "*.login.example.org"],
+      writableDomains: ["checkout.example.net", "auth.login.example.org"],
       channelIds: ["ch_tests", "ch_tests"],
     });
     expect(created.body).toMatchObject({
       data: {
         name: "Checkout",
+        allowedDomains: ["checkout.example.net", "*.login.example.org"],
+        writableDomains: ["checkout.example.net", "auth.login.example.org"],
         channelIds: ["ch_tests"],
         nextRunAt: new Date(NOW + 6 * 3_600_000).toISOString(),
         createdBy: { userId: USERS.owner.id, name: USERS.owner.name },
@@ -253,6 +275,8 @@ describe("browser test routes", () => {
     });
     await expect(tests.findById(WORKSPACE.id, created.id)).resolves.toMatchObject({
       nextRunAt: NOW + 6 * 3_600_000,
+      allowedDomains: ["checkout.example.net", "*.login.example.org"],
+      writableDomains: ["checkout.example.net", "auth.login.example.org"],
       createdBy: USERS.owner.id,
       updatedBy: USERS.owner.id,
     });
@@ -306,6 +330,8 @@ describe("browser test routes", () => {
         headers: headers("admin"),
         body: JSON.stringify({
           name: "Checkout mobile",
+          allowedDomains: ["pay.example.net"],
+          writableDomains: ["pay.example.net"],
           device: "MOBILE",
           intervalHours: 2,
           channelIds: [],
@@ -316,6 +342,8 @@ describe("browser test routes", () => {
     await expect(updated.json()).resolves.toMatchObject({
       data: {
         name: "Checkout mobile",
+        allowedDomains: ["pay.example.net"],
+        writableDomains: ["pay.example.net"],
         device: "MOBILE",
         intervalHours: 2,
         channelIds: [],
@@ -329,6 +357,8 @@ describe("browser test routes", () => {
     });
     await expect(tests.findById(WORKSPACE.id, created.id)).resolves.toMatchObject({
       nextRunAt: clock.now() + 2 * 3_600_000,
+      allowedDomains: ["pay.example.net"],
+      writableDomains: ["pay.example.net"],
       updatedBy: USERS.admin.id,
     });
     await expect(runs.findById(WORKSPACE.id, historical.id)).resolves.toMatchObject({
@@ -345,6 +375,61 @@ describe("browser test routes", () => {
         "run_historical",
       );
     }
+  });
+
+  it("lists browser tests with a stable bounded cursor", async () => {
+    const created = await Promise.all(
+      ["One", "Two", "Three"].map((name) => create({ ...CONFIG, name })),
+    );
+    const expectedIds = created.map(({ id }) => id).sort().reverse();
+    const first = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests?limit=2`,
+      { headers: headers("member") },
+    );
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      data: { id: string }[];
+      nextCursor: string | null;
+    };
+    expect(firstBody.data.map(({ id }) => id)).toEqual(expectedIds.slice(0, 2));
+    expect(firstBody.nextCursor).toEqual(expect.any(String));
+
+    const second = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests?limit=2&cursor=${encodeURIComponent(firstBody.nextCursor ?? "")}`,
+      { headers: headers("member") },
+    );
+    await expect(second.json()).resolves.toMatchObject({
+      data: [{ id: expectedIds[2] }],
+      nextCursor: null,
+    });
+
+    for (const query of ["limit=101", "cursor=%25%25%25"]) {
+      const invalid = await app.request(
+        `/api/workspaces/${WORKSPACE.id}/browser-tests?${query}`,
+        { headers: headers("member") },
+      );
+      expect(invalid.status).toBe(400);
+    }
+  });
+
+  it("rate limits browser-test creation per workspace and user", async () => {
+    for (
+      let count = 0;
+      count < RATE_LIMITS.browser_test_create.limit;
+      count += 1
+    ) {
+      await create({ ...CONFIG, name: `Rate ${count}` });
+    }
+    const limited = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests`,
+      {
+        method: "POST",
+        headers: headers("owner"),
+        body: JSON.stringify({ ...CONFIG, name: "Rate blocked" }),
+      },
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
   });
 
   it("soft-deletes tests, hides them from reads, and invokes incident cleanup", async () => {
@@ -373,7 +458,7 @@ describe("browser test routes", () => {
       `/api/workspaces/${WORKSPACE.id}/browser-tests`,
       { headers: headers("member") },
     );
-    await expect(list.json()).resolves.toEqual({ data: [] });
+    await expect(list.json()).resolves.toEqual({ data: [], nextCursor: null });
   });
 
   it("allows member reads but forbids every mutation", async () => {

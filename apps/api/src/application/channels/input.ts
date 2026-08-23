@@ -1,5 +1,8 @@
 import type { ChannelConfig, ChannelType } from "../../domain/channels/types";
-import { channelConfigSchema } from "../../domain/channels/types";
+import {
+  channelConfigSchema,
+  hasRecipientConsent,
+} from "../../domain/channels/types";
 import { validation } from "../../shared/errors";
 
 export function channelName(value: string): string {
@@ -24,6 +27,14 @@ export function parseChannelConfig(
         message: issue.message,
       })),
     );
+  }
+  if (!hasRecipientConsent(type, parsed.data)) {
+    throw validation([
+      {
+        field: "config.consent",
+        message: "Explicit recipient consent is required",
+      },
+    ]);
   }
   return parsed.data;
 }

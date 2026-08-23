@@ -71,8 +71,16 @@ CI=1 pnpm exec expo export --platform ios --output-dir /tmp/zenguy-export   # Me
   refuse a non-`https` `EXPO_PUBLIC_API_ORIGIN`. Local cleartext is allowed only
   for localhost / private addresses in development builds.
 - Deep-link parameters are validated (`src/lib/links.ts`) and never used to
-  navigate outside the app. No analytics or third-party SDKs. `console.*` is
-  stripped from release bundles.
+  navigate outside the app. Link bearers are captured in bounded process
+  memory, removed from Expo's cached launch URL and replaced with token-free
+  continuation routes before use; they are never placed in React Query keys or
+  login `next` parameters. Newly issued links carry the capability in a URL
+  fragment (not sent to CDN/origin/Referer), and preview/consume APIs receive it
+  in a POST body rather than the request path. HTTPS links on `app.zenguy.com` are verified by the
+  versioned AASA file and the `applinks:` entitlement. The final config plugin
+  removes Expo's implicit bundle-id URL scheme from generated `Info.plist`, so
+  the app registers no claimable custom scheme. No analytics or third-party
+  SDKs. `console.*` is stripped from release bundles.
 
 - **Forced updates**: on launch and on every return to the foreground the app
   reads `GET /api/app/version` (`minVersion`, `storeUrl`). A build older than
@@ -83,9 +91,10 @@ CI=1 pnpm exec expo export --platform ios --output-dir /tmp/zenguy-export   # Me
   `IOS_APP_STORE_URL` var per environment once the app is published. Network
   failures never block the app.
 
-Not covered (documented decisions): certificate pinning, jailbreak detection,
-push notifications, universal links (needs an AASA file on `app.zenguy.com`;
-the `zenguy://` scheme works today, e.g. `zenguy://verify-email?token=…`).
+Not covered (documented decisions): certificate pinning and jailbreak
+detection. Universal Links require the AASA file from
+`apps/frontend/public/.well-known/apple-app-site-association` to be deployed on
+`app.zenguy.com` before installing the new binary.
 
 ## Push notifications
 
@@ -102,20 +111,24 @@ app). The app side (`src/contexts/PushContext.tsx`):
   session must still be valid). The API creates the default "Mobile push"
   channel (`type: "PUSH"`) for the user's workspaces.
 - Tapping a notification opens its `data.url` only when it is a
-  `zenguy://w/<workspace>/…` route (`src/lib/push.ts`); anything else is ignored.
+  verified `https://app.zenguy.com/w/<workspace>/…` Universal Link
+  (`src/lib/push.ts`); anything else is ignored.
 - Foreground notifications still show as banners.
 
 It only works on a physical iPhone running an EAS build (see *Deploy to App
 Store*): the simulator cannot receive APNs and reports push as unavailable, and
 the `expo-notifications` plugin sets `aps-environment` to production for the
-`production` profile.
+  `production` profile. The entitlement is set explicitly in `app.config.ts`
+  because Expo can auto-apply the notifications plugin before its configured
+  plugin instance.
 
 ## Configuration
 
 | Setting | Where | Values |
 | --- | --- | --- |
 | API origin | `EXPO_PUBLIC_API_ORIGIN` (`.env.local`, `eas.json` profiles) | dev `http://127.0.0.1:8787`, preview `https://api-staging.zenguy.com`, production `https://api.zenguy.com` |
-| Bundle id / scheme | `app.config.ts` | `com.zenguy.app`, `zenguy` |
+| Bundle id / links | `app.config.ts` | `com.zenguy.app`, verified Universal Links only |
+| Reproducible iOS builder | `eas.json` | `macos-tahoe-26.5-xcode-26.6` for every profile |
 | Face ID usage text, ATS | `app.config.ts` → `ios.infoPlist` | |
 
 The app has no secrets of its own.
@@ -180,7 +193,7 @@ agent):
 
 ```bash
 cd apps/app
-npx eas-cli@latest credentials --platform ios
+pnpm exec eas credentials --platform ios
 ```
 
 1. Profile: `production`. Log in with an Apple ID that is Admin or Account
@@ -206,6 +219,7 @@ chats and logs.
 ```bash
 cd apps/app
 pnpm install
+pnpm verify:release-config              # introspects every native profile
 pnpm typecheck && pnpm lint && pnpm test
 pnpm doctor                           # expo-doctor
 pnpm exec expo install --check        # dependency versions for SDK 57
@@ -213,46 +227,109 @@ pnpm exec expo install --check        # dependency versions for SDK 57
 
 ### 4. Version
 
-`version` in `app.config.ts` is the public version **and** the runtime
-(`runtimeVersion.policy = appVersion`). Bump it for any native change — a
-dependency with native code, a config plugin, a permission or entitlement, the
-icon or splash — and whenever a release must be enforced through
-`MIN_APP_VERSION`. The build number is remote and auto-incremented
+`version` in `app.config.ts` and `package.json` is the public App Store version;
+the release guard requires them to match. Runtime
+compatibility uses `runtimeVersion.policy = fingerprint`, so native modules,
+plugins, permissions and entitlements automatically produce a different OTA
+runtime. Bump the public version deliberately for each commercial release and
+whenever a release must be enforced through `MIN_APP_VERSION`. The build number is remote and auto-incremented
 (`appVersionSource: remote`, `autoIncrement: true`); inspect or fix it with
-`npx eas-cli@latest build:version:get --platform ios` / `build:version:set`.
+`pnpm exec eas build:version:get --platform ios` / `build:version:set`.
 
 ### 5. Build and send to TestFlight
 
+First create the GitHub environment `ios-production-release`, require an
+independent reviewer, restrict deployment to protected tags, and add only the
+environment secret `EXPO_IOS_RELEASE_TOKEN`. Use a dedicated Expo access token
+that is not reused by OTA. Protect `ios-v*` tags against deletion or movement.
+
+The preferred production path is `.github/workflows/ios-release.yml`: on the
+current `main` commit, push the exact tag `ios-v<package version>` (for example
+`ios-v0.2.2`) or dispatch the workflow while viewing that tag, then approve the
+protected `ios-production-release` environment. The workflow verifies the tag
+against `package.json` and the live GitHub API `main` head both before and after
+tests, installs the frozen app lockfile, introspects all native profiles, and
+builds the reviewed commit with frozen credentials and a fully pinned EAS
+image/CLI/Node/pnpm toolchain. Keep the command below only as an audited
+operator fallback.
+
 ```bash
 cd apps/app
-npx eas-cli@latest build --platform ios --profile production \
+pnpm exec eas build --platform ios --profile production \
   --auto-submit --non-interactive --wait --freeze-credentials
 ```
 
-What happens: the project is uploaded (uncommitted changes included unless
-`cli.requireCommit` is set), EAS builds with the stored credentials, submits
+What happens: EAS refuses a dirty worktree (`cli.requireCommit: true`), builds
+the reviewed commit with the stored credentials, submits
 with the App Store Connect API key, then Apple processes the binary (5–30
 minutes). Export compliance is answered by `ITSAppUsesNonExemptEncryption:
 false` (only standard TLS), so no questionnaire appears. When the build shows
 *Ready to Test* in App Store Connect → TestFlight → iOS, "Zenguy Internal"
 receives it automatically and testers install it from the TestFlight app.
 
-- Progress: `npx eas-cli@latest build:list --platform ios --limit 3`,
+- Progress: `pnpm exec eas build:list --platform ios --limit 3`,
   https://expo.dev/accounts/maguayo/projects/zenguy/builds and
   `…/submissions`.
-- Re-submit an existing build: `npx eas-cli@latest submit --platform ios --profile production --latest`.
+- Re-submit an existing build: `pnpm exec eas submit --platform ios --profile production --latest`.
 - A preview build for internal devices: `--profile preview` (ad hoc; each
   device UDID must be registered with `eas device:create`).
 
 ### 6. OTA updates (JavaScript-only fixes)
 
-`eas update` reaches every installed build of the same `version`; never use it
-for native changes (see step 4).
+`eas update` reaches installed builds with the exact native fingerprint; never
+use it for native changes (see step 4). Updates are accepted only when signed
+by `certs/updates-certificate.pem` using key id `zenguy-2026-01`. The public
+certificate is RSA-2048, SHA-256 fingerprint
+`88:2A:06:F4:85:BF:16:0F:3F:F2:63:E8:2E:26:8A:DC:B0:00:51:8D:40:99:0E:B2:D4:2F:22:47:A0:F8:5D:10`,
+valid through 2036-08-20.
+
+Create a separate GitHub environment `ios-production-ota` with an independent
+reviewer and protected-tag restriction. It contains only
+`EXPO_IOS_OTA_TOKEN` and `EAS_UPDATE_PRIVATE_KEY_PEM`; neither secret belongs in
+the build environment. The preferred path is `.github/workflows/ios-ota.yml`:
+create a protected `ios-ota-v<package version>-<positive sequence>` tag (for
+example `ios-ota-v0.2.2-1`), approve `ios-production-ota`, and let CI install
+the frozen lockfile, run all mobile checks, re-check the live `main` head before
+each credential boundary, verify that the signing key matches the versioned
+public certificate, and publish with the pinned EAS CLI. The private key exists
+on the runner only for that job and is removed in an `always()` cleanup step.
+Keep a separate recovery copy in the approved secret-manager vault.
+
+The matching local private key is deliberately ignored at
+`credentials/updates-private-key.pem`. The command below is only an audited
+operator fallback; keep that file at mode `0600` and never copy it into the
+repository.
 
 ```bash
-npx eas-cli@latest update --channel production --environment production --message "<what changed>"
-npx eas-cli@latest channel:view production
+pnpm exec eas update --channel production --environment production \
+  --private-key-path credentials/updates-private-key.pem --message "<what changed>"
+pnpm exec eas channel:view production
 ```
+
+To rotate the OTA key, generate a new offline key/certificate and key id, ship
+a new binary embedding that public certificate first, and retain the old key
+for the old runtime until it no longer needs updates. Never overwrite the
+vault's only recovery copy. `pnpm verify:release-config` enforces public/private
+key hygiene, the embedded fingerprint, certificate lifetime and local `0600`
+permissions.
+
+### Remote controls still required
+
+Local configuration cannot complete these controls:
+
+1. Deploy `apps/frontend/public/.well-known/apple-app-site-association` unchanged at
+   `https://app.zenguy.com/.well-known/apple-app-site-association` with HTTP
+   200, no redirect and `application/json`; then reinstall a production-profile
+   build and smoke-test all five approved path families on a physical iPhone.
+2. Create and protect the two GitHub environments and their three isolated
+   secrets described above; protect the exact release/OTA tag families and
+   require review for changes to workflows, app signing config and certificates.
+3. Confirm EAS still has the distribution certificate, App Store profile, APNs
+   key and App Store Connect API key listed in step 2 before the first guarded
+   build. The workflows freeze rather than replace credentials.
+4. Complete TestFlight/App Store Connect metadata, privacy answers, screenshots,
+   review account and manual public release described below. None of these
+   settings are changed by repository code.
 
 ### 7. Public App Store release (not done yet)
 
@@ -269,7 +346,7 @@ Prefer manual release after approval, then set `IOS_APP_STORE_URL` (step 1).
 - *Invalid username and password* at `eas credentials`: EAS logs into Apple
   with the Apple ID you type; use the team member's own Apple ID and its 2FA
   code. Passwords go to Apple only and are cached in the macOS keychain.
-- *Build number already used*: `npx eas-cli@latest build:version:set --platform ios` to a higher value.
+- *Build number already used*: `pnpm exec eas build:version:set --platform ios` to a higher value.
 - Submission rejected for agreements or trader status: App Store Connect →
   Business → Agreements (Account Holder only).
 - Push not received: physical iPhone only, `aps-environment` must be

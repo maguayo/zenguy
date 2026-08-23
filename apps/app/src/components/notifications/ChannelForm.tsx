@@ -21,6 +21,7 @@ import {
   channelFormSchema,
   channelTypeOptions,
   createChannelInput,
+  isPaidChannelType,
   isPhoneChannelType,
   isWebhookChannelType,
   phoneHint,
@@ -232,7 +233,7 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
                     />
                   ) : null}
 
-                  {selectedType === "SMS" ? (
+                  {isPaidChannelType(selectedType) ? (
                     <Controller
                       control={form.control}
                       name="smsConsent"

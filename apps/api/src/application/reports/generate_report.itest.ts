@@ -35,6 +35,7 @@ const USER: User = {
   email: "report-reader@zenguy.test",
   passwordHash: "unused",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -182,7 +183,7 @@ describe("generated report download", () => {
       workspaces,
       resolveSecrets: new ResolveSecrets(
         new D1SecretRepo(bindings.DB),
-        config.encryptionKey,
+        config.encryptionKeys,
       ),
       storage,
       clock,

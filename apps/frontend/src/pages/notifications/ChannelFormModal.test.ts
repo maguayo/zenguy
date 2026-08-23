@@ -112,9 +112,13 @@ describe("channel form", () => {
         ...values,
         name: "Phone",
         phoneNumber: " +34612345678 ",
+        smsConsent: true,
         type: "CALL",
       }),
-    ).toMatchObject({ config: { phoneNumber: "+34612345678" }, type: "CALL" });
+    ).toMatchObject({
+      config: { consent: true, phoneNumber: "+34612345678" },
+      type: "CALL",
+    });
     expect(
       createChannelInput({
         ...values,

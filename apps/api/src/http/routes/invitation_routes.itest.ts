@@ -22,6 +22,7 @@ const USERS: Record<"owner" | "admin" | "invitee" | "wrong", User> = {
     email: "owner@invite.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -31,6 +32,7 @@ const USERS: Record<"owner" | "admin" | "invitee" | "wrong", User> = {
     email: "admin@invite.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -40,6 +42,7 @@ const USERS: Record<"owner" | "admin" | "invitee" | "wrong", User> = {
     email: "invitee@example.com",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -49,6 +52,7 @@ const USERS: Record<"owner" | "admin" | "invitee" | "wrong", User> = {
     email: "wrong@example.com",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -82,11 +86,11 @@ function jsonRequest(body: object, authorization?: string): RequestInit {
 function invitationToken(message: string | undefined): string {
   const rawUrl = message?.match(/https?:\/\/\S+/u)?.[0];
   if (rawUrl === undefined) throw new Error("Invitation email has no URL");
-  const segment = new URL(rawUrl).pathname.split("/").at(-1);
-  if (segment === undefined || segment === "") {
+  const fragment = new URL(rawUrl).hash.slice(1);
+  if (fragment === "") {
     throw new Error("Invitation URL has no token");
   }
-  return decodeURIComponent(segment);
+  return decodeURIComponent(fragment);
 }
 
 describe("invitation routes", () => {
@@ -204,7 +208,10 @@ describe("invitation routes", () => {
     expect(response.status).toBe(201);
     const token = invitationToken(emails.messages.at(-1)?.text);
 
-    const publicResponse = await app.request(`/api/invitations/${token}`);
+    const publicResponse = await app.request(
+      "/api/invitations/preview",
+      jsonRequest({ token }),
+    );
     expect(publicResponse.status).toBe(200);
     await expect(publicResponse.json()).resolves.toMatchObject({
       data: {
@@ -216,8 +223,8 @@ describe("invitation routes", () => {
     });
 
     const wrongAccept = await app.request(
-      `/api/invitations/${token}/accept`,
-      jsonRequest({}, tokens.wrong),
+      "/api/invitations/accept",
+      jsonRequest({ token }, tokens.wrong),
     );
     expect(wrongAccept.status).toBe(403);
     await expect(wrongAccept.json()).resolves.toMatchObject({
@@ -240,7 +247,10 @@ describe("invitation routes", () => {
       revokedAt: null,
       createdAt: 1_000,
     });
-    const expired = await app.request(`/api/invitations/${expiredPlain}`);
+    const expired = await app.request(
+      "/api/invitations/preview",
+      jsonRequest({ token: expiredPlain }),
+    );
     expect(expired.status).toBe(410);
   });
 
@@ -249,12 +259,12 @@ describe("invitation routes", () => {
     const token = invitationToken(emails.messages.at(-1)?.text);
 
     const first = await app.request(
-      `/api/invitations/${token}/accept`,
-      jsonRequest({}, tokens.invitee),
+      "/api/invitations/accept",
+      jsonRequest({ token }, tokens.invitee),
     );
     const second = await app.request(
-      `/api/invitations/${token}/accept`,
-      jsonRequest({}, tokens.invitee),
+      "/api/invitations/accept",
+      jsonRequest({ token }, tokens.invitee),
     );
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
@@ -265,8 +275,27 @@ describe("invitation routes", () => {
       members.find(WORKSPACE.id, USERS.invitee.id),
     ).resolves.toMatchObject({ role: "MEMBER" });
 
-    const consumedPublic = await app.request(`/api/invitations/${token}`);
+    const consumedPublic = await app.request(
+      "/api/invitations/preview",
+      jsonRequest({ token }),
+    );
     expect(consumedPublic.status).toBe(410);
+  });
+
+  it("rejects a planted invite after its issuer loses authority", async () => {
+    await invite(tokens.owner, USERS.invitee.email, "ADMIN");
+    const token = invitationToken(emails.messages.at(-1)?.text);
+    await members.updateRole(WORKSPACE.id, USERS.owner.id, "ADMIN");
+
+    const response = await app.request(
+      "/api/invitations/accept",
+      jsonRequest({ token }, tokens.invitee),
+    );
+
+    expect(response.status).toBe(410);
+    await expect(
+      members.find(WORKSPACE.id, USERS.invitee.id),
+    ).resolves.toBeNull();
   });
 
   it("re-inviting revokes the old token and list/delete expose pending only", async () => {

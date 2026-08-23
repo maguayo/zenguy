@@ -8,6 +8,8 @@ const NOW = 1_700_000_000_000;
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+const USER_ONE = "usr_00000000000000000000000001";
+const USER_TWO = "usr_00000000000000000000000002";
 
 const TABLES = [
   "uptime_checks",
@@ -55,36 +57,41 @@ async function seed(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO users (id, name, email, password_hash, email_verified_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind("usr_one", "One", "one@example.com", "hash", NOW - 2 * DAY, NOW - 2 * DAY, NOW),
+    ).bind(USER_ONE, "One", "one@example.com", "hash", NOW - 2 * DAY, NOW - 2 * DAY, NOW),
     env.DB.prepare(
       `INSERT INTO users (id, name, email, password_hash, email_verified_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind("usr_two", "Two", "two@example.com", "hash", null, NOW - 30 * DAY, NOW),
+    ).bind(USER_TWO, "Two", "two@example.com", "hash", null, NOW - 30 * DAY, NOW),
     env.DB.prepare(
       `INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).bind("rt_one", "usr_one", "token-hash", NOW + 30 * DAY, NOW - HOUR),
+    ).bind("rt_one", USER_ONE, "token-hash", NOW + 30 * DAY, NOW - HOUR),
     env.DB.prepare(
       `INSERT INTO workspaces (id, name, slug, timezone, owner_user_id, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind("ws_acme", "Acme", "acme", "UTC", "usr_one", NOW - 2 * DAY, NOW),
+    ).bind("ws_acme", "Acme", "acme", "UTC", USER_ONE, NOW - 2 * DAY, NOW),
     // Soft-deleted: it must not inflate workspaces.total nor workspaceCount.
     env.DB.prepare(
-      `INSERT INTO workspaces (id, name, slug, timezone, owner_user_id, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind("ws_gone", "Former", "former", "UTC", "usr_one", NOW - 40 * DAY, NOW, NOW - DAY),
+      `INSERT INTO workspaces (id, name, slug, timezone, owner_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).bind("ws_gone", "Former", "former", "UTC", USER_ONE, NOW - 40 * DAY, NOW),
     env.DB.prepare(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role, joined_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).bind("wm_one", "ws_acme", "usr_one", "OWNER", NOW - 2 * DAY),
+    ).bind("wm_one", "ws_acme", USER_ONE, "OWNER", NOW - 2 * DAY),
     env.DB.prepare(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role, joined_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).bind("wm_gone", "ws_gone", "usr_one", "OWNER", NOW - 40 * DAY),
+    ).bind("wm_gone", "ws_gone", USER_ONE, "OWNER", NOW - 40 * DAY),
+    env.DB.prepare(
+      `UPDATE workspaces
+       SET deleted_at = ?, deletion_state = 'COMPLETED', deletion_completed_at = ?
+       WHERE id = ?`,
+    ).bind(NOW - DAY, NOW - DAY, "ws_gone"),
     env.DB.prepare(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role, joined_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).bind("wm_two", "ws_acme", "usr_two", "MEMBER", NOW - 2 * DAY),
+    ).bind("wm_two", "ws_acme", USER_TWO, "MEMBER", NOW - 2 * DAY),
     env.DB.prepare(
       `INSERT INTO browser_tests
          (id, workspace_id, name, start_url, instructions, device, interval_hours,
@@ -439,7 +446,7 @@ describe("admin D1 queries", () => {
 
     expect(users.map((user) => user.email)).toEqual(["one@example.com", "two@example.com"]);
     expect(users[0]).toEqual({
-      id: "usr_one",
+      id: USER_ONE,
       email: "one@example.com",
       name: "One",
       createdAt: NOW - 2 * DAY,

@@ -5,6 +5,8 @@ import type {
   RunRepo,
 } from "../../domain/browser_tests/repo";
 import { buildSnapshot } from "../../domain/browser_tests/rules";
+import { authorizeIrreversibleRun } from "../../domain/browser_tests/irreversible_authorization";
+import type { BrowserTestConfig } from "../../domain/browser_tests/rules";
 import type {
   RunSource,
   TestAttempt,
@@ -30,7 +32,10 @@ export class CreateRun {
     private readonly subscriptions: SubscriptionRepo,
     private readonly durable: Pick<DurableWorkflowRepo, "insertRunWithAttempt">,
     private readonly outboxPublisher: Pick<PublishQueueOutbox, "publishById">,
-    private readonly config: Pick<AppConfig, "llmModel">,
+    private readonly config: Pick<
+      AppConfig,
+      "llmModel" | "runnerCapabilitySecret"
+    >,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -42,6 +47,7 @@ export class CreateRun {
     config?: unknown;
     triggeredByUserId?: string;
     scheduledFor?: number;
+    approveIrreversibleActions?: true;
   }): Promise<TestRun> {
     if (
       (input.testId === undefined) === (input.config === undefined)
@@ -53,13 +59,19 @@ export class CreateRun {
 
     let testId: string | null = null;
     let snapshot;
+    let runConfig: BrowserTestConfig;
     if (input.testId !== undefined) {
       const test = await this.tests.findById(input.workspaceId, input.testId);
       if (test === null) throw notFound("Browser test");
       testId = test.id;
-      snapshot = buildSnapshot(
-        {
+      runConfig = parseBrowserTestConfig({
           name: test.name,
+          allowedDomains: [...(test.allowedDomains ?? [])],
+          writableDomains: [...(test.writableDomains ?? [])],
+          testDataAttested: test.testDataAttested ?? false,
+          irreversibleActionScopes: structuredClone(
+            test.irreversibleActionScopes ?? [],
+          ),
           startUrl: test.startUrl,
           instructions: test.instructions,
           device: test.device,
@@ -67,20 +79,21 @@ export class CreateRun {
           maxRetries: test.maxRetries,
           notifyOnRecovery: test.notifyOnRecovery,
           channelIds: await this.tests.getChannelIds(test.id),
-        },
-        this.config.llmModel,
-      );
+        });
+      snapshot = buildSnapshot(runConfig, this.config.llmModel);
     } else {
-      snapshot = buildSnapshot(
-        parseBrowserTestConfig(input.config),
-        this.config.llmModel,
-      );
+      runConfig = parseBrowserTestConfig(input.config);
+      snapshot = buildSnapshot(runConfig, this.config.llmModel);
     }
 
     if ((await this.workspaces.findById(input.workspaceId)) === null) {
       throw notFound("Workspace");
     }
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     if (testId !== null && (await this.runs.activeRunExists(testId))) {
       throw new AppError(
         "ACTIVE_RUN_EXISTS",
@@ -91,6 +104,25 @@ export class CreateRun {
     const now = this.clock.now();
     const runId = this.ids.newId("run");
     const attemptId = this.ids.newId("att");
+    const humanApproved =
+      input.approveIrreversibleActions === true &&
+      input.source !== "SCHEDULED" &&
+      input.triggeredByUserId !== undefined;
+    if (humanApproved && runConfig.irreversibleActionScopes.length > 0) {
+      const approvedByUserId = input.triggeredByUserId;
+      if (approvedByUserId === undefined) {
+        throw new Error("Human approval requires an authenticated user");
+      }
+      snapshot.irreversibleAuthorization = await authorizeIrreversibleRun({
+        snapshot,
+        runId,
+        workspaceId: input.workspaceId,
+        approvedByUserId,
+        approvedAt: now,
+        scopes: runConfig.irreversibleActionScopes,
+        signingSecret: this.config.runnerCapabilitySecret,
+      });
+    }
     const run: TestRun = {
       id: runId,
       workspaceId: input.workspaceId,
@@ -98,6 +130,13 @@ export class CreateRun {
       source: input.source,
       status: "QUEUED",
       snapshot,
+      actionAuthorizations:
+        snapshot.irreversibleAuthorization === undefined
+          ? []
+          : snapshot.irreversibleAuthorization.scopes.map((scope) => ({
+              scope: structuredClone(scope),
+              remainingUses: scope.maxUses,
+            })),
       scheduledFor: input.scheduledFor ?? null,
       queuedAt: now,
       startedAt: null,
@@ -156,6 +195,31 @@ export class CreateRun {
     try {
       await this.durable.insertRunWithAttempt(run, attempt, outbox);
     } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message.includes("ZENGUY_WORKSPACE_ACTIVE_RUN_CAP") ||
+          error.message.includes("ZENGUY_USER_ACTIVE_RUN_CAP") ||
+          error.message.includes("ZENGUY_OWNER_ACTIVE_RUN_CAP") ||
+          error.message.includes("ZENGUY_GLOBAL_ACTIVE_RUN_CAP") ||
+          error.message.includes("ZENGUY_WORKSPACE_DAILY_RUN_CAP") ||
+          error.message.includes("ZENGUY_USER_DAILY_RUN_CAP") ||
+          error.message.includes("ZENGUY_OWNER_DAILY_RUN_CAP") ||
+          error.message.includes("ZENGUY_GLOBAL_DAILY_RUN_CAP") ||
+          error.message.includes("ZENGUY_WORKSPACE_MONTHLY_RUN_CAP") ||
+          error.message.includes("ZENGUY_USER_MONTHLY_RUN_CAP") ||
+          error.message.includes("ZENGUY_OWNER_MONTHLY_RUN_CAP") ||
+          error.message.includes("ZENGUY_GLOBAL_MONTHLY_RUN_CAP"))
+      ) {
+        platformAlert("browser_run_cost_cap_reached", {
+          workspaceId: input.workspaceId,
+          actorUserId: input.triggeredByUserId ?? null,
+          databaseGuard: error.message.match(/ZENGUY_[A-Z_]+/u)?.[0] ?? null,
+        });
+        throw new AppError(
+          "RATE_LIMITED",
+          "The browser run safety limit has been reached",
+        );
+      }
       if (
         testId !== null &&
         input.scheduledFor !== undefined &&

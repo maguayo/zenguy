@@ -10,6 +10,7 @@ import type { UserRepo } from "../../domain/users/repo";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { Clock } from "../../shared/clock";
+import type { EncryptionKeyring } from "../../shared/crypto";
 import { forbidden, notFound } from "../../shared/errors";
 import {
   parseMonitorConfig,
@@ -20,6 +21,7 @@ import {
   decryptMonitorSensitive,
   encryptMonitorSensitive,
 } from "./monitor_secrets";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { monitorOutput, type MonitorOutput } from "./types";
 
 export class UpdateMonitor {
@@ -30,7 +32,7 @@ export class UpdateMonitor {
     private readonly subscriptions: SubscriptionRepo,
     private readonly users: UserRepo,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
   ) {}
 
@@ -43,7 +45,11 @@ export class UpdateMonitor {
     ip?: string;
   }): Promise<MonitorOutput> {
     if (!can(input.actorRole, "uptime.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const monitor = await this.monitors.findById(
       input.workspaceId,
       input.monitorId,
@@ -52,7 +58,7 @@ export class UpdateMonitor {
     const parsed = parseMonitorUpdate(input.changes);
     const [currentChannelIds, sensitive] = await Promise.all([
       this.monitors.getChannelIds(monitor.id),
-      decryptMonitorSensitive(monitor, this.encryptionKey),
+      decryptMonitorSensitive(monitor, this.encryptionKeys),
     ]);
     const method = parsed.method ?? monitor.method;
     const autoClearBody =
@@ -109,33 +115,15 @@ export class UpdateMonitor {
             complete.channelIds,
           );
     const now = this.clock.now();
-    let encryptedHeaders: string | null | undefined;
-    if (parsed.headers !== undefined) {
-      encryptedHeaders = (
-        await encryptMonitorSensitive(
-          { headers: complete.headers ?? [] },
-          this.encryptionKey,
-        )
-      ).encryptedHeaders;
-    }
-    let encryptedBody: string | null | undefined;
-    if (autoClearBody) {
-      encryptedBody = null;
-    } else if (parsed.body !== undefined) {
-      encryptedBody = (
-        await encryptMonitorSensitive({ body: complete.body ?? "" }, this.encryptionKey)
-      ).encryptedBody;
-    }
     const conditionChanged =
       parsed.bodyCondition !== undefined ||
       parsed.bodyExpectedValue !== undefined ||
       parsed.bodyConditionPath !== undefined;
-    const changes: MonitorUpdate = {
+    const baseChanges: MonitorUpdate = {
       ...(parsed.name === undefined ? {} : { name: complete.name }),
       ...(parsed.url === undefined ? {} : { url: complete.url }),
       ...(parsed.method === undefined ? {} : { method: complete.method }),
-      ...(encryptedHeaders === undefined ? {} : { encryptedHeaders }),
-      ...(encryptedBody === undefined ? {} : { encryptedBody }),
+      ...(autoClearBody ? { encryptedBody: null } : {}),
       ...(parsed.expectedStatus === undefined
         ? {}
         : { expectedStatus: complete.expectedStatus }),
@@ -162,7 +150,41 @@ export class UpdateMonitor {
         ? {}
         : { notifyOnRecovery: complete.notifyOnRecovery }),
     };
-    await this.monitors.update(monitor.id, changes, now);
+    const encryptsSensitiveData =
+      parsed.headers !== undefined ||
+      (!autoClearBody && parsed.body !== undefined);
+    let changes: MonitorUpdate;
+    if (encryptsSensitiveData) {
+      changes = await writeWithActiveDataKeyRetry(
+        async () => {
+          const encrypted = await encryptMonitorSensitive(
+            {
+              ...(parsed.headers === undefined
+                ? {}
+                : { headers: complete.headers ?? [] }),
+              ...(!autoClearBody && parsed.body !== undefined
+                ? { body: complete.body ?? "" }
+                : {}),
+            },
+            this.encryptionKeys,
+            { workspaceId: monitor.workspaceId, monitorId: monitor.id },
+          );
+          return {
+            ...baseChanges,
+            ...(parsed.headers === undefined
+              ? {}
+              : { encryptedHeaders: encrypted.encryptedHeaders }),
+            ...(!autoClearBody && parsed.body !== undefined
+              ? { encryptedBody: encrypted.encryptedBody }
+              : {}),
+          };
+        },
+        (candidate) => this.monitors.update(monitor.id, candidate, now),
+      );
+    } else {
+      changes = baseChanges;
+      await this.monitors.update(monitor.id, changes, now);
+    }
     if (parsed.channelIds !== undefined) {
       await this.monitors.setChannels(monitor.id, channelIds);
     }
@@ -191,7 +213,7 @@ export class UpdateMonitor {
       creator,
       incident,
       role: input.actorRole,
-      encryptionKey: this.encryptionKey,
+      encryptionKeys: this.encryptionKeys,
     });
   }
 }

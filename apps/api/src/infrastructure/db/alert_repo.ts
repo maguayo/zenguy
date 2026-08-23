@@ -2,8 +2,11 @@ import type {
   AlertRepo,
   AlertSettingsUpdate,
   CreditCreditInput,
+  CreditAdjustmentInput,
   CreditDebitInput,
   LedgerWrite,
+  LimitedDebitResult,
+  PaddleTopupForReconciliation,
   WorkspaceNeedingDefaultChannel,
 } from "../../domain/alerts/repo";
 import type {
@@ -162,6 +165,81 @@ export class D1AlertRepo implements AlertRepo {
     return row === null ? null : toEntry(row);
   }
 
+  async findTopupByProviderTransactionId(
+    id: string,
+  ): Promise<PaddleTopupForReconciliation | null> {
+    const row = await one<{
+      workspace_id: string;
+      provider_transaction_id: string;
+      provider_customer_id: string | null;
+      amount_cents: number;
+    }>(
+      this.database
+        .prepare(
+          `SELECT workspace_id, provider_transaction_id, provider_customer_id,
+                  amount_cents
+             FROM alert_credit_entries
+           WHERE provider_transaction_id = ? AND kind = 'TOPUP'
+           ORDER BY created_at ASC LIMIT 1`,
+        )
+        .bind(id),
+    );
+    return row === null
+      ? null
+      : {
+          workspaceId: row.workspace_id,
+          providerTransactionId: row.provider_transaction_id,
+          providerCustomerId: row.provider_customer_id,
+          amountCents: row.amount_cents,
+        };
+  }
+
+  async listTopupsNeedingReconciliation(
+    reconciledBefore: number,
+    limit: number,
+  ): Promise<PaddleTopupForReconciliation[]> {
+    const rows = await all<{
+      workspace_id: string;
+      provider_transaction_id: string;
+      provider_customer_id: string | null;
+      amount_cents: number;
+    }>(
+      this.database
+        .prepare(
+          `SELECT workspace_id, provider_transaction_id, provider_customer_id,
+                  amount_cents
+             FROM alert_credit_entries
+            WHERE kind = 'TOPUP'
+              AND provider_transaction_id IS NOT NULL
+              AND (provider_reconciled_at IS NULL OR provider_reconciled_at < ?)
+            ORDER BY COALESCE(provider_reconciled_at, 0) ASC, created_at ASC
+            LIMIT ?`,
+        )
+        .bind(reconciledBefore, limit),
+    );
+    return rows.map((row) => ({
+      workspaceId: row.workspace_id,
+      providerTransactionId: row.provider_transaction_id,
+      providerCustomerId: row.provider_customer_id,
+      amountCents: row.amount_cents,
+    }));
+  }
+
+  async markTopupReconciled(
+    providerTransactionId: string,
+    at: number,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE alert_credit_entries
+              SET provider_reconciled_at = ?
+            WHERE kind = 'TOPUP' AND provider_transaction_id = ?`,
+        )
+        .bind(at, providerTransactionId),
+    );
+  }
+
   private insertEntryStatement(input: {
     id: string;
     workspaceId: string;
@@ -169,6 +247,7 @@ export class D1AlertRepo implements AlertRepo {
     amountCents: number;
     deliveryId: string | null;
     providerTransactionId: string | null;
+    providerCustomerId?: string | null;
     description: string;
     idempotencyKey: string;
     at: number;
@@ -180,9 +259,9 @@ export class D1AlertRepo implements AlertRepo {
       .prepare(
         `INSERT INTO alert_credit_entries
           (id, workspace_id, kind, amount_cents, balance_after_cents,
-           delivery_id, provider_transaction_id, description,
-           idempotency_key, created_at)
-         SELECT ?, ?, ?, ?, balance_cents, ?, ?, ?, ?, ?
+           delivery_id, provider_transaction_id, provider_customer_id,
+           description, idempotency_key, created_at)
+         SELECT ?, ?, ?, ?, balance_cents, ?, ?, ?, ?, ?, ?
          FROM alert_credit_balances
          WHERE workspace_id = ? AND last_entry_token = ?`,
       )
@@ -193,6 +272,7 @@ export class D1AlertRepo implements AlertRepo {
         input.amountCents,
         input.deliveryId,
         input.providerTransactionId,
+        input.providerCustomerId ?? null,
         input.description,
         input.idempotencyKey,
         input.at,
@@ -247,6 +327,89 @@ export class D1AlertRepo implements AlertRepo {
     return entry === null ? null : { entry, created: true };
   }
 
+  async debitWithinDailyLimit(
+    input: CreditDebitInput,
+    dailyLimit: number,
+    since: number,
+  ): Promise<LimitedDebitResult> {
+    const existing = await this.findEntryByIdempotencyKey(input.idempotencyKey);
+    if (existing !== null) {
+      return {
+        status: "written",
+        write: { entry: existing, created: false },
+      };
+    }
+    const token = entryToken(input.id, input.at);
+    try {
+      await batch(this.database, [
+        this.database
+          .prepare(
+            `UPDATE alert_credit_balances
+             SET balance_cents = balance_cents - ?,
+                 last_entry_token = ?,
+                 updated_at = ?
+             WHERE workspace_id = ?
+               AND balance_cents >= ?
+               AND ? > (
+                 SELECT COUNT(*)
+                 FROM alert_credit_entries AS charge
+                 WHERE charge.workspace_id = ?
+                   AND charge.kind = 'CHARGE'
+                   AND charge.created_at >= ?
+                   AND NOT EXISTS (
+                     SELECT 1
+                     FROM alert_credit_entries AS refund
+                     WHERE refund.workspace_id = charge.workspace_id
+                       AND refund.kind = 'REFUND'
+                       AND refund.delivery_id = charge.delivery_id
+                   )
+               )`,
+          )
+          .bind(
+            input.amountCents,
+            token,
+            input.at,
+            input.workspaceId,
+            input.amountCents,
+            dailyLimit,
+            input.workspaceId,
+            since,
+          ),
+        this.insertEntryStatement({
+          id: input.id,
+          workspaceId: input.workspaceId,
+          kind: "CHARGE",
+          amountCents: -input.amountCents,
+          deliveryId: input.deliveryId,
+          providerTransactionId: null,
+          description: input.description,
+          idempotencyKey: input.idempotencyKey,
+          at: input.at,
+          token,
+        }),
+      ]);
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const replayed = await this.findEntryByIdempotencyKey(
+        input.idempotencyKey,
+      );
+      if (replayed === null) throw error;
+      return {
+        status: "written",
+        write: { entry: replayed, created: false },
+      };
+    }
+
+    const entry = await this.findEntryByIdempotencyKey(input.idempotencyKey);
+    if (entry !== null) {
+      return { status: "written", write: { entry, created: true } };
+    }
+    if ((await this.countCharges(input.workspaceId, since)) >= dailyLimit) {
+      return { status: "daily_limit" };
+    }
+    return { status: "insufficient_credit" };
+  }
+
   async credit(input: CreditCreditInput): Promise<LedgerWrite> {
     const existing = await this.findEntryByIdempotencyKey(input.idempotencyKey);
     if (existing !== null) return { entry: existing, created: false };
@@ -277,6 +440,7 @@ export class D1AlertRepo implements AlertRepo {
           amountCents: input.amountCents,
           deliveryId: input.deliveryId,
           providerTransactionId: input.providerTransactionId,
+          providerCustomerId: input.providerCustomerId,
           description: input.description,
           idempotencyKey: input.idempotencyKey,
           at: input.at,
@@ -296,12 +460,100 @@ export class D1AlertRepo implements AlertRepo {
     return { entry, created: true };
   }
 
+  async adjust(input: CreditAdjustmentInput): Promise<LedgerWrite | null> {
+    if (input.amountCents === 0) throw new Error("Adjustment cannot be zero");
+    const existing = await this.findEntryByIdempotencyKey(input.idempotencyKey);
+    if (existing !== null) return { entry: existing, created: false };
+    const token = entryToken(input.id, input.at);
+    try {
+      await batch(this.database, [
+        this.database
+          .prepare(
+            `INSERT INTO alert_credit_balances
+               (workspace_id, balance_cents, last_entry_token, updated_at)
+             VALUES (?, 0, NULL, ?)
+             ON CONFLICT(workspace_id) DO NOTHING`,
+          )
+          .bind(input.workspaceId, input.at),
+        this.database
+          .prepare(
+            `UPDATE alert_credit_balances
+             SET balance_cents = balance_cents + ?,
+                 last_entry_token = ?, updated_at = ?
+             WHERE workspace_id = ?
+               AND (
+                 (? < 0 AND -? <= COALESCE((
+                   SELECT topup.amount_cents + COALESCE(SUM(adjustment.amount_cents), 0)
+                   FROM alert_credit_entries AS topup
+                   LEFT JOIN alert_credit_entries AS adjustment
+                     ON adjustment.provider_transaction_id = topup.provider_transaction_id
+                    AND adjustment.kind = 'ADJUSTMENT'
+                   WHERE topup.provider_transaction_id = ?
+                     AND topup.kind = 'TOPUP'
+                   GROUP BY topup.id
+                 ), 0))
+                 OR
+                 (? > 0 AND ? <= COALESCE(-(
+                   SELECT SUM(adjustment.amount_cents)
+                   FROM alert_credit_entries AS adjustment
+                   WHERE adjustment.provider_transaction_id = ?
+                     AND adjustment.kind = 'ADJUSTMENT'
+                 ), 0))
+               )`,
+          )
+          .bind(
+            input.amountCents,
+            token,
+            input.at,
+            input.workspaceId,
+            input.amountCents,
+            input.amountCents,
+            input.providerTransactionId,
+            input.amountCents,
+            input.amountCents,
+            input.providerTransactionId,
+          ),
+        this.insertEntryStatement({
+          id: input.id,
+          workspaceId: input.workspaceId,
+          kind: "ADJUSTMENT",
+          amountCents: input.amountCents,
+          deliveryId: null,
+          providerTransactionId: input.providerTransactionId,
+          description: input.description,
+          idempotencyKey: input.idempotencyKey,
+          at: input.at,
+          token,
+        }),
+      ]);
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const replayed = await this.findEntryByIdempotencyKey(
+        input.idempotencyKey,
+      );
+      if (replayed === null) throw error;
+      return { entry: replayed, created: false };
+    }
+    const entry = await this.findEntryByIdempotencyKey(input.idempotencyKey);
+    return entry === null ? null : { entry, created: true };
+  }
+
   async countCharges(workspaceId: string, since: number): Promise<number> {
     const row = await one<{ count: number }>(
       this.database
         .prepare(
-          `SELECT COUNT(*) AS count FROM alert_credit_entries
-           WHERE workspace_id = ? AND kind = 'CHARGE' AND created_at >= ?`,
+          `SELECT COUNT(*) AS count
+           FROM alert_credit_entries AS charge
+           WHERE charge.workspace_id = ?
+             AND charge.kind = 'CHARGE'
+             AND charge.created_at >= ?
+             AND NOT EXISTS (
+               SELECT 1
+               FROM alert_credit_entries AS refund
+               WHERE refund.workspace_id = charge.workspace_id
+                 AND refund.kind = 'REFUND'
+                 AND refund.delivery_id = charge.delivery_id
+             )`,
         )
         .bind(workspaceId, since),
     );

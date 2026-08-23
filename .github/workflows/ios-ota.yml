@@ -1,0 +1,136 @@
+name: iOS signed OTA
+
+on:
+  push:
+    tags:
+      - "ios-ota-v*"
+  workflow_dispatch:
+    inputs:
+      message:
+        description: Release notes for this OTA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-production-ota
+  cancel-in-progress: false
+
+jobs:
+  publish-signed-update:
+    # Manual dispatch is deliberately accepted only when the selected ref is
+    # an immutable release tag. Protect ios-ota-v* tags and this environment.
+    if: github.repository == 'maguayo/zenguy' && github.ref_type == 'tag' && startsWith(github.ref_name, 'ios-ota-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # app.config.ts changes native update inputs by EAS profile. EAS Update
+      # does not infer the build profile from --environment, so keep its
+      # fingerprint inputs identical to the production build.
+      EAS_BUILD_PROFILE: production
+      ZENGUY_ENFORCE_TRACKED_RELEASE_ARTIFACTS: "1"
+    environment:
+      name: ios-production-ota
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify OTA tag and current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node apps/app/scripts/verify-release-tag.mjs ota "$GITHUB_REF_NAME"
+          tag_sha="$(git rev-list -n 1 "$GITHUB_SHA")"
+          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$tag_sha" = "$current_sha"
+
+      # actions/setup-node v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+          cache-dependency-path: apps/app/pnpm-lock.yaml
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.18.0 --activate
+
+      - name: Install iOS dependencies from lock
+        working-directory: apps/app
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Expo dependency compatibility
+        working-directory: apps/app
+        run: pnpm exec expo install --check
+
+      - name: Run pinned Expo Doctor
+        working-directory: apps/app
+        run: pnpm exec expo-doctor
+
+      - name: Validate repository release invariants
+        run: node scripts/security/check-repository.mjs
+
+      - name: Validate iOS app
+        working-directory: apps/app
+        run: pnpm verify:release-config && pnpm typecheck && pnpm lint && pnpm test --runInBand --forceExit
+
+      - name: Re-verify current main before signing key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-list -n 1 "$GITHUB_SHA")"
+          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$tag_sha" = "$current_sha"
+
+      - name: Materialize and verify the signing key
+        shell: bash
+        env:
+          EAS_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.EAS_UPDATE_PRIVATE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          test -n "$EAS_UPDATE_PRIVATE_KEY_PEM"
+          umask 077
+          printf '%s' "$EAS_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/zenguy-update-key.pem"
+          openssl pkey -in "$RUNNER_TEMP/zenguy-update-key.pem" -pubout \
+            -out "$RUNNER_TEMP/key-public.pem"
+          openssl x509 -in apps/app/certs/updates-certificate.pem -pubkey -noout \
+            -out "$RUNNER_TEMP/certificate-public.pem"
+          cmp --silent "$RUNNER_TEMP/key-public.pem" "$RUNNER_TEMP/certificate-public.pem"
+
+      - name: Re-verify current main before publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-list -n 1 "$GITHUB_SHA")"
+          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$tag_sha" = "$current_sha"
+
+      - name: Publish the reviewed, signed production update
+        working-directory: apps/app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_IOS_OTA_TOKEN }}
+          OTA_MESSAGE: ${{ inputs.message || github.ref_name }}
+        run: >-
+          pnpm exec eas update
+          --channel production
+          --environment production
+          --private-key-path "$RUNNER_TEMP/zenguy-update-key.pem"
+          --message "$OTA_MESSAGE"
+          --non-interactive
+
+      - name: Remove transient signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/zenguy-update-key.pem" \
+            "$RUNNER_TEMP/key-public.pem" \
+            "$RUNNER_TEMP/certificate-public.pem"

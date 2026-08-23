@@ -8,6 +8,10 @@ import {
   apiGetPage,
   apiPost,
   authEvents,
+  confirmTerminalLogout,
+  ensureFreshToken,
+  SessionSupersededError,
+  supersedeSession,
 } from "./api";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -19,10 +23,14 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe("API client", () => {
   beforeEach(() => {
+    confirmTerminalLogout();
+    supersedeSession();
     clearToken();
   });
 
   afterEach(() => {
+    confirmTerminalLogout();
+    supersedeSession();
     clearToken();
     vi.unstubAllGlobals();
   });
@@ -142,6 +150,32 @@ describe("API client", () => {
     expect(first.path).toBe("/api/first");
     expect(second.path).toBe("/api/second");
     expect(refreshCalls).toBe(1);
+  });
+
+  it("aborts and discards a refresh response from a superseded session", async () => {
+    setToken("principal-a", 1_800);
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+        if (init?.signal) signals.push(init.signal);
+        return new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }),
+    );
+
+    const pending = ensureFreshToken();
+    await Promise.resolve();
+    supersedeSession();
+    expect(signals[0]?.aborted).toBe(true);
+    resolveRefresh?.(
+      jsonResponse({ data: { accessToken: "late-a", expiresIn: 1_800, user: {} } }),
+    );
+
+    await expect(pending).rejects.toBeInstanceOf(SessionSupersededError);
+    expect(getToken().accessToken).toBeNull();
   });
 
   it("clears auth and emits signed-out when refresh fails", async () => {

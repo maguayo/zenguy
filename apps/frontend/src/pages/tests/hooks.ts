@@ -12,6 +12,8 @@ import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 
 export const runCostCopy = "This will use 1 run. Retries don't use additional runs.";
+export const irreversibleRunApprovalCopy =
+  "You attest that all credentials and data are staging/test-only and authorize the configured exact, one-shot irreversible action scopes for this run.";
 
 export function isActiveRun(test: BrowserTest): boolean {
   return test.lastRun?.status === "QUEUED" || test.lastRun?.status === "RUNNING";
@@ -31,7 +33,12 @@ export function useRunNow(test: BrowserTest): UseRunNowResult {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const mutation = useMutation({
-    mutationFn: () => runNow(current.id, test.id),
+    mutationFn: () =>
+      runNow(
+        current.id,
+        test.id,
+        (test.irreversibleActionScopes?.length ?? 0) > 0,
+      ),
   });
 
   const confirm = async () => {
@@ -51,7 +58,10 @@ export function useRunNow(test: BrowserTest): UseRunNowResult {
 
   return {
     dialogProps: {
-      body: runCostCopy,
+      body:
+        (test.irreversibleActionScopes?.length ?? 0) > 0
+          ? `${runCostCopy} ${irreversibleRunApprovalCopy}`
+          : runCostCopy,
       confirmLabel: "Run now",
       onClose: () => setOpen(false),
       onConfirm: confirm,

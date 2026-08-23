@@ -33,4 +33,16 @@ export class ArtifactStorage {
       await this.bucket.delete(unique.slice(index, index + 1_000));
     }
   }
+
+  /** Deletes every object under a workspace prefix, including orphaned R2
+   * objects whose D1 artifact insert failed after upload. */
+  async deletePrefix(prefix: string): Promise<void> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.bucket.list({ prefix, cursor });
+      const keys = page.objects.map((object) => object.key);
+      if (keys.length > 0) await this.delete(keys);
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor !== undefined);
+  }
 }

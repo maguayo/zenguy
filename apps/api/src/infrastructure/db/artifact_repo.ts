@@ -70,6 +70,19 @@ export class D1ArtifactRepo implements ArtifactRepo {
     return row === null ? null : toArtifact(row);
   }
 
+  async findByIds(ids: string[]): Promise<RunArtifact[]> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+    const placeholders = unique.map(() => "?").join(", ");
+    return (
+      await all<ArtifactRow>(
+        this.database
+          .prepare(`SELECT * FROM run_artifacts WHERE id IN (${placeholders})`)
+          .bind(...unique),
+      )
+    ).map(toArtifact);
+  }
+
   async listForAttempt(attemptId: string): Promise<RunArtifact[]> {
     return (
       await all<ArtifactRow>(

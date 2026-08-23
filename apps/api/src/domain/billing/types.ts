@@ -22,6 +22,8 @@ export interface Subscription {
   cancelUrl: string | null;
   createdAt: number;
   updatedAt: number;
+  /** First transition into the current PAST_DUE state; never extended by later webhooks. */
+  pastDueSince?: number | null;
   /** Provider event time used to reject stale/out-of-order Paddle webhooks. */
   lastProviderEventAt?: number | null;
 }
@@ -76,6 +78,24 @@ export interface SubscriptionGrant {
   redeemedAt: number | null;
   redeemedWorkspaceId: string | null;
   createdAt: number;
+}
+
+export type PaddleCheckoutPurpose = "subscription" | "alert_credit";
+
+export interface PaddleCheckoutIntent {
+  id: string;
+  workspaceId: string;
+  actorUserId: string;
+  purpose: PaddleCheckoutPurpose;
+  productId: string;
+  priceId: string;
+  quantity: number;
+  currencyCode: "EUR";
+  amountCents: number;
+  createdAt: number;
+  expiresAt: number;
+  consumedAt: number | null;
+  providerReference: string | null;
 }
 
 export function isComplimentarySubscription(

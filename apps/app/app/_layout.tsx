@@ -7,7 +7,8 @@ import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AppLockGate } from "@/components/AppLockGate";
+import { ActivityTracker } from "@/components/ActivityTracker";
+import { AppLockBoundary } from "@/components/AppLockBoundary";
 import { PrivacyShield } from "@/components/PrivacyShield";
 import { UpdateGate } from "@/components/UpdateGate";
 import { AppLockProvider } from "@/contexts/AppLockContext";
@@ -15,6 +16,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PushProvider } from "@/contexts/PushContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { queryClient } from "@/lib/query-client";
+import { cleanupSharedFiles } from "@/lib/share";
 import { colors, fonts } from "@/theme";
 import { Button, ErrorState, Screen } from "@/ui";
 
@@ -61,7 +63,9 @@ function RootNavigator() {
       <Stack.Screen name="verify-email" options={{ headerShown: true, title: "Verify email" }} />
       <Stack.Screen name="onboarding/workspace" />
       <Stack.Screen name="invitations/[token]" options={{ headerShown: true, title: "Invitation" }} />
+      <Stack.Screen name="invitations/accept" options={{ headerShown: true, title: "Invitation" }} />
       <Stack.Screen name="grants/[token]" options={{ headerShown: true, title: "Complimentary access" }} />
+      <Stack.Screen name="grants/redeem" options={{ headerShown: true, title: "Complimentary access" }} />
       <Stack.Screen name="complimentary" options={{ headerShown: true, title: "Complimentary links" }} />
       <Stack.Screen name="privacy" options={{ headerShown: true, presentation: "modal", title: "Privacy" }} />
       <Stack.Screen name="terms" options={{ headerShown: true, presentation: "modal", title: "Terms" }} />
@@ -81,7 +85,25 @@ function SignOutOffline() {
   );
 }
 
+function ProtectedAppContent() {
+  return (
+    <>
+      <AppLockBoundary>
+        <StatusBar style="dark" />
+        <RootNavigator />
+        <UpdateGate />
+        <ActivityTracker />
+      </AppLockBoundary>
+      <PrivacyShield />
+    </>
+  );
+}
+
 export default function RootLayout() {
+  useEffect(() => {
+    void cleanupSharedFiles();
+  }, []);
+
   return (
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaProvider>
@@ -90,11 +112,7 @@ export default function RootLayout() {
             <AuthProvider>
               <PushProvider>
                 <AppLockProvider>
-                  <StatusBar style="dark" />
-                  <RootNavigator />
-                  <UpdateGate />
-                  <AppLockGate />
-                  <PrivacyShield />
+                  <ProtectedAppContent />
                 </AppLockProvider>
               </PushProvider>
             </AuthProvider>

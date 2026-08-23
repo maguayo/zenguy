@@ -118,6 +118,66 @@ function parseIpv6(raw: string): Uint8Array | null {
   return bytes;
 }
 
+function ipv4FromBytes(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) * 0x1000000) +
+    ((bytes[offset + 1] ?? 0) << 16) +
+    ((bytes[offset + 2] ?? 0) << 8) +
+    (bytes[offset + 3] ?? 0)
+  ) >>> 0;
+}
+
+function hasPrefix(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  return prefix.every((byte, index) => bytes[index] === byte);
+}
+
+function embedsBlockedIpv4(address: Uint8Array): boolean {
+  // Deprecated IPv4-compatible (::/96) and IPv4-mapped (::ffff:0:0/96)
+  // literals are still interpreted by some network stacks.
+  if (address.slice(0, 12).every((byte) => byte === 0)) {
+    return blockedIpv4(ipv4FromBytes(address, 12));
+  }
+  if (
+    address.slice(0, 10).every((byte) => byte === 0) &&
+    address[10] === 0xff &&
+    address[11] === 0xff
+  ) {
+    return blockedIpv4(ipv4FromBytes(address, 12));
+  }
+
+  // RFC 6052's well-known NAT64 prefix. Network-specific prefixes cannot be
+  // inferred from a literal, but this prevents the standard representation
+  // from translating a private/metadata IPv4 target after validation.
+  if (hasPrefix(address, [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0])) {
+    return blockedIpv4(ipv4FromBytes(address, 12));
+  }
+
+  // 6to4 encodes the destination IPv4 address immediately after 2002::/16.
+  if (hasPrefix(address, [0x20, 0x02])) {
+    return blockedIpv4(ipv4FromBytes(address, 2));
+  }
+
+  // Teredo carries a server IPv4 address followed by an XOR-obfuscated client
+  // address. Reject either endpoint when it decodes to a non-public range.
+  if (hasPrefix(address, [0x20, 0x01, 0x00, 0x00])) {
+    const server = ipv4FromBytes(address, 4);
+    const client = (~ipv4FromBytes(address, 12)) >>> 0;
+    return blockedIpv4(server) || blockedIpv4(client);
+  }
+
+  // ISATAP can appear below an arbitrary IPv6 prefix; its interface identifier
+  // has 0000:5efe or 0200:5efe followed by the embedded IPv4 address.
+  if (
+    (hasPrefix(address.slice(8), [0x00, 0x00, 0x5e, 0xfe]) ||
+      hasPrefix(address.slice(8), [0x02, 0x00, 0x5e, 0xfe])) &&
+    blockedIpv4(ipv4FromBytes(address, 12))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function isBlockedIpv6(address: string): boolean {
   const bytes = parseIpv6(address);
   if (bytes === null) {
@@ -137,23 +197,33 @@ function isBlockedIpv6(address: string): boolean {
   if (bytes[0] === 0xfe && ((bytes[1] ?? 0) & 0xc0) === 0x80) {
     return true;
   }
-  const mapped =
-    bytes.slice(0, 10).every((byte) => byte === 0) &&
-    bytes[10] === 0xff &&
-    bytes[11] === 0xff;
-  if (mapped) {
-    const ipv4 =
-      (((bytes[12] ?? 0) * 0x1000000) +
-        ((bytes[13] ?? 0) << 16) +
-        ((bytes[14] ?? 0) << 8) +
-        (bytes[15] ?? 0)) >>>
-      0;
-    return blockedIpv4(ipv4);
+  // Deprecated site-local addresses (fec0::/10) remain non-public even though
+  // RFC 3879 removed their standard meaning.
+  if (bytes[0] === 0xfe && ((bytes[1] ?? 0) & 0xc0) === 0xc0) {
+    return true;
   }
-  return false;
+  // IPv6 multicast and the local-use NAT64 prefix are never public monitor
+  // destinations. The latter is reserved by RFC 8215 as 64:ff9b:1::/48.
+  if (
+    bytes[0] === 0xff ||
+    hasPrefix(bytes, [0x00, 0x64, 0xff, 0x9b, 0x00, 0x01])
+  ) {
+    return true;
+  }
+  return embedsBlockedIpv4(bytes);
 }
 
-export function assertSafeExternalUrl(raw: string): URL {
+export interface SafeExternalUrlPolicy {
+  /** Uptime monitors must never be usable to call the Zenguy control plane. */
+  denyZenguyOrigins?: boolean;
+  /** Credential-bearing requests may not use cleartext HTTP. */
+  requireHttps?: boolean;
+}
+
+export function assertSafeExternalUrl(
+  raw: string,
+  policy: SafeExternalUrlPolicy = {},
+): URL {
   let url: URL;
   try {
     url = new URL(raw);
@@ -163,6 +233,9 @@ export function assertSafeExternalUrl(raw: string): URL {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return reject("Only HTTP and HTTPS URLs are allowed");
   }
+  if (policy.requireHttps === true && url.protocol !== "https:") {
+    return reject("HTTPS is required for this URL");
+  }
   if (url.username.length > 0 || url.password.length > 0) {
     return reject("Embedded URL credentials are not allowed");
   }
@@ -170,7 +243,16 @@ export function assertSafeExternalUrl(raw: string): URL {
     return reject("Port 0 is not allowed");
   }
 
-  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+  const hostname = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, "")
+    .replace(/\.+$/gu, "");
+  if (
+    policy.denyZenguyOrigins === true &&
+    (hostname === "zenguy.com" || hostname.endsWith(".zenguy.com"))
+  ) {
+    return reject("Zenguy service origins are not allowed");
+  }
   if (
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||

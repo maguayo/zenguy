@@ -53,7 +53,9 @@ zenguy/
 
 See `apps/api/README.md` / `apps/frontend/README.md` for service-specific setup and
 staging and production deployment details, and `apps/app/README.md` for the iOS app
-(Expo; `pnpm app:install`, `pnpm app:ios`).
+(Expo; `pnpm app:install`, `pnpm app:ios`). Remote Access, GitHub Environment,
+token separation and Cloudflare WAF/IP Access operations are sequenced in
+`security/REMOTE_CONTROLS.md`.
 
 ## Deployment architecture and current status
 
@@ -83,8 +85,9 @@ Requirements:
 
 - Node.js 22 or newer.
 - `pnpm`.
-- A populated, ignored `apps/api/.dev.vars` file. Start from
-  `apps/api/.dev.vars.example`; never commit API keys or provider secrets.
+- macOS with an unlocked login Keychain. Local API credentials are stored in
+  the dedicated Keychain service managed by `apps/api/scripts/local-secrets.mjs`;
+  `.dev.vars.example` intentionally contains no assignments.
 - Python 3.11+, `browser-use`, Google Chrome, and a local model server for end-to-end browser
   execution; see `runner/README.md`.
 
@@ -93,6 +96,11 @@ demo fixture:
 
 ```bash
 pnpm install
+pnpm --filter @zenguy/api secrets:list
+pnpm --filter @zenguy/api secrets:status
+# For each required name (the prompt receives the value without exposing argv):
+pnpm --filter @zenguy/api secrets:set -- JWT_SECRET
+pnpm --filter @zenguy/api secrets:verify
 pnpm --filter @zenguy/api db:migrate:local
 pnpm --filter @zenguy/api seed
 ```
@@ -114,7 +122,7 @@ The Vite application proxies `/api` to `http://localhost:8787`. To use an
 alternate API port while another Wrangler process is running:
 
 ```bash
-pnpm --filter @zenguy/api exec wrangler dev --port 8790
+pnpm --filter @zenguy/api dev -- --port 8790
 ZENGUY_API_ORIGIN=http://127.0.0.1:8790 \
   pnpm --filter @zenguy/frontend exec vite --host 127.0.0.1 --port 5174
 ```
@@ -136,10 +144,9 @@ Running the seed command creates this reusable account and workspace:
 | Password | `abc123456` |
 | Workspace | `Aguayo Staging` |
 
-These credentials are the local and staging fixture only. Do not use them in
-production. A commit to the `staging` branch wipes staging application data and
-recreates this fixture. If the workspace unexpectedly redirects to billing
-onboarding, rerun migrate + seed.
+These credentials are a **local-only** fixture. Remote seeding is disabled and
+these values must never be used in staging or production. If the local
+workspace unexpectedly redirects to billing onboarding, rerun migrate + seed.
 
 ## Paddle sandbox checkout
 
@@ -184,10 +191,11 @@ notification destination for:
 https://<public-api-host>/api/webhooks/paddle
 ```
 
-Subscribe that destination to the `subscription.created`,
-`subscription.updated`, `subscription.canceled`, and `subscription.past_due`
-events. Put that destination's endpoint secret in `PADDLE_WEBHOOK_SECRET`, then
-restart the API before testing checkout.
+Subscribe that destination to exactly these seven events:
+`subscription.created`, `subscription.updated`, `subscription.canceled`,
+`subscription.past_due`, `transaction.completed`, `adjustment.created`, and
+`adjustment.updated`. Put that destination's endpoint secret in
+`PADDLE_WEBHOOK_SECRET`, then restart the API before testing checkout.
 
 If the UI remains on `Activating…` after a successful sandbox payment, do not
 pay again. First confirm the subscription in Paddle Sandbox, make the webhook
@@ -195,10 +203,20 @@ destination reachable, and replay its `subscription.created` notification.
 The UI polls for up to two minutes and then presents `Check again`; once the
 signed notification has been processed, that action completes onboarding.
 
+`transaction.completed` credits only a server-issued, signed alert-credit
+checkout. An approved adjustment is applied only when both its transaction and
+customer match that credited checkout. `adjustment.created` may arrive already
+approved (for example, a credit or chargeback) or as `pending_approval`; pending
+and rejected records do not change credit. Keep `adjustment.updated` subscribed
+so a later approval is applied. A six-hour reconciliation pass lists approved
+adjustments and uses the same customer check and ledger idempotency key,
+covering missed or delayed webhooks without applying an adjustment twice.
+
 ### Overage billing safety
 
-The server-side Paddle API key used for overage billing must include
-`price.read`, `subscription.write`, and `transaction.read`. Zenguy validates
+The server-side Paddle API key must include `price.read`, `subscription.write`,
+`transaction.read`, and `adjustment.read`; the last permission is required by
+top-up reconciliation. Zenguy validates
 that `PADDLE_OVERAGE_PRICE_ID` is exactly EUR 0.20 with no country-specific
 overrides before requesting a charge.
 
@@ -212,11 +230,10 @@ sanitized operator log. They never repeat the charge request.
 
 ## Provider configuration for testing
 
-- Cloudflare commands for this repository must run through the
-  `zenguy-personal` Wrangler profile. From `apps/api`, `wrangler whoami` must
-  report `marcosaguayomora@gmail.com` before creating, changing, or deploying
-  any Cloudflare resource. The profile is directory-scoped, so other saved
-  Wrangler accounts are not selected by this project.
+- Cloudflare deploys and CI must use separate, resource-scoped API tokens for
+  staging and production. A personal Wrangler OAuth session must not be used
+  by runners, services or CI and must be revoked after the dedicated tokens
+  are provisioned.
 - Keep `PADDLE_ENVIRONMENT=sandbox` locally.
 - Transactional email uses Cloudflare Email Service through the Worker's
   `EMAIL` binding. Local Wrangler uses a remote binding, so signup, password
@@ -224,27 +241,36 @@ sanitized operator log. They never repeat the charge request.
 - The development sender is
   `Zenguy <notifications@zenguy.com>`. The sending domain must remain
   enabled in the connected Cloudflare account before starting the API.
-- Browser runs are pulled by `runner/browser_worker.py`; the API has neither a
-  Browser Rendering binding nor a cloud-model credential. Deployed snapshots
-  record `LLM_MODEL=qwen/qwen3.8-27b`, and the local runner fixes the same Bionic
-  model at `http://127.0.0.1:1234/v1`.
+- Browser runs execute only in the isolated Compose fallback topology described
+  in `runner/README.md`. Direct host mode is disabled for every remote
+  environment; the local Bionic smoke does not consume Queue or call the remote
+  API.
 - Keep the local runner tokens in the ignored, mode-0600
-  `runner/.browser_worker.local.json`; keep other local API secrets in
-  `apps/api/.dev.vars`. Do not copy their values into source, screenshots, logs,
-  or test reports.
+  `runner/.browser_worker.local.json`; keep local API secrets in the dedicated
+  macOS Keychain service. The API wrapper serves them from memory through a
+  private FIFO (and uses an anonymous descriptor for the seed), sanitizes the
+  child environment, and never falls back to `.dev.vars`. Do not copy their
+  values into source, screenshots, logs, shell arguments, or test reports.
 - Remote email bindings send real transactional messages during local
   development. Use only inboxes you control.
 
-To create or repair the directory-scoped Cloudflare profile:
+Do not create, activate or reuse a persistent personal Wrangler profile.
+Routine staging and production mutations run in the protected GitHub Environment
+with its environment-specific Cloudflare API token. While an automation is not
+connected, its explicit fallback command may run only in an approved change
+window with a separate short-lived token. For an approved one-off inspection or
+Email Service onboarding change, load that scoped token from the secret manager
+into `CLOUDFLARE_API_TOKEN` for the process only, limit it to the exact
+account/resource and operation, run
+`pnpm --filter @zenguy/api exec wrangler whoami`, and confirm the expected
+account before continuing. Email onboarding needs only the documented
+`Email Sending: Edit` permission. Revoke the temporary token after the change;
+never persist it in a profile, dotenv file, shell startup file or command line.
 
-```bash
-pnpm --filter @zenguy/api exec wrangler auth create zenguy-personal
-pnpm --filter @zenguy/api exec wrangler auth activate zenguy-personal
-pnpm --filter @zenguy/api exec wrangler whoami
-```
-
-The final command must show `Active profile: zenguy-personal` and the expected
-personal email before continuing.
+Files under `docs/superpowers/specs` and `docs/superpowers/plans` are immutable
+historical design records, not operational runbooks. Their old authentication or
+deployment examples must not be executed; this README, the application README
+and `security/REMOTE_CONTROLS.md` are authoritative.
 
 ## Staging and production releases
 
@@ -255,9 +281,9 @@ tracks `staging`; the production project tracks `main`. Both use
 
 The staging backend CI configuration is prepared but is not connected yet
 because the existing Workers Builds token lacks required permissions. Until a
-correctly scoped token is installed,
-an API push does not deploy the Worker automatically; use the explicit
-migration and deploy commands below. Production automation must remain disabled
+correctly scoped token is installed, an API push does not deploy the Worker
+automatically; use the explicit migration and deploy commands below only in the
+approved change window described above. Production automation must remain disabled
 until its Paddle Live, Twilio, webhook, and secret release gates are satisfied.
 
 Apply the matching D1 migrations before deploying an API environment:

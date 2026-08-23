@@ -2,6 +2,7 @@ import { WriteAudit } from "../audit/write_audit";
 import { FixedClock } from "../../shared/clock";
 import {
   API_KEY_DISPLAY_PREFIX_LENGTH,
+  API_KEY_DEFAULT_TTL_DAYS,
   MAX_ACTIVE_API_KEYS_PER_WORKSPACE,
 } from "../../shared/constants";
 import { sha256Hex } from "../../shared/crypto";
@@ -56,6 +57,8 @@ describe("CreateApiKey", () => {
     expect(result.apiKey).toMatchObject({
       name: "Status dashboard",
       keyPrefix: result.key.slice(0, API_KEY_DISPLAY_PREFIX_LENGTH),
+      scopes: ["workspace:read", "uptime:read", "tests:read", "runs:read"],
+      expiresAt: clock.now() + API_KEY_DEFAULT_TTL_DAYS * 86_400_000,
       createdBy: { userId: OWNER.id, name: OWNER.name },
       createdAt: clock.now(),
       lastUsedAt: null,
@@ -76,6 +79,20 @@ describe("CreateApiKey", () => {
       resourceId: stored?.id,
     });
     expect(entry?.metadataJson).not.toContain(result.key);
+  });
+
+  it("stores only requested read scopes and a bounded caller-selected expiry", async () => {
+    const { subscriptions, clock, useCase } = build();
+    await subscriptions.upsertByWorkspace(activeSubscription());
+
+    const result = await useCase.execute({
+      ...input(),
+      scopes: ["runs:read", "runs:read"],
+      expiresInDays: 30,
+    });
+
+    expect(result.apiKey.scopes).toEqual(["runs:read"]);
+    expect(result.apiKey.expiresAt).toBe(clock.now() + 30 * 86_400_000);
   });
 
   it("generates a distinct key on every call", async () => {

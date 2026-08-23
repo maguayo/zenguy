@@ -6,6 +6,9 @@ import { RemoveMember } from "../../application/members/remove_member";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { UserRepo } from "../../domain/users/repo";
 import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
+import type { InvitationRepo } from "../../domain/workspaces/repo";
+import type { ApiKeyRepo } from "../../domain/api_keys/repo";
+import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
@@ -17,7 +20,10 @@ export interface MemberRoutesDependencies {
   users: UserRepo;
   workspaces: WorkspaceRepo;
   members: MemberRepo;
+  invitations: InvitationRepo;
+  apiKeys: ApiKeyRepo;
   audit: Pick<WriteAudit, "execute">;
+  clock: Clock;
   config: Pick<AppConfig, "jwtSecret">;
 }
 
@@ -38,11 +44,17 @@ export function memberRoutes(
   const listMembers = new ListMembers(dependencies.members);
   const changeRole = new ChangeMemberRole(
     dependencies.members,
+    dependencies.invitations,
+    dependencies.apiKeys,
     dependencies.audit,
+    dependencies.clock,
   );
   const removeMember = new RemoveMember(
     dependencies.members,
+    dependencies.invitations,
+    dependencies.apiKeys,
     dependencies.audit,
+    dependencies.clock,
   );
 
   app.get(

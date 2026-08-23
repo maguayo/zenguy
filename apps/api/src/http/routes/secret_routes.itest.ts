@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import type { Subscription } from "../../domain/billing/types";
+import type { WorkspaceSecret } from "../../domain/secrets/types";
 import type { User } from "../../domain/users/types";
 import type { Role, Workspace } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
@@ -12,8 +13,16 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { decryptSecret } from "../../shared/crypto";
-import { freshDb, testEnv } from "../../test/helpers";
+import {
+  decryptSecret,
+  encryptLegacySecretForMigration,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
+import {
+  freshDb,
+  insertPreFenceLegacyFixture,
+  testEnv,
+} from "../../test/helpers";
 import type { AppEnv } from "../env";
 
 type Actor = "owner" | "admin" | "member";
@@ -26,6 +35,7 @@ const USERS: Record<Actor, User> = {
     email: "owner@secrets.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -35,6 +45,7 @@ const USERS: Record<Actor, User> = {
     email: "admin@secrets.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -44,6 +55,7 @@ const USERS: Record<Actor, User> = {
     email: "member@secrets.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1,
     updatedAt: 1,
   },
@@ -85,7 +97,7 @@ describe("secret routes", () => {
   let secrets: D1SecretRepo;
   let subscriptions: D1SubscriptionRepo;
   let audits: D1AuditRepo;
-  let encryptionKey: Uint8Array;
+  let encryptionKeys: EncryptionKeyring;
 
   beforeEach(async () => {
     await freshDb();
@@ -112,7 +124,7 @@ describe("secret routes", () => {
     secrets = new D1SecretRepo(bindings.DB);
     audits = new D1AuditRepo(bindings.DB);
     const config = loadConfig(bindings);
-    encryptionKey = config.encryptionKey;
+    encryptionKeys = config.encryptionKeys;
     tokens = {
       owner: `Bearer ${await issueAccessToken(config, USERS.owner, systemClock)}`,
       admin: `Bearer ${await issueAccessToken(config, USERS.admin, systemClock)}`,
@@ -164,7 +176,11 @@ describe("secret routes", () => {
     const stored = await secrets.findById(WORKSPACE.id, created.data.id);
     expect(stored?.encryptedValue).not.toBe(PLAINTEXT);
     await expect(
-      decryptSecret(stored?.encryptedValue ?? "", encryptionKey),
+      decryptSecret(stored?.encryptedValue ?? "", encryptionKeys, {
+        type: "workspace_secret",
+        workspaceId: WORKSPACE.id,
+        recordId: created.data.id,
+      }),
     ).resolves.toBe(PLAINTEXT);
 
     const listed = await app.request(
@@ -204,7 +220,11 @@ describe("secret routes", () => {
     });
     const updated = await secrets.findById(WORKSPACE.id, created.data.id);
     await expect(
-      decryptSecret(updated?.encryptedValue ?? "", encryptionKey),
+      decryptSecret(updated?.encryptedValue ?? "", encryptionKeys, {
+        type: "workspace_secret",
+        workspaceId: WORKSPACE.id,
+        recordId: created.data.id,
+      }),
     ).resolves.toBe(REPLACEMENT);
 
     const deleted = await app.request(
@@ -229,6 +249,106 @@ describe("secret routes", () => {
     expect(auditText).not.toContain(PLAINTEXT);
     expect(auditText).not.toContain(REPLACEMENT);
     expect(auditText).toContain("SHOP_PASSWORD");
+  });
+
+  it("lets only the owner re-encrypt legacy workspace records in bounded batches", async () => {
+    const legacy: WorkspaceSecret = {
+      id: "sec_legacy_rotation",
+      workspaceId: WORKSPACE.id,
+      key: "LEGACY_ROTATION",
+      encryptedValue: await encryptLegacySecretForMigration(
+        PLAINTEXT,
+        encryptionKeys.active.key,
+      ),
+      encryptionVersion: 1,
+      allowedDomains: ["example.com"],
+      description: null,
+      createdBy: USERS.owner.id,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await insertPreFenceLegacyFixture(() => secrets.insert(legacy));
+
+    const denied = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/security/encryption/rotate`,
+      { method: "POST", headers: headers("admin") },
+    );
+    expect(denied.status).toBe(403);
+
+    const rotated = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/security/encryption/rotate?limit=1`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(rotated.status).toBe(200);
+    await expect(rotated.json()).resolves.toMatchObject({
+      data: {
+        activeKeyId: encryptionKeys.active.id,
+        examined: 1,
+        rotated: 1,
+        conflicted: 0,
+      },
+    });
+    const stored = await secrets.findById(WORKSPACE.id, legacy.id);
+    expect(stored?.encryptionVersion).toBe(4);
+    expect(stored?.encryptedValue).toMatch(
+      /^v4:dek-[A-Za-z0-9_-]{24}:/u,
+    );
+    await expect(
+      decryptSecret(stored?.encryptedValue ?? "", encryptionKeys, {
+        type: "workspace_secret",
+        workspaceId: WORKSPACE.id,
+        recordId: legacy.id,
+      }),
+    ).resolves.toBe(PLAINTEXT);
+  });
+
+  it("rotates a workspace DEK once and rejects a replayed precondition", async () => {
+    const created = await create();
+    const statusResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/security/encryption/rotate?limit=1`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(statusResponse.status).toBe(200);
+    const status = JSON.parse(await statusResponse.text()) as {
+      data: { activeDataKeyId: string; dataKeyGeneration: number };
+    };
+    expect(status.data).toMatchObject({ dataKeyGeneration: 1 });
+
+    const rotationResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/security/encryption/rotate?limit=1&rotateDataKeyFrom=${encodeURIComponent(status.data.activeDataKeyId)}`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(rotationResponse.status).toBe(200);
+    const rotation = JSON.parse(await rotationResponse.text()) as {
+      data: {
+        activeDataKeyId: string;
+        dataKeyGeneration: number;
+        dataKeyRotated: boolean;
+        rotated: number;
+      };
+    };
+    expect(rotation.data).toMatchObject({
+      dataKeyGeneration: 2,
+      dataKeyRotated: true,
+      rotated: 1,
+    });
+    expect(rotation.data.activeDataKeyId).not.toBe(
+      status.data.activeDataKeyId,
+    );
+
+    const replay = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/security/encryption/rotate?limit=1&rotateDataKeyFrom=${encodeURIComponent(status.data.activeDataKeyId)}`,
+      { method: "POST", headers: headers("owner") },
+    );
+    expect(replay.status).toBe(409);
+    const stored = await secrets.findById(WORKSPACE.id, created.data.id);
+    await expect(
+      decryptSecret(stored?.encryptedValue ?? "", encryptionKeys, {
+        type: "workspace_secret",
+        workspaceId: WORKSPACE.id,
+        recordId: created.data.id,
+      }),
+    ).resolves.toBe(PLAINTEXT);
   });
 
   it("lets members read metadata but forbids every mutation", async () => {

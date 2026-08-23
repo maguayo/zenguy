@@ -18,7 +18,12 @@ import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
 import { FixedClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { freshDb, freshKv, testEnv } from "../../test/helpers";
+import {
+  encryptTestValue,
+  freshDb,
+  freshKv,
+  testEnv,
+} from "../../test/helpers";
 
 const NOW = Date.now();
 const HOUR_MS = 3_600_000;
@@ -28,6 +33,7 @@ const USER: User = {
   email: "incident-reader@zenguy.test",
   passwordHash: "unused",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -210,7 +216,11 @@ describe("incident read routes", () => {
       workspaceId: WORKSPACE.id,
       name: "Ops Slack",
       type: "SLACK",
-      encryptedConfig: "encrypted-for-read-only-test",
+      encryptedConfig: await encryptTestValue({
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "ch_incident_ops",
+      }),
       enabled: true,
       verifiedAt: NOW - HOUR_MS,
       lastDeliveryStatus: "SENT",

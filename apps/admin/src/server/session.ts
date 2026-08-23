@@ -1,7 +1,6 @@
 import { SESSION_COOKIE } from "./constants";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -9,73 +8,35 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
-function fromBase64Url(encoded: string): Uint8Array | null {
-  if (!/^[A-Za-z0-9_-]+$/u.test(encoded)) return null;
-  const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
-  try {
-    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  } catch {
-    return null;
-  }
+export function newSessionToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return toBase64Url(bytes);
 }
 
-async function hmac(payload: string, secret: string): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payload)));
-}
-
-function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    diff |= (left[index] ?? 0) ^ (right[index] ?? 0);
-  }
-  return diff === 0;
-}
-
-export interface SessionPayload {
-  email: string;
-  exp: number;
-}
-
-export async function signSession(payload: SessionPayload, secret: string): Promise<string> {
-  const encoded = toBase64Url(encoder.encode(JSON.stringify(payload)));
-  return `${encoded}.${toBase64Url(await hmac(encoded, secret))}`;
-}
-
-export async function verifySession(
+export async function sessionTokenHash(
   token: string,
-  secret: string,
-  now: number,
-): Promise<{ email: string } | null> {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [encoded, signature] = parts as [string, string];
-  const provided = fromBase64Url(signature);
-  if (provided === null) return null;
-  if (!timingSafeEqual(provided, await hmac(encoded, secret))) return null;
-  const raw = fromBase64Url(encoded);
-  if (raw === null) return null;
-  let payload: unknown;
-  try {
-    payload = JSON.parse(decoder.decode(raw));
-  } catch {
-    return null;
+  accessSubject: string,
+): Promise<string> {
+  if (accessSubject.length === 0 || accessSubject.length > 512) {
+    throw new Error("Cloudflare Access subject is invalid");
   }
-  if (typeof payload !== "object" || payload === null) return null;
-  const { email, exp } = payload as Partial<SessionPayload>;
-  if (typeof email !== "string" || typeof exp !== "number" || exp <= now) return null;
-  return { email };
+  // A JSON tuple avoids concatenation ambiguity and binds the opaque cookie to
+  // the exact Access identity that created it, not only to a reusable email.
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(
+      JSON.stringify(["zenguy-admin-session", 1, accessSubject, token]),
+    ),
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-const COOKIE_ATTRIBUTES = "Path=/; HttpOnly; Secure; SameSite=Lax";
+export function isWellFormedSessionToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/u.test(token);
+}
+
+const COOKIE_ATTRIBUTES = "Path=/; HttpOnly; Secure; SameSite=Strict";
 
 export function sessionCookie(token: string, maxAgeSeconds: number): string {
   return `${SESSION_COOKIE}=${token}; Max-Age=${maxAgeSeconds}; ${COOKIE_ATTRIBUTES}`;

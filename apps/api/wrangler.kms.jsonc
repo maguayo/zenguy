@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zenguy-kms",
+  "main": "src/key_wrapping_worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "KEY_WRAPPING_KEY_SET": "{\"configVersion\":1,\"activeKeyId\":\"primary\",\"writeKeyIds\":[\"primary\"],\"keys\":[{\"id\":\"primary\",\"binding\":\"KMS_KEY_PRIMARY\"}]}"
+      }
+    },
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "KEY_WRAPPING_KEY_SET": "{\"configVersion\":1,\"activeKeyId\":\"primary\",\"writeKeyIds\":[\"primary\"],\"keys\":[{\"id\":\"primary\",\"binding\":\"KMS_KEY_PRIMARY\"}]}"
+      }
+    }
+  }
+}

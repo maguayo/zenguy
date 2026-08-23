@@ -30,7 +30,11 @@ export class DeleteMonitor {
     ip?: string;
   }): Promise<void> {
     if (!can(input.actorRole, "uptime.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const monitor = await this.monitors.findById(
       input.workspaceId,
       input.monitorId,

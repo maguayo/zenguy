@@ -1,10 +1,12 @@
 import type { ResolvedSecrets } from "../../domain/secrets/types";
 import type { MonitorConfig } from "../../domain/uptime/rules";
+import { isMutableMonitorMethod } from "../../domain/uptime/types";
 import { FixedClock } from "../../shared/clock";
 import { MAX_REDIRECTS, UPTIME_BODY_CAP } from "../../shared/constants";
 import {
   executeCheck,
   type CheckOutcome,
+  type CheckExecutionContext,
   type UptimeFetch,
 } from "./execute_check";
 
@@ -44,15 +46,21 @@ async function run(input: {
   fetchFn: UptimeFetch;
   secrets?: ResolvedSecrets;
   clock?: FixedClock;
+  execution?: CheckExecutionContext;
 }): Promise<CheckOutcome> {
+  const monitorConfig = input.config ?? BASE;
   return executeCheck(
     {
       fetchFn: input.fetchFn,
       clock: input.clock ?? new FixedClock(1_000),
       resolveSecrets: new StaticResolver(input.secrets),
     },
-    input.config ?? BASE,
+    monitorConfig,
     WORKSPACE_ID,
+    input.execution ??
+      (isMutableMonitorMethod(monitorConfig.method)
+        ? { idempotencyKey: "zenguy:cycle-test" }
+        : {}),
   );
 }
 
@@ -61,6 +69,38 @@ function throwingFetch(error: Error): UptimeFetch {
 }
 
 describe("executeCheck request failures", () => {
+  it("refuses a mutable request without a cycle idempotency key", async () => {
+    let calls = 0;
+    const outcome = await run({
+      config: config({ method: "POST", body: "payload" }),
+      execution: {},
+      fetchFn: async () => {
+        calls += 1;
+        return new Response(null, { status: 200 });
+      },
+    });
+    expect(outcome).toMatchObject({
+      status: "FAILED",
+      failureReason: "IDEMPOTENCY_KEY_REQUIRED",
+    });
+    expect(calls).toBe(0);
+  });
+
+  it("marks timeout/network outcomes of mutable requests ambiguous", async () => {
+    const timeout = new Error("aborted");
+    timeout.name = "AbortError";
+    for (const error of [timeout, new TypeError("fetch failed")]) {
+      await expect(
+        run({
+          config: config({ method: "DELETE" }),
+          fetchFn: throwingFetch(error),
+        }),
+      ).resolves.toMatchObject({
+        status: "FAILED",
+        failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+      });
+    }
+  });
   it("returns BLOCKED_URL before sending a request", async () => {
     let calls = 0;
     const outcome = await run({
@@ -71,6 +111,61 @@ describe("executeCheck request failures", () => {
       },
     });
     expect(outcome).toMatchObject({ status: "FAILED", failureReason: "BLOCKED_URL" });
+    expect(calls).toBe(0);
+  });
+
+  it.each([
+    "https://zenguy.com/",
+    "https://app.zenguy.com/api/health",
+    "https://deep.internal.zenguy.com/",
+  ])("blocks the Zenguy control plane from uptime monitors: %s", async (url) => {
+    let calls = 0;
+    const outcome = await run({
+      config: config({ url }),
+      fetchFn: async () => {
+        calls += 1;
+        return new Response();
+      },
+    });
+    expect(outcome).toMatchObject({ failureReason: "BLOCKED_URL" });
+    expect(calls).toBe(0);
+  });
+
+  it("requires HTTPS whenever the monitor uses a secret", async () => {
+    let calls = 0;
+    const outcome = await run({
+      config: config({
+        url: "http://api.example.com/health",
+        headers: [{ key: "Authorization", value: "Bearer {{API_TOKEN}}" }],
+      }),
+      secrets: new Map([
+        ["API_TOKEN", { value: "raw-token", allowedDomains: ["api.example.com"] }],
+      ]),
+      fetchFn: async () => {
+        calls += 1;
+        return new Response();
+      },
+    });
+    expect(outcome).toMatchObject({ failureReason: "BLOCKED_URL" });
+    expect(calls).toBe(0);
+  });
+
+  it("rejects non-standard HTTPS ports whenever the monitor uses a secret", async () => {
+    let calls = 0;
+    const outcome = await run({
+      config: config({
+        url: "https://api.example.com:8443/health",
+        headers: [{ key: "Authorization", value: "Bearer {{API_TOKEN}}" }],
+      }),
+      secrets: new Map([
+        ["API_TOKEN", { value: "raw-token", allowedDomains: ["api.example.com"] }],
+      ]),
+      fetchFn: async () => {
+        calls += 1;
+        return new Response();
+      },
+    });
+    expect(outcome).toMatchObject({ failureReason: "BLOCKED_URL" });
     expect(calls).toBe(0);
   });
 
@@ -154,7 +249,7 @@ describe("executeCheck redirects", () => {
     expect(calls).toBe(MAX_REDIRECTS + 1);
   });
 
-  it("drops custom headers/body across hosts and downgrades 302 to GET", async () => {
+  it("blocks cross-origin redirects for mutable requests", async () => {
     const requests: Array<{
       url: string;
       method: string | undefined;
@@ -184,7 +279,10 @@ describe("executeCheck redirects", () => {
           : new Response(null, { status: 200 });
       },
     });
-    expect(outcome.status).toBe("PASSED");
+    expect(outcome).toMatchObject({
+      status: "FAILED",
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+    });
     expect(requests).toEqual([
       {
         url: "https://api.example.com/health",
@@ -193,14 +291,26 @@ describe("executeCheck redirects", () => {
         body: '{"probe":true}',
         redirect: "manual",
       },
-      {
-        url: "https://edge.example.net/final",
-        method: "GET",
-        authorization: null,
-        body: undefined,
-        redirect: "manual",
-      },
     ]);
+  });
+
+  it("stops mutable retries when a redirect outcome is ambiguous", async () => {
+    let calls = 0;
+    const outcome = await run({
+      config: config({ method: "DELETE" }),
+      fetchFn: async () => {
+        calls += 1;
+        return new Response(null, {
+          status: 307,
+          headers: { Location: `/hop-${calls}` },
+        });
+      },
+    });
+    expect(outcome).toMatchObject({
+      status: "FAILED",
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+    });
+    expect(calls).toBe(MAX_REDIRECTS + 1);
   });
 
   it("keeps method, headers, and body for same-host 307 redirects", async () => {
@@ -221,19 +331,98 @@ describe("executeCheck redirects", () => {
     expect(outcome.status).toBe("PASSED");
     expect(requests[1]).toMatchObject({ method: "POST", body: "payload" });
     expect(new Headers(requests[1]?.headers).get("X-Probe")).toBe("yes");
+    expect(new Headers(requests[0]?.headers).get("Idempotency-Key")).toBe(
+      "zenguy:cycle-test",
+    );
+    expect(new Headers(requests[1]?.headers).get("Idempotency-Key")).toBe(
+      "zenguy:cycle-test",
+    );
+  });
+
+  it("drops credentials on a same-host port change", async () => {
+    const authorizations: Array<string | null> = [];
+    const outcome = await run({
+      config: config({
+        headers: [{ key: "Authorization", value: "Bearer scoped" }],
+      }),
+      fetchFn: async (_url, init) => {
+        authorizations.push(new Headers(init?.headers).get("Authorization"));
+        return authorizations.length === 1
+          ? new Response(null, {
+              status: 307,
+              headers: { Location: "https://api.example.com:8443/final" },
+            })
+          : new Response(null, { status: 200 });
+      },
+    });
+    expect(outcome.status).toBe("PASSED");
+    expect(authorizations).toEqual(["Bearer scoped", null]);
+  });
+
+  it("blocks an HTTPS-to-HTTP redirect while carrying a secret", async () => {
+    const outcome = await run({
+      config: config({
+        headers: [{ key: "Authorization", value: "Bearer {{API_TOKEN}}" }],
+      }),
+      secrets: new Map([
+        ["API_TOKEN", { value: "raw-token", allowedDomains: ["api.example.com"] }],
+      ]),
+      fetchFn: async () =>
+        new Response(null, {
+          status: 307,
+          headers: { Location: "http://api.example.com/final" },
+        }),
+    });
+    expect(outcome).toMatchObject({ failureReason: "UNSAFE_REDIRECT" });
   });
 });
 
 describe("executeCheck conditions and evidence", () => {
-  it("does not consume the response body when no body condition is configured", async () => {
-    const response = new Response("should remain unread", { status: 503 });
+  it("marks retryable HTTP and response-stream failures ambiguous for mutable requests", async () => {
+    await expect(
+      run({
+        config: config({ method: "POST", body: "payload" }),
+        fetchFn: async () => new Response(null, { status: 503 }),
+      }),
+    ).resolves.toMatchObject({
+      status: "FAILED",
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+    });
+
+    const brokenBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new TypeError("response stream reset"));
+      },
+    });
+    await expect(
+      run({
+        config: config({
+          method: "PATCH",
+          body: "payload",
+          bodyCondition: "CONTAINS",
+          bodyExpectedValue: "ok",
+        }),
+        fetchFn: async () => new Response(brokenBody, { status: 200 }),
+      }),
+    ).resolves.toMatchObject({
+      status: "FAILED",
+      failureReason: "AMBIGUOUS_EXTERNAL_EFFECT",
+    });
+  });
+
+  it("cancels the response body when no body condition is configured", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const response = new Response(
+      new ReadableStream<Uint8Array>({ cancel }),
+      { status: 503 },
+    );
     const outcome = await run({ fetchFn: async () => response });
     expect(outcome).toMatchObject({
       status: "FAILED",
       failureReason: "UNEXPECTED_STATUS",
       responseExcerpt: null,
     });
-    expect(response.bodyUsed).toBe(false);
+    expect(cancel).toHaveBeenCalledOnce();
     expect(outcome.conditions).toEqual([
       {
         type: "status",
@@ -357,7 +546,8 @@ describe("executeCheck conditions and evidence", () => {
     expect(authorization).toBe(`Bearer ${rawSecret}`);
     expect(outcome.failureReason).toBe("BODY_MISMATCH");
     expect(outcome.responseExcerpt).toContain("{{API_TOKEN}}");
-    expect(outcome.responseExcerpt).toContain("token=redacted");
+    expect(outcome.responseExcerpt).toContain("https://logs.example.com");
+    expect(outcome.responseExcerpt).not.toContain("page=1");
     expect(JSON.stringify(outcome)).not.toContain(rawSecret);
   });
 });

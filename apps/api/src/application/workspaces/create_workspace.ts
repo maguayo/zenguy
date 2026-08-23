@@ -9,6 +9,7 @@ import type { WriteAudit } from "../audit/write_audit";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
+import { AppError } from "../../shared/errors";
 import { workspaceName, workspaceTimezone } from "./input";
 import { workspaceOutput, type WorkspaceOutput } from "./list_my_workspaces";
 
@@ -45,7 +46,20 @@ export class CreateWorkspace {
       updatedAt: now,
       deletedAt: null,
     };
-    await this.dependencies.workspaces.insert(workspace);
+    try {
+      await this.dependencies.workspaces.insert(workspace);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("ZENGUY_OWNED_WORKSPACE_CAP")
+      ) {
+        throw new AppError(
+          "RATE_LIMITED",
+          "The workspace ownership limit has been reached",
+        );
+      }
+      throw error;
+    }
     await this.dependencies.members.insert({
       id: this.dependencies.ids.newId("mem"),
       workspaceId: workspace.id,

@@ -1,5 +1,6 @@
 import type {
   BilledTransaction,
+  ApprovedPaddleAdjustment,
   PaddleClient,
   SubscriptionManagementUrls,
 } from "./client";
@@ -32,6 +33,10 @@ export class UnavailablePaddleClient implements PaddleClient {
   }
 
   async getInvoicePdfUrl(): Promise<string> {
+    return paddleUnavailable();
+  }
+
+  async listApprovedAdjustments(): Promise<ApprovedPaddleAdjustment[]> {
     return paddleUnavailable();
   }
 }

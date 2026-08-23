@@ -63,25 +63,25 @@ describe("sanitizeUrl", () => {
   it.each([
     [
       "https://example.com/path?token=abc&safe=yes#fragment",
-      "https://example.com/path?token=redacted&safe=yes",
+      "https://example.com",
     ],
     [
       "https://user:password@example.com/login?return=%2Fdashboard",
-      "https://example.com/login?return=%2Fdashboard",
+      "https://example.com",
     ],
     [
       "https://example.com/?apiKey=one&session_id=two&query=three",
-      "https://example.com/?apiKey=redacted&session_id=redacted&query=three",
+      "https://example.com",
     ],
-    ["https://example.com/path", "https://example.com/path"],
+    ["https://example.com/path", "https://example.com"],
     ["not a URL", "<invalid-url>"],
   ])("sanitizes %s", (raw, expected) => {
     expect(sanitizeUrl(raw)).toBe(expected);
   });
 
-  it("keeps duplicate safe query parameters", () => {
+  it("drops path and duplicate query parameters even when their names look safe", () => {
     expect(sanitizeUrl("https://example.com/?tag=a&tag=b")).toBe(
-      "https://example.com/?tag=a&tag=b",
+      "https://example.com",
     );
   });
 });

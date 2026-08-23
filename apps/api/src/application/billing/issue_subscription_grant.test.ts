@@ -12,6 +12,7 @@ const ISSUER: User = {
   email: "marcos@aguayo.es",
   passwordHash: "hash",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -42,7 +43,7 @@ describe("IssueSubscriptionGrant", () => {
 
     expect(issued.token.length).toBeGreaterThan(20);
     expect(issued.redeemUrl).toBe(
-      `https://app.zenguy.com/grants/${issued.token}`,
+      `https://app.zenguy.com/grants/redeem#${issued.token}`,
     );
     expect(issued.note).toBe("Influencer launch");
     expect(issued.expiresAt).toBe(

@@ -5,6 +5,7 @@ import type {
   RunStatus,
   RunSummaryRow,
   RunTick,
+  IrreversibleActionScope,
 } from "../../domain/browser_tests/types";
 import type { User } from "../../domain/users/types";
 
@@ -22,6 +23,10 @@ export interface RunSummaryOutput {
 export interface BrowserTestOutput {
   id: string;
   name: string;
+  allowedDomains: string[];
+  writableDomains: string[];
+  testDataAttested: boolean;
+  irreversibleActionScopes: IrreversibleActionScope[];
   startUrl: string;
   instructions: string;
   device: Device;
@@ -62,6 +67,12 @@ export function browserTestOutput(
   return {
     id: test.id,
     name: test.name,
+    allowedDomains: [...(test.allowedDomains ?? [])],
+    writableDomains: [...(test.writableDomains ?? [])],
+    testDataAttested: test.testDataAttested ?? false,
+    irreversibleActionScopes: structuredClone(
+      test.irreversibleActionScopes ?? [],
+    ),
     startUrl: test.startUrl,
     instructions: test.instructions,
     device: test.device,

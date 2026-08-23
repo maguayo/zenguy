@@ -1,20 +1,46 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { z } from "zod";
 
 import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
+import { Field } from "../../components/ui/Field";
+import { Input } from "../../components/ui/Input";
+import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useResendVerification } from "./useResendVerification";
 
 const POLL_INTERVAL_MS = 10_000;
 
-/** Signed in but not yet verified: waits for the link in the inbox to be used. */
+export const pendingVerificationSchema = z.object({
+  email: z.string().email("Enter a valid email address."),
+});
+
+type PendingVerificationValues = z.infer<typeof pendingVerificationSchema>;
+
+/** Public/token-free after registration; legacy signed-in users also keep polling. */
 export default function VerifyPending() {
-  const { refreshUser, signOut, user } = useAuth();
+  const { refreshUser, signOut, status, user } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
-  const { countdown, resend, sending } = useResendVerification(user?.email ?? "");
+  const stateEmail = (location.state as { email?: unknown } | null)?.email;
+  const form = useForm<PendingVerificationValues>({
+    defaultValues: {
+      email:
+        user?.email ?? (typeof stateEmail === "string" ? stateEmail : ""),
+    },
+    resolver: zodResolver(pendingVerificationSchema),
+  });
+  const email = form.watch("email");
+  const { countdown, resend, sending } = useResendVerification(email);
+  const signedIn = status === "signedIn" && user !== null;
 
   useEffect(() => {
+    if (status !== "signedIn" || user === null || user.emailVerified) {
+      return undefined;
+    }
     let polling = false;
     const check = () => {
       if (polling) return;
@@ -40,32 +66,66 @@ export default function VerifyPending() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", check);
     };
-  }, [navigate, refreshUser]);
+  }, [navigate, refreshUser, signedIn, user?.emailVerified]);
 
-  if (!user) return null;
+  const submit = form.handleSubmit(async () => resend());
 
   return (
     <AuthShell
       description={
-        <>
-          We sent a verification link to <span className="font-medium text-zinc-700">{user.email}</span>.
-        </>
+        email.length > 0 ? (
+          <>
+            We sent a verification link to{" "}
+            <span className="font-medium text-zinc-700">{email}</span>.
+          </>
+        ) : (
+          "Enter your email to resend the verification link."
+        )
       }
       footer={
-        <button className="font-medium text-accent-700 hover:underline" type="button" onClick={() => void signOut()}>
-          Sign out
-        </button>
+        signedIn ? (
+          <button
+            className="font-medium text-accent-700 hover:underline"
+            type="button"
+            onClick={() => void signOut()}
+          >
+            Sign out
+          </button>
+        ) : (
+          <Link className="font-medium text-accent-700 hover:underline" to="/signin">
+            Sign in
+          </Link>
+        )
       }
       title="Verify your email"
     >
-      <Button
-        className="w-full"
-        disabled={countdown > 0}
-        loading={sending}
-        onClick={() => void resend()}
-      >
-        {countdown > 0 ? `Resend email in ${countdown}s` : "Resend email"}
-      </Button>
+      <p className="mb-4 text-sm text-zinc-600">
+        Open the link, then enter the password you chose during registration.
+      </p>
+      <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
+        <Field
+          error={fieldError(form.formState, "email")}
+          htmlFor="pending-verification-email"
+          label="Email"
+          required
+        >
+          <Input
+            autoComplete="email"
+            id="pending-verification-email"
+            invalid={Boolean(form.formState.errors.email)}
+            type="email"
+            {...form.register("email")}
+          />
+        </Field>
+        <Button
+          className="w-full"
+          disabled={countdown > 0}
+          loading={sending}
+          type="submit"
+        >
+          {countdown > 0 ? `Resend email in ${countdown}s` : "Resend email"}
+        </Button>
+      </form>
     </AuthShell>
   );
 }

@@ -16,10 +16,13 @@ export class DurableWorkflowMaintenance {
     private readonly attempts: Pick<AttemptLifecycle, "resumePendingJobs">,
     private readonly checks: Pick<HandleCheckMessage, "resumePendingJobs">,
     private readonly publisher: Pick<PublishQueueOutbox, "flush">,
-    private readonly outbox: Pick<OutboxRepo, "purgePublished">,
+    private readonly outbox: Pick<
+      OutboxRepo,
+      "purgePublished" | "purgeQuarantinedOutbox"
+    >,
     private readonly workflows: Pick<
       DurableWorkflowRepo,
-      "purgeCompleted"
+      "purgeCompleted" | "purgeQuarantinedJobs"
     >,
     private readonly clock: Clock,
   ) {}
@@ -29,6 +32,8 @@ export class DurableWorkflowMaintenance {
     failed: number;
     purgedOutbox: number;
     purgedJobs: number;
+    purgedQuarantinedOutbox: number;
+    purgedQuarantinedJobs: number;
   }> {
     const continuations = await Promise.allSettled([
       this.attempts.resumePendingJobs(),
@@ -39,10 +44,23 @@ export class DurableWorkflowMaintenance {
     }
     const published = await this.publisher.flush();
     const before = this.clock.now() - RETENTION_MS;
-    const [purgedOutbox, purgedJobs] = await Promise.all([
+    const [
+      purgedOutbox,
+      purgedJobs,
+      purgedQuarantinedOutbox,
+      purgedQuarantinedJobs,
+    ] = await Promise.all([
       this.outbox.purgePublished(before, PURGE_LIMIT),
       this.workflows.purgeCompleted(before, PURGE_LIMIT),
+      this.outbox.purgeQuarantinedOutbox(before, PURGE_LIMIT),
+      this.workflows.purgeQuarantinedJobs(before, PURGE_LIMIT),
     ]);
-    return { ...published, purgedOutbox, purgedJobs };
+    return {
+      ...published,
+      purgedOutbox,
+      purgedJobs,
+      purgedQuarantinedOutbox,
+      purgedQuarantinedJobs,
+    };
   }
 }

@@ -71,7 +71,8 @@ export function DeliveryRow({
           </Link>
         ) : null}
       </div>
-      {delivery.status === "FAILED" && delivery.errorSanitized ? (
+      {(delivery.status === "FAILED" || delivery.status === "AMBIGUOUS") &&
+      delivery.errorSanitized ? (
         <Tooltip className="max-w-full" content={delivery.errorSanitized}>
           <span className="block max-w-full truncate rounded bg-zinc-100 px-2 py-1 font-mono text-xs text-zinc-700">
             {delivery.errorSanitized}

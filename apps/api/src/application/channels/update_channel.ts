@@ -10,12 +10,16 @@ import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import {
+  encryptSecret,
+  type EncryptionKeyring,
+} from "../../shared/crypto";
 import { forbidden, notFound, validation } from "../../shared/errors";
 import {
   PAID_CHANNELS_OFF_MESSAGE,
   PUSH_DEFAULT_REQUIRED_MESSAGE,
 } from "./create_channel";
+import { writeWithActiveDataKeyRetry } from "../security/write_with_active_data_key";
 import { channelName, parseChannelConfig } from "./input";
 import { channelOutput, type ChannelOutput } from "./types";
 
@@ -25,7 +29,7 @@ export class UpdateChannel {
     private readonly subscriptions: SubscriptionRepo,
     private readonly alerts: Pick<AlertRepo, "findSettings" | "getBalanceCents">,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
     private readonly clock: Clock,
   ) {}
 
@@ -41,7 +45,11 @@ export class UpdateChannel {
     ip?: string;
   }): Promise<ChannelOutput> {
     if (!can(input.actorRole, "channels.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     if (
       input.name === undefined &&
       input.enabled === undefined &&
@@ -57,6 +65,12 @@ export class UpdateChannel {
       input.channelId,
     );
     if (channel === null) throw notFound("Notification channel");
+    if (
+      isPaidChannelType(channel.type) &&
+      !can(input.actorRole, "paid_alerts.manage")
+    ) {
+      throw forbidden();
+    }
     if (channel.type === "PUSH" && input.isDefault === false) {
       throw validation([
         { field: "isDefault", message: PUSH_DEFAULT_REQUIRED_MESSAGE },
@@ -78,15 +92,26 @@ export class UpdateChannel {
     if (input.name !== undefined) changes.name = channelName(input.name);
     if (input.enabled !== undefined) changes.enabled = input.enabled;
     if (input.isDefault !== undefined) changes.isDefault = input.isDefault;
+    const now = this.clock.now();
     if (input.config !== undefined) {
       const config = parseChannelConfig(channel.type, input.config);
-      changes.encryptedConfig = await encryptSecret(
-        JSON.stringify(config),
-        this.encryptionKey,
+      changes.encryptedConfig = await writeWithActiveDataKeyRetry(
+        () =>
+          encryptSecret(JSON.stringify(config), this.encryptionKeys, {
+            type: "notification_channel",
+            workspaceId: channel.workspaceId,
+            recordId: channel.id,
+          }),
+        (candidate) =>
+          this.channels.update(
+            channel.id,
+            { ...changes, encryptedConfig: candidate },
+            now,
+          ),
       );
+    } else {
+      await this.channels.update(channel.id, changes, now);
     }
-    const now = this.clock.now();
-    await this.channels.update(channel.id, changes, now);
     const updated = { ...channel, ...changes, updatedAt: now };
     await this.audit.execute({
       workspaceId: input.workspaceId,
@@ -103,6 +128,6 @@ export class UpdateChannel {
       },
       ip: input.ip,
     });
-    return channelOutput(updated, this.encryptionKey, paid);
+    return channelOutput(updated, this.encryptionKeys, paid);
   }
 }

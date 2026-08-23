@@ -8,6 +8,7 @@ const USER: User = {
   email: "alice@example.com",
   passwordHash: "password-hash",
   emailVerifiedAt: null,
+  authVersion: 1,
   createdAt: 1_000,
   updatedAt: 1_000,
 };
@@ -26,6 +27,22 @@ describe("D1UserRepo", () => {
     await expect(repo.findById(USER.id)).resolves.toEqual(USER);
     await expect(repo.findByEmail("ALICE@EXAMPLE.COM")).resolves.toEqual(USER);
     await expect(repo.findById("usr_missing")).resolves.toBeNull();
+  });
+
+  it("finds a deduplicated batch of users", async () => {
+    const other = {
+      ...USER,
+      id: "usr_bob",
+      name: "Bob",
+      email: "bob@example.com",
+    };
+    await repo.insert(USER);
+    await repo.insert(other);
+
+    await expect(
+      repo.findByIds([other.id, USER.id, other.id, "usr_missing"]),
+    ).resolves.toEqual(expect.arrayContaining([USER, other]));
+    await expect(repo.findByIds([])).resolves.toEqual([]);
   });
 
   it("enforces case-insensitive email uniqueness", async () => {
@@ -51,7 +68,36 @@ describe("D1UserRepo", () => {
       name: "Alice Smith",
       passwordHash: "new-hash",
       emailVerifiedAt: 2_000,
+      authVersion: 1,
       updatedAt: 4_000,
+    });
+  });
+
+  it("rehashes a password with compare-and-swap semantics", async () => {
+    await repo.insert(USER);
+
+    await expect(
+      repo.rehashPasswordIfUnchanged(
+        USER.id,
+        "stale-hash",
+        "must-not-win",
+        2_000,
+      ),
+    ).resolves.toBe(false);
+    await expect(repo.findById(USER.id)).resolves.toEqual(USER);
+
+    await expect(
+      repo.rehashPasswordIfUnchanged(
+        USER.id,
+        USER.passwordHash,
+        "rehash-v1",
+        3_000,
+      ),
+    ).resolves.toBe(true);
+    await expect(repo.findById(USER.id)).resolves.toEqual({
+      ...USER,
+      passwordHash: "rehash-v1",
+      updatedAt: 3_000,
     });
   });
 });

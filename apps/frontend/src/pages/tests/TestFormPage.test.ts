@@ -10,6 +10,10 @@ import {
 } from "./TestFormPage";
 
 const valid = {
+  allowedDomains: ["checkout.example.com", "*.login.example.com"],
+  writableDomains: ["staging.example.com", "checkout.example.com"],
+  testDataAttested: false,
+  irreversibleActionScopesJson: "[]",
   channelIds: [],
   device: "DESKTOP" as const,
   instructions: "Confirm the heading",
@@ -30,6 +34,18 @@ describe("browser test form", () => {
     );
     expect(testFormSchema.safeParse({ ...valid, intervalHours: 25 }).success).toBe(false);
     expect(testFormSchema.safeParse({ ...valid, maxRetries: 4 }).success).toBe(false);
+    expect(
+      testFormSchema.safeParse({ ...valid, allowedDomains: ["https://example.com"] }).success,
+    ).toBe(false);
+    expect(
+      testFormSchema.safeParse({ ...valid, allowedDomains: ["EXAMPLE.com"] }).success,
+    ).toBe(false);
+    expect(
+      testFormSchema.safeParse({ ...valid, writableDomains: ["*.example.com"] }).success,
+    ).toBe(false);
+    expect(
+      testFormSchema.safeParse({ ...valid, writableDomains: ["other.example.net"] }).success,
+    ).toBe(false);
   });
 
   it("offers every hourly schedule and complete retry descriptions", () => {
@@ -37,6 +53,73 @@ describe("browser test form", () => {
     expect(retryOptionLabel(3)).toBe(
       "3 retries — immediately, after 1 min, after 2 min",
     );
+  });
+
+  it("requires explicit staging attestation for irreversible scopes", () => {
+    const irreversibleActionScopesJson = JSON.stringify([
+      {
+        kind: "HTTP",
+        method: "POST",
+        origin: "https://staging.example.com",
+        path: "/orders",
+        maxUses: 1,
+      },
+    ]);
+    expect(
+      testFormSchema.safeParse({ ...valid, irreversibleActionScopesJson }).success,
+    ).toBe(false);
+    expect(
+      testFormSchema.safeParse({
+        ...valid,
+        testDataAttested: true,
+        irreversibleActionScopesJson,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects legacy DOM scopes without a signed submit/form identity", () => {
+    const legacyDomScope = {
+      kind: "DOM",
+      action: "CLICK",
+      origin: "https://staging.example.com",
+      path: "/checkout",
+      target: { attribute: "data-testid", value: "place-order" },
+      maxUses: 1,
+    };
+    const hardenedDomScope = {
+      ...legacyDomScope,
+      target: {
+        ...legacyDomScope.target,
+        tag: "BUTTON",
+        type: "submit",
+        form: {
+          method: "POST",
+          origin: "https://staging.example.com",
+          path: "/orders",
+        },
+      },
+    };
+    const httpScope = {
+      kind: "HTTP",
+      method: "POST",
+      origin: "https://staging.example.com",
+      path: "/orders",
+      maxUses: 1,
+    };
+    expect(
+      testFormSchema.safeParse({
+        ...valid,
+        testDataAttested: true,
+        irreversibleActionScopesJson: JSON.stringify([legacyDomScope, httpScope]),
+      }).success,
+    ).toBe(false);
+    expect(
+      testFormSchema.safeParse({
+        ...valid,
+        testDataAttested: true,
+        irreversibleActionScopesJson: JSON.stringify([hardenedDomScope, httpScope]),
+      }).success,
+    ).toBe(true);
   });
 
   it("keeps the required safety and timeout copy verbatim", () => {

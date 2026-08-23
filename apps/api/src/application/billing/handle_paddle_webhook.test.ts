@@ -5,6 +5,7 @@ import { FixedClock } from "../../shared/clock";
 import { hmacSha256Hex } from "../../shared/crypto";
 import { FakeIds } from "../../test/fakes/ids";
 import { FakeKv } from "../../test/fakes/kv";
+import { FakePaddleCheckoutIntentRepo } from "../../test/fakes/paddle_checkout_intents";
 import {
   FakeAuditRepo,
   FakePendingOveragePeriodRepo,
@@ -52,21 +53,56 @@ function setup(overageReporter = new RecordingOverageReporter()) {
   const subscriptions = new FakeSubscriptionRepo();
   const pendingOveragePeriods = new FakePendingOveragePeriodRepo();
   const audits = new FakeAuditRepo();
+  const checkoutIntents = new FakePaddleCheckoutIntentRepo();
+  checkoutIntents.intents.set("pci_subscription_1", {
+    id: "pci_subscription_1",
+    workspaceId: "ws_primary",
+    actorUserId: "usr_owner",
+    purpose: "subscription",
+    productId: "pro_test_zenguy",
+    priceId: "pri_test_monthly",
+    quantity: 1,
+    currencyCode: "EUR",
+    amountCents: 3_900,
+    createdAt: NOW - 1_000,
+    expiresAt: NOW + 60_000,
+    consumedAt: null,
+    providerReference: null,
+  });
   const handler = new HandlePaddleWebhook({
     webhookSecret: SIGNING_SECRET,
     kv: new FakeKv(clock),
     subscriptions,
+    checkoutIntents,
+    workspaces: {
+      findById: async (id: string) =>
+        id === "ws_primary"
+          ? {
+              id,
+              name: "Primary",
+              slug: "primary",
+              timezone: "UTC",
+              ownerUserId: "usr_owner",
+              createdAt: 1,
+              updatedAt: 1,
+              deletedAt: null,
+            }
+          : null,
+    },
     pendingOveragePeriods,
     overageReporter,
     audit: new WriteAudit({ audits, clock, ids: new FakeIds() }),
     clock,
     ids: new FakeIds(),
+    subscriptionProductId: "pro_test_zenguy",
+    subscriptionPriceId: "pri_test_monthly",
   });
   return {
     handler,
     subscriptions,
     pendingOveragePeriods,
     audits,
+    checkoutIntents,
     overageReporter,
   };
 }
@@ -117,6 +153,37 @@ describe("HandlePaddleWebhook", () => {
     expect(
       JSON.parse([...audits.entries.values()][0]?.metadataJson ?? "null"),
     ).toEqual({ status: "ACTIVE" });
+  });
+
+  it("rejects a different product even when price, currency, and net match", async () => {
+    const { handler, subscriptions, checkoutIntents } = setup();
+    const tampered = {
+      ...PADDLE_SUBSCRIPTION_CREATED,
+      event_id: "evt_subscription_wrong_product",
+      data: {
+        ...PADDLE_SUBSCRIPTION_CREATED.data,
+        items: [
+          {
+            ...PADDLE_SUBSCRIPTION_CREATED.data.items[0],
+            price: {
+              ...PADDLE_SUBSCRIPTION_CREATED.data.items[0].price,
+              product_id: "pro_other",
+            },
+          },
+        ],
+      },
+    };
+
+    await expect(deliver(handler, tampered)).rejects.toThrow(
+      "Paddle checkout does not match the server intent",
+    );
+
+    await expect(
+      subscriptions.findByWorkspace("ws_primary"),
+    ).resolves.toBeNull();
+    await expect(
+      checkoutIntents.findById("pci_subscription_1"),
+    ).resolves.toMatchObject({ consumedAt: null, providerReference: null });
   });
 
   it("processes each event id once", async () => {

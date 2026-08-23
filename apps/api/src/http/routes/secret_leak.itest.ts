@@ -46,6 +46,7 @@ const OWNER: User = {
   email: "owner@leak.test",
   passwordHash: "unused",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };

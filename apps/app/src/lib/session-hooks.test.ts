@@ -18,4 +18,26 @@ describe("sign-out hooks", () => {
     await runBeforeSignOut();
     expect(ran).toHaveBeenCalledTimes(1);
   });
+
+  it("fails closed when required push unregistration fails", async () => {
+    const unregister = jest.fn(async () => {
+      throw new Error("push DELETE failed");
+    });
+    const off = onBeforeSignOut(unregister);
+
+    await expect(runBeforeSignOut({ required: true })).rejects.toThrow(
+      "Required principal cleanup failed",
+    );
+    expect(unregister).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it("fails closed when required principal cleanup times out", async () => {
+    const off = onBeforeSignOut(() => new Promise<void>(() => undefined));
+
+    await expect(runBeforeSignOut({ required: true, timeoutMs: 5 })).rejects.toThrow(
+      "Required principal cleanup failed",
+    );
+    off();
+  });
 });

@@ -7,7 +7,20 @@ export const PADDLE_SUBSCRIPTION_CREATED = {
     id: "sub_provider_123",
     customer_id: "ctm_provider_123",
     status: "active",
-    custom_data: { workspace_id: "ws_primary" },
+    custom_data: {
+      checkout_intent_id: "pci_subscription_1",
+      checkout_intent_sig: "NpiF8opX5NGOcsXZ1WfI81IgCgyMFMtXldWjvw8hiBE",
+    },
+    items: [
+      {
+        price: {
+          id: "pri_test_monthly",
+          product_id: "pro_test_zenguy",
+          unit_price: { amount: "3900", currency_code: "EUR" },
+        },
+        quantity: 1,
+      },
+    ],
     current_billing_period: {
       starts_at: "2026-08-01T00:00:00Z",
       ends_at: "2026-09-01T00:00:00Z",
@@ -25,7 +38,17 @@ export const PADDLE_SUBSCRIPTION_UPDATED = {
     id: "sub_provider_123",
     customer_id: "ctm_provider_123",
     status: "past_due",
-    custom_data: { workspace_id: "ws_primary" },
+    custom_data: null,
+    items: [
+      {
+        price: {
+          id: "pri_test_monthly",
+          product_id: "pro_test_zenguy",
+          unit_price: { amount: "3900", currency_code: "EUR" },
+        },
+        quantity: 1,
+      },
+    ],
     current_billing_period: {
       starts_at: "2026-09-01T00:00:00Z",
       ends_at: "2026-10-01T00:00:00Z",

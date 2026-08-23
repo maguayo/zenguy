@@ -44,7 +44,11 @@ const events: ActivityFeedEvent[] = [
     type: "web.page_viewed",
     occurredAt: NOW - 60_000,
     source: "web",
-    actor: { id: "usr_one", name: "One", email: "one@example.com" },
+    actor: {
+      id: "usr_00000000000000000000000001",
+      name: "One",
+      email: "one@example.com",
+    },
     workspace: { id: "ws_acme", name: "Acme" },
     resourceType: null,
     resourceId: null,
@@ -103,7 +107,7 @@ function harnessFor(loaders: FakeLoaders) {
     loaders,
     secret: "unused-by-the-stand-in",
     adminEmails: "unused@example.com",
-    adminUserIds: "usr_unused",
+    adminUserIds: new Set(["usr_00000000000000000000000001"]),
     sessions: {},
   } as unknown as ActivityRoutesDependencies;
   harness.route("/api", activityRoutes(dependencies));

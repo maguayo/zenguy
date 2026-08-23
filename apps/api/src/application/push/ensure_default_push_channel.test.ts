@@ -2,7 +2,7 @@ import { defaultAlertSettings } from "../../domain/alerts/types";
 import type { BrowserTest } from "../../domain/browser_tests/types";
 import type { UptimeMonitor } from "../../domain/uptime/types";
 import { FixedClock } from "../../shared/clock";
-import { decryptSecret } from "../../shared/crypto";
+import { createEncryptionKeyring, decryptSecret } from "../../shared/crypto";
 import { FakeAlertRepo } from "../../test/fakes/alerts";
 import { FakeBrowserTestRepo } from "../../test/fakes/browser_test_repos";
 import { FakeIds } from "../../test/fakes/ids";
@@ -14,6 +14,7 @@ import {
 } from "./ensure_default_push_channel";
 
 const KEY = new Uint8Array(32).fill(5);
+const KEYS = createEncryptionKeyring({ id: "test-default-push", key: KEY });
 const NOW = 1_700_000_000_000;
 
 function browserTest(id: string, workspaceId: string, deletedAt: number | null = null): BrowserTest {
@@ -82,7 +83,7 @@ async function fixture() {
     alerts,
     tests,
     monitors,
-    KEY,
+    KEYS,
     new FixedClock(NOW),
     new FakeIds(),
   );
@@ -103,9 +104,13 @@ describe("EnsureDefaultPushChannel", () => {
       isDefault: true,
       createdBy: null,
     });
-    await expect(decryptSecret(channel?.encryptedConfig ?? "", KEY)).resolves.toBe(
-      JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }),
-    );
+    await expect(
+      decryptSecret(channel?.encryptedConfig ?? "", KEYS, {
+        type: "notification_channel",
+        workspaceId: "ws_1",
+        recordId: channel?.id ?? "missing",
+      }),
+    ).resolves.toBe(JSON.stringify({ recipients: "WORKSPACE_MEMBERS" }));
     expect(await tests.getChannelIds("bt_1")).toEqual(["ch_email", first.channelId].sort());
     expect(await tests.getChannelIds("bt_deleted")).toEqual([]);
     expect(await tests.getChannelIds("bt_other")).toEqual([]);

@@ -1,6 +1,6 @@
 import { defaultAlertSettings } from "../../domain/alerts/types";
 import { FixedClock } from "../../shared/clock";
-import { decryptSecret } from "../../shared/crypto";
+import { createEncryptionKeyring, decryptSecret } from "../../shared/crypto";
 import { FakeAlertRepo } from "../../test/fakes/alerts";
 import { FakeIds } from "../../test/fakes/ids";
 import { FakeChannelRepo } from "../../test/fakes/repos";
@@ -10,6 +10,7 @@ import {
 } from "./ensure_default_email_channel";
 
 const KEY = new Uint8Array(32).fill(7);
+const KEYS = createEncryptionKeyring({ id: "test-default-email", key: KEY });
 const NOW = 1_700_000_000_000;
 
 function fixture() {
@@ -18,7 +19,7 @@ function fixture() {
   const ensure = new EnsureDefaultEmailChannel(
     channels,
     alerts,
-    KEY,
+    KEYS,
     new FixedClock(NOW),
     new FakeIds(),
   );
@@ -46,7 +47,11 @@ describe("EnsureDefaultEmailChannel", () => {
       createdBy: "usr_owner",
     });
     await expect(
-      decryptSecret(stored?.encryptedConfig ?? "", KEY),
+      decryptSecret(stored?.encryptedConfig ?? "", KEYS, {
+        type: "notification_channel",
+        workspaceId: "ws_1",
+        recordId: stored?.id ?? "missing",
+      }),
     ).resolves.toBe(JSON.stringify({ emails: ["owner@acme.test"] }));
     expect(alerts.settings.get("ws_1")).toMatchObject({
       defaultEmailChannelCreatedAt: NOW,

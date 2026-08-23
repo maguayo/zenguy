@@ -4,13 +4,14 @@ import type { UserRepo } from "../../domain/users/repo";
 import type { Role } from "../../domain/workspaces/types";
 import { notFound } from "../../shared/errors";
 import { monitorOutput, type MonitorOutput } from "./types";
+import type { EncryptionKeyring } from "../../shared/crypto";
 
 export class GetMonitor {
   constructor(
     private readonly monitors: MonitorRepo,
     private readonly incidents: IncidentRepo,
     private readonly users: UserRepo,
-    private readonly encryptionKey: Uint8Array,
+    private readonly encryptionKeys: EncryptionKeyring,
   ) {}
 
   async execute(input: {
@@ -36,7 +37,7 @@ export class GetMonitor {
       creator,
       incident,
       role: input.role,
-      encryptionKey: this.encryptionKey,
+      encryptionKeys: this.encryptionKeys,
     });
   }
 }

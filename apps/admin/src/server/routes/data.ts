@@ -9,6 +9,8 @@ import { loadWorkers } from "../db/workers";
 import type { AppEnv, Clock } from "../env";
 import { AppError } from "../errors";
 import { requireSession } from "../require_session";
+import type { AdminSessionStore } from "../admin_sessions";
+import type { AdminUserIds } from "../allowlist";
 
 export interface Loaders {
   overview: typeof loadOverview;
@@ -20,8 +22,8 @@ export interface Loaders {
 export interface DataRoutesDependencies {
   db: D1Database;
   clock: Clock;
-  adminEmails: string;
-  secret: string;
+  adminUserIds: AdminUserIds;
+  sessions: AdminSessionStore;
   loaders?: Partial<Loaders>;
 }
 

@@ -1,10 +1,11 @@
 import type { WorkspaceSecret } from "../../domain/secrets/types";
 import { substitutePlaceholders } from "../../domain/secrets/rules";
-import { encryptSecret } from "../../shared/crypto";
+import { createEncryptionKeyring, encryptSecret } from "../../shared/crypto";
 import { FakeSecretRepo } from "../../test/fakes/repos";
 import { buildRedactor, ResolveSecrets } from "./resolve_secrets";
 
 const KEY = new Uint8Array(32).fill(11);
+const KEYS = createEncryptionKeyring({ id: "test-resolve", key: KEY });
 
 async function stored(
   id: string,
@@ -17,8 +18,12 @@ async function stored(
     id,
     workspaceId,
     key,
-    encryptedValue: await encryptSecret(value, KEY),
-    encryptionVersion: 1,
+    encryptedValue: await encryptSecret(value, KEYS, {
+      type: "workspace_secret",
+      workspaceId,
+      recordId: id,
+    }),
+    encryptionVersion: 4,
     allowedDomains,
     description: null,
     createdBy: "usr_owner",
@@ -56,7 +61,7 @@ async function setup() {
       ["example.com"],
     ),
   );
-  const resolver = new ResolveSecrets(repo, KEY);
+  const resolver = new ResolveSecrets(repo, KEYS);
   return {
     repo,
     resolved: await resolver.execute({

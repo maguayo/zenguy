@@ -10,6 +10,12 @@ import type {
   RunnerOutcomeInput,
   RunnerStepInput,
 } from "../../domain/browser_tests/runner_protocol";
+import type { z } from "zod";
+import { runnerAuthorizeActionSchema } from "../../domain/browser_tests/runner_protocol";
+import {
+  actionMatchesScope,
+  verifyIrreversibleRunAuthorization,
+} from "../../domain/browser_tests/irreversible_authorization";
 import { runnerKindFromVersion } from "../../domain/browser_tests/runner_protocol";
 import type {
   RunArtifact,
@@ -52,11 +58,6 @@ const STALE_CLAIM_CANDIDATES = 5;
 export interface ExternalRunnerJob {
   reference: RunnerAttemptReference;
   snapshot: RunSnapshot;
-  secrets: Array<{
-    key: string;
-    value: string;
-    allowedDomains: string[];
-  }>;
   limits: {
     attemptTimeoutMs: number;
     maxAgentSteps: number;
@@ -65,12 +66,22 @@ export interface ExternalRunnerJob {
   };
 }
 
+export interface ExternalRunnerStart {
+  startedAt: number;
+  deadlineAt: number;
+  secrets: Array<{
+    key: string;
+    value: string;
+    allowedDomains: string[];
+  }>;
+}
+
 export interface ExternalRunnerDependencies {
   lifecycle: Pick<
     AttemptLifecycle,
     "claim" | "markRunning" | "onAttemptFinished"
   >;
-  runs: Pick<RunRepo, "findByIdForExecution">;
+  runs: Pick<RunRepo, "findByIdForExecution" | "consumeActionAuthorization">;
   attempts: Pick<
     AttemptRepo,
     "findById" | "isRunnerDeliveryOwner" | "listExternallyClaimable"
@@ -81,6 +92,7 @@ export interface ExternalRunnerDependencies {
   resolveSecrets: Pick<ResolveSecrets, "execute">;
   clock: Clock;
   ids: IdGenerator;
+  authorizationSigningSecret: string;
 }
 
 interface AttemptState {
@@ -172,15 +184,21 @@ export class ExternalRunner {
     const reference = messageReference(input);
     const state = await this.state(reference);
     if (state === null || state.attempt.status !== "STARTING") return null;
-    const secrets = await this.secretsForRun(state.run);
+    const snapshot = structuredClone(state.run.snapshot);
+    const authorization = snapshot.irreversibleAuthorization;
+    const authorizationValid =
+      authorization !== undefined &&
+      authorization.runId === state.run.id &&
+      authorization.workspaceId === state.run.workspaceId &&
+      authorization.approvedByUserId === state.run.triggeredByUserId &&
+      (await verifyIrreversibleRunAuthorization(
+        snapshot,
+        this.dependencies.authorizationSigningSecret,
+      ));
+    if (!authorizationValid) delete snapshot.irreversibleAuthorization;
     return {
       reference,
-      snapshot: structuredClone(state.run.snapshot),
-      secrets: [...secrets].map(([key, secret]) => ({
-        key,
-        value: secret.value,
-        allowedDomains: [...secret.allowedDomains],
-      })),
+      snapshot,
       limits: {
         attemptTimeoutMs: ATTEMPT_TIMEOUT_MS,
         maxAgentSteps: MAX_AGENT_STEPS,
@@ -190,9 +208,56 @@ export class ExternalRunner {
     };
   }
 
+  async authorizeAction(
+    input: z.infer<typeof runnerAuthorizeActionSchema>,
+  ): Promise<boolean> {
+    const state = await this.state(input.reference);
+    if (
+      state === null ||
+      state.run.status !== "RUNNING" ||
+      state.attempt.status !== "RUNNING"
+    ) {
+      return false;
+    }
+    const authorization = state.run.snapshot.irreversibleAuthorization;
+    if (
+      authorization === undefined ||
+      authorization.runId !== state.run.id ||
+      authorization.workspaceId !== state.run.workspaceId ||
+      authorization.approvedByUserId !== state.run.triggeredByUserId ||
+      !(await verifyIrreversibleRunAuthorization(
+        state.run.snapshot,
+        this.dependencies.authorizationSigningSecret,
+      )) ||
+      !authorization.scopes.some((scope) =>
+        actionMatchesScope(input.action, scope),
+      )
+    ) {
+      return false;
+    }
+    const consumed = await this.dependencies.runs.consumeActionAuthorization(
+      state.run.id,
+      input.action,
+    );
+    if (consumed) {
+      platformAlert("browser_irreversible_action_authorized", {
+        runId: state.run.id,
+        attemptId: state.attempt.id,
+        kind: input.action.kind,
+        origin: input.action.origin,
+        path: input.action.path,
+        operation:
+          input.action.kind === "HTTP"
+            ? input.action.method
+            : input.action.action,
+      });
+    }
+    return consumed;
+  }
+
   async claimStale(input: {
     deliveryId: string;
-    workerId?: string;
+    workerId: string;
   }): Promise<ExternalRunnerJob | null> {
     const now = this.dependencies.clock.now();
     // Also surface abandoned STARTING/RUNNING attempts: claiming them runs
@@ -222,9 +287,10 @@ export class ExternalRunner {
 
   async start(
     reference: RunnerAttemptReference,
-  ): Promise<{ startedAt: number; deadlineAt: number } | null> {
+  ): Promise<ExternalRunnerStart | null> {
     let state = await this.state(reference);
     if (state === null || isRunTerminal(state.run)) return null;
+    let newlyStarted = false;
     if (state.attempt.status === "STARTING") {
       await this.dependencies.lifecycle.markRunning(
         reference.runId,
@@ -233,6 +299,7 @@ export class ExternalRunner {
         reference.executionGeneration,
       );
       state = await this.state(reference);
+      newlyStarted = true;
     }
     if (
       state === null ||
@@ -241,9 +308,20 @@ export class ExternalRunner {
     ) {
       return null;
     }
+    // Secret material is a one-response lease. Replaying the job capability
+    // may resume an already running attempt, but it never releases the values
+    // a second time.
+    const secrets = newlyStarted
+      ? await this.secretsForRun(state.run)
+      : new Map();
     return {
       startedAt: state.attempt.startedAt,
       deadlineAt: state.attempt.startedAt + ATTEMPT_TIMEOUT_MS,
+      secrets: [...secrets].map(([key, secret]) => ({
+        key,
+        value: secret.value,
+        allowedDomains: [...secret.allowedDomains],
+      })),
     };
   }
 

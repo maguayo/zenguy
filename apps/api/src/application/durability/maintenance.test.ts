@@ -42,6 +42,18 @@ describe("DurableWorkflowMaintenance", () => {
     };
     durable.outboxEntries.set(oldOutbox.id, oldOutbox);
     durable.outboxEntries.set(recentOutbox.id, recentOutbox);
+    const oldQuarantinedOutbox = {
+      ...createOutboxEntry({
+        dedupeKey: "old:quarantined",
+        queueKind: "RUN" as const,
+        payload: {},
+        availableAt: OLD,
+        now: OLD,
+        ids,
+      }),
+    };
+    durable.outboxEntries.set(oldQuarantinedOutbox.id, oldQuarantinedOutbox);
+    await durable.quarantineOutbox(oldQuarantinedOutbox.id, OLD, "poison");
     const oldJob = {
       ...createDurableJob({
         kind: "RUN_FINALIZATION" as const,
@@ -66,6 +78,15 @@ describe("DurableWorkflowMaintenance", () => {
     };
     durable.jobs.set(oldJob.id, oldJob);
     durable.jobs.set(recentJob.id, recentJob);
+    const oldQuarantinedJob = createDurableJob({
+      kind: "RUN_FINALIZATION" as const,
+      aggregateKey: "run_poison",
+      payload: {},
+      now: OLD,
+      ids,
+    });
+    durable.jobs.set(oldQuarantinedJob.id, oldQuarantinedJob);
+    durable.quarantinedJobsAt.set(oldQuarantinedJob.id, OLD);
     const attempts = { resumePendingJobs: vi.fn(async () => undefined) };
     const checks = { resumePendingJobs: vi.fn(async () => undefined) };
     const queue = new NoopQueue();
@@ -88,6 +109,8 @@ describe("DurableWorkflowMaintenance", () => {
       failed: 0,
       purgedOutbox: 1,
       purgedJobs: 1,
+      purgedQuarantinedOutbox: 1,
+      purgedQuarantinedJobs: 1,
     });
     expect(attempts.resumePendingJobs).toHaveBeenCalledOnce();
     expect(checks.resumePendingJobs).toHaveBeenCalledOnce();
@@ -95,5 +118,7 @@ describe("DurableWorkflowMaintenance", () => {
     expect(durable.outboxEntries.has(recentOutbox.id)).toBe(true);
     expect(durable.jobs.has(oldJob.id)).toBe(false);
     expect(durable.jobs.has(recentJob.id)).toBe(true);
+    expect(durable.outboxEntries.has(oldQuarantinedOutbox.id)).toBe(false);
+    expect(durable.jobs.has(oldQuarantinedJob.id)).toBe(false);
   });
 });

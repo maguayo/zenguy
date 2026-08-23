@@ -129,6 +129,7 @@ export function RunStatusPanel({ compact = false, onTerminal, runId, wsId }: Run
       {latestScreenshot ? (
         <Image
           accessibilityLabel="Latest validation screenshot"
+          cachePolicy="memory"
           contentFit="cover"
           contentPosition="top"
           source={{ uri: absoluteArtifactUrl(latestScreenshot.url) }}

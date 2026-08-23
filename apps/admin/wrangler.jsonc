@@ -6,7 +6,7 @@
   "name": "zenguy-admin",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "assets": {
     "directory": "./dist/client",
@@ -15,6 +15,8 @@
     "run_worker_first": true
   },
   "routes": [{ "pattern": "admin.zenguy.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
   "d1_databases": [
     {
       "binding": "DB",
@@ -22,9 +24,12 @@
       "database_id": "82cdd9c1-591f-45c4-a115-17fcdc18950b"
     }
   ],
+  "secrets": {
+    "required": ["ADMIN_USER_IDS"]
+  },
   "vars": {
-    "ADMIN_EMAILS": "marcos@aguayo.es",
-    "ZENGUY_API_ORIGIN": "https://api.zenguy.com"
+    "ZENGUY_API_ORIGIN": "https://api.zenguy.com",
+    "CF_ACCESS_TEAM_DOMAIN": "https://bugfer.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "d17d9dd9175eddbde9658c1c4d1005921e1d54b41b19d81c1a14f02f70e0fb65"
   }
-  // Secret (wrangler secret put): ADMIN_SESSION_SECRET (>= 32 chars)
 }

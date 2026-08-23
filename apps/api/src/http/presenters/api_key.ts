@@ -8,6 +8,7 @@ export function presentApiKey(apiKey: ApiKeyOutput) {
   return {
     ...apiKey,
     createdAt: iso(apiKey.createdAt),
+    expiresAt: iso(apiKey.expiresAt),
     lastUsedAt: apiKey.lastUsedAt === null ? null : iso(apiKey.lastUsedAt),
     revokedAt: apiKey.revokedAt === null ? null : iso(apiKey.revokedAt),
   };

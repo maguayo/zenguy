@@ -1,5 +1,6 @@
 import type { NotificationMessage } from "../../domain/channels/notifier";
 import { FixedClock } from "../../shared/clock";
+import { PUSH_DEVICE_INACTIVITY_TTL_DAYS } from "../../shared/constants";
 import { FakePushDeviceRepo } from "../../test/fakes/push";
 import {
   EXPO_PUSH_ENDPOINT,
@@ -46,13 +47,19 @@ function token(index: number): string {
 }
 
 describe("push payload", () => {
-  it("turns web links into app deep links and keeps the payload small", () => {
+  it("keeps verified Universal Links and refuses external destinations", () => {
     expect(pushDeepLink(FAILURE.link, "https://app.zenguy.test/")).toBe(
-      "zenguy://w/ws_1/incidents/inc_1",
+      "https://app.zenguy.test/w/ws_1/incidents/inc_1",
     );
     expect(pushDeepLink("https://elsewhere.test/x", "https://app.zenguy.test")).toBe(
-      "https://elsewhere.test/x",
+      "https://app.zenguy.test",
     );
+    expect(
+      pushDeepLink(
+        "https://app.zenguy.test/w/ws_1/incidents/inc_1?token=secret#private",
+        "https://app.zenguy.test",
+      ),
+    ).toBe("https://app.zenguy.test/w/ws_1/incidents/inc_1");
     const [message] = buildPushMessages([token(1)], FAILURE, {
       workspaceId: "ws_1",
       appUrl: "https://app.zenguy.test",
@@ -62,7 +69,7 @@ describe("push payload", () => {
       title: "❌ Checkout failed",
       body: 'Browser test "Checkout" failed after all configured retries.',
       data: {
-        url: "zenguy://w/ws_1/incidents/inc_1",
+        url: "https://app.zenguy.test/w/ws_1/incidents/inc_1",
         workspaceId: "ws_1",
         eventType: "FAILURE",
         incidentId: "inc_1",
@@ -76,7 +83,7 @@ describe("push payload", () => {
       { workspaceId: "ws_1", appUrl: "https://app.zenguy.test" },
     );
     expect(test?.data).toEqual({
-      url: "zenguy://w/ws_1/alerts",
+      url: "https://app.zenguy.test/w/ws_1/alerts",
       workspaceId: "ws_1",
       eventType: "TEST",
     });
@@ -101,6 +108,7 @@ describe("ExpoPushClient", () => {
     expect(result).toHaveLength(101);
     expect(recorder.requests).toHaveLength(2);
     expect(recorder.requests[0]?.url).toBe(EXPO_PUSH_ENDPOINT);
+    expect(recorder.requests[0]?.init?.signal).toBeInstanceOf(AbortSignal);
     const headers = new Headers(recorder.requests[0]?.init?.headers);
     expect(headers.get("Authorization")).toBe("Bearer expo-secret");
     expect(headers.get("Content-Type")).toBe("application/json");
@@ -203,6 +211,27 @@ describe("ExpoPushSender", () => {
       updatedAt: 9_000,
     });
     expect(devices.devices.get("pd_b")?.enabled).toBe(true);
+  });
+
+  it("does not send sensitive notifications to inactive devices", async () => {
+    const { devices, recorder, sender } = fixture([
+      tickets({ status: "ok", id: "ticket-active" }),
+    ]);
+    const stale = devices.devices.get("pd_b");
+    if (stale === undefined) throw new Error("Missing fixture device");
+    devices.devices.set("pd_b", {
+      ...stale,
+      lastSeenAt:
+        9_000 - PUSH_DEVICE_INACTIVITY_TTL_DAYS * 24 * 60 * 60 * 1_000 - 1,
+    });
+
+    await expect(sender.send("ws_1", FAILURE)).resolves.toEqual({
+      providerMessageId: "ticket-active",
+    });
+    const body = JSON.parse(String(recorder.requests[0]?.init?.body)) as {
+      to: string;
+    }[];
+    expect(body.map((message) => message.to)).toEqual([token(1)]);
   });
 
   it("fails with a redacted reason when no ticket was accepted", async () => {

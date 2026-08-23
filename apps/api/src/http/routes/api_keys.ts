@@ -5,6 +5,7 @@ import { ListApiKeys } from "../../application/api_keys/list_api_keys";
 import { RevokeApiKey } from "../../application/api_keys/revoke_api_key";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { ApiKeyRepo } from "../../domain/api_keys/repo";
+import { API_KEY_SCOPES } from "../../domain/api_keys/types";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
@@ -12,6 +13,7 @@ import type {
   WorkspaceRepo,
 } from "../../domain/workspaces/repo";
 import type { Clock } from "../../shared/clock";
+import { API_KEY_MAX_TTL_DAYS } from "../../shared/constants";
 import type { AppConfig } from "../../shared/config";
 import type { IdGenerator } from "../../shared/ids";
 import type { AppEnv } from "../env";
@@ -33,7 +35,15 @@ export interface ApiKeyRoutesDependencies {
   config: Pick<AppConfig, "jwtSecret">;
 }
 
-const createSchema = z.object({ name: z.string() });
+const createSchema = z.object({
+  name: z.string(),
+  scopes: z
+    .array(z.enum(API_KEY_SCOPES))
+    .min(1)
+    .max(API_KEY_SCOPES.length)
+    .optional(),
+  expiresInDays: z.number().int().min(1).max(API_KEY_MAX_TTL_DAYS).optional(),
+});
 
 function requestIp(context: {
   req: { header(name: string): string | undefined };
@@ -47,7 +57,10 @@ export function apiKeyRoutes(
   const app = new Hono<AppEnv>();
   const auth = requireAuth(dependencies);
   const workspace = withWorkspace(dependencies);
-  const active = requireActiveSubscription(dependencies.subscriptions);
+  const active = requireActiveSubscription(
+    dependencies.subscriptions,
+    dependencies.clock,
+  );
   const createApiKey = new CreateApiKey(
     dependencies.apiKeys,
     dependencies.subscriptions,

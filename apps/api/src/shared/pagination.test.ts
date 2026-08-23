@@ -23,4 +23,11 @@ describe("pagination cursors", () => {
       }
     },
   );
+
+  it("rejects oversized cursors and cursor IDs", () => {
+    expect(() => decodeCursor("a".repeat(513))).toThrowError(AppError);
+    expect(() => decodeCursor(encodeCursor(1, "a".repeat(257)))).toThrowError(
+      AppError,
+    );
+  });
 });

@@ -2,6 +2,10 @@ import type {
   ChannelSender,
   NotificationMessage,
 } from "../../domain/channels/notifier";
+import {
+  providerAmbiguous,
+  providerRejected,
+} from "../../domain/channels/notifier";
 import type { NotifyMessage } from "../../domain/queues";
 import type {
   ChannelType,
@@ -12,7 +16,7 @@ import { defaultAlertSettings } from "../../domain/alerts/types";
 import type { User } from "../../domain/users/types";
 import type { Workspace } from "../../domain/workspaces/types";
 import { FixedClock } from "../../shared/clock";
-import { encryptSecret } from "../../shared/crypto";
+import { createEncryptionKeyring, encryptSecret } from "../../shared/crypto";
 import { FakeAlertRepo } from "../../test/fakes/alerts";
 import { RecordingEmailSender } from "../../test/fakes/email";
 import { FakeIds } from "../../test/fakes/ids";
@@ -28,6 +32,7 @@ import type {
 import { SendQueuedNotification } from "./send_queued_notification";
 
 const KEY = new Uint8Array(32).fill(9);
+const KEYS = createEncryptionKeyring({ id: "test-paid-queue", key: KEY });
 const NOW = 5_000;
 const MESSAGE: NotificationMessage = {
   eventType: "FAILURE",
@@ -54,6 +59,7 @@ const OWNER: User = {
   email: "owner@acme.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -69,6 +75,7 @@ class RecordingIncidentEvents implements IncidentEventWriter {
 class SelectiveSender implements ChannelSender {
   readonly calls: ChannelType[] = [];
   failures = 0;
+  ambiguous = false;
 
   async send(channel: {
     type: ChannelType;
@@ -77,7 +84,9 @@ class SelectiveSender implements ChannelSender {
     this.calls.push(channel.type);
     if (this.failures > 0) {
       this.failures -= 1;
-      throw new Error("twilio error 500");
+      throw this.ambiguous
+        ? providerAmbiguous("twilio error network")
+        : providerRejected("twilio error 500");
     }
     return { providerMessageId: `provider-${channel.type}` };
   }
@@ -109,7 +118,8 @@ async function smsChannel(id: string): Promise<NotificationChannel> {
     type: "SMS",
     encryptedConfig: await encryptSecret(
       JSON.stringify({ phoneNumber: "+34600123456", consent: true }),
-      KEY,
+      KEYS,
+      { type: "notification_channel", workspaceId: "ws_1", recordId: id },
     ),
     enabled: true,
     verifiedAt: null,
@@ -166,7 +176,7 @@ async function fixture(options: { enabled?: boolean; balance?: number } = {}) {
     channels,
     sender,
     incidents,
-    KEY,
+    KEYS,
     clock,
     charger,
   );
@@ -237,6 +247,32 @@ describe("SendQueuedNotification with paid channels", () => {
     });
   });
 
+  it("refuses legacy paid destinations without explicit recipient consent", async () => {
+    const { deliveries, sender, channels, alerts, consumer } = await fixture();
+    const legacy = await encryptSecret(
+      JSON.stringify({ phoneNumber: "+34600123456" }),
+      KEYS,
+      {
+        type: "notification_channel",
+        workspaceId: "ws_1",
+        recordId: "ch_sms",
+      },
+    );
+    await channels.update("ch_sms", { encryptedConfig: legacy }, NOW);
+    const body = notify("del_1", "ch_sms");
+    const message = new RecordingMessage(body);
+
+    await consumer.execute(body, message);
+
+    expect(sender.calls).toEqual([]);
+    expect(message.ackCount).toBe(1);
+    expect(await alerts.getBalanceCents("ws_1")).toBe(100);
+    await expect(deliveries.findById("ws_1", "del_1")).resolves.toMatchObject({
+      status: "FAILED",
+      errorSanitized: "explicit recipient consent is required",
+    });
+  });
+
   it("keeps a single charge across provider retries and refunds on final failure", async () => {
     const { deliveries, sender, alerts, consumer } = await fixture();
     sender.failures = 3;
@@ -268,5 +304,29 @@ describe("SendQueuedNotification with paid channels", () => {
       deliveryId: "del_1",
     });
     expect(sender.calls).toEqual(["SMS", "SMS", "SMS"]);
+  });
+
+  it("keeps the charge reserved and does not resend an ambiguous paid delivery", async () => {
+    const { deliveries, sender, alerts, consumer } = await fixture();
+    sender.failures = 1;
+    sender.ambiguous = true;
+    const body = notify("del_1", "ch_sms");
+    const first = new RecordingMessage(body);
+
+    await consumer.execute(body, first);
+
+    expect(first.ackCount).toBe(1);
+    expect(first.retryOptions).toEqual([]);
+    expect(await alerts.getBalanceCents("ws_1")).toBe(82);
+    expect(alerts.entries.filter((entry) => entry.kind === "REFUND")).toEqual([]);
+    await expect(deliveries.findById("ws_1", "del_1")).resolves.toMatchObject({
+      status: "PENDING",
+      dispatchState: "AMBIGUOUS",
+      attemptCount: 1,
+    });
+
+    await consumer.execute(body, new RecordingMessage(body));
+    expect(sender.calls).toEqual(["SMS"]);
+    expect(await alerts.getBalanceCents("ws_1")).toBe(82);
   });
 });

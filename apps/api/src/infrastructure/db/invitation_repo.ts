@@ -1,6 +1,6 @@
 import type { InvitationRepo } from "../../domain/workspaces/repo";
-import type { WorkspaceInvitation } from "../../domain/workspaces/types";
-import { all, one, run } from "./d1";
+import type { Role, WorkspaceInvitation } from "../../domain/workspaces/types";
+import { all, batch, one, run } from "./d1";
 
 interface InvitationRow {
   id: string;
@@ -110,6 +110,84 @@ export class D1InvitationRepo implements InvitationRepo {
     return row === null ? null : toInvitation(row);
   }
 
+  async acceptByHash(input: {
+    hash: string;
+    email: string;
+    userId: string;
+    memberId: string;
+    now: number;
+  }): Promise<WorkspaceInvitation | null> {
+    const authority = `(inviter.role = 'OWNER'
+      OR (inviter.role = 'ADMIN' AND invitation.role = 'MEMBER'))`;
+    const [inserted, accepted] = await batch<InvitationRow>(this.database, [
+      this.database
+        .prepare(
+          `INSERT OR IGNORE INTO workspace_members
+            (id, workspace_id, user_id, role, invited_by, joined_at)
+           SELECT ?, invitation.workspace_id, ?, invitation.role,
+                  invitation.invited_by, ?
+           FROM workspace_invitations invitation
+           JOIN workspace_members inviter
+             ON inviter.workspace_id = invitation.workspace_id
+            AND inviter.user_id = invitation.invited_by
+           JOIN workspaces workspace ON workspace.id = invitation.workspace_id
+           WHERE invitation.token_hash = ?
+             AND invitation.email = ? COLLATE NOCASE
+             AND invitation.accepted_at IS NULL
+             AND invitation.revoked_at IS NULL
+             AND invitation.expires_at > ?
+             AND workspace.deleted_at IS NULL
+             AND ${authority}`,
+        )
+        .bind(
+          input.memberId,
+          input.userId,
+          input.now,
+          input.hash,
+          input.email,
+          input.now,
+        ),
+      this.database
+        .prepare(
+          `UPDATE workspace_invitations AS invitation
+           SET accepted_at = ?
+           WHERE invitation.token_hash = ?
+             AND invitation.email = ? COLLATE NOCASE
+             AND invitation.accepted_at IS NULL
+             AND invitation.revoked_at IS NULL
+             AND invitation.expires_at > ?
+             AND EXISTS (
+               SELECT 1 FROM workspaces workspace
+               WHERE workspace.id = invitation.workspace_id
+                 AND workspace.deleted_at IS NULL
+             )
+             AND EXISTS (
+               SELECT 1 FROM workspace_members target
+               WHERE target.workspace_id = invitation.workspace_id
+                 AND target.user_id = ?
+             )
+             AND EXISTS (
+               SELECT 1 FROM workspace_members inviter
+               WHERE inviter.workspace_id = invitation.workspace_id
+                 AND inviter.user_id = invitation.invited_by
+                 AND (inviter.role = 'OWNER'
+                   OR (inviter.role = 'ADMIN' AND invitation.role = 'MEMBER'))
+             )
+           RETURNING *`,
+        )
+        .bind(
+          input.now,
+          input.hash,
+          input.email,
+          input.now,
+          input.userId,
+        ),
+    ]);
+    void inserted;
+    const row = accepted?.results[0];
+    return row === undefined ? null : toInvitation(row);
+  }
+
   async markAccepted(id: string, at: number): Promise<void> {
     await run(
       this.database
@@ -120,14 +198,35 @@ export class D1InvitationRepo implements InvitationRepo {
     );
   }
 
-  async revoke(id: string, at: number): Promise<void> {
-    await run(
+  async revoke(id: string, at: number): Promise<boolean> {
+    const result = await run(
       this.database
         .prepare(
           "UPDATE workspace_invitations SET revoked_at = ? WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL",
         )
         .bind(at, id),
     );
+    return result.meta.changes === 1;
+  }
+
+  async revokeUnauthorizedByInviter(
+    workspaceId: string,
+    inviterUserId: string,
+    currentRole: Role | null,
+    at: number,
+  ): Promise<number> {
+    if (currentRole === "OWNER") return 0;
+    const result = await run(
+      this.database
+        .prepare(
+          `UPDATE workspace_invitations SET revoked_at = ?
+           WHERE workspace_id = ? AND invited_by = ?
+             AND accepted_at IS NULL AND revoked_at IS NULL
+             AND (? != 'ADMIN' OR role = 'ADMIN')`,
+        )
+        .bind(at, workspaceId, inviterUserId, currentRole ?? "NONE"),
+    );
+    return result.meta.changes;
   }
 
   async revokeAllForWorkspace(workspaceId: string, at: number): Promise<void> {

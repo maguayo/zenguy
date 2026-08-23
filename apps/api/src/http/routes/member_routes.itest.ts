@@ -7,9 +7,12 @@ import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { D1WorkspaceRepo } from "../../infrastructure/db/workspace_repo";
+import { D1InvitationRepo } from "../../infrastructure/db/invitation_repo";
+import { D1ApiKeyRepo } from "../../infrastructure/db/api_key_repo";
+import { D1ChannelRepo } from "../../infrastructure/db/channel_repo";
 import { systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
-import { freshDb, testEnv } from "../../test/helpers";
+import { encryptTestValue, freshDb, testEnv } from "../../test/helpers";
 import type { AppEnv } from "../env";
 
 type Actor = "owner" | "admin" | "member";
@@ -21,6 +24,7 @@ const USERS: Record<Actor | "target", User> = {
     email: "owner@members.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -30,6 +34,7 @@ const USERS: Record<Actor | "target", User> = {
     email: "admin@members.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -39,6 +44,7 @@ const USERS: Record<Actor | "target", User> = {
     email: "member@members.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -48,6 +54,7 @@ const USERS: Record<Actor | "target", User> = {
     email: "target@members.test",
     passwordHash: "hash",
     emailVerifiedAt: 1,
+    authVersion: 1,
     createdAt: 1_000,
     updatedAt: 1_000,
   },
@@ -236,5 +243,78 @@ describe("member routes", () => {
     await expect(adminRemoval.json()).resolves.toMatchObject({
       error: { message: "Only the owner can remove admins" },
     });
+  });
+
+  it("revokes delegated invitations and API keys when an admin is demoted", async () => {
+    const invitations = new D1InvitationRepo(testEnv().DB);
+    const apiKeys = new D1ApiKeyRepo(testEnv().DB);
+    const channels = new D1ChannelRepo(testEnv().DB);
+    await members.updateRole(WORKSPACE.id, USERS.target.id, "ADMIN");
+    await invitations.insert({
+      id: "inv_target_planted",
+      workspaceId: WORKSPACE.id,
+      email: "later@example.com",
+      role: "MEMBER",
+      tokenHash: "target-planted-hash",
+      invitedBy: USERS.target.id,
+      expiresAt: Date.now() + 10_000,
+      acceptedAt: null,
+      revokedAt: null,
+      createdAt: 2_000,
+    });
+    await apiKeys.insert({
+      id: "key_target_created",
+      workspaceId: WORKSPACE.id,
+      name: "Target key",
+      keyPrefix: "zgk_target",
+      keyHash: "target-key-hash",
+      scopes: ["workspace:read"],
+      expiresAt: Date.now() + 86_400_000,
+      createdBy: USERS.target.id,
+      createdAt: 2_000,
+      lastUsedAt: null,
+      revokedAt: null,
+    });
+    await channels.insert({
+      id: "chn_target_created",
+      workspaceId: WORKSPACE.id,
+      name: "Target webhook",
+      type: "SLACK",
+      encryptedConfig: await encryptTestValue({
+        type: "notification_channel",
+        workspaceId: WORKSPACE.id,
+        recordId: "chn_target_created",
+      }),
+      enabled: true,
+      isDefault: false,
+      verifiedAt: 2_000,
+      lastDeliveryStatus: null,
+      createdBy: USERS.target.id,
+      createdAt: 2_000,
+      updatedAt: 2_000,
+    });
+
+    const response = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/members/${USERS.target.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...authorization("owner"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ role: "MEMBER" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(invitations.findByHash("target-planted-hash")).resolves.toMatchObject({
+      revokedAt: expect.any(Number),
+    });
+    await expect(apiKeys.findByHash("target-key-hash")).resolves.toMatchObject({
+      revokedAt: expect.any(Number),
+    });
+    await expect(
+      channels.findById(WORKSPACE.id, "chn_target_created"),
+    ).resolves.toMatchObject({ enabled: false });
   });
 });

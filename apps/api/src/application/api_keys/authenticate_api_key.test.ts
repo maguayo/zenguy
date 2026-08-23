@@ -25,7 +25,7 @@ async function seed(
 }
 
 describe("AuthenticateApiKey", () => {
-  it("resolves the workspace and touches last_used_at", async () => {
+  it("resolves the workspace without writing usage before the request limiter", async () => {
     const fixture = build();
     await seed(fixture);
 
@@ -33,9 +33,23 @@ describe("AuthenticateApiKey", () => {
 
     expect(result.workspace.id).toBe(WORKSPACE.id);
     expect(result.apiKey.id).toBe("ak_stored_1");
-    expect(fixture.apiKeys.apiKeys.get("ak_stored_1")?.lastUsedAt).toBe(
-      fixture.clock.now(),
-    );
+    expect(fixture.apiKeys.apiKeys.get("ak_stored_1")?.lastUsedAt).toBeNull();
+  });
+
+  it("rejects expired keys and keys without an explicit read scope", async () => {
+    const expired = build();
+    await seed(expired, { expiresAt: expired.clock.now() });
+    await expect(expired.useCase.execute({ key: PLAINTEXT })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Invalid API key",
+    });
+
+    const unscoped = build();
+    await seed(unscoped, { scopes: [] });
+    await expect(unscoped.useCase.execute({ key: PLAINTEXT })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Invalid API key",
+    });
   });
 
   it("rejects unknown, malformed, and revoked keys with the same error", async () => {

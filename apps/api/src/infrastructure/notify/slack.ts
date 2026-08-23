@@ -1,4 +1,12 @@
 import type { NotificationMessage } from "../../domain/channels/notifier";
+import {
+  providerAmbiguous,
+  providerRejected,
+} from "../../domain/channels/notifier";
+import {
+  cancelResponseBody,
+  externalProviderSignal,
+} from "../../shared/limited_response";
 
 export type SlackFetch = (
   input: string,
@@ -36,10 +44,19 @@ export class SlackWebhookSender {
             },
           ],
         }),
+        signal: externalProviderSignal(),
       });
-    } catch {
-      throw new Error("slack error network");
+    } catch (error) {
+      throw providerAmbiguous("slack error network", { cause: error });
     }
-    if (!response.ok) throw new Error(`slack error ${response.status}`);
+    if (!response.ok) {
+      await cancelResponseBody(response);
+      const message = `slack error ${response.status}`;
+      if (response.status >= 500 || [408, 425, 429].includes(response.status)) {
+        throw providerAmbiguous(message);
+      }
+      throw providerRejected(message);
+    }
+    await cancelResponseBody(response);
   }
 }

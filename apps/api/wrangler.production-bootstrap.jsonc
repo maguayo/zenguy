@@ -3,7 +3,7 @@
   "name": "zenguy-api-production",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
   "preview_urls": false,
   "observability": { "enabled": true },
@@ -28,6 +28,13 @@
   "r2_buckets": [
     { "binding": "ARTIFACTS", "bucket_name": "zenguy-artifacts" }
   ],
+  "services": [
+    {
+      "binding": "KEY_WRAPPING",
+      "service": "zenguy-kms-production",
+      "entrypoint": "KeyWrappingService"
+    }
+  ],
   "queues": {
     "producers": [
       { "binding": "RUN_QUEUE", "queue": "zenguy-runs" },
@@ -38,6 +45,9 @@
   "vars": {
     "ENVIRONMENT": "production",
     "APP_URL": "https://app.zenguy.com",
+    "CF_ACCESS_TEAM_DOMAIN": "https://bugfer.cloudflareaccess.com",
+    "ENCRYPTION_KEY_ID": "primary",
+    "KEY_WRAPPING_KEY_ID": "primary",
     "LLM_MODEL": "qwen/qwen3.8-27b",
     "PADDLE_ENVIRONMENT": "production",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",

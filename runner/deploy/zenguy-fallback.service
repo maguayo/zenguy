@@ -1,33 +1,92 @@
-# Example systemd unit for the Zenguy fallback (plan-B) runner on a VPS.
+# Example systemd unit for the isolated Zenguy fallback stack on a VPS.
 # Install as /etc/systemd/system/zenguy-fallback.service, then:
 #   systemctl daemon-reload && systemctl enable --now zenguy-fallback
 #
-# /etc/zenguy/fallback.env (root:root, mode 0600) must define:
-#   ZENGUY_RUNNER_TOKEN=...   # same value as the environment's RUNNER_API_TOKEN secret
+# /etc/zenguy/fallback.env (root:root, mode 0600; passed only to the container)
+# must define:
+#   ZENGUY_RUNNER_TOKEN=...   # environment's RUNNER_FALLBACK_API_TOKEN secret
 #   OPENAI_API_KEY=...
+#   CF_ACCESS_CLIENT_ID=...    # environment/runner-specific Access service token
+#   CF_ACCESS_CLIENT_SECRET=...
+#
+# /etc/zenguy/fallback.runtime.env (root:root, mode 0600; non-secret) defines:
+#   ZENGUY_RUNNER_IMAGE=ghcr.io/maguayo/zenguy-runner@sha256:<64 hex>
+#   ZENGUY_EGRESS_PROXY_IMAGE=ghcr.io/maguayo/zenguy-egress-proxy@sha256:<64 hex>
+#   ZENGUY_RUNNER_RELEASE_TAG=runner-v<approved release>
+#   ZENGUY_RUNNER_RELEASE_SHA=<approved 40-character Git commit SHA>
+#   ZENGUY_RUNNER_ENVIRONMENT=production
+#   ZENGUY_WORKER_ID=zenguy-production-fallback
+#   ZENGUY_API_URL=https://app.zenguy.com
+#   ZENGUY_HOST_EGRESS_DENY_FILE=/etc/zenguy/host-egress-deny.conf
 # Optional overrides:
 #   ZENGUY_FALLBACK_MODEL=gpt-5-mini
 #   ZENGUY_FALLBACK_REASONING_EFFORT=low
-#   ZENGUY_FALLBACK_CHROME=/usr/bin/chromium
 #   ZENGUY_FALLBACK_POLL_SECONDS=5
 #
-# Append --staging to ExecStart to back up staging instead of production.
+# Configure staging in runner/deploy/compose.yml only on a separate host and
+# with independent credentials. Direct host execution is intentionally absent.
 
 [Unit]
-Description=Zenguy fallback browser-test runner (plan B)
-After=network-online.target
-Wants=network-online.target
+Description=Zenguy isolated fallback browser-test stack (plan B)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
 
 [Service]
 Type=simple
 User=zenguy
 WorkingDirectory=/opt/zenguy/runner
-EnvironmentFile=/etc/zenguy/fallback.env
-ExecStart=/opt/zenguy/runner/.venv/bin/python /opt/zenguy/runner/browser_worker.py --fallback
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+EnvironmentFile=/etc/zenguy/fallback.runtime.env
+Environment=ZENGUY_RUNTIME_ENV_SOURCE=/etc/zenguy/fallback.runtime.env
+Environment=ZENGUY_SECRET_ENV_SOURCE=/etc/zenguy/fallback.env
+Environment=ZENGUY_DEPLOY_ROOT=/opt/zenguy/runner
+LoadCredential=fallback.env:/etc/zenguy/fallback.env
+Environment=ZENGUY_RUNNER_ENV_FILE=%d/fallback.env
+ExecStartPre=+/bin/sh /opt/zenguy/runner/deploy/verify-container-runtime.sh
+ExecStartPre=/bin/sh /opt/zenguy/runner/deploy/verify-runtime-images.sh
+# Only the fixed Docker orchestration commands use systemd's privileged `+`
+# prefix. The `zenguy` account therefore must NOT belong to the docker group.
+# Fixed names let every start/stop remove an attempt whose attached Docker CLI
+# died before --rm could run. The leading `-` ignores the expected not-found.
+ExecStartPre=-+/usr/bin/docker rm --force zenguy-fallback-attempt
+ExecStartPre=-+/usr/bin/docker rm --force zenguy-fallback-sandbox-preflight
+ExecStartPre=+/usr/bin/env ZENGUY_RUNNER_ENV_FILE=/dev/null /usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml down --timeout 30 --remove-orphans
+ExecStartPre=+/usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml pull --quiet runner egress-proxy
+ExecStartPre=+/usr/bin/env ZENGUY_RUNNER_ENV_FILE=/dev/null /usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml run --name zenguy-fallback-sandbox-preflight --rm --no-deps runner --verify-browser-sandbox
+ExecStartPre=+/usr/bin/env ZENGUY_RUNNER_ENV_FILE=/dev/null /usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml up --detach --no-build --remove-orphans egress-proxy
+ExecStart=+/usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml run --name zenguy-fallback-attempt --rm --no-deps runner
+ExecStop=-+/usr/bin/docker stop --time 30 zenguy-fallback-attempt
+# ExecStopPost also runs after startup failure or an unexpected Docker CLI
+# exit, unlike ExecStop. It is therefore the unconditional tenant cleanup.
+ExecStopPost=-+/usr/bin/docker rm --force zenguy-fallback-attempt
+ExecStopPost=-+/usr/bin/docker rm --force zenguy-fallback-sandbox-preflight
+ExecStopPost=+/usr/bin/env ZENGUY_RUNNER_ENV_FILE=/dev/null /usr/bin/docker compose --project-name zenguy-fallback --file /opt/zenguy/runner/deploy/compose.yml down --timeout 15 --remove-orphans
 Restart=always
-RestartSec=10
+RestartSec=2
+TimeoutStopSec=60
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=tmpfs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+TasksMax=512
+MemoryMax=2G
 
 [Install]
 WantedBy=multi-user.target

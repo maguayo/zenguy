@@ -60,6 +60,38 @@ describe("Refresh", () => {
         (token) => token.revokedAt !== null,
       ),
     ).toBe(true);
+    await expect(dependencies.users.findById("usr_alice")).resolves.toMatchObject({
+      authVersion: 2,
+    });
+    expect(dependencies.sessionSecurity.revokedAdminUsers).toContain("usr_alice");
+    expect(dependencies.sessionSecurity.disabledPushUsers).toContain("usr_alice");
+    await expect(
+      useCase.execute({ refreshTokenPlain: "original-plain" }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(dependencies.sessionSecurity.revocations).toHaveLength(1);
+  });
+
+  it("allows exactly one concurrent rotation and treats the loser as reuse", async () => {
+    const dependencies = authTestDependencies();
+    await dependencies.users.insert(testUser());
+    await insertRefresh(dependencies, "racing-token");
+    const useCase = new Refresh(dependencies);
+
+    const results = await Promise.allSettled([
+      useCase.execute({ refreshTokenPlain: "racing-token" }),
+      useCase.execute({ refreshTokenPlain: "racing-token" }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(
+      [...dependencies.refreshTokens.tokens.values()].every(
+        (token) => token.revokedAt !== null,
+      ),
+    ).toBe(true);
+    expect(dependencies.sessionSecurity.revocations).toEqual([
+      expect.objectContaining({ userId: "usr_alice", reason: "refresh_reuse" }),
+    ]);
   });
 
   it("rejects an expired refresh token", async () => {

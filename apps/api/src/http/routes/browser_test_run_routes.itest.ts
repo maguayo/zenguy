@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import type { Subscription } from "../../domain/billing/types";
 import type { BrowserTest } from "../../domain/browser_tests/types";
+import { verifyIrreversibleRunAuthorization } from "../../domain/browser_tests/irreversible_authorization";
 import type { AttemptMessage } from "../../domain/queues";
 import type { User } from "../../domain/users/types";
 import type { Workspace } from "../../domain/workspaces/types";
@@ -31,6 +32,7 @@ const OWNER: User = {
   email: "owner@runs.test",
   passwordHash: "hash",
   emailVerifiedAt: 1,
+  authVersion: 1,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -240,6 +242,7 @@ describe("browser test run creation routes", () => {
     const message = queue.messages[0];
     expect(message).toBeDefined();
     if (message === undefined) throw new Error("Run message missing");
+    const workerId = "primary-mac-1";
     const runnerHeaders = headers(
       `Bearer ${"runner-test-secret".padEnd(32, "-")}`,
     );
@@ -247,28 +250,35 @@ describe("browser test run creation routes", () => {
     const claimed = await app.request("/api/runner/attempts/claim", {
       method: "POST",
       headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "cf-message-1", message }),
+      body: JSON.stringify({ deliveryId: "cf-message-1", message, workerId }),
     });
     expect(claimed.status).toBe(200);
     const claimBody = (await claimed.json()) as {
       data: {
         disposition: "EXECUTE";
-        job: { reference: Record<string, unknown>; snapshot: { startUrl: string } };
+        job: {
+          capability: string;
+          reference: Record<string, unknown>;
+          snapshot: { startUrl: string };
+        };
       };
     };
     expect(claimBody.data).toMatchObject({
       disposition: "EXECUTE",
       job: {
         snapshot: { startUrl: TEST.startUrl },
-        secrets: [],
       },
     });
     const reference = claimBody.data.job.reference;
+    const jobHeaders = {
+      ...headers(`Bearer ${claimBody.data.job.capability}`),
+      "X-Zenguy-Worker-Id": workerId,
+    };
 
     const repeatedClaim = await app.request("/api/runner/attempts/claim", {
       method: "POST",
       headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "cf-message-1", message }),
+      body: JSON.stringify({ deliveryId: "cf-message-1", message, workerId }),
     });
     await expect(repeatedClaim.json()).resolves.toMatchObject({
       data: { disposition: "EXECUTE" },
@@ -276,7 +286,7 @@ describe("browser test run creation routes", () => {
     const competingClaim = await app.request("/api/runner/attempts/claim", {
       method: "POST",
       headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "cf-message-2", message }),
+      body: JSON.stringify({ deliveryId: "cf-message-2", message, workerId }),
     });
     await expect(competingClaim.json()).resolves.toEqual({
       data: { disposition: "SKIP" },
@@ -286,20 +296,20 @@ describe("browser test run creation routes", () => {
       `/api/runner/attempts/${message.attemptId}/start`,
       {
         method: "POST",
-        headers: runnerHeaders,
+        headers: jobHeaders,
         body: JSON.stringify({ reference }),
       },
     );
     expect(started.status).toBe(200);
     await expect(started.json()).resolves.toMatchObject({
-      data: { disposition: "STARTED", startedAt: NOW },
+      data: { disposition: "STARTED", startedAt: NOW, secrets: [] },
     });
 
     const step = await app.request(
       `/api/runner/attempts/${message.attemptId}/steps`,
       {
         method: "POST",
-        headers: runnerHeaders,
+        headers: jobHeaders,
         body: JSON.stringify({
           reference,
           step: {
@@ -319,7 +329,7 @@ describe("browser test run creation routes", () => {
       `/api/runner/attempts/${message.attemptId}/complete`,
       {
         method: "POST",
-        headers: runnerHeaders,
+        headers: jobHeaders,
         body: JSON.stringify({
           reference,
           outcome: {
@@ -372,14 +382,15 @@ describe("browser test run creation routes", () => {
     expect(created.status).toBe(202);
     const message = queue.messages[0];
     if (message === undefined) throw new Error("Run message missing");
-    const runnerHeaders = headers(
-      `Bearer ${"runner-test-secret".padEnd(32, "-")}`,
+    const workerId = "fallback-vps-1";
+    const fallbackHeaders = headers(
+      `Bearer ${"fallback-runner-test-secret".padEnd(32, "-")}`,
     );
 
     const early = await app.request("/api/runner/attempts/claim-stale", {
       method: "POST",
-      headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "fallback-vps-1" }),
+      headers: fallbackHeaders,
+      body: JSON.stringify({ deliveryId: "fallback-delivery-1", workerId }),
     });
     expect(early.status).toBe(200);
     await expect(early.json()).resolves.toEqual({
@@ -393,8 +404,8 @@ describe("browser test run creation routes", () => {
     });
     const claimed = await laterApp.request("/api/runner/attempts/claim-stale", {
       method: "POST",
-      headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "fallback-vps-1" }),
+      headers: fallbackHeaders,
+      body: JSON.stringify({ deliveryId: "fallback-delivery-1", workerId }),
     });
     expect(claimed.status).toBe(200);
     const claimedBody = (await claimed.json()) as {
@@ -408,7 +419,7 @@ describe("browser test run creation routes", () => {
           attemptId: message.attemptId,
           attemptIndex: 0,
           executionGeneration: message.executionGeneration,
-          deliveryId: "fallback-vps-1",
+          deliveryId: "fallback-delivery-1",
         },
         snapshot: { startUrl: TEST.startUrl },
       },
@@ -419,8 +430,12 @@ describe("browser test run creation routes", () => {
 
     const localClaim = await app.request("/api/runner/attempts/claim", {
       method: "POST",
-      headers: runnerHeaders,
-      body: JSON.stringify({ deliveryId: "cf-late-delivery", message }),
+      headers: headers(`Bearer ${"runner-test-secret".padEnd(32, "-")}`),
+      body: JSON.stringify({
+        deliveryId: "cf-late-delivery",
+        message,
+        workerId: "primary-mac-1",
+      }),
     });
     await expect(localClaim.json()).resolves.toEqual({
       data: { disposition: "SKIP" },
@@ -499,6 +514,71 @@ describe("browser test run creation routes", () => {
       runId: body.data.runId,
       attemptIndex: 0,
     });
+  });
+
+  it("requires a fresh human confirmation before funding exact draft scopes", async () => {
+    const scopedDraft = {
+      ...DRAFT,
+      writableDomains: ["shop.example.com"],
+      testDataAttested: true,
+      irreversibleActionScopes: [
+        {
+          kind: "HTTP" as const,
+          method: "POST" as const,
+          origin: "https://shop.example.com",
+          path: "/orders",
+          maxUses: 1,
+        },
+      ],
+    };
+    const unapprovedResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/validate`,
+      {
+        method: "POST",
+        headers: headers(ownerToken),
+        body: JSON.stringify(scopedDraft),
+      },
+    );
+    const unapprovedBody = (await unapprovedResponse.json()) as {
+      data: { runId: string };
+    };
+    const unapproved = await runs.findById(
+      WORKSPACE.id,
+      unapprovedBody.data.runId,
+    );
+    expect(unapproved?.snapshot.irreversibleAuthorization).toBeUndefined();
+    expect(unapproved?.actionAuthorizations).toEqual([]);
+
+    const approvedResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/browser-tests/validate`,
+      {
+        method: "POST",
+        headers: headers(ownerToken),
+        body: JSON.stringify({
+          config: scopedDraft,
+          approveIrreversibleActions: true,
+        }),
+      },
+    );
+    expect(approvedResponse.status).toBe(202);
+    const approvedBody = (await approvedResponse.json()) as {
+      data: { runId: string };
+    };
+    const approved = await runs.findById(
+      WORKSPACE.id,
+      approvedBody.data.runId,
+    );
+    expect(approved?.actionAuthorizations).toEqual([
+      { scope: scopedDraft.irreversibleActionScopes[0], remainingUses: 1 },
+    ]);
+    expect(
+      approved === null
+        ? false
+        : await verifyIrreversibleRunAuthorization(
+            approved.snapshot,
+            loadConfig(testEnv()).runnerCapabilitySecret,
+          ),
+    ).toBe(true);
   });
 
   it("returns 403 for members and 402 without a subscription", async () => {

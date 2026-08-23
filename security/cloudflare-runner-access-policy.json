@@ -1,0 +1,31 @@
+{
+  "contractVersion": 1,
+  "environments": {
+    "production": {
+      "applicationName": "zenguy-production-runner",
+      "issuerBinding": "CF_ACCESS_TEAM_DOMAIN",
+      "audienceBinding": "CF_RUNNER_ACCESS_AUD",
+      "hostnames": [
+        "api.zenguy.com",
+        "app.zenguy.com"
+      ],
+      "path": "/api/runner/*",
+      "policyType": "service_auth",
+      "denyByDefault": true,
+      "allowHumanIdentities": false,
+      "bypassPolicies": [],
+      "identities": {
+        "primary": {
+          "serviceTokenName": "zenguy-production-primary-runner",
+          "workerId": "zenguy-production-primary",
+          "bootstrapBinding": "RUNNER_API_TOKEN"
+        },
+        "fallback": {
+          "serviceTokenName": "zenguy-production-fallback-runner",
+          "workerId": "zenguy-production-fallback",
+          "bootstrapBinding": "RUNNER_FALLBACK_API_TOKEN"
+        }
+      }
+    }
+  }
+}

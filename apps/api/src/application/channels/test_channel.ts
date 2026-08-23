@@ -10,19 +10,32 @@ import type {
 import type { ChannelSender } from "../../domain/channels/notifier";
 import { buildNotificationMessage } from "../../domain/channels/templates";
 import type { NotificationDelivery } from "../../domain/channels/types";
+import {
+  channelConfigSchema,
+  hasRecipientConsent,
+  type ChannelConfig,
+  type ChannelType,
+} from "../../domain/channels/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
 import type { AppConfig } from "../../shared/config";
 import { RATE_LIMITS } from "../../shared/constants";
-import { decryptSecret } from "../../shared/crypto";
-import { AppError, forbidden, notFound } from "../../shared/errors";
+import { decryptSecret, sha256Hex } from "../../shared/crypto";
+import { forbidden, notFound, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
-import type { RateLimiter } from "../../shared/ratelimit";
+import {
+  enforceRateLimitScopes,
+  type RateLimiter,
+} from "../../shared/ratelimit";
 import { Redactor, truncate } from "../../shared/redact";
 import type { PaidDeliveryCharger } from "../alerts/charge_paid_delivery";
 import { deliveryOutput, type DeliveryOutput } from "./types";
+
+export interface WorkspaceOperational {
+  isOperational(workspaceId: string): Promise<boolean>;
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "notification error";
@@ -50,6 +63,30 @@ function channelConfigRedactor(plaintext: string, config?: unknown): Redactor {
   );
 }
 
+function destinationValues(type: ChannelType, config: ChannelConfig): string[] {
+  switch (type) {
+    case "EMAIL":
+      return "emails" in config
+        ? config.emails.map((email) => email.trim().toLowerCase())
+        : [];
+    case "SMS":
+    case "WHATSAPP":
+    case "CALL":
+      return "phoneNumber" in config ? [config.phoneNumber] : [];
+    case "SLACK":
+    case "DISCORD":
+      return "webhookUrl" in config ? [config.webhookUrl] : [];
+    case "PUSH":
+      // The workspace scope already uniquely identifies this audience.
+      return [];
+  }
+}
+
+function rateAddress(value: string | undefined): string {
+  const raw = value?.trim().toLowerCase() ?? "unknown";
+  return /^[0-9a-f:.]{1,64}$/iu.test(raw) ? raw : "invalid";
+}
+
 export class TestChannel {
   constructor(
     private readonly channels: ChannelRepo,
@@ -58,10 +95,11 @@ export class TestChannel {
     private readonly sender: ChannelSender,
     private readonly rateLimiter: RateLimiter,
     private readonly audit: Pick<WriteAudit, "execute">,
-    private readonly config: Pick<AppConfig, "appUrl" | "encryptionKey">,
+    private readonly config: Pick<AppConfig, "appUrl" | "encryptionKeys">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
     private readonly charger: PaidDeliveryCharger,
+    private readonly workspaceOperational?: WorkspaceOperational,
   ) {}
 
   async execute(input: {
@@ -73,23 +111,70 @@ export class TestChannel {
     ip?: string;
   }): Promise<DeliveryOutput> {
     if (!can(input.actorRole, "channels.manage")) throw forbidden();
-    await ensureActiveSubscription(this.subscriptions, input.workspaceId);
+    await ensureActiveSubscription(
+      this.subscriptions,
+      input.workspaceId,
+      this.clock.now(),
+    );
     const channel = await this.channels.findById(
       input.workspaceId,
       input.channelId,
     );
     if (channel === null) throw notFound("Notification channel");
-    const rate = await this.rateLimiter.hit(
-      `channel_test:${input.workspaceId}:${channel.id}`,
-      RATE_LIMITS.channel_test.limit,
-      RATE_LIMITS.channel_test.windowSeconds,
+    if (
+      isPaidChannelType(channel.type) &&
+      !can(input.actorRole, "paid_alerts.manage")
+    ) {
+      throw forbidden();
+    }
+    const address = rateAddress(input.ip);
+    const addressDigest = await sha256Hex(address);
+    await enforceRateLimitScopes(
+      this.rateLimiter,
+      [
+        `channel_test:workspace:${input.workspaceId}`,
+        `channel_test:actor:${input.actor.id}`,
+        `channel_test:ip:${addressDigest}`,
+      ],
+      RATE_LIMITS.channel_test,
     );
-    if (!rate.allowed) {
-      throw new AppError(
-        "RATE_LIMITED",
-        "Too many requests",
-        undefined,
-        rate.retryAfterSeconds,
+
+    // Resolve the write-only destination before creating a delivery. This
+    // gives every recipient a stable budget independent of channel/account
+    // rotation without persisting the recipient itself in rate-limit keys.
+    const plaintext = await decryptSecret(
+      channel.encryptedConfig,
+      this.config.encryptionKeys,
+      {
+        type: "notification_channel",
+        workspaceId: channel.workspaceId,
+        recordId: channel.id,
+      },
+    );
+    const parsedConfig = channelConfigSchema(channel.type).parse(
+      JSON.parse(plaintext) as unknown,
+    );
+    if (!hasRecipientConsent(channel.type, parsedConfig)) {
+      throw validation([
+        {
+          field: "config.consent",
+          message: "Explicit recipient consent is required",
+        },
+      ]);
+    }
+    const destinationKeys = await Promise.all(
+      [...new Set(destinationValues(channel.type, parsedConfig))].map(
+        async (destination) => {
+          const digest = await sha256Hex(`${channel.type}:${destination}`);
+          return `channel_test:destination:${digest}`;
+        },
+      ),
+    );
+    if (destinationKeys.length > 0) {
+      await enforceRateLimitScopes(
+        this.rateLimiter,
+        destinationKeys,
+        RATE_LIMITS.channel_test,
       );
     }
 
@@ -119,17 +204,13 @@ export class TestChannel {
     });
 
     let result: NotificationDelivery;
-    let redactor = new Redactor([]);
+    let redactor = channelConfigRedactor(plaintext, parsedConfig);
     const paid = isPaidChannelType(channel.type);
     let charged = false;
     try {
-      const plaintext = await decryptSecret(
-        channel.encryptedConfig,
-        this.config.encryptionKey,
-      );
-      redactor = channelConfigRedactor(plaintext);
-      const parsedConfig = JSON.parse(plaintext) as unknown;
-      redactor = channelConfigRedactor(plaintext, parsedConfig);
+      if (!(await this.isWorkspaceOperational(input.workspaceId))) {
+        return this.stopForDeletion(delivery, channel);
+      }
       let cost: Pick<NotificationDelivery, "costCents" | "destinationCountry"> =
         {};
       if (paid) {
@@ -160,9 +241,26 @@ export class TestChannel {
           destinationCountry: charge.destination.name,
         };
       }
+      // Charge/decrypt can yield to another isolate. Re-read the tombstone at
+      // the last possible point before the irreversible provider call.
+      if (!(await this.isWorkspaceOperational(input.workspaceId))) {
+        if (charged) {
+          await this.charger.refund({
+            workspaceId: input.workspaceId,
+            deliveryId: delivery.id,
+            reason: "workspace deletion requested",
+          });
+        }
+        return this.stopForDeletion(delivery, channel);
+      }
       const sent = await this.sender.send(
         { type: channel.type, config: parsedConfig, workspaceId: input.workspaceId },
         message,
+        {
+          deliveryId: delivery.id,
+          idempotencyKey: delivery.id,
+          attemptCount: 1,
+        },
       );
       result = {
         ...delivery,
@@ -208,6 +306,33 @@ export class TestChannel {
       }
     }
     return this.finish(input, channel, result);
+  }
+
+  private async isWorkspaceOperational(workspaceId: string): Promise<boolean> {
+    return (
+      this.workspaceOperational === undefined ||
+      (await this.workspaceOperational.isOperational(workspaceId))
+    );
+  }
+
+  private async stopForDeletion(
+    delivery: NotificationDelivery,
+    channel: { id: string },
+  ): Promise<DeliveryOutput> {
+    const stopped = {
+      ...delivery,
+      status: "FAILED" as const,
+      errorSanitized: "workspace deletion requested",
+    };
+    await this.deliveries.update(delivery.id, {
+      status: "FAILED",
+      errorSanitized: stopped.errorSanitized,
+      attemptCount: delivery.attemptCount,
+    });
+    await this.channels.setLastDeliveryStatus(channel.id, "FAILED");
+    // Do not write a post-tombstone audit row containing actor/resource data;
+    // the deletion audit was committed before the saga began.
+    return deliveryOutput(stopped);
   }
 
   private async finish(

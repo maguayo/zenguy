@@ -1,5 +1,9 @@
 import type { ApiKeyRepo } from "../../domain/api_keys/repo";
-import type { WorkspaceApiKey } from "../../domain/api_keys/types";
+import {
+  API_KEY_SCOPES,
+  type ApiKeyScope,
+  type WorkspaceApiKey,
+} from "../../domain/api_keys/types";
 import { all, one, run } from "./d1";
 
 interface ApiKeyRow {
@@ -8,10 +12,26 @@ interface ApiKeyRow {
   name: string;
   key_prefix: string;
   key_hash: string;
+  scopes_json: string;
+  expires_at: number;
   created_by: string | null;
   created_at: number;
   last_used_at: number | null;
   revoked_at: number | null;
+}
+
+function parseScopes(value: string): ApiKeyScope[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const allowed = new Set<string>(API_KEY_SCOPES);
+    if (!parsed.every((scope) => typeof scope === "string" && allowed.has(scope))) {
+      return [];
+    }
+    return [...new Set(parsed)] as ApiKeyScope[];
+  } catch {
+    return [];
+  }
 }
 
 function toApiKey(row: ApiKeyRow): WorkspaceApiKey {
@@ -21,6 +41,8 @@ function toApiKey(row: ApiKeyRow): WorkspaceApiKey {
     name: row.name,
     keyPrefix: row.key_prefix,
     keyHash: row.key_hash,
+    scopes: parseScopes(row.scopes_json),
+    expiresAt: row.expires_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
@@ -37,8 +59,8 @@ export class D1ApiKeyRepo implements ApiKeyRepo {
         .prepare(
           `INSERT INTO workspace_api_keys
             (id, workspace_id, name, key_prefix, key_hash,
-             created_by, created_at, last_used_at, revoked_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             scopes_json, expires_at, created_by, created_at, last_used_at, revoked_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           apiKey.id,
@@ -46,6 +68,8 @@ export class D1ApiKeyRepo implements ApiKeyRepo {
           apiKey.name,
           apiKey.keyPrefix,
           apiKey.keyHash,
+          JSON.stringify(apiKey.scopes),
+          apiKey.expiresAt,
           apiKey.createdBy,
           apiKey.createdAt,
           apiKey.lastUsedAt,
@@ -90,14 +114,14 @@ export class D1ApiKeyRepo implements ApiKeyRepo {
     return rows.map(toApiKey);
   }
 
-  async countActive(workspaceId: string): Promise<number> {
+  async countActive(workspaceId: string, now: number): Promise<number> {
     const row = await one<{ total: number }>(
       this.database
         .prepare(
           `SELECT COUNT(*) AS total FROM workspace_api_keys
-           WHERE workspace_id = ? AND revoked_at IS NULL`,
+           WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ?`,
         )
-        .bind(workspaceId),
+        .bind(workspaceId, now),
     );
     return row?.total ?? 0;
   }
@@ -112,6 +136,22 @@ export class D1ApiKeyRepo implements ApiKeyRepo {
         )
         .bind(at, id),
     );
+  }
+
+  async revokeAllCreatedBy(
+    workspaceId: string,
+    creatorUserId: string,
+    at: number,
+  ): Promise<number> {
+    const result = await run(
+      this.database
+        .prepare(
+          `UPDATE workspace_api_keys SET revoked_at = ?
+           WHERE workspace_id = ? AND created_by = ? AND revoked_at IS NULL`,
+        )
+        .bind(at, workspaceId, creatorUserId),
+    );
+    return result.meta.changes;
   }
 
   async touchLastUsed(id: string, at: number): Promise<void> {

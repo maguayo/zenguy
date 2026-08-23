@@ -7,6 +7,10 @@ describe("StatusBadge", () => {
   it("maps known statuses and humanises unknown ones", async () => {
     expect(statusPresentation("PASSED")).toMatchObject({ label: "Passed", tone: "ok" });
     expect(statusPresentation("RUNNING")).toMatchObject({ pulse: true, tone: "info" });
+    expect(statusPresentation("AMBIGUOUS")).toEqual({
+      label: "Needs reconciliation",
+      tone: "warn",
+    });
     expect(statusPresentation("SOMETHING_ELSE")).toEqual({ label: "Something Else", tone: "neutral" });
     expect(fallbackLabel("SYSTEM_ERROR")).toBe("System Error");
   });

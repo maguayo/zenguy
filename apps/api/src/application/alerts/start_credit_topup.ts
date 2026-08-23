@@ -1,20 +1,15 @@
-import {
-  ALERT_CREDIT_MAX_PACKS,
-  ALERT_CREDIT_MIN_PACKS,
-  ALERT_CREDIT_PACK_CENTS,
-} from "../../domain/alerts/types";
-import { can } from "../../domain/workspaces/permissions";
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { Role } from "../../domain/workspaces/types";
-import { forbidden, unavailable, validation } from "../../shared/errors";
+import type { User } from "../../domain/users/types";
+import type { TrackEvent } from "../activity/track_event";
+import type {
+  IssuePaddleCheckoutIntent,
+  PaddleCheckout,
+} from "../billing/paddle_checkout_intent";
 
 export const ALERT_CREDIT_PURPOSE = "alert_credit";
 
-export interface CreditTopUpCheckout {
-  priceId: string;
-  quantity: number;
-  amountCents: number;
-  customData: { workspace_id: string; purpose: typeof ALERT_CREDIT_PURPOSE };
-}
+export type CreditTopUpCheckout = PaddleCheckout;
 
 /**
  * Validates a top-up request and returns what the browser needs to open the
@@ -22,37 +17,31 @@ export interface CreditTopUpCheckout {
  * `transaction.completed` webhook arrives.
  */
 export class StartCreditTopUp {
-  constructor(private readonly alertCreditPriceId: string | null) {}
+  constructor(
+    private readonly intents: IssuePaddleCheckoutIntent,
+    private readonly track?: Pick<TrackEvent, "execute">,
+  ) {}
 
   async execute(input: {
     workspaceId: string;
+    actor: User;
     actorRole: Role;
     packs: number;
   }): Promise<CreditTopUpCheckout> {
-    if (!can(input.actorRole, "billing.manage")) throw forbidden();
-    if (
-      !Number.isInteger(input.packs) ||
-      input.packs < ALERT_CREDIT_MIN_PACKS ||
-      input.packs > ALERT_CREDIT_MAX_PACKS
-    ) {
-      throw validation([
-        {
-          field: "packs",
-          message: `Must be an integer between ${ALERT_CREDIT_MIN_PACKS} and ${ALERT_CREDIT_MAX_PACKS}`,
-        },
-      ]);
-    }
-    if (this.alertCreditPriceId === null) {
-      throw unavailable("Top-ups are not available yet");
-    }
-    return {
-      priceId: this.alertCreditPriceId,
+    const checkout = await this.intents.execute({
+      workspaceId: input.workspaceId,
+      actor: input.actor,
+      actorRole: input.actorRole,
+      purpose: ALERT_CREDIT_PURPOSE,
       quantity: input.packs,
-      amountCents: input.packs * ALERT_CREDIT_PACK_CENTS,
-      customData: {
-        workspace_id: input.workspaceId,
-        purpose: ALERT_CREDIT_PURPOSE,
-      },
-    };
+    });
+    await this.track?.execute({
+      type: ACTIVITY_EVENTS.alertsTopupStarted,
+      userId: input.actor.id,
+      workspaceId: input.workspaceId,
+      source: "server",
+      properties: { amountCents: checkout.amountCents },
+    });
+    return checkout;
   }
 }

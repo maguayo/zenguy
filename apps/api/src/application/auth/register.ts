@@ -1,20 +1,24 @@
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { EmailSender } from "../../domain/email/sender";
 import type {
   EmailTokenRepo,
   UserRepo,
 } from "../../domain/users/repo";
 import type { User } from "../../domain/users/types";
-import { renderWelcomeEmail } from "../../infrastructure/email/templates";
+import {
+  renderRegistrationAttemptEmail,
+  renderWelcomeEmail,
+} from "../../infrastructure/email/templates";
 import type { AppConfig } from "../../shared/config";
+import type { Clock } from "../../shared/clock";
 import { EMAIL_VERIFY_TTL_HOURS } from "../../shared/constants";
 import { hashPassword, randomToken, sha256Hex } from "../../shared/crypto";
-import { conflict, validation } from "../../shared/errors";
+import { validation } from "../../shared/errors";
 import { logEvent } from "../../shared/log";
-import {
-  createSession,
-  type AuthSession,
-  type SessionDependencies,
-} from "./session";
+import type { IdGenerator } from "../../shared/ids";
+import { newPasswordIssues } from "../../shared/password_policy";
+import type { TrackEvent } from "../activity/track_event";
+import type { AuthClient } from "./session";
 
 export interface RegisterInput {
   name: string;
@@ -22,11 +26,19 @@ export interface RegisterInput {
   password: string;
 }
 
-export interface RegisterDependencies extends SessionDependencies {
+export interface RegisterDependencies {
   users: UserRepo;
   emailTokens: EmailTokenRepo;
   emailSender: EmailSender;
-  config: Pick<AppConfig, "appUrl" | "jwtSecret">;
+  config: Pick<AppConfig, "appUrl">;
+  clock: Clock;
+  ids: IdGenerator;
+  track?: Pick<TrackEvent, "execute">;
+}
+
+export interface RegistrationPending {
+  registrationPending: true;
+  email: string;
 }
 
 function normalizeInput(input: RegisterInput): RegisterInput {
@@ -36,40 +48,93 @@ function normalizeInput(input: RegisterInput): RegisterInput {
   if (name.length < 1 || name.length > 80) {
     details.push({ field: "name", message: "Must be between 1 and 80 characters" });
   }
-  if (input.password.length < 8 || input.password.length > 100) {
-    details.push({
+  details.push(
+    ...newPasswordIssues(input.password).map((message) => ({
       field: "password",
-      message: "Must be between 8 and 100 characters",
-    });
-  }
+      message,
+    })),
+  );
   if (details.length > 0) throw validation(details);
   return { name, email, password: input.password };
 }
 
 export class Register {
-  constructor(private readonly dependencies: RegisterDependencies) {}
+  constructor(
+    private readonly dependencies: RegisterDependencies,
+    private readonly passwordHasher: (password: string) => Promise<string> =
+      hashPassword,
+  ) {}
+
+  private async send(
+    message: Omit<Parameters<EmailSender["send"]>[0], "to">,
+    email: string,
+    type: "VERIFY_EMAIL" | "REGISTRATION_ATTEMPT",
+  ): Promise<void> {
+    try {
+      await this.dependencies.emailSender.send({ ...message, to: [email] });
+    } catch {
+      logEvent("email_send_failed", { type });
+    }
+  }
+
+  private async existingAccountResponse(
+    existing: User,
+    email: string,
+  ): Promise<RegistrationPending> {
+    await this.send(
+      renderRegistrationAttemptEmail(
+        this.dependencies.config.appUrl,
+        existing.name,
+      ),
+      existing.email,
+      "REGISTRATION_ATTEMPT",
+    );
+    return { registrationPending: true, email };
+  }
 
   /**
-   * The new account is signed in straight away: the verified-email gate keeps
-   * that session on the verification screen until the emailed link is used.
+   * Always returns the same token-free pending result for a new or existing
+   * address. Inbox verification is the only point that opens a live session;
+   * registration never signs a JWT, creates a refresh capability, or sets an
+   * auth cookie for a synthetic principal.
    */
-  async execute(rawInput: RegisterInput): Promise<AuthSession> {
+  async execute(
+    rawInput: RegisterInput & { client: AuthClient },
+  ): Promise<RegistrationPending> {
     const input = normalizeInput(rawInput);
-    if ((await this.dependencies.users.findByEmail(input.email)) !== null) {
-      throw conflict("An account with this email already exists");
+    const now = this.dependencies.clock.now();
+    const passwordHash = await this.passwordHasher(input.password);
+    const existing = await this.dependencies.users.findByEmail(input.email);
+
+    if (existing !== null) {
+      return this.existingAccountResponse(existing, input.email);
     }
 
-    const now = this.dependencies.clock.now();
     const user: User = {
       id: this.dependencies.ids.newId("usr"),
       name: input.name,
       email: input.email,
-      passwordHash: await hashPassword(input.password),
+      passwordHash,
       emailVerifiedAt: null,
+      authVersion: 1,
       createdAt: now,
       updatedAt: now,
     };
-    await this.dependencies.users.insert(user);
+    if (!(await this.dependencies.users.insertIfAbsent(user))) {
+      const racedExisting = await this.dependencies.users.findByEmail(input.email);
+      if (racedExisting === null) {
+        throw new Error("Account creation constraint violation");
+      }
+      return this.existingAccountResponse(racedExisting, input.email);
+    }
+
+    // Only a real account creation is an event: the existing-email branches
+    // above create nothing, so they stay silent (anti-enumeration).
+    await this.dependencies.track?.execute({
+      type: ACTIVITY_EVENTS.userRegistered,
+      userId: user.id,
+      source: rawInput.client,
+    });
 
     const tokenPlain = randomToken();
     await this.dependencies.emailTokens.insert({
@@ -87,15 +152,8 @@ export class Register {
       user.name,
       tokenPlain,
     );
-    try {
-      await this.dependencies.emailSender.send({
-        ...message,
-        to: [user.email],
-      });
-    } catch {
-      logEvent("email_send_failed", { type: "VERIFY_EMAIL" });
-    }
+    await this.send(message, user.email, "VERIFY_EMAIL");
 
-    return createSession(this.dependencies, user);
+    return { registrationPending: true, email: input.email };
   }
 }

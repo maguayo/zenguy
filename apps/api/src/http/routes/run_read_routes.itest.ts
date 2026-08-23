@@ -41,6 +41,7 @@ const USER: User = {
   email: "reader@runs.test",
   passwordHash: "hash",
   emailVerifiedAt: NOW,
+  authVersion: 1,
   createdAt: NOW,
   updatedAt: NOW,
 };
