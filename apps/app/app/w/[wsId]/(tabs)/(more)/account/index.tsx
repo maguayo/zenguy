@@ -1,4 +1,3 @@
-import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
@@ -19,28 +18,22 @@ import { useAppLock } from "@/contexts/AppLockContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { apiErrorMessage } from "@/lib/errors";
-import { colors, radius, spacing } from "@/theme";
+import { colors, spacing } from "@/theme";
 import {
   Button,
   Caption,
   Card,
   confirm,
   Field,
-  Heading,
+  IconTile,
   ListRow,
-  Muted,
+  MonoSmall,
   Screen,
   SelectSheet,
+  Text,
+  Title,
   Toggle,
 } from "@/ui";
-
-function RowIcon({ name }: { name: "file-text" | "shield" }) {
-  return (
-    <View style={styles.icon}>
-      <Feather color={colors.zinc600} name={name} size={18} />
-    </View>
-  );
-}
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -91,14 +84,16 @@ export default function AccountScreen() {
       <Stack.Screen options={{ title: "Account" }} />
       <Screen>
         <View style={styles.stack}>
-          <Card>
+          <Card elevated padding="lg">
             <View style={styles.profile}>
-              <View style={styles.avatar}>
-                <Heading color={colors.accentDark}>{userInitial(user)}</Heading>
-              </View>
+              <IconTile ink round size={56}>
+                <Text color={colors.onInk} style={styles.initial}>
+                  {userInitial(user)}
+                </Text>
+              </IconTile>
               <View style={styles.profileText}>
-                <Heading numberOfLines={1}>{user?.name || "User"}</Heading>
-                <Muted numberOfLines={1}>{user?.email}</Muted>
+                <Title numberOfLines={1}>{user?.name || "User"}</Title>
+                <MonoSmall numberOfLines={1}>{user?.email}</MonoSmall>
               </View>
             </View>
           </Card>
@@ -128,14 +123,14 @@ export default function AccountScreen() {
 
           <NotificationsCard />
 
-          <Card padding="none">
+          <Card eyebrow="About" padding="none">
             <ListRow
-              left={<RowIcon name="shield" />}
+              left={<IconTile icon="shield" size={32} />}
               title="Privacy"
               onPress={() => router.push(toHref("/privacy"))}
             />
             <ListRow
-              left={<RowIcon name="file-text" />}
+              left={<IconTile icon="file-text" size={32} />}
               style={styles.lastRow}
               title="Terms"
               onPress={() => router.push(toHref("/terms"))}
@@ -149,9 +144,9 @@ export default function AccountScreen() {
             variant="danger"
             onPress={() => void handleSignOut()}
           />
-          <Caption style={styles.version}>
+          <MonoSmall style={styles.version}>
             {appVersionLabel(Constants.expoConfig?.version, Constants.expoConfig?.ios?.buildNumber)}
-          </Caption>
+          </MonoSmall>
         </View>
       </Screen>
     </>
@@ -159,27 +154,12 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  avatar: {
-    alignItems: "center",
-    backgroundColor: colors.accentSoft,
-    borderRadius: radius.full,
-    height: 44,
-    justifyContent: "center",
-    width: 44,
-  },
-  icon: {
-    alignItems: "center",
-    backgroundColor: colors.zinc100,
-    borderRadius: radius.md,
-    height: 32,
-    justifyContent: "center",
-    width: 32,
-  },
+  initial: { fontSize: 22, fontWeight: "600", lineHeight: 26 },
   lastRow: { borderBottomWidth: 0 },
   lockAfter: { marginTop: spacing.lg },
   note: { marginTop: spacing.lg },
-  profile: { alignItems: "center", flexDirection: "row", gap: spacing.md },
-  profileText: { flex: 1, gap: 2 },
-  stack: { gap: spacing.lg },
+  profile: { alignItems: "center", flexDirection: "row", gap: spacing.lg },
+  profileText: { flex: 1, gap: spacing.xs },
+  stack: { gap: spacing.xl },
   version: { textAlign: "center" },
 });

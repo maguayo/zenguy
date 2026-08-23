@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import { useAppLock } from "@/contexts/AppLockContext";
 import { colors, spacing } from "@/theme";
-import { Button, Muted, Title } from "@/ui";
+import { Button, IconTile, Muted, Title } from "@/ui";
 import { Wordmark } from "./AuthShell";
 
 /** Full-screen cover shown while App Lock requires Face ID / passcode. */
@@ -25,15 +25,20 @@ export function AppLockGate() {
     <View style={styles.cover}>
       <Wordmark dark size={28} />
       <View style={styles.body}>
-        <Feather color={colors.zinc400} name="lock" size={28} />
-        <Title color={colors.white} style={styles.title}>
+        <IconTile size={56} style={styles.tile}>
+          <Feather color={colors.onInkMuted} name="lock" size={24} />
+        </IconTile>
+        <Title color={colors.onInk} style={styles.title}>
           Zenguy is locked
         </Title>
-        <Muted color={colors.zinc400}>Unlock with Face ID, Touch ID or your passcode.</Muted>
+        <Muted color={colors.onInkMuted} style={styles.message}>
+          Unlock with Face ID, Touch ID or your passcode.
+        </Muted>
         <Button
+          size="lg"
           style={styles.button}
           title="Unlock"
-          variant="primary"
+          variant="accent"
           onPress={() => {
             if (prompting.current) return;
             prompting.current = true;
@@ -49,18 +54,20 @@ export function AppLockGate() {
 
 const styles = StyleSheet.create({
   body: { alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl },
-  button: { marginTop: spacing.lg },
+  button: { marginTop: spacing.lg, minWidth: 200 },
   cover: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
     bottom: 0,
+    justifyContent: "center",
     left: 0,
+    padding: spacing.xl,
     position: "absolute",
     right: 0,
     top: 0,
-    alignItems: "center",
-    backgroundColor: colors.zinc950,
-    justifyContent: "center",
-    padding: spacing.xl,
     zIndex: 999,
   },
+  message: { textAlign: "center" },
+  tile: { backgroundColor: colors.inkCard, marginBottom: spacing.sm },
   title: { marginTop: spacing.sm },
 });

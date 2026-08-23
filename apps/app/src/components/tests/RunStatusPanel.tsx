@@ -8,10 +8,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { absoluteArtifactUrl } from "@/lib/api";
 import { itemQueryErrorMessage } from "@/lib/errors";
 import { formatDuration } from "@/lib/format";
-import { colors, radius, spacing } from "@/theme";
-import { Caption, Card, ErrorState, Label, Muted, Skeleton, Small } from "@/ui";
+import { colors, radius, spacing, toneColors } from "@/theme";
+import { Badge, Card, ErrorState, Label, Mono, MonoSmall, Muted, Skeleton, Small } from "@/ui";
 import { ExpectedObserved } from "./ExpectedObserved";
 import { attemptCountLabel, attemptSymbol, elapsedMs, isTerminalRun } from "./run-status";
+import { statusTone } from "./status-icon";
 
 export { attemptSymbol, isTerminalRun } from "./run-status";
 
@@ -88,31 +89,38 @@ export function RunStatusPanel({ compact = false, onTerminal, runId, wsId }: Run
         <View style={styles.statusRow}>
           <StatusBadge passedAfterRetry={data.passedAfterRetry} status={data.status} />
           {active ? (
-            <View style={styles.live}>
-              <View style={styles.liveDot} />
-              <Caption>Live</Caption>
-            </View>
+            <Badge dot pulse tone="info">
+              Live
+            </Badge>
           ) : null}
         </View>
-        <Caption>
+        <MonoSmall>
           {elapsed} · {attemptCountLabel(data.attemptCount)}
-        </Caption>
+        </MonoSmall>
       </View>
 
       {!compact && data.attempts.length > 0 ? (
         <ScrollView contentContainerStyle={styles.attempts} horizontal showsHorizontalScrollIndicator={false}>
-          {data.attempts.map((attempt) => (
-            <View key={attempt.id} style={styles.attempt}>
-              <Label>{`Attempt ${attempt.attemptIndex + 1} ${attemptSymbol(attempt.status)}`}</Label>
-              {attempt.retryDelaySeconds > 0 ? <Caption>waited {attempt.retryDelaySeconds} s</Caption> : null}
-            </View>
-          ))}
+          {data.attempts.map((attempt) => {
+            const tone = toneColors[statusTone(attempt.status)];
+            return (
+              <View key={attempt.id} style={[styles.attempt, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                <Label color={tone.fg}>{`Attempt ${attempt.attemptIndex + 1} ${attemptSymbol(attempt.status)}`}</Label>
+                {attempt.retryDelaySeconds > 0 ? (
+                  <MonoSmall color={tone.fg}>waited {attempt.retryDelaySeconds} s</MonoSmall>
+                ) : null}
+              </View>
+            );
+          })}
         </ScrollView>
       ) : null}
 
       {latestStep ? (
         <View style={styles.stepBox}>
-          <Small color={colors.zinc700}>{latestStep.description}</Small>
+          <Mono color={colors.textMuted} style={styles.stepAction}>
+            {latestStep.actionType}
+          </Mono>
+          <Small color={colors.textBody}>{latestStep.description}</Small>
         </View>
       ) : active ? (
         <Muted>Waiting for the browser to start…</Muted>
@@ -159,7 +167,7 @@ export function RunStatusPanel({ compact = false, onTerminal, runId, wsId }: Run
 
       {data.status === "SYSTEM_ERROR" ? (
         <Card padding="sm" tone="neutral">
-          <Small color={colors.zinc700} style={styles.medium}>
+          <Small color={colors.textBody} style={styles.medium}>
             System error on our side — this run is not billed and no incident was opened.
           </Small>
         </Card>
@@ -170,8 +178,6 @@ export function RunStatusPanel({ compact = false, onTerminal, runId, wsId }: Run
 
 const styles = StyleSheet.create({
   attempt: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     gap: 2,
@@ -188,12 +194,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: "space-between",
   },
-  live: { alignItems: "center", flexDirection: "row", gap: 6 },
-  liveDot: { backgroundColor: colors.info, borderRadius: 4, height: 8, width: 8 },
   medium: { fontWeight: "500" },
-  screenshot: { backgroundColor: colors.zinc100, borderRadius: radius.md, height: 220, width: "100%" },
+  screenshot: {
+    backgroundColor: colors.surfaceSunken,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 220,
+    width: "100%",
+  },
   screenshotCompact: { height: 160 },
   stack: { gap: spacing.md },
   statusRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  stepBox: { backgroundColor: colors.zinc50, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  stepAction: { fontSize: 11, lineHeight: 14, textTransform: "uppercase" },
+  stepBox: {
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.md,
+    gap: 3,
+    paddingHorizontal: 14,
+    paddingVertical: spacing.md - 2,
+  },
 });

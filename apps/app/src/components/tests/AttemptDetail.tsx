@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { getAttempt } from "@/api/tests";
 import type { ArtifactRef, Step } from "@/api/types";
@@ -11,7 +11,7 @@ import { absoluteArtifactUrl } from "@/lib/api";
 import { itemQueryErrorMessage } from "@/lib/errors";
 import { formatTime } from "@/lib/format";
 import { colors, radius, spacing, toneColors, type Tone } from "@/theme";
-import { Badge, Body, Caption, Card, ErrorState, Heading, Mono, Muted, Skeleton, Small } from "@/ui";
+import { Badge, Body, Caption, Card, ErrorState, Label, Mono, MonoSmall, Muted, Skeleton, Small } from "@/ui";
 import { runnerLabel, tokensLabel } from "@/components/tests/labels";
 import { ExpectedObserved } from "./ExpectedObserved";
 import { ScreenshotViewer } from "./ScreenshotViewer";
@@ -41,8 +41,8 @@ function DisclosureCard({
         style={({ pressed }) => [styles.disclosureHeader, pressed && styles.pressed]}
         onPress={() => setOpen((value) => !value)}
       >
-        <Heading style={styles.disclosureTitle}>{`${title} (${count})`}</Heading>
-        <Feather color={colors.zinc500} name={open ? "chevron-up" : "chevron-down"} size={18} />
+        <Label style={styles.disclosureTitle}>{`${title} (${count})`}</Label>
+        <Feather color={colors.textSubtle} name={open ? "chevron-up" : "chevron-down"} size={18} />
       </Pressable>
       {open ? <View style={styles.disclosureBody}>{children}</View> : null}
     </Card>
@@ -53,22 +53,24 @@ function ScreenshotThumbnail({
   onOpen,
   screenshot,
   sequence,
+  wide = false,
 }: {
   onOpen: () => void;
   screenshot: ArtifactRef;
   sequence: number;
+  wide?: boolean;
 }) {
   const [expired, setExpired] = useState(false);
   return (
     <Pressable
       accessibilityLabel={`Open step ${sequence} screenshot`}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.thumbnail, pressed && styles.thumbnailPressed]}
+      style={({ pressed }) => [styles.thumbnail, wide && styles.thumbnailWide, pressed && styles.thumbnailPressed]}
       onPress={onOpen}
     >
       {expired ? (
         <View style={styles.thumbnailFallback}>
-          <Feather color={colors.zinc500} name="image" size={18} />
+          <Feather color={colors.textMuted} name="image" size={18} />
           <Caption>Screenshot expired</Caption>
         </View>
       ) : (
@@ -83,6 +85,36 @@ function ScreenshotThumbnail({
         />
       )}
     </Pressable>
+  );
+}
+
+/** Every screenshot of the attempt in one swipeable strip: the evidence first. */
+function EvidenceGallery({
+  onOpen,
+  screenshots,
+}: {
+  onOpen: (index: number) => void;
+  screenshots: ScreenshotItem[];
+}) {
+  if (screenshots.length === 0) return null;
+  return (
+    <Card eyebrow={`Evidence · ${screenshots.length} ${screenshots.length === 1 ? "screenshot" : "screenshots"}`} padding="none">
+      <ScrollView contentContainerStyle={styles.gallery} horizontal showsHorizontalScrollIndicator={false}>
+        {screenshots.map((screenshot, index) => (
+          <View key={screenshot.id} style={styles.galleryItem}>
+            <ScreenshotThumbnail
+              screenshot={screenshot}
+              sequence={index + 1}
+              wide
+              onOpen={() => onOpen(index)}
+            />
+            <MonoSmall numberOfLines={1} style={styles.galleryCaption}>
+              {index + 1}. {screenshot.caption}
+            </MonoSmall>
+          </View>
+        ))}
+      </ScrollView>
+    </Card>
   );
 }
 
@@ -110,10 +142,10 @@ function StepTimeline({
         return (
           <View key={step.sequence} style={styles.step}>
             <View style={styles.rail}>
-              <View style={styles.sequence}>
-                <Caption color={colors.zinc700} style={styles.sequenceText}>
+              <View style={[styles.sequence, !ok && styles.sequenceError]}>
+                <MonoSmall color={ok ? colors.textBody : colors.dangerDark} style={styles.sequenceText}>
                   {step.sequence}
-                </Caption>
+                </MonoSmall>
               </View>
               {!last ? <View style={styles.railLine} /> : null}
             </View>
@@ -125,16 +157,14 @@ function StepTimeline({
                   </Mono>
                 </Badge>
                 <View style={[styles.resultDot, { backgroundColor: ok ? colors.ok : colors.danger }]} />
-                <Caption color={ok ? colors.okDark : colors.dangerDark} style={styles.resultText}>
-                  {ok ? "OK" : "Error"}
-                </Caption>
-                <Caption style={styles.time}>{formatTime(step.timestamp, timezone)}</Caption>
+                <Caption color={ok ? colors.okDark : colors.dangerDark}>{ok ? "OK" : "Error"}</Caption>
+                <MonoSmall style={styles.time}>{formatTime(step.timestamp, timezone)}</MonoSmall>
               </View>
               <Body style={styles.description}>{step.description}</Body>
               {step.urlSanitized ? (
-                <Mono color={colors.textMuted} numberOfLines={1} style={styles.url}>
+                <MonoSmall numberOfLines={1} style={styles.url}>
                   {step.urlSanitized}
-                </Mono>
+                </MonoSmall>
               ) : null}
               {step.screenshot ? (
                 <ScreenshotThumbnail
@@ -208,17 +238,18 @@ export function AttemptDetail({
         ) : null}
         {failed ? <ExpectedObserved actual={data.actualResult} expected={data.expectedResult} /> : null}
         {data.status === "SYSTEM_ERROR" && data.systemErrorCode ? (
-          <Mono color={colors.zinc600} style={styles.gapTop}>
+          <Mono color={colors.textBody} style={styles.gapTop}>
             System error code: {data.systemErrorCode}
           </Mono>
         ) : null}
-        <Caption style={styles.gapTop}>
-          Tokens: {tokensLabel(data)} · Model: {data.modelName ?? "—"} · Runner:{" "}
-          {runnerLabel(data.runnerKind)}
-        </Caption>
+        <MonoSmall style={styles.gapTop}>
+          Tokens {tokensLabel(data)} · Model {data.modelName ?? "—"} · Runner {runnerLabel(data.runnerKind)}
+        </MonoSmall>
       </View>
 
-      <Card title="Steps timeline">
+      <EvidenceGallery screenshots={screenshots} onOpen={setViewerIndex} />
+
+      <Card eyebrow="Steps">
         <StepTimeline
           screenshots={screenshots}
           steps={data.steps}
@@ -233,8 +264,8 @@ export function AttemptDetail({
         ) : (
           <View style={styles.list}>
             {data.consoleErrors.map((error, index) => (
-              <Mono key={`${error.timestamp}-${index}`} color={colors.zinc700} selectable>
-                <Mono color={colors.zinc700} style={styles.bold}>
+              <Mono key={`${error.timestamp}-${index}`} color={colors.textBody} selectable>
+                <Mono color={colors.textBody} style={styles.bold}>
                   {error.level}
                 </Mono>
                 {` · ${error.message} · ${error.url ?? "—"}`}
@@ -254,7 +285,7 @@ export function AttemptDetail({
                 key={`${error.method}-${error.host}-${error.path}-${index}`}
                 style={[styles.networkRow, index === data.networkErrors.length - 1 && styles.lastRow]}
               >
-                <Mono color={colors.zinc700} selectable>
+                <Mono color={colors.textBody} selectable>
                   {error.method} {error.host}
                 </Mono>
                 <Mono color={colors.textMuted} numberOfLines={2} selectable>
@@ -279,7 +310,7 @@ export function AttemptDetail({
                 <Mono color={colors.textMuted} style={styles.urlIndex}>
                   {index + 1}.
                 </Mono>
-                <Mono color={colors.zinc700} selectable style={styles.urlText}>
+                <Mono color={colors.textBody} selectable style={styles.urlText}>
                   {url}
                 </Mono>
               </View>
@@ -299,9 +330,9 @@ export function AttemptDetail({
 }
 
 const styles = StyleSheet.create({
-  actionType: { fontSize: 12, lineHeight: 16 },
+  actionType: { fontSize: 11, lineHeight: 14 },
   bold: { fontWeight: "600" },
-  description: { color: colors.zinc800, marginTop: spacing.sm },
+  description: { color: colors.text, marginTop: spacing.sm },
   disclosureBody: {
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -313,55 +344,56 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: 14,
   },
-  disclosureTitle: { flexShrink: 1, fontSize: 15 },
+  disclosureTitle: { flexShrink: 1 },
+  gallery: { flexDirection: "row", gap: spacing.md, padding: spacing.lg },
+  galleryCaption: { marginTop: spacing.xs, maxWidth: 200 },
+  galleryItem: { gap: 2 },
   gapTop: { marginTop: spacing.md },
   italic: { fontStyle: "italic" },
   lastRow: { borderBottomWidth: 0 },
   list: { gap: spacing.sm },
   networkRow: {
-    borderBottomColor: colors.zinc100,
+    borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 2,
     paddingBottom: spacing.sm,
   },
   pressed: { backgroundColor: colors.zinc50 },
-  rail: { alignItems: "center", width: 32 },
-  railLine: { backgroundColor: colors.border, flex: 1, marginTop: spacing.xs, width: StyleSheet.hairlineWidth },
+  rail: { alignItems: "center", width: 28 },
+  railLine: { backgroundColor: colors.borderStrong, flex: 1, marginTop: spacing.xs, width: StyleSheet.hairlineWidth },
   reason: {
-    backgroundColor: "rgba(255, 255, 255, 0.75)",
-    borderColor: "#fecaca",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
   },
-  resultDot: { borderRadius: 4, height: 8, width: 8 },
-  resultText: { fontWeight: "500" },
+  resultDot: { borderRadius: 3, height: 6, width: 6 },
   sequence: {
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceSunken,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 32,
+    height: 28,
     justifyContent: "center",
-    width: 32,
+    width: 28,
   },
-  sequenceText: { fontWeight: "600" },
+  sequenceError: { backgroundColor: colors.dangerSoft },
+  sequenceText: { color: colors.textBody },
   skeletons: { gap: spacing.sm },
   stack: { gap: spacing.lg },
   step: { flexDirection: "row", gap: spacing.md },
-  stepBody: { flex: 1, minWidth: 0, paddingTop: spacing.xs },
+  stepBody: { flex: 1, minWidth: 0, paddingTop: 3 },
   stepBodyGap: { paddingBottom: spacing.xl },
   stepMeta: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   summary: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing.lg },
   summaryHeader: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   summaryText: { flex: 1, fontWeight: "500", minWidth: 160 },
   thumbnail: {
-    backgroundColor: colors.zinc100,
+    backgroundColor: colors.surfaceSunken,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -373,6 +405,7 @@ const styles = StyleSheet.create({
   thumbnailFallback: { alignItems: "center", flex: 1, gap: spacing.xs, justifyContent: "center" },
   thumbnailImage: { height: "100%", width: "100%" },
   thumbnailPressed: { borderColor: colors.accent },
+  thumbnailWide: { height: 126, marginTop: 0, width: 200 },
   time: { fontVariant: ["tabular-nums"], marginLeft: "auto" },
   url: { marginTop: spacing.xs },
   urlIndex: { width: 28 },

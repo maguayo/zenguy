@@ -2,7 +2,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { AppState, Pressable, StyleSheet } from "react-native";
 
-import { AuthShell } from "@/components/AuthShell";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { useAuth } from "@/contexts/AuthContext";
 import { useResendVerification } from "@/hooks/useResendVerification";
 import { colors } from "@/theme";
@@ -54,11 +54,11 @@ export default function VerifyPending() {
   if (!signedIn) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <AuthShell
+    <AuthStatus
       description={
-        <Muted>
+        <Muted style={styles.lead}>
           We sent a verification link to{" "}
-          <Small color={colors.zinc700} style={styles.email}>
+          <Small color={colors.textBody} style={styles.email}>
             {user.email}
           </Small>
           .
@@ -69,8 +69,10 @@ export default function VerifyPending() {
           <Label color={colors.accentDark}>Sign out</Label>
         </Pressable>
       }
+      icon="mail"
       title="Verify your email"
     >
+      <Muted>Open the link on this phone or anywhere else; this screen moves on by itself.</Muted>
       <Button
         disabled={countdown > 0}
         fullWidth
@@ -78,11 +80,12 @@ export default function VerifyPending() {
         title={countdown > 0 ? `Resend email in ${countdown}s` : "Resend email"}
         onPress={() => void resend()}
       />
-    </AuthShell>
+    </AuthStatus>
   );
 }
 
 const styles = StyleSheet.create({
-  email: { fontWeight: "500" },
+  email: { fontSize: 16, fontWeight: "500", lineHeight: 22 },
   fill: { flex: 1 },
+  lead: { fontSize: 16, lineHeight: 22 },
 });

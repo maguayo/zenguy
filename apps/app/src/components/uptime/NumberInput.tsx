@@ -39,6 +39,7 @@ export const NumberInput = forwardRef<TextInput, Props>(function NumberInput(
       ref={ref}
       inputMode="numeric"
       keyboardType="number-pad"
+      mono
       {...props}
       value={text}
       onChangeText={(next) => {

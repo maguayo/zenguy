@@ -25,11 +25,11 @@ import {
   ActionMenu,
   Badge,
   Button,
-  Caption,
   Card,
   confirm,
   EmptyState,
   ErrorState,
+  IconTile,
   ListRow,
   Mono,
   Muted,
@@ -52,7 +52,7 @@ function HeaderAddButton({ onPress }: { onPress: () => void }) {
       style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
       onPress={onPress}
     >
-      <Feather color={colors.accent} name="plus" size={24} />
+      <Feather color={colors.onInk} name="plus" size={18} />
     </Pressable>
   );
 }
@@ -100,7 +100,7 @@ export default function SecretsScreen() {
     <Button
       icon={<Feather color={colors.white} name="plus" size={16} />}
       title="Add secret"
-      variant="primary"
+      variant="accent"
       onPress={() => openEditor("create")}
     />
   ) : undefined;
@@ -135,18 +135,23 @@ export default function SecretsScreen() {
           ) : secrets.isError ? (
             <ErrorState onRetry={() => void secrets.refetch()} />
           ) : (
-            <Card padding="none">
+            <Card
+              eyebrow={`${secrets.data.length} ${secrets.data.length === 1 ? "secret" : "secrets"}`}
+              padding="none"
+            >
               {secrets.data.length === 0 ? (
                 <EmptyState
                   action={addButton}
                   description={secretsIntro}
-                  icon={<Feather color={colors.zinc400} name="key" size={24} />}
+                  icon={<IconTile icon="key" size={44} tone="accent" />}
                   title="No secrets yet"
                 />
               ) : (
                 secrets.data.map((secret, index) => (
                   <ListRow
                     key={secret.id}
+                    left={<IconTile icon="lock" />}
+                    meta={`${secret.createdBy?.name ?? "System"} · updated ${formatRelative(secret.updatedAt)}`}
                     right={
                       manage ? (
                         <ActionMenu
@@ -166,20 +171,15 @@ export default function SecretsScreen() {
                         {secret.description ? <Muted numberOfLines={2}>{secret.description}</Muted> : null}
                         <View style={styles.domains}>
                           {secret.allowedDomains.map((domain) => (
-                            <Badge key={domain}>{domain}</Badge>
+                            <Badge key={domain} tone="accent">
+                              {domain}
+                            </Badge>
                           ))}
                         </View>
-                        <Caption>
-                          Created by {secret.createdBy?.name ?? "System"} · Updated{" "}
-                          {formatRelative(secret.updatedAt)}
-                        </Caption>
                       </View>
                     }
                     title={
-                      <View style={styles.keyRow}>
-                        <Feather color={colors.zinc500} name="key" size={14} />
-                        <Mono selectable style={styles.key}>{`{{${secret.key}}}`}</Mono>
-                      </View>
+                      <Mono selectable style={styles.key}>{`{{${secret.key}}}`}</Mono>
                     }
                   />
                 ))
@@ -202,13 +202,19 @@ export default function SecretsScreen() {
 
 const styles = StyleSheet.create({
   domains: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
-  headerButton: { alignItems: "center", borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
-  headerButtonPressed: { backgroundColor: colors.zinc100 },
-  key: { flexShrink: 1, fontWeight: "500" },
-  keyRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.full,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  headerButtonPressed: { opacity: 0.7 },
+  key: { flexShrink: 1, fontSize: 14, fontWeight: "500", lineHeight: 19 },
   lastRow: { borderBottomWidth: 0 },
   meta: { gap: spacing.xs + 2 },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
   warning: { alignItems: "flex-start", flexDirection: "row", gap: spacing.md },
   warningIcon: { marginTop: 1 },
   warningText: { flex: 1, fontWeight: "500" },

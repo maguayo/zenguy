@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { colors, spacing } from "@/theme";
-import { Body, Caption, Heading, Label, Screen, Title } from "@/ui";
+import { Body, Heading, Label, Muted, Screen, Title } from "@/ui";
 
 export const legalEffectiveDate = "Effective and last updated: August 21, 2026";
 export const legalContactEmail = "privacy@zenguy.com";
@@ -20,10 +20,13 @@ export function LegalPage({
 }) {
   return (
     <Screen>
-      <Title>{title}</Title>
-      <Caption style={styles.date}>{legalEffectiveDate}</Caption>
+      <View style={styles.header}>
+        <Title>{title}</Title>
+        <Muted style={styles.date}>{legalEffectiveDate}</Muted>
+      </View>
       <View style={styles.sections}>{children}</View>
       <View style={styles.footer}>
+        <Muted>Related</Muted>
         <Link href={related.href}>
           <Label color={colors.accentDark}>{related.label}</Label>
         </Link>
@@ -50,6 +53,7 @@ export function LegalContactEmail() {
     <Body
       accessibilityRole="link"
       color={colors.accentDark}
+      style={styles.paragraph}
       onPress={() => {
         void Linking.openURL(`mailto:${legalContactEmail}`).catch(() => undefined);
       }}
@@ -64,10 +68,12 @@ const styles = StyleSheet.create({
   footer: {
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
+    gap: spacing.xs,
     marginTop: spacing.xxl,
     paddingTop: spacing.lg,
   },
-  paragraph: { color: colors.zinc700, lineHeight: 23 },
+  header: { marginTop: spacing.sm },
+  paragraph: { color: colors.textBody, lineHeight: 24 },
   section: { gap: spacing.sm },
   sections: { gap: spacing.xl, marginTop: spacing.xl },
 });

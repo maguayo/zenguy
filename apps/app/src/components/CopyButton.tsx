@@ -20,7 +20,7 @@ export function CopyButton({ label, text }: { label: string; text: string }) {
         });
       }}
     >
-      <Feather color={copied ? colors.ok : colors.zinc500} name={copied ? "check" : "copy"} size={15} />
+      <Feather color={copied ? colors.okDark : colors.zinc600} name={copied ? "check" : "copy"} size={15} />
     </Pressable>
   );
 }

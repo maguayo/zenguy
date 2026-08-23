@@ -8,7 +8,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "zenguy",
   // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
   owner: "maguayo",
-  version: "0.1.0",
+  version: "0.2.0",
   // EAS Update: one runtime per app version. Any native change (dependency with
   // native code, config plugin, permission, entitlement, icon, splash) must
   // bump `version`, so an OTA update can never reach an incompatible binary.
@@ -65,12 +65,26 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-splash-screen",
       {
         image: "./assets/splash-icon.png",
-        imageWidth: 160,
+        imageWidth: 120,
         resizeMode: "contain",
-        backgroundColor: "#09090b",
+        backgroundColor: "#F2EEE6",
       },
     ],
-    "expo-font",
+    [
+      // Geist (text) and Geist Mono (data) are embedded natively so every
+      // face is available at first paint; see src/theme/index.ts → fonts.
+      "expo-font",
+      {
+        fonts: [
+          "./assets/fonts/Geist-Regular.ttf",
+          "./assets/fonts/Geist-Medium.ttf",
+          "./assets/fonts/Geist-SemiBold.ttf",
+          "./assets/fonts/Geist-Bold.ttf",
+          "./assets/fonts/GeistMono-Regular.ttf",
+          "./assets/fonts/GeistMono-Medium.ttf",
+        ],
+      },
+    ],
     [
       "expo-notifications",
       {

@@ -1,31 +1,43 @@
 import { forwardRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import {
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-  type TextInputProps,
-} from "react-native";
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 
-import { colors, controlHeight, radius, spacing, typography } from "@/theme";
+import { colors, controlHeight, fonts, radius, spacing } from "@/theme";
 
 export interface InputProps extends TextInputProps {
   invalid?: boolean;
+  /** Measured values (URLs, ids, tokens) are set in Geist Mono. */
+  mono?: boolean;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { invalid = false, multiline, style, ...props },
+  { invalid = false, mono = false, multiline, onBlur, onFocus, style, ...props },
   ref,
 ) {
+  const [focused, setFocused] = useState(false);
   return (
     <TextInput
       ref={ref}
-      placeholderTextColor={colors.zinc400}
+      placeholderTextColor={colors.textSubtle}
       selectionColor={colors.accent}
       {...props}
       multiline={multiline}
-      style={[styles.input, multiline && styles.multiline, invalid && styles.invalid, style]}
+      style={[
+        styles.input,
+        mono && styles.mono,
+        multiline && styles.multiline,
+        focused && styles.focused,
+        invalid && styles.invalid,
+        style,
+      ]}
+      onBlur={(event) => {
+        setFocused(false);
+        onBlur?.(event);
+      }}
+      onFocus={(event) => {
+        setFocused(true);
+        onFocus?.(event);
+      }}
     />
   );
 });
@@ -52,27 +64,29 @@ export const PasswordInput = forwardRef<TextInput, InputProps>(function Password
         style={styles.eye}
         onPress={() => setVisible((value) => !value)}
       >
-        <Feather color={colors.zinc500} name={visible ? "eye-off" : "eye"} size={18} />
+        <Feather color={colors.zinc600} name={visible ? "eye-off" : "eye"} size={18} />
       </Pressable>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  eye: { alignItems: "center", height: controlHeight.md, justifyContent: "center", position: "absolute", right: 0, width: 44 },
+  eye: { alignItems: "center", height: controlHeight.md, justifyContent: "center", position: "absolute", right: 0, width: 46 },
+  focused: { borderColor: colors.accent, borderWidth: 1.5 },
   input: {
     backgroundColor: colors.surface,
-    borderColor: colors.zinc300,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
     borderWidth: 1,
     color: colors.text,
+    fontFamily: fonts.sans.regular,
+    fontSize: 16,
     height: controlHeight.md,
-    paddingHorizontal: spacing.md,
-    ...typography.body,
-    lineHeight: undefined,
+    paddingHorizontal: 14,
   },
   invalid: { borderColor: colors.danger },
-  multiline: { height: undefined, minHeight: 120, paddingTop: spacing.md, textAlignVertical: "top" },
-  passwordInput: { paddingRight: 44 },
+  mono: { fontFamily: fonts.mono.regular, fontSize: 14 },
+  multiline: { height: undefined, lineHeight: 22, minHeight: 128, paddingTop: spacing.md, textAlignVertical: "top" },
+  passwordInput: { paddingRight: 46 },
   passwordWrap: { justifyContent: "center" },
 });

@@ -12,7 +12,7 @@ import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, radius, spacing } from "@/theme";
+import { colors, palette, radius, shadows, spacing } from "@/theme";
 import { Small } from "@/ui";
 
 type ToastTone = "error" | "info" | "success";
@@ -36,9 +36,9 @@ export function appendToast(items: ToastItem[], item: ToastItem): ToastItem[] {
 }
 
 const toneIcon: Record<ToastTone, { color: string; name: "alert-circle" | "check-circle" | "info" }> = {
-  error: { color: colors.danger, name: "alert-circle" },
-  info: { color: colors.info, name: "info" },
-  success: { color: colors.ok, name: "check-circle" },
+  error: { color: palette.red, name: "alert-circle" },
+  info: { color: palette.violetSoft, name: "info" },
+  success: { color: palette.green, name: "check-circle" },
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -96,7 +96,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               onPress={() => remove(item.id)}
             >
               <Feather color={icon.color} name={icon.name} size={18} />
-              <Small style={styles.message}>{item.message}</Small>
+              <Small color={colors.onInk} style={styles.message}>
+                {item.message}
+              </Small>
             </Pressable>
           );
         })}
@@ -113,20 +115,15 @@ export function useToast(): ToastApi {
 
 const styles = StyleSheet.create({
   message: { flex: 1 },
-  stack: { gap: spacing.sm, left: spacing.lg, position: "absolute", right: spacing.lg, zIndex: 900 },
+  stack: { gap: spacing.sm, left: 20, position: "absolute", right: 20, zIndex: 900 },
   toast: {
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: colors.ink,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    elevation: 4,
     flexDirection: "row",
     gap: spacing.md,
-    padding: spacing.md,
-    shadowColor: colors.zinc950,
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    ...shadows.hero,
   },
 });

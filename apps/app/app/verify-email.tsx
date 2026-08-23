@@ -12,6 +12,7 @@ import {
   type VerificationEmailValues,
   type VerificationState,
 } from "@/components/auth/verify-email";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -85,31 +86,37 @@ export default function VerifyEmail() {
 
   if (state === "loading") {
     return (
-      <AuthShell title="Verifying your email">
+      <AuthStatus icon="mail" title="Verifying your email">
         <Spinner label="Verifying email" size="large" style={styles.spinner} />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
   if (state === "error") {
     return (
-      <AuthShell title="Verify your email">
+      <AuthStatus icon="mail" title="Verify your email" tone="warn">
         <ErrorState onRetry={() => setAttempt((current) => current + 1)} />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
   if (state === "success") {
     return (
-      <AuthShell description="Your email address is ready to use." title="Email verified">
+      <AuthStatus
+        description="Your email address is ready to use."
+        icon="check"
+        title="Email verified"
+        tone="ok"
+      >
         <Button
           fullWidth
           loading={continuing}
+          size="lg"
           title="Continue"
-          variant="primary"
+          variant="accent"
           onPress={() => void continueToApp()}
         />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
@@ -148,7 +155,7 @@ export default function VerifyEmail() {
           fullWidth
           loading={sending}
           title={countdown > 0 ? `Resend email in ${countdown}s` : "Resend verification"}
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>

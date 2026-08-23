@@ -5,7 +5,7 @@ import type { Delivery } from "@/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateTime } from "@/lib/format";
 import { colors, radius, spacing } from "@/theme";
-import { Badge, Caption, Label, Mono } from "@/ui";
+import { Badge, IconTile, Label, Mono, MonoSmall, type FeatherIconName } from "@/ui";
 
 import {
   deliveryAttempts,
@@ -13,6 +13,12 @@ import {
   deliveryEvent,
   deliveryIncidentHref,
 } from "./deliveries";
+
+const eventIcons: Record<Delivery["eventType"], FeatherIconName> = {
+  FAILURE: "alert-octagon",
+  RECOVERY: "activity",
+  TEST: "send",
+};
 
 /** One delivery in a channel's history: event, outcome, timings and evidence. */
 export function DeliveryRow({
@@ -30,38 +36,43 @@ export function DeliveryRow({
   const event = deliveryEvent(delivery.eventType);
   const cost = deliveryCostLabel(delivery);
   const incidentHref = deliveryIncidentHref(workspaceId, delivery);
+  const meta = [deliveryAttempts(delivery.attemptCount), ...(cost ? [cost] : [])].join(" · ");
 
   return (
     <View style={[styles.row, last && styles.last]}>
-      <View style={styles.top}>
-        <Badge tone={event.tone}>{event.label}</Badge>
-        <Caption>{formatDateTime(delivery.createdAt, timezone)}</Caption>
+      <IconTile icon={eventIcons[delivery.eventType]} tone={event.tone} />
+      <View style={styles.main}>
+        <View style={styles.top}>
+          <Badge tone={event.tone}>{event.label}</Badge>
+          <MonoSmall>{formatDateTime(delivery.createdAt, timezone)}</MonoSmall>
+        </View>
+        <View style={styles.meta}>
+          <StatusBadge status={delivery.status} />
+          <MonoSmall>{meta}</MonoSmall>
+        </View>
+        {delivery.sentAt ? (
+          <MonoSmall>Sent {formatDateTime(delivery.sentAt, timezone)}</MonoSmall>
+        ) : null}
+        {delivery.providerMessageId ? (
+          <Mono color={colors.textMuted} numberOfLines={1} style={styles.messageId}>
+            {delivery.providerMessageId}
+          </Mono>
+        ) : null}
+        {delivery.status === "FAILED" && delivery.errorSanitized ? (
+          <Mono style={styles.error}>{delivery.errorSanitized}</Mono>
+        ) : null}
+        {incidentHref ? (
+          <Pressable
+            accessibilityLabel="Open incident"
+            accessibilityRole="link"
+            hitSlop={4}
+            style={styles.incidentLink}
+            onPress={() => router.push(incidentHref as Href)}
+          >
+            <Label color={colors.accentDark}>Open incident →</Label>
+          </Pressable>
+        ) : null}
       </View>
-      <View style={styles.meta}>
-        <StatusBadge status={delivery.status} />
-        <Caption>{deliveryAttempts(delivery.attemptCount)}</Caption>
-        {cost ? <Caption>{cost}</Caption> : null}
-      </View>
-      {delivery.sentAt ? <Caption>Sent {formatDateTime(delivery.sentAt, timezone)}</Caption> : null}
-      {delivery.providerMessageId ? (
-        <Mono color={colors.textMuted} numberOfLines={1} style={styles.messageId}>
-          {delivery.providerMessageId}
-        </Mono>
-      ) : null}
-      {delivery.status === "FAILED" && delivery.errorSanitized ? (
-        <Mono style={styles.error}>{delivery.errorSanitized}</Mono>
-      ) : null}
-      {incidentHref ? (
-        <Pressable
-          accessibilityLabel="Open incident"
-          accessibilityRole="link"
-          hitSlop={4}
-          style={styles.incidentLink}
-          onPress={() => router.push(incidentHref as Href)}
-        >
-          <Label color={colors.accentDark}>Open incident →</Label>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -69,9 +80,9 @@ export function DeliveryRow({
 const styles = StyleSheet.create({
   error: {
     alignSelf: "flex-start",
-    backgroundColor: colors.zinc100,
+    backgroundColor: colors.dangerSoft,
     borderRadius: radius.sm,
-    color: colors.zinc700,
+    color: colors.dangerDark,
     fontSize: 12,
     lineHeight: 16,
     overflow: "hidden",
@@ -80,14 +91,17 @@ const styles = StyleSheet.create({
   },
   incidentLink: { alignSelf: "flex-start", marginTop: 2 },
   last: { borderBottomWidth: 0 },
+  main: { flex: 1, gap: spacing.sm, minWidth: 0 },
   messageId: { fontSize: 12, lineHeight: 16 },
   meta: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   row: {
+    alignItems: "flex-start",
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.sm,
+    flexDirection: "row",
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  top: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  top: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" },
 });

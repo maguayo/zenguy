@@ -141,7 +141,7 @@ export function InviteForm({ onClose, open }: Props) {
             loading={send.isPending}
             size="lg"
             title="Send invitation"
-            variant="primary"
+            variant="accent"
             onPress={() => void submit()}
           />
         </View>
@@ -152,6 +152,6 @@ export function InviteForm({ onClose, open }: Props) {
 
 const styles = StyleSheet.create({
   form: { gap: spacing.lg },
-  header: { alignItems: "flex-start", marginLeft: -spacing.md, marginTop: -spacing.sm },
-  title: { marginBottom: spacing.xl, marginTop: spacing.sm },
+  header: { alignItems: "flex-start", marginLeft: -spacing.md, marginTop: spacing.xs },
+  title: { marginBottom: spacing.xl, marginTop: spacing.md },
 });

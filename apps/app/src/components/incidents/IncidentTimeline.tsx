@@ -1,11 +1,10 @@
-import { Feather } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import type { IncidentDetail, IncidentEvent } from "@/api/types";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { colors, radius, spacing, toneColors } from "@/theme";
-import { Badge, Body, Caption, Mono, Muted } from "@/ui";
+import { Badge, Body, IconTile, Mono, MonoSmall, Muted } from "@/ui";
 
 import {
   eventPresentation,
@@ -35,7 +34,10 @@ function Chip({ chip, onPress }: { chip: TimelineChip; onPress?: () => void }) {
   );
 }
 
-/** Chronological incident events with a coloured dot per event type and compact metadata chips. */
+/**
+ * Chronological incident events on a sand rail: a tinted dot per event type,
+ * the message in Geist, the time in mono, evidence as chips.
+ */
 export function IncidentTimeline({
   events,
   incident,
@@ -55,22 +57,19 @@ export function IncidentTimeline({
     <View accessibilityRole="list">
       {ordered.map((event, index) => {
         const presentation = eventPresentation[event.type];
-        const palette = toneColors[presentation.tone];
         const chips = timelineChips(event, incident, workspaceId);
         const last = index === ordered.length - 1;
         return (
           <View key={event.id} style={[styles.item, last && styles.lastItem]}>
             <View style={styles.rail}>
-              <View style={[styles.dot, { backgroundColor: palette.bg }]}>
-                <Feather color={palette.fg} name={presentation.icon} size={15} />
-              </View>
+              <IconTile icon={presentation.icon} round size={28} tone={presentation.tone} />
               {last ? null : <View style={styles.line} />}
             </View>
             <View style={styles.content}>
               <Body style={styles.message}>{event.message}</Body>
-              <Caption style={styles.time}>
+              <MonoSmall style={styles.time}>
                 {formatDateTime(event.createdAt, timezone)} · {formatRelative(event.createdAt)}
-              </Caption>
+              </MonoSmall>
               {chips.length > 0 ? (
                 <View style={styles.chips}>
                   {chips.map((chip) => {
@@ -95,26 +94,19 @@ export function IncidentTimeline({
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: spacing.sm },
-  content: { flex: 1, minWidth: 0, paddingTop: 4 },
-  dot: {
-    alignItems: "center",
-    borderRadius: radius.full,
-    height: 32,
-    justifyContent: "center",
-    width: 32,
-  },
+  content: { flex: 1, minWidth: 0, paddingTop: 3 },
   item: { flexDirection: "row", gap: spacing.md, paddingBottom: spacing.lg },
   lastItem: { paddingBottom: 0 },
-  line: { backgroundColor: colors.border, flex: 1, marginTop: spacing.xs, width: 1 },
+  line: { backgroundColor: colors.borderStrong, flex: 1, marginTop: spacing.xs, width: 2, borderRadius: 1 },
   linkChip: {
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 3,
   },
   linkChipText: { fontSize: 12, lineHeight: 16 },
   message: { fontWeight: "500" },
   pressed: { opacity: 0.7 },
-  rail: { alignItems: "center", width: 32 },
-  time: { marginTop: 2 },
+  rail: { alignItems: "center", width: 28 },
+  time: { marginTop: 3 },
 });

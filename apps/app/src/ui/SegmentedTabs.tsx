@@ -8,6 +8,7 @@ export interface SegmentedTabItem<K extends string> {
   label: string;
 }
 
+/** Filter pills: an ink pill slides over a sunken paper track. */
 export function SegmentedTabs<K extends string>({
   items,
   onChange,
@@ -18,11 +19,7 @@ export function SegmentedTabs<K extends string>({
   value: K;
 }) {
   return (
-    <ScrollView
-      contentContainerStyle={styles.row}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-    >
+    <ScrollView contentContainerStyle={styles.row} horizontal showsHorizontalScrollIndicator={false}>
       {items.map((item) => {
         const active = item.key === value;
         return (
@@ -30,10 +27,10 @@ export function SegmentedTabs<K extends string>({
             key={item.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            style={[styles.pill, active && styles.pillActive]}
+            style={({ pressed }) => [styles.pill, active && styles.pillActive, pressed && !active && styles.pillPressed]}
             onPress={() => onChange(item.key)}
           >
-            <Text color={active ? colors.accentDark : colors.zinc600} variant="label">
+            <Text color={active ? colors.onInk : colors.zinc600} variant="label">
               {item.label}
             </Text>
           </Pressable>
@@ -45,11 +42,12 @@ export function SegmentedTabs<K extends string>({
 
 const styles = StyleSheet.create({
   pill: {
-    backgroundColor: colors.zinc100,
+    backgroundColor: colors.surfaceSunken,
     borderRadius: radius.full,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
-  pillActive: { backgroundColor: colors.accentSoft },
+  pillActive: { backgroundColor: colors.ink },
+  pillPressed: { backgroundColor: colors.borderStrong },
   row: { flexDirection: "row", gap: spacing.sm },
 });

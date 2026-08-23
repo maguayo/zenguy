@@ -17,22 +17,23 @@ import {
 import { UsageMeter } from "@/components/UsageMeter";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { formatDateTime, formatEuros } from "@/lib/format";
-import { colors, radius, spacing } from "@/theme";
+import { colors, palette, radius, spacing } from "@/theme";
 import {
   Badge,
-  Body,
   Button,
   Caption,
   Card,
   DescriptionList,
   EmptyState,
   ErrorState,
-  Heading,
+  IconTile,
   ListRow,
+  Mono,
   Muted,
   Screen,
   Skeleton,
   Small,
+  Title,
 } from "@/ui";
 
 function BillingSkeleton() {
@@ -62,19 +63,23 @@ function PlanCard({ billing, timezone }: { billing: Billing; timezone: string })
     (billing.subscription.status === "NONE" || billing.subscription.status === "CANCELED");
 
   return (
-    <Card title="Plan">
+    <Card elevated eyebrow="Plan">
       <View style={styles.planHeader}>
-        <Heading style={styles.planName}>{plan.name}</Heading>
-        <Badge tone={plan.tone}>{plan.label}</Badge>
+        <Title style={styles.planName}>{plan.name}</Title>
+        <Badge dot size="md" tone={plan.tone}>
+          {plan.label}
+        </Badge>
       </View>
       <Muted style={styles.planDescription}>{plan.description}</Muted>
       <DescriptionList
         items={[
-          { label: "Price", value: planPrice(plan, billing.plan.pricePerMonthCents) },
-          { label: "Included runs", value: `${billing.plan.includedRuns} runs per month` },
+          { label: "Price", value: <Mono>{planPrice(plan, billing.plan.pricePerMonthCents)}</Mono> },
+          { label: "Included runs", value: <Mono>{`${billing.plan.includedRuns} runs per month`}</Mono> },
           {
             label: "Period",
-            value: `${formatDateTime(period.start, timezone)} – ${formatDateTime(period.end, timezone)}`,
+            value: (
+              <Mono>{`${formatDateTime(period.start, timezone)} – ${formatDateTime(period.end, timezone)}`}</Mono>
+            ),
           },
         ]}
       />
@@ -89,7 +94,7 @@ function PlanCard({ billing, timezone }: { billing: Billing; timezone: string })
         <Button
           style={styles.gapTop}
           title="Set up subscription"
-          variant="primary"
+          variant="accent"
           onPress={() => router.push(`/w/${current.id}/setup/billing`)}
         />
       ) : null}
@@ -99,7 +104,7 @@ function PlanCard({ billing, timezone }: { billing: Billing; timezone: string })
 
 function UsageCard({ billing, timezone }: { billing: Billing; timezone: string }) {
   return (
-    <Card title="Usage">
+    <Card eyebrow="Usage">
       <UsageMeter timezone={timezone} usage={billing.usage} />
       <Caption style={styles.gapTop}>
         Current period: {formatDateTime(billing.usage.periodStart, timezone)} –{" "}
@@ -111,23 +116,24 @@ function UsageCard({ billing, timezone }: { billing: Billing; timezone: string }
 
 function InvoicesCard({ billing, timezone }: { billing: Billing; timezone: string }) {
   return (
-    <Card padding="none" title="Invoices">
+    <Card eyebrow="Invoices" padding="none">
       {billing.invoices.length === 0 ? (
-        <EmptyState title="No invoices yet." />
+        <EmptyState icon={<IconTile icon="file-text" size={44} />} title="No invoices yet." />
       ) : (
         billing.invoices.map((invoice, index) => {
           const display = invoiceStatus(invoice.status);
           return (
             <ListRow
               key={invoice.id}
+              left={<IconTile icon="file-text" />}
+              meta={invoice.billedAt ? formatDateTime(invoice.billedAt, timezone) : "—"}
               right={
                 <View style={styles.invoiceRight}>
-                  <Body style={styles.invoiceTotal}>{formatEuros(invoice.totalCents)}</Body>
+                  <Mono style={styles.invoiceTotal}>{formatEuros(invoice.totalCents)}</Mono>
                   <Badge tone={display.tone}>{display.label}</Badge>
                 </View>
               }
               style={index === billing.invoices.length - 1 ? styles.lastRow : undefined}
-              subtitle={invoice.billedAt ? formatDateTime(invoice.billedAt, timezone) : "—"}
               title={invoiceNumberLabel(invoice)}
             />
           );
@@ -139,7 +145,7 @@ function InvoicesCard({ billing, timezone }: { billing: Billing; timezone: strin
 
 function PaymentCard({ canManage }: { canManage: boolean }) {
   return (
-    <Card title="Payment">
+    <Card eyebrow="Payment">
       <Muted>{canManage ? paymentWebNote : paymentOwnerOnlyNote}</Muted>
     </Card>
   );
@@ -192,7 +198,7 @@ const styles = StyleSheet.create({
   lastRow: { borderBottomWidth: 0 },
   notice: {
     backgroundColor: colors.warnSoft,
-    borderColor: "#fde68a",
+    borderColor: palette.amberLine,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: spacing.lg,
@@ -202,5 +208,5 @@ const styles = StyleSheet.create({
   planHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
   planName: { flexShrink: 1 },
   skeletonRows: { gap: spacing.sm },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
 });

@@ -1,16 +1,14 @@
-import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { getOverview } from "@/api/overview";
-import type { ActivityItem, ActivityType } from "@/api/types";
+import type { ActivityItem, ActivityType, Overview } from "@/api/types";
 import { UsageMeter } from "@/components/UsageMeter";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { formatRelative } from "@/lib/format";
 import { largeTitleOptions } from "@/lib/stack-options";
-import { colors, radius, spacing } from "@/theme";
+import { colors, spacing, toneColors, type Tone } from "@/theme";
 import {
   Body,
   Button,
@@ -18,30 +16,39 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  Heading,
+  Hero,
+  IconTile,
   Label,
-  Muted,
+  MonoSmall,
+  PulseStrip,
   Screen,
+  SectionHeader,
   Skeleton,
+  StatTile,
+  type FeatherIconName,
+  type PulseTick,
 } from "@/ui";
-
-type FeatherName = ComponentProps<typeof Feather>["name"];
 
 interface ActivityPresentation {
   bg: string;
   fg: string;
-  icon: FeatherName;
+  icon: FeatherIconName;
+  tone: Tone;
+}
+
+function presentation(tone: Tone, icon: FeatherIconName): ActivityPresentation {
+  return { bg: toneColors[tone].bg, fg: toneColors[tone].fg, icon, tone };
 }
 
 export const activityPresentation: Record<ActivityType, ActivityPresentation> = {
-  CHANNEL_DELIVERY_FAILED: { bg: colors.warnSoft, fg: colors.warn, icon: "bell-off" },
-  MONITOR_DOWN: { bg: colors.dangerSoft, fg: colors.dangerDark, icon: "alert-octagon" },
-  MONITOR_RECOVERED: { bg: colors.okSoft, fg: colors.okDark, icon: "activity" },
-  TEST_FAILED: { bg: colors.dangerSoft, fg: colors.dangerDark, icon: "x-circle" },
-  TEST_PASSED: { bg: colors.okSoft, fg: colors.okDark, icon: "check-circle" },
-  TEST_RECOVERED: { bg: colors.okSoft, fg: colors.okDark, icon: "activity" },
-  TEST_SYSTEM_ERROR: { bg: colors.zinc100, fg: colors.zinc600, icon: "tool" },
-  TEST_TIMEOUT: { bg: colors.warnSoft, fg: colors.warn, icon: "clock" },
+  CHANNEL_DELIVERY_FAILED: presentation("warn", "bell-off"),
+  MONITOR_DOWN: presentation("danger", "alert-octagon"),
+  MONITOR_RECOVERED: presentation("ok", "activity"),
+  TEST_FAILED: presentation("danger", "x-circle"),
+  TEST_PASSED: presentation("ok", "check-circle"),
+  TEST_RECOVERED: presentation("ok", "activity"),
+  TEST_SYSTEM_ERROR: presentation("neutral", "tool"),
+  TEST_TIMEOUT: presentation("warn", "clock"),
 };
 
 export function activityPath(workspaceId: string, item: ActivityItem): string {
@@ -60,44 +67,51 @@ export function browserTestNoun(count: number): "test" | "tests" {
   return count === 1 ? "test" : "tests";
 }
 
-function StatRow({
-  danger = false,
-  label,
-  onPress,
-  value,
-}: {
-  danger?: boolean;
-  label: string;
-  onPress?: () => void;
-  value: string | number;
-}) {
-  return (
-    <Pressable disabled={!onPress} style={styles.statRow} onPress={onPress}>
-      <View style={styles.statLabel}>
-        <View style={[styles.statDot, { backgroundColor: danger ? colors.danger : colors.zinc300 }]} />
-        <Muted>{label}</Muted>
-      </View>
-      <Body color={danger ? colors.dangerDark : colors.text} style={styles.statValue}>
-        {value}
-      </Body>
-    </Pressable>
-  );
+/** The hero's one line: loud only when something needs a human. */
+export function heroHeadline(overview: Overview): { subtitle: string; title: string } {
+  const incidents = overview.browserTests.openIncidents + overview.uptime.openIncidents;
+  const monitors = overview.uptime.up + overview.uptime.down + overview.uptime.unknown;
+  const parts = [
+    `${overview.browserTests.total} ${browserTestNoun(overview.browserTests.total)}`,
+    `${monitors} ${monitors === 1 ? "monitor" : "monitors"}`,
+  ];
+  if (overview.browserTests.runningRuns > 0) parts.push(`${overview.browserTests.runningRuns} running`);
+  const subtitle = parts.join(" · ");
+  if (overview.uptime.down > 0) {
+    return { subtitle, title: overview.uptime.down === 1 ? "1 monitor is down." : `${overview.uptime.down} monitors are down.` };
+  }
+  if (incidents > 0) return { subtitle, title: incidents === 1 ? "1 incident open." : `${incidents} incidents open.` };
+  if (overview.browserTests.total === 0 && monitors === 0) return { subtitle: "Add a browser test or a monitor to start watching.", title: "Nothing to watch yet." };
+  return { subtitle, title: "All clear." };
+}
+
+/** Oldest first, so the strip reads left-to-right like a timeline. */
+export function activityTicks(activity: ActivityItem[]): PulseTick[] {
+  return [...activity]
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    .map((item) => ({ key: activityKey(item), tone: activityPresentation[item.type].tone }));
 }
 
 function OverviewSkeleton() {
   return (
     <View accessibilityLabel="Loading overview" style={styles.stack}>
-      {[0, 1, 2].map((index) => (
-        <Card key={index}>
-          <Skeleton width={110} />
-          <Skeleton height={28} style={styles.gapTop} width={140} />
-          <View style={[styles.gapTop, styles.skeletonRows]}>
-            <Skeleton />
-            <Skeleton />
-            <Skeleton />
-          </View>
-        </Card>
+      <View style={styles.skeletonHero}>
+        <Skeleton style={styles.skeletonOnInk} width={120} />
+        <Skeleton height={34} style={[styles.skeletonOnInk, styles.gapTop]} width={200} />
+        <Skeleton height={18} style={[styles.skeletonOnInk, styles.gapTopLg]} />
+      </View>
+      {[0, 1].map((index) => (
+        <View key={index} style={styles.tiles}>
+          <Skeleton height={84} style={styles.skeletonTile} />
+          <Skeleton height={84} style={styles.skeletonTile} />
+          <Skeleton height={84} style={styles.skeletonTile} />
+        </View>
       ))}
+      <Card>
+        <Skeleton width={140} />
+        <Skeleton style={styles.gapTop} />
+        <Skeleton style={styles.gapTop} width={220} />
+      </Card>
     </View>
   );
 }
@@ -124,135 +138,154 @@ export default function OverviewScreen() {
         ) : overview.isError ? (
           <ErrorState onRetry={() => void overview.refetch()} />
         ) : (
-          <View style={styles.stack}>
-            <Caption style={styles.workspace}>{current.name}</Caption>
-
-            <Card title="Usage this cycle">
-              <UsageMeter timezone={timezone} usage={overview.data.usage} />
-            </Card>
-
-            <Card title="Browser tests">
-              <View style={styles.bigRow}>
-                <Heading style={styles.big}>{overview.data.browserTests.total}</Heading>
-                <Muted> {browserTestNoun(overview.data.browserTests.total)}</Muted>
-              </View>
-              <View style={styles.stats}>
-                <StatRow label="Running now" value={overview.data.browserTests.runningRuns} />
-                <StatRow
-                  danger={overview.data.browserTests.openIncidents > 0}
-                  label="Open incidents"
-                  value={overview.data.browserTests.openIncidents}
-                  onPress={
-                    overview.data.browserTests.openIncidents > 0
-                      ? () => router.push(`${base}/incidents?status=open&type=browser`)
-                      : undefined
-                  }
-                />
-                <StatRow
-                  danger={overview.data.browserTests.failed24h > 0}
-                  label="Failures (24 h)"
-                  value={overview.data.browserTests.failed24h}
-                />
-              </View>
-              <Pressable accessibilityRole="link" style={styles.cardLink} onPress={() => router.push(`${base}/tests`)}>
-                <Label color={colors.accentDark}>View tests →</Label>
-              </Pressable>
-            </Card>
-
-            <Card title="Uptime">
-              <View style={styles.uptimeGrid}>
-                {(
-                  [
-                    ["UP", overview.data.uptime.up, colors.okDark],
-                    ["DOWN", overview.data.uptime.down, colors.dangerDark],
-                    ["UNKNOWN", overview.data.uptime.unknown, colors.zinc600],
-                  ] as const
-                ).map(([label, value, color]) => (
-                  <View key={label} style={styles.uptimeCell}>
-                    <Heading color={color}>{value}</Heading>
-                    <Caption style={styles.uptimeLabel}>{label}</Caption>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.stats}>
-                <StatRow
-                  danger={overview.data.uptime.openIncidents > 0}
-                  label="Open incidents"
-                  value={overview.data.uptime.openIncidents}
-                  onPress={
-                    overview.data.uptime.openIncidents > 0
-                      ? () => router.push(`${base}/incidents?status=open&type=uptime`)
-                      : undefined
-                  }
-                />
-                <StatRow
-                  label="Avg response (24 h)"
-                  value={
-                    overview.data.uptime.avgResponseTimeMs24h === null
-                      ? "—"
-                      : `${Math.round(overview.data.uptime.avgResponseTimeMs24h)} ms`
-                  }
-                />
-              </View>
-              <Pressable accessibilityRole="link" style={styles.cardLink} onPress={() => router.push(`${base}/uptime`)}>
-                <Label color={colors.accentDark}>View monitors →</Label>
-              </Pressable>
-            </Card>
-
-            <Card padding="none" title="Recent activity">
-              {overview.data.activity.length === 0 ? (
-                <EmptyState
-                  action={
-                    can("tests.manage") ? (
-                      <Button
-                        title="Create your first test"
-                        variant="primary"
-                        onPress={() => router.push(`${base}/tests/new`)}
-                      />
-                    ) : undefined
-                  }
-                  description="Create your first browser test to see activity here."
-                  icon={<Feather color={colors.zinc400} name="globe" size={24} />}
-                  title="No activity yet"
-                />
-              ) : (
-                overview.data.activity.map((item, index) => {
-                  const presentation = activityPresentation[item.type];
-                  return (
-                    <Pressable
-                      key={activityKey(item)}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [
-                        styles.activityRow,
-                        index === overview.data.activity.length - 1 && styles.lastRow,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => router.push(activityPath(current.id, item))}
-                    >
-                      <View style={[styles.activityIcon, { backgroundColor: presentation.bg }]}>
-                        <Feather color={presentation.fg} name={presentation.icon} size={16} />
-                      </View>
-                      <View style={styles.activityText}>
-                        <Body numberOfLines={1} style={styles.activityTitle}>
-                          {item.title}
-                        </Body>
-                        <Caption numberOfLines={1}>{item.resourceName}</Caption>
-                      </View>
-                      <Caption>{formatRelative(item.occurredAt)}</Caption>
-                    </Pressable>
-                  );
-                })
-              )}
-            </Card>
-          </View>
+          <OverviewBody base={base} canManage={can("tests.manage")} data={overview.data} timezone={timezone} workspaceName={current.name} onNavigate={(path) => router.push(path)} />
         )}
       </Screen>
     </>
   );
 }
 
+function OverviewBody({
+  base,
+  canManage,
+  data,
+  onNavigate,
+  timezone,
+  workspaceName,
+}: {
+  base: string;
+  canManage: boolean;
+  data: Overview;
+  onNavigate: (path: string) => void;
+  timezone: string;
+  workspaceName: string;
+}) {
+  const headline = heroHeadline(data);
+  const ticks = activityTicks(data.activity);
+  const openIncidents = data.browserTests.openIncidents + data.uptime.openIncidents;
+  return (
+    <View style={styles.stack}>
+      <Hero eyebrow={workspaceName} subtitle={headline.subtitle} title={headline.title}>
+        <PulseStrip live={data.browserTests.runningRuns > 0} onInk ticks={ticks} />
+        <View style={styles.heroFooter}>
+          <MonoSmall color={colors.onInkSubtle}>
+            {ticks.length === 0 ? "No results yet" : `Last ${ticks.length} results`}
+          </MonoSmall>
+          {openIncidents > 0 ? (
+            <Pressable accessibilityRole="link" hitSlop={8} onPress={() => onNavigate(`${base}/incidents?status=open`)}>
+              <Label color={colors.onInk}>Open incidents →</Label>
+            </Pressable>
+          ) : null}
+        </View>
+      </Hero>
+
+      <View>
+        <SectionHeader
+          action={
+            <Pressable accessibilityRole="link" hitSlop={8} onPress={() => onNavigate(`${base}/tests`)}>
+              <Label color={colors.accentDark}>All tests →</Label>
+            </Pressable>
+          }
+          title="Browser tests"
+        />
+        <View style={styles.tiles}>
+          <StatTile label="Tests" value={data.browserTests.total} onPress={() => onNavigate(`${base}/tests`)} />
+          <StatTile
+            label="Running"
+            tone={data.browserTests.runningRuns > 0 ? "info" : "neutral"}
+            value={data.browserTests.runningRuns}
+          />
+          <StatTile
+            hint="last 24 h"
+            label="Failed"
+            tone={data.browserTests.failed24h > 0 ? "danger" : "neutral"}
+            value={data.browserTests.failed24h}
+            onPress={
+              data.browserTests.openIncidents > 0
+                ? () => onNavigate(`${base}/incidents?status=open&type=browser`)
+                : undefined
+            }
+          />
+        </View>
+      </View>
+
+      <View>
+        <SectionHeader
+          action={
+            <Pressable accessibilityRole="link" hitSlop={8} onPress={() => onNavigate(`${base}/uptime`)}>
+              <Label color={colors.accentDark}>All monitors →</Label>
+            </Pressable>
+          }
+          title="Uptime"
+        />
+        <View style={styles.tiles}>
+          <StatTile label="Up" tone={data.uptime.up > 0 ? "ok" : "neutral"} value={data.uptime.up} onPress={() => onNavigate(`${base}/uptime`)} />
+          <StatTile
+            label="Down"
+            tone={data.uptime.down > 0 ? "danger" : "neutral"}
+            value={data.uptime.down}
+            onPress={
+              data.uptime.openIncidents > 0
+                ? () => onNavigate(`${base}/incidents?status=open&type=uptime`)
+                : undefined
+            }
+          />
+          <StatTile
+            hint="avg · 24 h"
+            label="Response"
+            value={data.uptime.avgResponseTimeMs24h === null ? "—" : `${Math.round(data.uptime.avgResponseTimeMs24h)} ms`}
+          />
+        </View>
+      </View>
+
+      <Card title="Usage this cycle">
+        <UsageMeter timezone={timezone} usage={data.usage} />
+      </Card>
+
+      <Card eyebrow="Recent activity" padding="none">
+        {data.activity.length === 0 ? (
+          <EmptyState
+            action={
+              canManage ? (
+                <Button title="Create your first test" variant="accent" onPress={() => onNavigate(`${base}/tests/new`)} />
+              ) : undefined
+            }
+            description="Create your first browser test to see activity here."
+            icon={<IconTile icon="globe" size={44} tone="accent" />}
+            title="No activity yet"
+          />
+        ) : (
+          data.activity.map((item, index) => {
+            const look = activityPresentation[item.type];
+            return (
+              <Pressable
+                key={activityKey(item)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.activityRow,
+                  index === data.activity.length - 1 && styles.lastRow,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => onNavigate(activityPath(base.slice(3), item))}
+              >
+                <IconTile icon={look.icon} tone={look.tone} />
+                <View style={styles.activityText}>
+                  <Body numberOfLines={1} style={styles.activityTitle}>
+                    {item.title}
+                  </Body>
+                  <Caption numberOfLines={1}>{item.resourceName}</Caption>
+                </View>
+                <MonoSmall>{formatRelative(item.occurredAt)}</MonoSmall>
+              </Pressable>
+            );
+          })
+        )}
+      </Card>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  activityIcon: { alignItems: "center", borderRadius: radius.full, height: 32, justifyContent: "center", width: 32 },
   activityRow: {
     alignItems: "center",
     borderBottomColor: colors.border,
@@ -264,21 +297,14 @@ const styles = StyleSheet.create({
   },
   activityText: { flex: 1, gap: 2 },
   activityTitle: { fontWeight: "500" },
-  big: { fontSize: 30, lineHeight: 36 },
-  bigRow: { alignItems: "baseline", flexDirection: "row" },
-  cardLink: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.md },
   gapTop: { marginTop: spacing.md },
+  gapTopLg: { marginTop: spacing.lg },
+  heroFooter: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
   lastRow: { borderBottomWidth: 0 },
   pressed: { backgroundColor: colors.zinc50 },
-  skeletonRows: { gap: spacing.sm },
-  stack: { gap: spacing.lg },
-  statDot: { borderRadius: 4, height: 8, width: 8 },
-  statLabel: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  statRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  statValue: { fontWeight: "500" },
-  stats: { gap: spacing.sm + 2, marginTop: spacing.lg },
-  uptimeCell: { alignItems: "center", backgroundColor: colors.zinc50, borderRadius: radius.md, flex: 1, paddingVertical: spacing.sm },
-  uptimeGrid: { flexDirection: "row", gap: spacing.sm },
-  uptimeLabel: { fontWeight: "500" },
-  workspace: { marginTop: -spacing.sm },
+  skeletonHero: { backgroundColor: colors.ink, borderRadius: 20, padding: spacing.xl },
+  skeletonOnInk: { backgroundColor: colors.inkCard },
+  skeletonTile: { borderRadius: 14, flex: 1 },
+  stack: { gap: spacing.xl },
+  tiles: { flexDirection: "row", gap: spacing.sm },
 });

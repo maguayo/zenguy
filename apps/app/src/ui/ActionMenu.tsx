@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Feather } from "@expo/vector-icons";
 import { ActionSheetIOS, Pressable, StyleSheet } from "react-native";
 
-import { colors } from "@/theme";
+import { colors, radius } from "@/theme";
 
 export interface ActionMenuItem {
   destructive?: boolean;
@@ -57,5 +57,5 @@ export function ActionMenu({
 
 const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.zinc100 },
-  trigger: { alignItems: "center", borderRadius: 8, height: 36, justifyContent: "center", width: 36 },
+  trigger: { alignItems: "center", borderRadius: radius.full, height: 36, justifyContent: "center", width: 36 },
 });

@@ -37,15 +37,18 @@ export function statusPresentation(status: string): { label: string; pulse?: boo
 
 export interface StatusBadgeProps {
   passedAfterRetry?: boolean;
+  size?: "md" | "sm";
   status: string;
 }
 
-export function StatusBadge({ passedAfterRetry = false, status }: StatusBadgeProps) {
+export function StatusBadge({ passedAfterRetry = false, size = "sm", status }: StatusBadgeProps) {
   const config = statusPresentation(status);
   return (
     <View style={styles.row}>
       <Badge
         dot={status !== "SYSTEM_ERROR"}
+        pulse={config.pulse}
+        size={size}
         icon={
           status === "SYSTEM_ERROR" ? (
             <Feather color={toneColors.neutral.fg} name="tool" size={11} />
@@ -55,7 +58,11 @@ export function StatusBadge({ passedAfterRetry = false, status }: StatusBadgePro
       >
         {config.label}
       </Badge>
-      {passedAfterRetry ? <Badge tone="warn">Passed after retry</Badge> : null}
+      {passedAfterRetry ? (
+        <Badge size={size} tone="warn">
+          Passed after retry
+        </Badge>
+      ) : null}
     </View>
   );
 }

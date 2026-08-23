@@ -1,4 +1,3 @@
-import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { Linking, StyleSheet, View } from "react-native";
@@ -7,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getAppRequirements } from "@/api/app";
 import { isAppStoreUrl, isUpdateRequired } from "@/lib/app-version";
 import { colors, spacing } from "@/theme";
-import { Button, Caption, Muted, Title } from "@/ui";
+import { Button, IconTile, MonoSmall, Muted, Title } from "@/ui";
 import { Wordmark } from "./AuthShell";
 
 export const updateRequiredTitle = "Update required";
@@ -38,7 +37,7 @@ export function UpdateGate() {
       <SafeAreaView edges={["top", "bottom"]} style={styles.safe}>
         <Wordmark />
         <View style={styles.body}>
-          <Feather color={colors.accent} name="download-cloud" size={36} />
+          <IconTile icon="download-cloud" size={56} tone="accent" />
           <Title style={styles.title}>{updateRequiredTitle}</Title>
           <Muted style={styles.message}>{updateRequiredMessage}</Muted>
           <View style={styles.actions}>
@@ -47,7 +46,7 @@ export function UpdateGate() {
                 fullWidth
                 size="lg"
                 title="Open the App Store"
-                variant="primary"
+                variant="accent"
                 onPress={() => void Linking.openURL(storeUrl).catch(() => undefined)}
               />
             ) : (
@@ -62,9 +61,9 @@ export function UpdateGate() {
             />
           </View>
         </View>
-        <Caption style={styles.version}>
+        <MonoSmall style={styles.version}>
           Installed {currentVersion ?? "unknown"} · required {requirements.data.minVersion}
-        </Caption>
+        </MonoSmall>
       </SafeAreaView>
     </View>
   );
@@ -82,7 +81,7 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 990,
   },
-  message: { marginTop: spacing.sm, textAlign: "center" },
+  message: { fontSize: 16, lineHeight: 22, marginTop: spacing.sm, maxWidth: 320, textAlign: "center" },
   safe: { flex: 1, padding: spacing.xl },
   title: { marginTop: spacing.lg, textAlign: "center" },
   version: { textAlign: "center" },

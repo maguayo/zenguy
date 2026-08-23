@@ -3,13 +3,15 @@ import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { colors, spacing } from "@/theme";
-import { Body, Muted } from "./Text";
+import { Body, MonoSmall, Muted } from "./Text";
 
 interface Props {
   accessibilityLabel?: string;
   chevron?: boolean;
   destructive?: boolean;
   left?: ReactNode;
+  /** Mono line for measured data (ids, schedules, durations). */
+  meta?: string;
   onPress?: () => void;
   right?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -23,6 +25,7 @@ export function ListRow({
   chevron,
   destructive = false,
   left,
+  meta,
   onPress,
   right,
   style,
@@ -58,9 +61,14 @@ export function ListRow({
             <View style={styles.subtitle}>{subtitle}</View>
           )
         ) : null}
+        {meta ? (
+          <MonoSmall numberOfLines={1} style={styles.meta}>
+            {meta}
+          </MonoSmall>
+        ) : null}
       </View>
       {right ? <View style={styles.right}>{right}</View> : null}
-      {showChevron ? <Feather color={colors.zinc400} name="chevron-right" size={18} /> : null}
+      {showChevron ? <Feather color={colors.textSubtle} name="chevron-right" size={18} /> : null}
     </Pressable>
   );
 }
@@ -73,6 +81,7 @@ const styles = StyleSheet.create({
   group: { gap: 0 },
   left: { marginRight: spacing.md },
   main: { flex: 1, gap: 2, minWidth: 0 },
+  meta: { marginTop: 3 },
   pressed: { backgroundColor: colors.zinc50 },
   right: { alignItems: "flex-end", marginLeft: spacing.md },
   row: {
@@ -80,7 +89,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    minHeight: 56,
+    minHeight: 60,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },

@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -15,7 +15,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PushProvider } from "@/contexts/PushContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { queryClient } from "@/lib/query-client";
-import { colors } from "@/theme";
+import { colors, fonts } from "@/theme";
 import { Button, ErrorState, Screen } from "@/ui";
 
 void SplashScreen.preventAutoHideAsync();
@@ -30,13 +30,14 @@ function RootNavigator() {
   if (status === "unavailable") {
     return (
       <Screen safe={["top", "bottom"]} scroll={false}>
-        <ErrorState
-          message="Zenguy can't be reached right now. Check your connection and try again."
-          retryLabel="Try again"
-          style={styles.fill}
-          onRetry={retry}
-        />
-        <SignOutOffline />
+        <View style={styles.offline}>
+          <ErrorState
+            message="Zenguy can't be reached right now. Check your connection and try again."
+            retryLabel="Try again"
+            onRetry={retry}
+          />
+          <SignOutOffline />
+        </View>
       </Screen>
     );
   }
@@ -48,8 +49,8 @@ function RootNavigator() {
         headerShadowVisible: false,
         headerShown: false,
         headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.accent,
-        headerTitleStyle: { color: colors.text },
+        headerTintColor: colors.ink,
+        headerTitleStyle: { color: colors.text, fontFamily: fonts.sans.semibold, fontSize: 17 },
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
@@ -106,5 +107,6 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  signOut: { alignSelf: "center", marginBottom: 24 },
+  offline: { alignItems: "center", flex: 1, justifyContent: "center" },
+  signOut: { alignSelf: "center", marginTop: 8 },
 });

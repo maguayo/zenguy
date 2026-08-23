@@ -32,13 +32,17 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { colors, spacing } from "@/theme";
 import {
   ActionMenu,
+  Body,
   Button,
   Caption,
   Card,
   confirm,
   EmptyState,
   ErrorState,
+  IconTile,
+  Label,
   ListRow,
+  MonoSmall,
   Muted,
   Screen,
   showActionMenu,
@@ -46,6 +50,18 @@ import {
   Spinner,
   type ActionMenuItem,
 } from "@/ui";
+
+export function memberInitial(name: string, email: string): string {
+  return (name.trim().slice(0, 1) || email.slice(0, 1) || "?").toUpperCase();
+}
+
+function InitialTile({ email, name }: { email: string; name: string }) {
+  return (
+    <IconTile round>
+      <Label color={colors.zinc600}>{memberInitial(name, email)}</Label>
+    </IconTile>
+  );
+}
 
 function MemberActions({ member }: { member: Member }) {
   const { user } = useAuth();
@@ -144,10 +160,12 @@ function PendingInvitations({ invitations }: { invitations: Invitation[] }) {
   };
 
   return (
-    <Card padding="none" title="Pending invitations">
+    <Card eyebrow="Pending invitations" padding="none">
       {invitations.map((invitation, index) => (
         <ListRow
           key={invitation.id}
+          left={<IconTile icon="mail" round tone="accent" />}
+          meta={`Expires ${formatRelative(invitation.expiresAt)}`}
           right={
             <View style={styles.rowRight}>
               <RoleBadge role={invitation.role} />
@@ -161,13 +179,12 @@ function PendingInvitations({ invitations }: { invitations: Invitation[] }) {
             </View>
           }
           style={index === invitations.length - 1 && styles.lastRow}
-          subtitle={
-            <View style={styles.meta}>
-              <Caption>Invited by {invitation.invitedBy?.name ?? "System"}</Caption>
-              <Caption>Expires {formatRelative(invitation.expiresAt)}</Caption>
-            </View>
+          subtitle={<Caption>Invited by {invitation.invitedBy?.name ?? "System"}</Caption>}
+          title={
+            <Body numberOfLines={1} style={styles.invitationEmail}>
+              {invitation.email}
+            </Body>
           }
-          title={invitation.email}
         />
       ))}
     </Card>
@@ -200,7 +217,7 @@ export default function MembersScreen() {
     <Button
       icon={<Feather color={colors.white} name="plus" size={16} />}
       title="Invite member"
-      variant="primary"
+      variant="accent"
       onPress={() => setInviteOpen(true)}
     />
   ) : undefined;
@@ -224,17 +241,22 @@ export default function MembersScreen() {
           ) : members.isError ? (
             <ErrorState onRetry={() => void members.refetch()} />
           ) : (
-            <Card padding="none">
+            <Card
+              eyebrow={`${members.data.length} ${members.data.length === 1 ? "member" : "members"}`}
+              padding="none"
+            >
               {members.data.length === 0 ? (
                 <EmptyState
                   action={inviteButton}
-                  icon={<Feather color={colors.zinc400} name="user-plus" size={24} />}
+                  icon={<IconTile icon="user-plus" size={44} tone="accent" />}
                   title="No members yet"
                 />
               ) : (
                 members.data.map((member, index) => (
                   <ListRow
                     key={member.userId}
+                    left={<InitialTile email={member.email} name={member.name} />}
+                    meta={`Joined ${formatDateTime(member.joinedAt, timezone)}`}
                     right={
                       <View style={styles.rowRight}>
                         <RoleBadge role={member.role} />
@@ -242,12 +264,7 @@ export default function MembersScreen() {
                       </View>
                     }
                     style={index === members.data.length - 1 && styles.lastRow}
-                    subtitle={
-                      <View style={styles.meta}>
-                        <Muted numberOfLines={1}>{member.email}</Muted>
-                        <Caption>Joined {formatDateTime(member.joinedAt, timezone)}</Caption>
-                      </View>
-                    }
+                    subtitle={<MonoSmall numberOfLines={1}>{member.email}</MonoSmall>}
                     title={member.name}
                   />
                 ))
@@ -256,7 +273,7 @@ export default function MembersScreen() {
           )}
 
           {canInvite && invitations.isPending ? (
-            <Card title="Pending invitations">
+            <Card eyebrow="Pending invitations">
               <View accessibilityLabel="Loading pending invitations" style={styles.skeletons}>
                 <Skeleton />
                 <Skeleton width="80%" />
@@ -276,9 +293,9 @@ export default function MembersScreen() {
 }
 
 const styles = StyleSheet.create({
+  invitationEmail: { fontWeight: "500" },
   lastRow: { borderBottomWidth: 0 },
-  meta: { gap: 2 },
   rowRight: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   skeletons: { gap: spacing.sm + 2 },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
 });

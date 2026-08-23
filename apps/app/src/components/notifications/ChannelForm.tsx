@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
@@ -13,8 +12,8 @@ import { FormError } from "@/components/FormError";
 import { useToast } from "@/contexts/ToastContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
-import { colors, radius, spacing } from "@/theme";
-import { Badge, Button, Caption, Field, Heading, Input, Label, Muted, Toggle } from "@/ui";
+import { colors, gutter, palette, radius, spacing } from "@/theme";
+import { Badge, Button, Caption, Card, Field, Heading, Input, Label, Muted, Toggle } from "@/ui";
 
 import {
   channelFormDefaults,
@@ -32,7 +31,8 @@ import {
   type ChannelFormValues,
   isEditableChannelType,
 } from "./channel-form";
-import { channelIcons, channelTypeLabels } from "./channels";
+import { channelTypeLabels } from "./channels";
+import { ChannelTile } from "./ChannelTile";
 import { EmailListInput } from "./EmailListInput";
 
 export interface ChannelFormProps {
@@ -54,9 +54,9 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
             style={({ pressed }) => [styles.typeButton, pressed && styles.typeButtonPressed]}
             onPress={() => onSelect(type)}
           >
-            <Ionicons color={colors.zinc700} name={channelIcons[type]} size={22} />
-            <Label>{label}</Label>
-            <Caption>{paid ? "Pay as you go" : "Free"}</Caption>
+            <ChannelTile size={36} type={type} />
+            <Label style={styles.typeLabel}>{label}</Label>
+            <Caption color={paid ? colors.warn : colors.okDark}>{paid ? "Pay as you go" : "Free"}</Caption>
           </Pressable>
         ))}
       </View>
@@ -153,149 +153,158 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
             <TypePicker onSelect={selectType} />
           ) : (
             <View style={styles.form}>
-              {editing ? (
-                <Field label="Type">
-                  <Badge>{channelTypeLabels[selectedType]}</Badge>
-                </Field>
-              ) : null}
+              <Card eyebrow="Channel">
+                <View style={styles.fields}>
+                  <View style={styles.typeRow}>
+                    <ChannelTile size={32} tone="accent" type={selectedType} />
+                    <Badge tone="accent">{channelTypeLabels[selectedType]}</Badge>
+                  </View>
 
-              <Controller
-                control={form.control}
-                name="name"
-                render={({ field, fieldState }) => (
-                  <Field error={fieldState.error?.message} label="Name" required>
-                    <Input
-                      invalid={Boolean(fieldState.error)}
-                      maxLength={80}
-                      placeholder="Engineering alerts"
-                      value={field.value}
-                      onBlur={field.onBlur}
-                      onChangeText={field.onChange}
-                    />
-                  </Field>
-                )}
-              />
-
-              {selectedType === "EMAIL" ? (
-                <Controller
-                  control={form.control}
-                  name="emails"
-                  render={({ field, fieldState }) => (
-                    <Field
-                      error={fieldState.error?.message}
-                      hint="Press Enter or comma after each address. Up to 10 recipients."
-                      label="Email addresses"
-                      required
-                    >
-                      <EmailListInput
-                        invalid={Boolean(fieldState.error)}
-                        value={field.value}
-                        onChange={(emails) => {
-                          field.onChange(emails);
-                          void form.trigger("emails");
-                        }}
-                      />
-                    </Field>
-                  )}
-                />
-              ) : null}
-
-              {isPhoneChannelType(selectedType) ? (
-                <Controller
-                  control={form.control}
-                  name="phoneNumber"
-                  render={({ field, fieldState }) => (
-                    <Field
-                      error={fieldState.error?.message}
-                      hint={phoneHint(selectedType)}
-                      label="Phone number"
-                      required
-                    >
-                      <Input
-                        autoComplete="tel"
-                        invalid={Boolean(fieldState.error)}
-                        keyboardType="phone-pad"
-                        placeholder="+34612345678"
-                        textContentType="telephoneNumber"
-                        value={field.value}
-                        onBlur={field.onBlur}
-                        onChangeText={field.onChange}
-                      />
-                    </Field>
-                  )}
-                />
-              ) : null}
-
-              {selectedType === "SMS" ? (
-                <Controller
-                  control={form.control}
-                  name="smsConsent"
-                  render={({ field, fieldState }) => (
-                    <View style={styles.consent}>
-                      <Toggle
-                        description={smsConsentCopy}
-                        label="Recipient consent"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      />
-                      <View style={styles.legalLinks}>
-                        <Pressable
-                          accessibilityRole="link"
-                          onPress={() => router.push("/terms" as Href)}
-                        >
-                          <Label color={colors.accentDark}>Terms</Label>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="link"
-                          onPress={() => router.push("/privacy" as Href)}
-                        >
-                          <Label color={colors.accentDark}>Privacy Policy</Label>
-                        </Pressable>
-                      </View>
-                      {fieldState.error ? (
-                        <Caption accessibilityRole="alert" color={colors.danger}>
-                          {fieldState.error.message}
-                        </Caption>
-                      ) : null}
-                    </View>
-                  )}
-                />
-              ) : null}
-
-              {isWebhookChannelType(selectedType) ? (
-                <Controller
-                  control={form.control}
-                  name="webhookUrl"
-                  render={({ field, fieldState }) => (
-                    <Field
-                      error={fieldState.error?.message}
-                      hint={webhookHint(selectedType)}
-                      label="Webhook URL"
-                      required={!editing}
-                    >
-                      <View style={styles.webhook}>
-                        {editing ? (
-                          <Caption>
-                            Currently: {channel?.configPreview.webhookUrlMasked ?? "masked"}
-                          </Caption>
-                        ) : null}
+                  <Controller
+                    control={form.control}
+                    name="name"
+                    render={({ field, fieldState }) => (
+                      <Field error={fieldState.error?.message} label="Name" required>
                         <Input
-                          autoCapitalize="none"
-                          autoComplete="off"
-                          autoCorrect={false}
                           invalid={Boolean(fieldState.error)}
-                          keyboardType="url"
-                          placeholder={editing ? "Paste a new URL to replace it" : "https://"}
-                          textContentType="URL"
+                          maxLength={80}
+                          placeholder="Engineering alerts"
                           value={field.value}
                           onBlur={field.onBlur}
                           onChangeText={field.onChange}
                         />
-                      </View>
-                    </Field>
-                  )}
-                />
-              ) : null}
+                      </Field>
+                    )}
+                  />
+                </View>
+              </Card>
+
+              <Card eyebrow="Destination">
+                <View style={styles.fields}>
+                  {selectedType === "EMAIL" ? (
+                    <Controller
+                      control={form.control}
+                      name="emails"
+                      render={({ field, fieldState }) => (
+                        <Field
+                          error={fieldState.error?.message}
+                          hint="Press Enter or comma after each address. Up to 10 recipients."
+                          label="Email addresses"
+                          required
+                        >
+                          <EmailListInput
+                            invalid={Boolean(fieldState.error)}
+                            value={field.value}
+                            onChange={(emails) => {
+                              field.onChange(emails);
+                              void form.trigger("emails");
+                            }}
+                          />
+                        </Field>
+                      )}
+                    />
+                  ) : null}
+
+                  {isPhoneChannelType(selectedType) ? (
+                    <Controller
+                      control={form.control}
+                      name="phoneNumber"
+                      render={({ field, fieldState }) => (
+                        <Field
+                          error={fieldState.error?.message}
+                          hint={phoneHint(selectedType)}
+                          label="Phone number"
+                          required
+                        >
+                          <Input
+                            autoComplete="tel"
+                            invalid={Boolean(fieldState.error)}
+                            keyboardType="phone-pad"
+                            mono
+                            placeholder="+34612345678"
+                            textContentType="telephoneNumber"
+                            value={field.value}
+                            onBlur={field.onBlur}
+                            onChangeText={field.onChange}
+                          />
+                        </Field>
+                      )}
+                    />
+                  ) : null}
+
+                  {selectedType === "SMS" ? (
+                    <Controller
+                      control={form.control}
+                      name="smsConsent"
+                      render={({ field, fieldState }) => (
+                        <View style={styles.consent}>
+                          <Toggle
+                            description={smsConsentCopy}
+                            label="Recipient consent"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          />
+                          <View style={styles.legalLinks}>
+                            <Pressable
+                              accessibilityRole="link"
+                              onPress={() => router.push("/terms" as Href)}
+                            >
+                              <Label color={colors.accentDark}>Terms</Label>
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="link"
+                              onPress={() => router.push("/privacy" as Href)}
+                            >
+                              <Label color={colors.accentDark}>Privacy Policy</Label>
+                            </Pressable>
+                          </View>
+                          {fieldState.error ? (
+                            <Caption accessibilityRole="alert" color={colors.dangerDark}>
+                              {fieldState.error.message}
+                            </Caption>
+                          ) : null}
+                        </View>
+                      )}
+                    />
+                  ) : null}
+
+                  {isWebhookChannelType(selectedType) ? (
+                    <Controller
+                      control={form.control}
+                      name="webhookUrl"
+                      render={({ field, fieldState }) => (
+                        <Field
+                          error={fieldState.error?.message}
+                          hint={webhookHint(selectedType)}
+                          label="Webhook URL"
+                          required={!editing}
+                        >
+                          <View style={styles.webhook}>
+                            {editing ? (
+                              <Caption>
+                                Currently: {channel?.configPreview.webhookUrlMasked ?? "masked"}
+                              </Caption>
+                            ) : null}
+                            <Input
+                              autoCapitalize="none"
+                              autoComplete="off"
+                              autoCorrect={false}
+                              invalid={Boolean(fieldState.error)}
+                              keyboardType="url"
+                              mono
+                              placeholder={editing ? "Paste a new URL to replace it" : "https://"}
+                              textContentType="URL"
+                              value={field.value}
+                              onBlur={field.onBlur}
+                              onChangeText={field.onChange}
+                            />
+                          </View>
+                        </Field>
+                      )}
+                    />
+                  ) : null}
+                </View>
+              </Card>
 
               <FormError message={rootError} />
 
@@ -311,7 +320,7 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
                   loading={save.isPending}
                   style={styles.submit}
                   title={editing ? "Save changes" : "Create channel"}
-                  variant="primary"
+                  variant="accent"
                   onPress={() => void submit()}
                 />
               </View>
@@ -325,9 +334,10 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
 
 const styles = StyleSheet.create({
   consent: { gap: spacing.sm },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  content: { paddingBottom: spacing.xxxl, paddingHorizontal: gutter, paddingTop: spacing.md },
+  fields: { gap: spacing.lg },
   footer: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
-  form: { gap: spacing.lg },
+  form: { gap: spacing.xl },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -337,7 +347,7 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 80 },
   legalLinks: { flexDirection: "row", gap: spacing.lg },
-  pickerIntro: { marginBottom: spacing.md },
+  pickerIntro: { marginBottom: spacing.lg },
   sheet: { backgroundColor: colors.bg, flex: 1 },
   submit: { flex: 1 },
   title: { flex: 1, textAlign: "center" },
@@ -351,10 +361,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.xs,
     justifyContent: "center",
-    minHeight: 96,
+    minHeight: 108,
     padding: spacing.md,
   },
-  typeButtonPressed: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  typeButtonPressed: { backgroundColor: palette.violetBg, borderColor: palette.violetLine },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  typeLabel: { marginTop: spacing.xs },
+  typeRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   webhook: { gap: spacing.xs },
 });

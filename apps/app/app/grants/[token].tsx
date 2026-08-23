@@ -29,6 +29,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  IconTile,
   Input,
   Muted,
   Screen,
@@ -100,18 +101,26 @@ export default function RedeemGrantScreen() {
         <Spinner label="Loading complimentary link" style={styles.fill} />
       ) : state === "unavailable" ? (
         <Card>
-          <EmptyState description={unavailableGrantMessage} title="Link already used" />
+          <EmptyState
+            description={unavailableGrantMessage}
+            icon={<IconTile icon="gift" size={44} tone="warn" />}
+            title="Link already used"
+          />
         </Card>
       ) : state === "expired" ? (
         <Card>
-          <EmptyState description={expiredGrantMessage} title="Link expired" />
+          <EmptyState
+            description={expiredGrantMessage}
+            icon={<IconTile icon="clock" size={44} tone="warn" />}
+            title="Link expired"
+          />
         </Card>
       ) : state === "loading" ? (
         <Spinner label="Loading complimentary link" style={styles.fill} />
       ) : state === "error" ? (
         <ErrorState onRetry={() => void grant.refetch()} />
       ) : (
-        <Card title="Complimentary access">
+        <Card elevated title="Complimentary access">
           <View style={styles.form}>
             <Muted>{redeemDescription}</Muted>
             {workspaces.isPending ? (
@@ -146,7 +155,7 @@ export default function RedeemGrantScreen() {
               loading={redeem.isPending}
               size="lg"
               title="Activate complimentary access"
-              variant="primary"
+              variant="accent"
               onPress={() => redeem.mutate()}
             />
           </View>

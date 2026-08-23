@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
-import { colors, radius, spacing } from "@/theme";
-import { Caption, Small } from "@/ui";
+import { colors, palette, radius, spacing } from "@/theme";
+import { Eyebrow, Small } from "@/ui";
 
 /** Expected vs. observed result of a failed attempt, as on the web. */
 export function ExpectedObserved({
@@ -14,13 +14,13 @@ export function ExpectedObserved({
   return (
     <View style={styles.grid}>
       <View style={styles.box}>
-        <Caption style={styles.label}>Expected</Caption>
+        <Eyebrow color={colors.okDark}>Expected</Eyebrow>
         <Small selectable style={styles.value}>
           {expected ?? "—"}
         </Small>
       </View>
       <View style={[styles.box, styles.observed]}>
-        <Caption style={styles.label}>Observed</Caption>
+        <Eyebrow color={colors.dangerDark}>Observed</Eyebrow>
         <Small selectable style={styles.value}>
           {actual ?? "—"}
         </Small>
@@ -31,14 +31,16 @@ export function ExpectedObserved({
 
 const styles = StyleSheet.create({
   box: {
-    backgroundColor: "rgba(255, 255, 255, 0.75)",
+    backgroundColor: colors.surface,
     borderColor: colors.border,
+    borderLeftColor: palette.green,
+    borderLeftWidth: 3,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing.xs,
     padding: spacing.md,
   },
   grid: { gap: spacing.sm, marginTop: spacing.md },
-  label: { fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },
-  observed: { borderColor: "#fecaca" },
-  value: { color: colors.zinc800, marginTop: 2 },
+  observed: { borderLeftColor: palette.red },
+  value: { color: colors.text },
 });

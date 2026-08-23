@@ -4,17 +4,18 @@ import { Pressable, StyleSheet, View } from "react-native";
 import type { MonitorStats } from "@/api/types";
 import { formatTime } from "@/lib/format";
 import { colors, radius, spacing } from "@/theme";
-import { Caption, EmptyState, Small } from "@/ui";
+import { EmptyState, MonoSmall, Small } from "@/ui";
 
 import { formatResponseTime } from "./monitor-display";
 import { responseTimeBars } from "./response-time-chart";
 
-const plotHeight = 180;
+const plotHeight = 168;
 
 /**
- * Dependency-free port of the web's response-time area chart: one bar per
- * bucket of checks, failed checks in the danger colour, tap a bar for the
- * same details the web shows in its tooltip.
+ * Dependency-free port of the web's response-time area chart: one violet bar
+ * per bucket of checks, failed checks in red, tap a bar for the same details
+ * the web shows in its tooltip. Drawn on paper with sand gridlines and mono
+ * axis labels.
  */
 export function ResponseTimeChart({
   series,
@@ -37,8 +38,9 @@ export function ResponseTimeChart({
     <View accessibilityLabel="Response time chart" style={styles.chart}>
       <View style={styles.plot}>
         <View style={styles.axis}>
-          <Caption>{`${model.max} ms`}</Caption>
-          <Caption>0</Caption>
+          <MonoSmall>{`${model.max} ms`}</MonoSmall>
+          <MonoSmall>{`${model.max / 2} ms`}</MonoSmall>
+          <MonoSmall>0</MonoSmall>
         </View>
         <View style={styles.area}>
           <View pointerEvents="none" style={[styles.gridLine, styles.gridTop]} />
@@ -60,8 +62,8 @@ export function ResponseTimeChart({
                       styles.bar,
                       {
                         backgroundColor: bar.failed ? colors.danger : colors.accent,
-                        height: `${Math.max(bar.heightPct, bar.failed ? 4 : 1)}%`,
-                        opacity: selected === null || isActive ? 1 : 0.45,
+                        height: `${Math.max(bar.heightPct, bar.failed ? 4 : 1.5)}%`,
+                        opacity: selected === null || isActive ? 1 : 0.35,
                       },
                     ]}
                   />
@@ -72,13 +74,14 @@ export function ResponseTimeChart({
         </View>
       </View>
       <View style={styles.xAxis}>
-        <Caption>{formatTime(first.t, timezone)}</Caption>
-        <Caption>{formatTime(last.t, timezone)}</Caption>
+        <MonoSmall>{formatTime(first.t, timezone)}</MonoSmall>
+        <MonoSmall>{formatTime(last.t, timezone)}</MonoSmall>
       </View>
       {active ? (
         <View style={styles.tooltip}>
-          <Small style={styles.tooltipTime}>{formatTime(active.t, timezone)}</Small>
-          <Small color={colors.zinc600}>
+          <View style={[styles.tooltipDot, { backgroundColor: active.failed ? colors.danger : colors.accent }]} />
+          <MonoSmall color={colors.textBody}>{formatTime(active.t, timezone)}</MonoSmall>
+          <Small color={colors.textBody} style={styles.tooltipText}>
             {formatResponseTime(active.responseTimeMs)} · {active.failed ? "Failed" : "Passed"}
           </Small>
         </View>
@@ -91,20 +94,20 @@ const axisWidth = 52;
 
 const styles = StyleSheet.create({
   area: { flex: 1, height: plotHeight },
-  axis: { height: plotHeight, justifyContent: "space-between", width: axisWidth },
+  axis: { alignItems: "flex-end", height: plotHeight, justifyContent: "space-between", width: axisWidth },
   bar: { borderTopLeftRadius: 2, borderTopRightRadius: 2, width: "100%" },
   bars: {
     alignItems: "flex-end",
-    borderBottomColor: colors.zinc300,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
+    borderBottomWidth: 1,
     flexDirection: "row",
-    gap: 1,
+    gap: 2,
     height: plotHeight,
   },
   chart: { gap: spacing.sm },
   empty: { minHeight: plotHeight },
   gridLine: {
-    backgroundColor: colors.zinc100,
+    backgroundColor: colors.borderStrong,
     height: StyleSheet.hairlineWidth,
     left: 0,
     position: "absolute",
@@ -115,15 +118,17 @@ const styles = StyleSheet.create({
   plot: { flexDirection: "row", gap: spacing.sm },
   slot: { flex: 1, height: "100%", justifyContent: "flex-end" },
   tooltip: {
-    backgroundColor: colors.zinc50,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.full,
     flexDirection: "row",
     gap: spacing.sm,
+    marginTop: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 6,
   },
-  tooltipTime: { fontWeight: "500" },
+  tooltipDot: { borderRadius: 3, height: 6, width: 6 },
+  tooltipText: { flexShrink: 1 },
   xAxis: { flexDirection: "row", justifyContent: "space-between", paddingLeft: axisWidth + spacing.sm },
 });

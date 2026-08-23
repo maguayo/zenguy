@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, palette, radius, spacing } from "@/theme";
 import { Caption, Input, Mono } from "@/ui";
 
 import { MAX_ALLOWED_DOMAINS, addDomains, isAllowedDomain, removeDomain } from "./domains";
@@ -56,7 +56,7 @@ export const DomainListInput = forwardRef<DomainListInputHandle, Props>(function
         <View style={styles.chips}>
           {value.map((domain) => (
             <View key={domain} style={styles.chip}>
-              <Mono color={colors.zinc700} numberOfLines={1} style={styles.chipText}>
+              <Mono color={palette.violetInk} numberOfLines={1} style={styles.chipText}>
                 {domain}
               </Mono>
               <Pressable
@@ -66,7 +66,7 @@ export const DomainListInput = forwardRef<DomainListInputHandle, Props>(function
                 style={({ pressed }) => [styles.chipRemove, pressed && styles.chipRemovePressed]}
                 onPress={() => onChange(removeDomain(value, domain))}
               >
-                <Feather color={colors.zinc500} name="x" size={12} />
+                <Feather color={palette.violetDeep} name="x" size={12} />
               </Pressable>
             </View>
           ))}
@@ -80,10 +80,10 @@ export const DomainListInput = forwardRef<DomainListInputHandle, Props>(function
         inputMode="url"
         invalid={invalid || Boolean(localError)}
         keyboardType="url"
+        mono
         placeholder={value.length === 0 ? "example.com" : "Add another domain"}
         returnKeyType="done"
         spellCheck={false}
-        style={styles.input}
         submitBehavior="submit"
         textContentType="URL"
         value={draft}
@@ -106,7 +106,7 @@ export const DomainListInput = forwardRef<DomainListInputHandle, Props>(function
         onSubmitEditing={() => commit(draft)}
       />
       {localError ? (
-        <Caption accessibilityRole="alert" color={colors.danger}>
+        <Caption accessibilityRole="alert" color={colors.dangerDark}>
           {localError}
         </Caption>
       ) : null}
@@ -117,7 +117,7 @@ export const DomainListInput = forwardRef<DomainListInputHandle, Props>(function
 const styles = StyleSheet.create({
   chip: {
     alignItems: "center",
-    backgroundColor: colors.zinc100,
+    backgroundColor: palette.violetBg,
     borderRadius: radius.sm,
     flexDirection: "row",
     gap: 2,
@@ -127,9 +127,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chipRemove: { alignItems: "center", borderRadius: radius.sm, height: 24, justifyContent: "center", width: 24 },
-  chipRemovePressed: { backgroundColor: colors.zinc200 },
+  chipRemovePressed: { backgroundColor: palette.violetLine },
   chipText: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs + 2 },
-  input: { fontFamily: typography.mono.fontFamily },
   wrap: { gap: spacing.sm },
 });

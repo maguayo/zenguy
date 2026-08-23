@@ -16,15 +16,47 @@ behaviour, copy and validation faithfully; only the presentation changes.
   `stack-options.ts`.
 - `src/contexts/` — `useAuth()`, `useWorkspace()`, `useToast()`, `useAppLock()`.
 - `src/hooks/` — `useMutationError()` (403/402 handling), `useResendVerification()`.
-- `src/ui/` — primitives: `Screen`, `Card`, `Button`, `Input`, `PasswordInput`,
-  `Field`, `Badge`, `ListRow`, `EmptyState`, `ErrorState`, `Spinner`, `Skeleton`,
-  `SegmentedTabs`, `SelectSheet`, `Toggle`, `DescriptionList`, `ActionMenu`
-  (`showActionMenu`), `confirm()`, `LoadMore`, text variants (`Title`, `Heading`,
-  `Body`, `Small`, `Muted`, `Caption`, `Label`, `Mono`).
+- `src/ui/` — primitives: `Screen`, `Card` (`eyebrow`, `elevated`, `tone`),
+  `Hero` (the one ink card, overview only), `StatTile`, `PulseStrip`, `IconTile`,
+  `SectionHeader`, `Button` (`accent` once per screen, `primary` ink, `secondary`
+  outline, `ghost`, `danger`), `Input` (`mono` for URLs/ids), `PasswordInput`,
+  `Field`, `Badge` (`dot`, `pulse`), `ListRow` (`left`, `meta`), `EmptyState`,
+  `ErrorState`, `Spinner`, `Skeleton`, `SegmentedTabs`, `SelectSheet`, `Toggle`,
+  `DescriptionList`, `ActionMenu` (`showActionMenu`), `confirm()`, `LoadMore`,
+  `Press` (spring scale), motion hooks (`useBreathing`, `useReveal`,
+  `useReducedMotion`), text variants (`Display`, `Title`, `Heading`, `Body`,
+  `Small`, `Muted`, `Caption`, `Label`, `Eyebrow`, `Mono`, `MonoSmall`).
 - `src/components/` — domain components (`StatusBadge`, `RunSourceBadge`,
   `UsageMeter`, `ChannelPicker`, `TimezonePicker`, `CopyButton`, `RoleBadge`,
   `FormError`, `AuthShell`, …).
-- `src/theme/` — colours, spacing, radius, typography, tones.
+- `src/theme/` — the "Paper & Pulse" tokens: palette, semantic colours, Geist
+  faces, spacing, radius, shadows, typography, tones (see *Design system*).
+
+## Design system ("Paper & Pulse")
+
+Spec: `docs/superpowers/specs/2026-08-23-ios-app-redesign-design.md`.
+
+- Canvas is paper (`colors.bg`), surfaces are `colors.surface` cards with a
+  `colors.border` hairline; only the primary card of a screen is `elevated`.
+  The overview `Hero` is the only dark (ink) element.
+- Type: Geist for everything that reads, Geist Mono for everything that is
+  measured (ids, URLs, durations, schedules, timestamps → `Mono`, `MonoSmall`,
+  `Input mono`). Faces are embedded natively (`app.config.ts` → `expo-font`);
+  `Text` maps `fontWeight` to the matching face, so never set `fontFamily` by
+  hand outside `src/theme`.
+- Sections are introduced by mono `Eyebrow`s (`Card eyebrow=…`,
+  `SectionHeader`), not by bold titles. Lists are one `Card padding="none"` of
+  `ListRow`s with a leading `IconTile` whose tone is the row's status.
+- Violet is the only accent and also means "in motion": one `accent` button per
+  screen, links in `colors.accentDark`, running/checking states use tone `info`
+  with a breathing dot (`Badge pulse`, `StatusBadge`). Green/red/amber are for
+  status only; there is no blue.
+- History reads left to right: `PulseStrip` takes ticks oldest-first and
+  breathes the newest one while work is in progress.
+- Motion is one orchestrated entrance (`Hero` reveal) plus breathing dots and
+  `Press` scale; everything honours Reduce Motion through `useReducedMotion`.
+- Light only: `userInterfaceStyle: "light"`; tokens live in one place so a
+  dark palette can be added later without touching screens.
 
 ## Screen pattern
 

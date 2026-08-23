@@ -18,14 +18,33 @@ import { ChannelCard } from "@/components/notifications/ChannelCard";
 import { ChannelForm } from "@/components/notifications/ChannelForm";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { firstParam } from "@/lib/links";
-import { colors, spacing } from "@/theme";
-import { Button, EmptyState, ErrorState, Muted, Screen, Spinner } from "@/ui";
+import { colors, gutter, radius, spacing } from "@/theme";
+import { Button, Card, EmptyState, ErrorState, IconTile, Muted, Screen, Skeleton } from "@/ui";
 
 const description =
   "Where Zenguy reaches you when a test fails or a monitor goes down. Default channels are preselected for new tests and monitors.";
 
 /** iOS navigation bar height once the large title has collapsed. */
 const COMPACT_HEADER_HEIGHT = 44;
+
+function ChannelsSkeleton() {
+  return (
+    <View accessibilityLabel="Loading notification channels" style={styles.list}>
+      {[0, 1].map((index) => (
+        <Card key={index}>
+          <View style={styles.skeletonHeader}>
+            <Skeleton height={40} style={styles.skeletonTile} width={40} />
+            <View style={styles.skeletonText}>
+              <Skeleton width={160} />
+              <Skeleton height={12} width={90} />
+            </View>
+          </View>
+          <Skeleton style={styles.skeletonLine} width={220} />
+        </Card>
+      ))}
+    </View>
+  );
+}
 
 export default function NotificationsScreen() {
   const { can, current } = useWorkspace();
@@ -82,10 +101,10 @@ export default function NotificationsScreen() {
                   accessibilityLabel="Add channel"
                   accessibilityRole="button"
                   hitSlop={8}
-                  style={styles.headerButton}
+                  style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
                   onPress={() => openForm()}
                 >
-                  <Feather color={colors.accent} name="plus" size={24} />
+                  <Feather color={colors.onInk} name="plus" size={18} />
                 </Pressable>
               )
             : undefined,
@@ -103,7 +122,7 @@ export default function NotificationsScreen() {
           refreshControl={
             <RefreshControl
               refreshing={channels.isRefetching && !channels.isPending}
-              tintColor={colors.zinc500}
+              tintColor={colors.textMuted}
               onRefresh={() => void channels.refetch()}
             />
           }
@@ -112,20 +131,22 @@ export default function NotificationsScreen() {
           <Muted>{description}</Muted>
 
           {channels.isPending ? (
-            <Spinner label="Loading notification channels" />
+            <ChannelsSkeleton />
           ) : channels.isError ? (
             <ErrorState onRetry={() => void channels.refetch()} />
           ) : channels.data.length === 0 ? (
-            <EmptyState
-              action={
-                manage ? (
-                  <Button title="Add channel" variant="primary" onPress={() => openForm()} />
-                ) : undefined
-              }
-              description="Create a channel once, then reuse it across tests and monitors."
-              icon={<Feather color={colors.zinc400} name="mail" size={26} />}
-              title="No notification channels yet"
-            />
+            <Card elevated>
+              <EmptyState
+                action={
+                  manage ? (
+                    <Button title="Add channel" variant="accent" onPress={() => openForm()} />
+                  ) : undefined
+                }
+                description="Create a channel once, then reuse it across tests and monitors."
+                icon={<IconTile icon="mail" size={44} tone="accent" />}
+                title="No notification channels yet"
+              />
+            </Card>
           ) : (
             <View style={styles.list} onLayout={onListLayout}>
               {channels.data.map((channel) => {
@@ -151,8 +172,26 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xxl },
+  content: {
+    flexGrow: 1,
+    gap: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    paddingHorizontal: gutter,
+    paddingTop: spacing.sm,
+  },
   flex: { flex: 1 },
-  headerButton: { alignItems: "center", height: 36, justifyContent: "center", width: 36 },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.full,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
   list: { gap: spacing.md },
+  pressed: { opacity: 0.7 },
+  skeletonHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md },
+  skeletonLine: { marginTop: spacing.lg },
+  skeletonText: { flex: 1, gap: spacing.sm },
+  skeletonTile: { borderRadius: radius.md },
 });

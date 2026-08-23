@@ -1,7 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { colors } from "@/theme";
+import { colors, fonts } from "@/theme";
 
 /** Public screens: a signed-in user is always sent back into the app. */
 export default function AuthLayout() {
@@ -15,7 +15,8 @@ export default function AuthLayout() {
         headerShadowVisible: false,
         headerShown: false,
         headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.accent,
+        headerTintColor: colors.ink,
+        headerTitleStyle: { color: colors.text, fontFamily: fonts.sans.semibold, fontSize: 17 },
         title: "",
       }}
     >

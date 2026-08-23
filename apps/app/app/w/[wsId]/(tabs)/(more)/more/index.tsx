@@ -1,4 +1,3 @@
-import { Feather } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
@@ -6,19 +5,15 @@ import { StyleSheet, View } from "react-native";
 import { getBillingConfig } from "@/api/billing";
 import { pastDueBanner } from "@/components/more/billing";
 import { toHref } from "@/components/more/links";
-import { visibleMoreItems, type FeatherName } from "@/components/more/menu";
+import { visibleMoreItems } from "@/components/more/menu";
 import { RoleBadge } from "@/components/RoleBadge";
 import { rememberWorkspace, useWorkspace } from "@/contexts/WorkspaceContext";
 import { largeTitleOptions } from "@/lib/stack-options";
-import { colors, radius, spacing } from "@/theme";
-import { Caption, Card, Label, ListRow, Screen, SelectSheet, Small } from "@/ui";
+import { colors, spacing } from "@/theme";
+import { Card, Heading, IconTile, Label, ListRow, Screen, SelectSheet, Small, Text } from "@/ui";
 
-function MenuIcon({ name }: { name: FeatherName }) {
-  return (
-    <View style={styles.icon}>
-      <Feather color={colors.zinc600} name={name} size={18} />
-    </View>
-  );
+export function workspaceInitial(name: string): string {
+  return (name.trim().slice(0, 1) || "W").toUpperCase();
 }
 
 export default function MoreScreen() {
@@ -63,11 +58,18 @@ export default function MoreScreen() {
             </Card>
           ) : null}
 
-          <Card padding="none">
+          <Card elevated padding="none">
             <View style={styles.workspace}>
               <View style={styles.workspaceHeader}>
-                <Caption>Workspace</Caption>
-                <RoleBadge role={role} />
+                <IconTile ink size={44}>
+                  <Text color={colors.onInk} style={styles.initial}>
+                    {workspaceInitial(current.name)}
+                  </Text>
+                </IconTile>
+                <View style={styles.workspaceText}>
+                  <Heading numberOfLines={1}>{current.name}</Heading>
+                  <RoleBadge role={role} />
+                </View>
               </View>
               <SelectSheet
                 accessibilityLabel={`Switch workspace. Current workspace: ${current.name}`}
@@ -78,18 +80,18 @@ export default function MoreScreen() {
               />
             </View>
             <ListRow
-              left={<MenuIcon name="plus" />}
+              left={<IconTile icon="plus" size={32} />}
               style={styles.lastRow}
               title="Create workspace"
               onPress={() => router.push("/onboarding/workspace")}
             />
           </Card>
 
-          <Card padding="none">
+          <Card eyebrow="Workspace" padding="none">
             {items.map((item, index) => (
               <ListRow
                 key={item.path}
-                left={<MenuIcon name={item.icon} />}
+                left={<IconTile icon={item.icon} size={32} />}
                 style={index === items.length - 1 ? styles.lastRow : undefined}
                 title={item.label}
                 onPress={() => router.push(toHref(`${base}/${item.path}`))}
@@ -97,16 +99,17 @@ export default function MoreScreen() {
             ))}
           </Card>
 
-          <Card padding="none">
+          <Card eyebrow="You" padding="none">
             <ListRow
-              left={<MenuIcon name="user" />}
+              left={<IconTile icon="user" size={32} />}
               style={showComplimentary ? undefined : styles.lastRow}
+              testID="more-account"
               title="Account"
               onPress={() => router.push(toHref(`${base}/account`))}
             />
             {showComplimentary ? (
               <ListRow
-                left={<MenuIcon name="gift" />}
+                left={<IconTile icon="gift" size={32} />}
                 style={styles.lastRow}
                 title="Complimentary links"
                 onPress={() => router.push(toHref("/complimentary"))}
@@ -121,21 +124,15 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   bannerAction: { marginTop: spacing.xs },
-  icon: {
-    alignItems: "center",
-    backgroundColor: colors.zinc100,
-    borderRadius: radius.md,
-    height: 32,
-    justifyContent: "center",
-    width: 32,
-  },
+  initial: { fontSize: 18, fontWeight: "600", lineHeight: 22 },
   lastRow: { borderBottomWidth: 0 },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
   workspace: {
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.lg,
   },
-  workspaceHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  workspaceHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md },
+  workspaceText: { alignItems: "flex-start", flex: 1, gap: spacing.xs + 2 },
 });

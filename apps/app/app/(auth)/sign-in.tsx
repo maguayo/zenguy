@@ -119,7 +119,7 @@ export default function SignIn() {
           size="lg"
           testID="signin-submit"
           title="Sign in"
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>

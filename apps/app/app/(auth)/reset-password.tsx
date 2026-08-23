@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View, type TextInput } from "react-native";
@@ -11,13 +11,14 @@ import {
   resetTokenMessage,
   type ResetPasswordFormValues,
 } from "@/components/auth/password-flows";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { AuthShell } from "@/components/AuthShell";
 import { useToast } from "@/contexts/ToastContext";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { parseLinkToken } from "@/lib/links";
-import { colors, spacing } from "@/theme";
-import { Button, Field, Input, Label, PasswordInput } from "@/ui";
+import { spacing } from "@/theme";
+import { Button, Field, Input, PasswordInput } from "@/ui";
 
 type ResetState = "form" | "gone" | "success";
 
@@ -58,30 +59,37 @@ export default function ResetPassword() {
 
   if (state === "success") {
     return (
-      <AuthShell
+      <AuthStatus
         description="Password updated. Sign in with your new password."
+        icon="check"
         title="Password updated"
+        tone="ok"
       >
         <Button
           fullWidth
+          size="lg"
           title="Sign in"
-          variant="primary"
+          variant="accent"
           onPress={() => router.replace("/(auth)/sign-in")}
         />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
   if (state === "gone") {
     return (
-      <AuthShell
+      <AuthStatus
         description="This reset link is invalid or has expired."
+        icon="clock"
         title="Reset link expired"
+        tone="warn"
       >
-        <Link href="/(auth)/forgot-password">
-          <Label color={colors.accentDark}>Request a new reset link</Label>
-        </Link>
-      </AuthShell>
+        <Button
+          fullWidth
+          title="Request a new reset link"
+          onPress={() => router.push("/(auth)/forgot-password")}
+        />
+      </AuthStatus>
     );
   }
 
@@ -167,7 +175,7 @@ export default function ResetPassword() {
           fullWidth
           loading={form.formState.isSubmitting}
           title="Update password"
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>

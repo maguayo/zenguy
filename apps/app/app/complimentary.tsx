@@ -24,6 +24,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  IconTile,
   Input,
   ListRow,
   Mono,
@@ -81,7 +82,7 @@ export default function ComplimentaryLinksScreen() {
       ) : (
         <View style={styles.stack}>
           <Muted>{issueDescription}</Muted>
-          <Card title="New link">
+          <Card elevated title="New link">
             <Field hint="Optional. Visible only to you." label="Note">
               <Input
                 maxLength={200}
@@ -95,19 +96,19 @@ export default function ComplimentaryLinksScreen() {
               loading={issue.isPending}
               style={styles.gapTop}
               title="Create one-time link"
-              variant="primary"
+              variant="accent"
               onPress={() => issue.mutate()}
             />
             {latest ? (
               <View style={styles.latest}>
-                <Mono numberOfLines={1} selectable style={styles.latestUrl}>
+                <Mono color={colors.accentInk} numberOfLines={1} selectable style={styles.latestUrl}>
                   {latest.redeemUrl}
                 </Mono>
                 <CopyButton label="Copy link" text={latest.redeemUrl} />
               </View>
             ) : null}
           </Card>
-          <Card padding="none" title="Issued links">
+          <Card eyebrow="Issued links" padding="none">
             {grants.isPending ? (
               <Spinner label="Loading issued links" />
             ) : grants.isError ? (
@@ -117,11 +118,16 @@ export default function ComplimentaryLinksScreen() {
                 <ErrorState onRetry={() => void grants.refetch()} />
               )
             ) : grants.data.length === 0 ? (
-              <EmptyState title="No links issued yet." />
+              <EmptyState
+                description="Links you create appear here with their status."
+                icon={<IconTile icon="gift" size={44} />}
+                title="No links issued yet."
+              />
             ) : (
               grants.data.map((grant, index) => (
                 <ListRow
                   key={grant.id}
+                  left={<IconTile icon="gift" tone={grant.redeemedAt ? "plain" : "ok"} />}
                   right={
                     <Badge tone={grant.redeemedAt ? "neutral" : "ok"}>
                       {grant.redeemedAt ? "Used" : "Unused"}
@@ -146,8 +152,8 @@ const styles = StyleSheet.create({
   lastRow: { borderBottomWidth: 0 },
   latest: {
     alignItems: "center",
-    backgroundColor: colors.zinc50,
-    borderColor: colors.border,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentSofter,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",

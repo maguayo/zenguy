@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
-import { colors, spacing } from "@/theme";
+import { colors, gutter, spacing } from "@/theme";
 
 interface Props {
   children: ReactNode;
@@ -48,7 +48,7 @@ export function Screen({
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={refreshing} tintColor={colors.zinc500} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} tintColor={colors.textMuted} onRefresh={onRefresh} />
         ) : undefined
       }
       style={styles.flex}
@@ -77,6 +77,6 @@ export function Screen({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   grow: { flexGrow: 1 },
-  padded: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  padded: { paddingBottom: spacing.xxxl, paddingHorizontal: gutter, paddingTop: spacing.sm },
   root: { backgroundColor: colors.bg, flex: 1 },
 });

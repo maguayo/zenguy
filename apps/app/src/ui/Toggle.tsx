@@ -25,7 +25,8 @@ export function Toggle({
       <Switch
         accessibilityLabel={label}
         disabled={disabled}
-        trackColor={{ true: colors.accent }}
+        ios_backgroundColor={colors.borderStrong}
+        trackColor={{ false: colors.borderStrong, true: colors.accent }}
         value={value}
         onValueChange={onValueChange}
       />

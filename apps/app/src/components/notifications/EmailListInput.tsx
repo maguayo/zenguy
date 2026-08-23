@@ -8,8 +8,8 @@ import {
   type TextInputKeyPressEventData,
 } from "react-native";
 
-import { colors, controlHeight, radius, spacing } from "@/theme";
-import { Caption, Input, Small } from "@/ui";
+import { colors, controlHeight, palette, radius, spacing } from "@/theme";
+import { Caption, Input, Mono } from "@/ui";
 
 import { addEmails, removeEmail } from "./email-list";
 
@@ -61,9 +61,9 @@ export function EmailListInput({
       <View style={[styles.box, showInvalid && styles.invalid]}>
         {value.map((email) => (
           <View key={email} style={styles.chip}>
-            <Small numberOfLines={1} style={styles.chipText}>
+            <Mono color={palette.violetInk} numberOfLines={1} style={styles.chipText}>
               {email}
-            </Small>
+            </Mono>
             <Pressable
               accessibilityLabel={`Remove ${email}`}
               accessibilityRole="button"
@@ -71,7 +71,7 @@ export function EmailListInput({
               style={styles.remove}
               onPress={() => onChange(removeEmail(value, email))}
             >
-              <Feather color={colors.zinc500} name="x" size={13} />
+              <Feather color={palette.violetDeep} name="x" size={13} />
             </Pressable>
           </View>
         ))}
@@ -98,7 +98,7 @@ export function EmailListInput({
         />
       </View>
       {localError ? (
-        <Caption accessibilityRole="alert" color={colors.danger} style={styles.error}>
+        <Caption accessibilityRole="alert" color={colors.dangerDark} style={styles.error}>
           {localError}
         </Caption>
       ) : null}
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   box: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderColor: colors.zinc300,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
@@ -118,18 +118,18 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: controlHeight.md,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
   chip: {
     alignItems: "center",
-    backgroundColor: colors.zinc100,
+    backgroundColor: palette.violetBg,
     borderRadius: radius.sm,
     flexDirection: "row",
     maxWidth: "100%",
     paddingLeft: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  chipText: { color: colors.zinc700, flexShrink: 1 },
+  chipText: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
   error: { marginTop: 4 },
   input: { borderWidth: 0, flex: 1, height: 34, minWidth: 160, paddingHorizontal: spacing.xs },
   invalid: { borderColor: colors.danger },

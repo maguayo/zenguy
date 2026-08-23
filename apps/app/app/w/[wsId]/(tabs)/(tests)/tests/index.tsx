@@ -13,7 +13,7 @@ import {
   type ExportFormat,
 } from "@/api/tests";
 import type { BrowserTest } from "@/api/types";
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusBadge, statusPresentation } from "@/components/StatusBadge";
 import { testSubtitle } from "@/components/tests/labels";
 import {
   importDocumentTypes,
@@ -28,7 +28,7 @@ import { apiErrorMessage } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
 import { shareTextFile } from "@/lib/share";
 import { largeTitleOptions } from "@/lib/stack-options";
-import { colors, spacing } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 import {
   ActionMenu,
   Badge,
@@ -38,12 +38,22 @@ import {
   confirm,
   EmptyState,
   ErrorState,
+  IconTile,
   ListRow,
-  Muted,
   Screen,
-  Spinner,
+  Skeleton,
   type ActionMenuItem,
+  type FeatherIconName,
 } from "@/ui";
+
+/** Leading tile: the last result's tone, a breathing dot while a run is active. */
+export function testTile(test: BrowserTest): { icon: FeatherIconName; tone: "accent" | "danger" | "info" | "neutral" | "ok" | "warn" } {
+  if (!test.lastRun) return { icon: "globe", tone: "neutral" };
+  const tone = statusPresentation(test.lastRun.status).tone;
+  const icon: FeatherIconName =
+    tone === "ok" ? "check" : tone === "danger" ? "x" : tone === "warn" ? "clock" : tone === "info" ? "play" : "globe";
+  return { icon, tone };
+}
 
 function TestRow({ last, test }: { last: boolean; test: BrowserTest }) {
   const router = useRouter();
@@ -54,6 +64,7 @@ function TestRow({ last, test }: { last: boolean; test: BrowserTest }) {
   const run = useRunNow(test);
   const remove = useMutation({ mutationFn: () => deleteTest(current.id, test.id) });
   const base = `/w/${current.id}` as const;
+  const tile = testTile(test);
 
   const removeTest = async () => {
     const confirmed = await confirm({
@@ -94,26 +105,43 @@ function TestRow({ last, test }: { last: boolean; test: BrowserTest }) {
   return (
     <ListRow
       chevron={false}
+      left={<IconTile icon={tile.icon} tone={tile.tone} />}
+      meta={`Next run ${formatRelative(test.nextRunAt)}`}
       right={<ActionMenu accessibilityLabel={`Actions for ${test.name}`} items={items} title={test.name} />}
       style={last ? styles.lastRow : undefined}
       subtitle={
         <View style={styles.meta}>
-          <Muted>{testSubtitle(test)}</Muted>
+          <Caption numberOfLines={1}>{testSubtitle(test)}</Caption>
           <View style={styles.statusRow}>
             {test.lastRun ? (
               <StatusBadge passedAfterRetry={test.lastRun.passedAfterRetry} status={test.lastRun.status} />
             ) : (
-              <Caption>Never run</Caption>
+              <Badge>Never run</Badge>
             )}
             {test.lastRun?.finishedAt ? <Caption>{formatRelative(test.lastRun.finishedAt)}</Caption> : null}
-            {test.openIncidentId ? <Badge tone="danger">Open incident</Badge> : null}
+            {test.openIncidentId ? <Badge dot pulse tone="danger">Open incident</Badge> : null}
           </View>
-          <Caption>Next run {formatRelative(test.nextRunAt)}</Caption>
         </View>
       }
       title={test.name}
       onPress={() => router.push(`${base}/tests/${test.id}`)}
     />
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <Card padding="none">
+      {[0, 1, 2, 3].map((index) => (
+        <View key={index} style={[styles.skeletonRow, index === 3 && styles.lastRow]}>
+          <Skeleton height={36} style={styles.skeletonTile} width={36} />
+          <View style={styles.skeletonText}>
+            <Skeleton width={180} />
+            <Skeleton height={12} width={120} />
+          </View>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -189,7 +217,7 @@ export default function TestsListScreen() {
                   style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
                   onPress={() => router.push(`${base}/tests/new`)}
                 >
-                  <Feather color={colors.accent} name="plus" size={24} />
+                  <Feather color={colors.onInk} name="plus" size={18} />
                 </Pressable>
               ) : null}
             </View>
@@ -202,28 +230,28 @@ export default function TestsListScreen() {
         onRefresh={() => void tests.refetch()}
       >
         {tests.isPending ? (
-          <Spinner label="Loading browser tests" />
+          <ListSkeleton />
         ) : tests.isError ? (
           <ErrorState onRetry={() => void tests.refetch()} />
         ) : tests.data.length === 0 ? (
-          <Card>
+          <Card elevated>
             <EmptyState
               action={
                 canManage ? (
                   <Button
                     title="Create your first test"
-                    variant="primary"
+                    variant="accent"
                     onPress={() => router.push(`${base}/tests/new`)}
                   />
                 ) : undefined
               }
               description="Describe a flow in plain language and Zenguy will verify it in a real browser on a schedule."
-              icon={<Feather color={colors.zinc400} name="globe" size={24} />}
+              icon={<IconTile icon="globe" size={44} tone="accent" />}
               title="No browser tests yet"
             />
           </Card>
         ) : (
-          <Card padding="none">
+          <Card eyebrow={`${tests.data.length} ${tests.data.length === 1 ? "test" : "tests"}`} padding="none">
             {tests.data.map((test, index) => (
               <TestRow key={test.id} last={index === tests.data.length - 1} test={test} />
             ))}
@@ -235,10 +263,27 @@ export default function TestsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerActions: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
-  headerButton: { alignItems: "center", borderRadius: 8, height: 36, justifyContent: "center", width: 36 },
+  headerActions: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.full,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
   lastRow: { borderBottomWidth: 0 },
-  meta: { gap: spacing.xs, marginTop: 2 },
-  pressed: { backgroundColor: colors.zinc100 },
+  meta: { gap: spacing.xs + 1, marginTop: 2 },
+  pressed: { opacity: 0.7 },
+  skeletonRow: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  skeletonText: { flex: 1, gap: spacing.sm },
+  skeletonTile: { borderRadius: radius.md },
   statusRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
 });

@@ -19,7 +19,7 @@ import { PlanDetails } from "@/components/more/PlanDetails";
 import { useToast } from "@/contexts/ToastContext";
 import { requiresBillingSetup, useWorkspace } from "@/contexts/WorkspaceContext";
 import { apiErrorMessage } from "@/lib/errors";
-import { colors, radius, spacing } from "@/theme";
+import { colors, palette, radius, spacing } from "@/theme";
 import { Body, Button, Card, ErrorState, Muted, Screen, Small, Spinner } from "@/ui";
 
 type ActivationPhase = "activating" | "idle" | "timeout";
@@ -118,7 +118,7 @@ export default function BillingSetupScreen() {
   if (billingConfig.data.mode === "free") {
     return (
       <AuthShell description={freeAccessDescription} title="Free access">
-        <Card>
+        <Card elevated padding="lg">
           <PlanDetails />
         </Card>
         <View style={styles.actions}>
@@ -133,7 +133,7 @@ export default function BillingSetupScreen() {
               fullWidth
               size="lg"
               title="Activate free access"
-              variant="primary"
+              variant="accent"
               onPress={() => void checkActivation()}
             />
           ) : null}
@@ -153,10 +153,10 @@ export default function BillingSetupScreen() {
       }
       title={reactivating ? "Reactivate your workspace" : "Set up billing"}
     >
-      <Card>
+      <Card elevated padding="lg">
         <PlanDetails />
       </Card>
-      <Card style={styles.webNote} tone="info">
+      <Card style={styles.webNote} tone="accent">
         {isOwner ? (
           <>
             <Body style={styles.webNoteTitle}>Complete billing setup on the web</Body>
@@ -196,14 +196,14 @@ const styles = StyleSheet.create({
   actions: { marginTop: spacing.xl },
   fill: { flex: 1 },
   info: {
-    backgroundColor: colors.infoSoft,
-    borderColor: "#bfdbfe",
+    backgroundColor: colors.accentSoft,
+    borderColor: palette.violetLine,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.md,
   },
   infoAction: { marginTop: spacing.md },
-  infoText: { color: colors.zinc700 },
+  infoText: { color: colors.textBody },
   webNote: { marginTop: spacing.lg },
   webNoteTitle: { fontWeight: "500", marginBottom: spacing.xs },
 });

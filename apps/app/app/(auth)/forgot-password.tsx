@@ -9,6 +9,7 @@ import {
   forgotPasswordSchema,
   type ForgotPasswordValues,
 } from "@/components/auth/password-flows";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { AuthShell } from "@/components/AuthShell";
 import { useToast } from "@/contexts/ToastContext";
 import { apiErrorMessage } from "@/lib/errors";
@@ -40,21 +41,23 @@ export default function ForgotPassword() {
 
   if (sentTo) {
     return (
-      <AuthShell
+      <AuthStatus
         description={
-          <Muted>
+          <Muted style={styles.lead}>
             If an account exists for{" "}
-            <Small color={colors.zinc700} style={styles.email}>
+            <Small color={colors.textBody} style={styles.email}>
               {sentTo}
             </Small>
             , we&apos;ve sent a reset link.
           </Muted>
         }
         footer={footer}
+        icon="mail"
         title="Check your inbox"
+        tone="ok"
       >
-        <Muted style={styles.note}>The link expires for your security.</Muted>
-      </AuthShell>
+        <Muted>The link expires for your security.</Muted>
+      </AuthStatus>
     );
   }
 
@@ -93,7 +96,7 @@ export default function ForgotPassword() {
           fullWidth
           loading={form.formState.isSubmitting}
           title="Send reset link"
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>
@@ -102,7 +105,7 @@ export default function ForgotPassword() {
 }
 
 const styles = StyleSheet.create({
-  email: { fontWeight: "500" },
+  email: { fontSize: 16, fontWeight: "500", lineHeight: 22 },
   form: { gap: spacing.lg },
-  note: { textAlign: "center" },
+  lead: { fontSize: 16, lineHeight: 22 },
 });

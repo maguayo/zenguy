@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { listChannels } from "@/api/channels";
@@ -16,6 +16,8 @@ import {
   deviceLabel,
   retriesLabel,
 } from "@/components/tests/labels";
+import { isTerminalRun } from "@/components/tests/run-status";
+import { statusIcon, statusTone } from "@/components/tests/status-icon";
 import { parseRunFilter, runFilterItems, type RunFilter } from "@/components/tests/test-detail";
 import { useRunNow } from "@/components/tests/useRunNow";
 import { useToast } from "@/contexts/ToastContext";
@@ -25,7 +27,7 @@ import type { ApiPage } from "@/lib/api";
 import { apiErrorMessage, itemQueryErrorMessage } from "@/lib/errors";
 import { formatDateTime, formatDuration, formatInterval, formatRelative } from "@/lib/format";
 import { firstParam } from "@/lib/links";
-import { colors, spacing } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 import {
   ActionMenu,
   Badge,
@@ -36,19 +38,36 @@ import {
   DescriptionList,
   EmptyState,
   ErrorState,
+  Eyebrow,
+  IconTile,
   Label,
   ListRow,
   LoadMore,
+  Mono,
+  MonoSmall,
+  PulseStrip,
   Screen,
   SegmentedTabs,
   Spinner,
+  type PulseTick,
 } from "@/ui";
 
-function SummaryCard({ children, title }: { children: ReactNode; title: string }) {
+/** Oldest first, so the strip reads left-to-right like a timeline. */
+export function runTicks(runs: RunListItem[]): PulseTick[] {
+  return [...runs]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((run) => ({ key: run.id, tone: statusTone(run.status) }));
+}
+
+function Fact({ hint, label, value }: { hint?: string; label: string; value: string }) {
   return (
-    <Card style={styles.gridCard} title={title}>
-      {children}
-    </Card>
+    <View style={styles.fact}>
+      <Eyebrow numberOfLines={1}>{label}</Eyebrow>
+      <Label numberOfLines={1} style={styles.factValue}>
+        {value}
+      </Label>
+      {hint ? <Caption numberOfLines={1}>{hint}</Caption> : null}
+    </View>
   );
 }
 
@@ -79,6 +98,12 @@ export default function TestDetailScreen() {
     queryFn: ({ pageParam }) => listRuns(current.id, testId, { cursor: pageParam, status }),
     queryKey: ["ws", current.id, "tests", testId, "runs", { status }],
   });
+  // Unfiltered, so the strip keeps its history while the list is filtered.
+  const recentRuns = useQuery({
+    enabled: test.isSuccess,
+    queryFn: () => listRuns(current.id, testId, { cursor: null, status: null }),
+    queryKey: ["ws", current.id, "tests", testId, "runs", "recent"],
+  });
   const remove = useMutation({ mutationFn: () => deleteTest(current.id, testId) });
   const name = test.data?.name ?? "Browser test";
   const run = useRunNow({ id: testId, name });
@@ -103,7 +128,10 @@ export default function TestDetailScreen() {
 
   const refresh = () => {
     void test.refetch();
-    if (test.isSuccess) void runs.refetch();
+    if (test.isSuccess) {
+      void runs.refetch();
+      void recentRuns.refetch();
+    }
   };
 
   const testData = test.data;
@@ -111,6 +139,8 @@ export default function TestDetailScreen() {
   const rows = runs.data?.pages.flatMap((page) => page.items) ?? [];
   const lastRun = testData?.lastRun ?? null;
   const openIncidentId = testData?.openIncidentId ?? null;
+  const live = lastRun !== null && !isTerminalRun(lastRun.status);
+  const ticks = runTicks(recentRuns.data?.items ?? []);
 
   return (
     <>
@@ -128,8 +158,8 @@ export default function TestDetailScreen() {
                   style={({ pressed }) => [styles.runNow, (pressed || run.pending) && styles.dim]}
                   onPress={run.requestRun}
                 >
-                  <Feather color={colors.accent} name="play" size={16} />
-                  <Label color={colors.accent}>Run now</Label>
+                  <Feather color={colors.onInk} name="play" size={13} />
+                  <Label color={colors.onInk}>Run now</Label>
                 </Pressable>
               ) : null}
               {can("tests.manage") ? (
@@ -158,9 +188,14 @@ export default function TestDetailScreen() {
             {openIncidentId ? (
               <Card tone="danger">
                 <View style={styles.incidentRow}>
-                  <Label color={colors.dangerDark} style={styles.incidentText}>
-                    This test has an open incident.
-                  </Label>
+                  <View style={styles.incidentLead}>
+                    <Badge dot pulse tone="danger">
+                      Open incident
+                    </Badge>
+                    <Label color={colors.dangerDark} style={styles.incidentText}>
+                      This test has an open incident.
+                    </Label>
+                  </View>
                   <Pressable
                     accessibilityRole="link"
                     hitSlop={8}
@@ -172,31 +207,39 @@ export default function TestDetailScreen() {
               </Card>
             ) : null}
 
-            <View style={styles.grid}>
-              <SummaryCard title="Last result">
-                {lastRun ? (
-                  <View style={styles.lastResult}>
-                    <StatusBadge passedAfterRetry={lastRun.passedAfterRetry} status={lastRun.status} />
-                    <Caption>
-                      {lastRun.finishedAt ? formatRelative(lastRun.finishedAt) : "In progress"} ·{" "}
-                      {formatDuration(lastRun.durationMs)}
-                    </Caption>
+            <Card elevated>
+              <View style={styles.summaryTop}>
+                <IconTile
+                  icon={lastRun ? statusIcon(lastRun.status) : "globe"}
+                  size={44}
+                  tone={lastRun ? statusTone(lastRun.status) : "neutral"}
+                />
+                <View style={styles.summaryText}>
+                  <Eyebrow>Last result</Eyebrow>
+                  <View style={styles.summaryStatus}>
+                    {lastRun ? (
+                      <StatusBadge passedAfterRetry={lastRun.passedAfterRetry} status={lastRun.status} />
+                    ) : (
+                      <Badge>Never run</Badge>
+                    )}
                   </View>
-                ) : (
-                  <Body color={colors.zinc700}>Never run</Body>
-                )}
-              </SummaryCard>
-              <SummaryCard title="Next run">
-                <Body style={styles.strong}>{formatRelative(testData.nextRunAt)}</Body>
-              </SummaryCard>
-              <SummaryCard title="Schedule">
-                <Body style={styles.strong}>{formatInterval(testData.intervalHours)}</Body>
-                <Caption>{deviceLabel(testData.device)}</Caption>
-              </SummaryCard>
-              <SummaryCard title="Retries">
-                <Body style={styles.strong}>{retriesLabel(testData.maxRetries)}</Body>
-              </SummaryCard>
-            </View>
+                  <MonoSmall numberOfLines={1}>
+                    {lastRun
+                      ? `${lastRun.finishedAt ? formatRelative(lastRun.finishedAt) : "In progress"} · ${formatDuration(lastRun.durationMs)}`
+                      : "Run it now or wait for the schedule"}
+                  </MonoSmall>
+                </View>
+              </View>
+              <PulseStrip live={live} style={styles.strip} ticks={ticks} />
+              <MonoSmall style={styles.stripLabel}>
+                {ticks.length === 0 ? "No runs yet" : `Last ${ticks.length} ${ticks.length === 1 ? "run" : "runs"}`}
+              </MonoSmall>
+              <View style={styles.facts}>
+                <Fact label="Next run" value={formatRelative(testData.nextRunAt)} />
+                <Fact hint={deviceLabel(testData.device)} label="Schedule" value={formatInterval(testData.intervalHours)} />
+                <Fact label="Retries" value={retriesLabel(testData.maxRetries)} />
+              </View>
+            </Card>
 
             <Card title="Configuration">
               <DescriptionList
@@ -205,9 +248,9 @@ export default function TestDetailScreen() {
                     label: "Starting URL",
                     value: (
                       <View style={styles.inline}>
-                        <Body numberOfLines={1} selectable style={styles.inlineText}>
+                        <Mono numberOfLines={1} selectable style={styles.inlineText}>
                           {testData.startUrl}
-                        </Body>
+                        </Mono>
                         <CopyButton label="Copy starting URL" text={testData.startUrl} />
                       </View>
                     ),
@@ -234,7 +277,7 @@ export default function TestDetailScreen() {
                     ),
                   },
                   {
-                    label: "Notification channels",
+                    label: "Channels",
                     value:
                       testData.channelIds.length === 0 ? (
                         "None"
@@ -246,12 +289,12 @@ export default function TestDetailScreen() {
                         </View>
                       ),
                   },
-                  { label: "Notify on recovery", value: testData.notifyOnRecovery ? "Yes" : "No" },
+                  { label: "On recovery", value: testData.notifyOnRecovery ? "Notify" : "Stay quiet" },
                 ]}
               />
             </Card>
 
-            <Card padding="none" title="Runs">
+            <Card eyebrow="Runs" padding="none">
               <View style={styles.tabs}>
                 <SegmentedTabs items={runFilterItems} value={filter} onChange={setFilter} />
               </View>
@@ -266,19 +309,20 @@ export default function TestDetailScreen() {
                   {rows.map((item, index) => (
                     <ListRow
                       key={item.id}
+                      left={<IconTile icon={statusIcon(item.status)} tone={statusTone(item.status)} />}
+                      meta={[
+                        formatDuration(item.durationMs),
+                        `Attempts ${attemptsLabel(item.attemptCount, testData.maxRetries)}`,
+                        item.triggeredBy?.name,
+                        item.billable ? "1 run" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                       style={index === rows.length - 1 ? styles.lastRow : undefined}
                       subtitle={
-                        <View style={styles.runMeta}>
-                          <View style={styles.badges}>
-                            <RunSourceBadge source={item.source} />
-                            <StatusBadge passedAfterRetry={item.passedAfterRetry} status={item.status} />
-                          </View>
-                          <Caption>
-                            {formatDuration(item.durationMs)} · Attempts{" "}
-                            {attemptsLabel(item.attemptCount, testData.maxRetries)}
-                            {item.triggeredBy ? ` · ${item.triggeredBy.name}` : ""}
-                            {item.billable ? " · 1 run" : ""}
-                          </Caption>
+                        <View style={styles.badges}>
+                          <StatusBadge passedAfterRetry={item.passedAfterRetry} status={item.status} />
+                          <RunSourceBadge source={item.source} />
                         </View>
                       }
                       title={formatDateTime(item.createdAt, timezone)}
@@ -305,21 +349,46 @@ export default function TestDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  badges: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  badges: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 2 },
   dim: { opacity: 0.55 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  gridCard: { flexBasis: "47%", flexGrow: 1 },
+  fact: { flex: 1, gap: 3, minWidth: 0 },
+  factValue: { color: colors.text },
+  facts: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+  },
   headerActions: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
-  incidentRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.md, justifyContent: "space-between" },
+  incidentLead: { alignItems: "center", flexDirection: "row", flexShrink: 1, flexWrap: "wrap", gap: spacing.sm },
+  incidentRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between",
+  },
   incidentText: { flexShrink: 1 },
   inline: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
   inlineText: { flexShrink: 1 },
-  lastResult: { gap: spacing.sm },
   lastRow: { borderBottomWidth: 0 },
-  runMeta: { gap: spacing.xs, marginTop: 2 },
-  runNow: { alignItems: "center", flexDirection: "row", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  stack: { gap: spacing.lg },
-  strong: { fontWeight: "500" },
-  tabs: { paddingBottom: spacing.md, paddingHorizontal: spacing.lg },
+  runNow: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.full,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  stack: { gap: spacing.xl },
+  strip: { marginTop: spacing.lg },
+  stripLabel: { marginTop: spacing.sm },
+  summaryStatus: { flexDirection: "row", marginTop: spacing.xs },
+  summaryText: { flex: 1, gap: 3, minWidth: 0 },
+  summaryTop: { alignItems: "center", flexDirection: "row", gap: spacing.md },
+  tabs: { paddingBottom: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   toggle: { alignSelf: "flex-start", marginTop: spacing.xs },
 });

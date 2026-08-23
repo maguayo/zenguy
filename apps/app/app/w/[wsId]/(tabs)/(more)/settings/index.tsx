@@ -37,7 +37,7 @@ import { apiErrorMessage } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
 import { secureStorage, storageKeys } from "@/lib/secure-storage";
 import { timezoneLabel } from "@/lib/timezones";
-import { colors, spacing } from "@/theme";
+import { colors, fonts, palette, radius, spacing } from "@/theme";
 import {
   Body,
   Button,
@@ -52,6 +52,7 @@ import {
   Input,
   LoadMore,
   Mono,
+  MonoSmall,
   Muted,
   Screen,
   SelectSheet,
@@ -150,7 +151,7 @@ function GeneralCard({ workspace }: { workspace: Workspace }) {
         <Button
           loading={save.isPending}
           title="Save changes"
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>
@@ -184,7 +185,7 @@ function AuditRow({ entry, last }: { entry: AuditEntry; last: boolean }) {
         <Mono numberOfLines={1} style={styles.auditAction}>
           {entry.action}
         </Mono>
-        <Caption>{formatRelative(entry.createdAt)}</Caption>
+        <MonoSmall>{formatRelative(entry.createdAt)}</MonoSmall>
       </View>
       <Muted numberOfLines={1}>{auditActorName(entry)}</Muted>
       {resource ? <Caption numberOfLines={1}>{resource}</Caption> : null}
@@ -207,7 +208,7 @@ function AuditLogCard({ audit }: { audit: ReturnType<typeof useAuditLog> }) {
   const rows = audit.data?.pages.flatMap((page) => page.items) ?? [];
   const lastPage = audit.data?.pages[audit.data.pages.length - 1];
   return (
-    <Card padding="none" title="Audit log">
+    <Card eyebrow="Audit log" padding="none">
       {audit.isPending ? (
         <Spinner label="Loading audit log" />
       ) : audit.isError ? (
@@ -344,7 +345,7 @@ function DangerZone() {
             </View>
           ) : (
             <Button
-              icon={<Feather color={colors.zinc800} name="repeat" size={16} />}
+              icon={<Feather color={colors.ink} name="repeat" size={16} />}
               style={styles.dangerButton}
               title="Transfer ownership…"
               onPress={() => setTransferOpen(true)}
@@ -443,18 +444,18 @@ const styles = StyleSheet.create({
   dangerForm: { gap: spacing.md, marginTop: spacing.md },
   dangerSection: { gap: spacing.xs },
   dangerTitle: { fontWeight: "500" },
-  divider: { backgroundColor: "#fecaca", marginVertical: spacing.lg },
+  divider: { backgroundColor: palette.redLine, marginVertical: spacing.lg },
   form: { gap: spacing.lg },
   lastRow: { borderBottomWidth: 0 },
   metadata: {
-    backgroundColor: colors.zinc950,
-    borderRadius: 6,
-    color: colors.zinc100,
-    fontFamily: "Menlo",
+    backgroundColor: colors.ink,
+    borderRadius: radius.sm,
+    color: colors.onInkMuted,
+    fontFamily: fonts.mono.regular,
     marginTop: spacing.sm,
     padding: spacing.md,
   },
   pressed: { backgroundColor: colors.zinc50 },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
   viewJson: { fontWeight: "500", marginTop: spacing.xs },
 });

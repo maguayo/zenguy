@@ -5,12 +5,13 @@ import { StyleSheet, View } from "react-native";
 import { listChannels, listDeliveries } from "@/api/channels";
 import type { Delivery } from "@/api/types";
 import { channelTarget, channelTypeLabels } from "@/components/notifications/channels";
+import { ChannelTile } from "@/components/notifications/ChannelTile";
 import { DeliveryRow } from "@/components/notifications/DeliveryRow";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import type { ApiPage } from "@/lib/api";
 import { firstParam } from "@/lib/links";
 import { spacing } from "@/theme";
-import { Caption, Card, EmptyState, ErrorState, Heading, LoadMore, Screen, Spinner } from "@/ui";
+import { Card, EmptyState, ErrorState, IconTile, LoadMore, MonoSmall, Screen, Spinner, Title } from "@/ui";
 
 export default function ChannelDeliveriesScreen() {
   const { current, timezone } = useWorkspace();
@@ -45,10 +46,13 @@ export default function ChannelDeliveriesScreen() {
         <View style={styles.stack}>
           {channel ? (
             <View style={styles.channel}>
-              <Heading>{channel.name}</Heading>
-              <Caption numberOfLines={1}>
-                {channelTypeLabels[channel.type]} · {channelTarget(channel)}
-              </Caption>
+              <ChannelTile size={44} type={channel.type} />
+              <View style={styles.channelText}>
+                <Title numberOfLines={1}>{channel.name}</Title>
+                <MonoSmall numberOfLines={1}>
+                  {channelTypeLabels[channel.type]} · {channelTarget(channel)}
+                </MonoSmall>
+              </View>
             </View>
           ) : null}
 
@@ -58,10 +62,10 @@ export default function ChannelDeliveriesScreen() {
             <ErrorState onRetry={() => void deliveries.refetch()} />
           ) : rows.length === 0 ? (
             <Card>
-              <EmptyState title="No deliveries yet." />
+              <EmptyState icon={<IconTile icon="send" size={44} />} title="No deliveries yet." />
             </Card>
           ) : (
-            <Card padding="none">
+            <Card eyebrow="History" padding="none">
               {rows.map((delivery, index) => (
                 <DeliveryRow
                   key={delivery.id}
@@ -86,6 +90,7 @@ export default function ChannelDeliveriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  channel: { gap: 2 },
-  stack: { gap: spacing.lg },
+  channel: { alignItems: "center", flexDirection: "row", gap: spacing.md },
+  channelText: { flex: 1, gap: 3, minWidth: 0 },
+  stack: { gap: spacing.xl },
 });

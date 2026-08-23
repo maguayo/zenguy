@@ -5,9 +5,11 @@ import { Pressable, StyleSheet, View } from "react-native";
 
 import { listChannels } from "@/api/channels";
 import type { Channel } from "@/api/types";
+import { channelTypeLabels } from "@/components/notifications/channels";
+import { ChannelTile } from "@/components/notifications/ChannelTile";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { colors, radius, spacing } from "@/theme";
-import { Badge, Body, Card, ErrorState, Label, Muted, Spinner } from "@/ui";
+import { colors, palette, radius, spacing } from "@/theme";
+import { Body, Caption, Card, ErrorState, Label, Muted, Spinner } from "@/ui";
 
 /** Channels flagged as workspace defaults (enabled only), preselected on new tests/monitors. */
 export function defaultChannelIds(channels: Channel[]): string[] {
@@ -41,11 +43,11 @@ export function ChannelPicker({
   return (
     <Card
       action={
-        <Pressable accessibilityRole="link" onPress={() => router.push(`/w/${current.id}/notifications`)}>
+        <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push(`/w/${current.id}/notifications`)}>
           <Label color={colors.accentDark}>Manage channels</Label>
         </Pressable>
       }
-      title="Notifications"
+      eyebrow="Notifications"
     >
       {channels.isPending ? (
         <Spinner label="Loading notification channels" />
@@ -65,13 +67,16 @@ export function ChannelPicker({
                 style={({ pressed }) => [styles.row, checked && styles.rowChecked, pressed && styles.pressed]}
                 onPress={() => onChange(toggleChannelId(value, channel.id))}
               >
+                <ChannelTile size={32} tone={checked ? "accent" : "plain"} type={channel.type} />
+                <View style={styles.text}>
+                  <Body numberOfLines={1} style={styles.name}>
+                    {channel.name}
+                  </Body>
+                  <Caption>{channelTypeLabels[channel.type]}</Caption>
+                </View>
                 <View style={[styles.box, checked && styles.boxChecked]}>
                   {checked ? <Feather color={colors.white} name="check" size={14} /> : null}
                 </View>
-                <Body numberOfLines={1} style={styles.name}>
-                  {channel.name}
-                </Body>
-                <Badge>{channel.type}</Badge>
               </Pressable>
             );
           })}
@@ -84,19 +89,20 @@ export function ChannelPicker({
 const styles = StyleSheet.create({
   box: {
     alignItems: "center",
-    borderColor: colors.zinc300,
-    borderRadius: 5,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.full,
     borderWidth: 1.5,
-    height: 20,
+    height: 22,
     justifyContent: "center",
-    width: 20,
+    width: 22,
   },
   boxChecked: { backgroundColor: colors.accent, borderColor: colors.accent },
   list: { gap: spacing.sm },
-  name: { flex: 1 },
-  pressed: { backgroundColor: colors.zinc50 },
+  name: { fontWeight: "500" },
+  pressed: { opacity: 0.8 },
   row: {
     alignItems: "center",
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -105,5 +111,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
   },
-  rowChecked: { borderColor: colors.accent },
+  rowChecked: { backgroundColor: palette.violetBg, borderColor: palette.violetLine },
+  text: { flex: 1, gap: 1, minWidth: 0 },
 });

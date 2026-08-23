@@ -7,14 +7,14 @@ import type { Monitor } from "@/api/types";
 import { deleteMonitor, listMonitors } from "@/api/uptime";
 import { StatusBadge } from "@/components/StatusBadge";
 import { editMonitorHref, incidentHref, monitorHref, newMonitorHref } from "@/components/uptime/links";
-import { formatResponseTime, monitorHost } from "@/components/uptime/monitor-display";
+import { monitorHost, monitorMeta, monitorTile } from "@/components/uptime/monitor-display";
 import { useToast } from "@/contexts/ToastContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { apiErrorMessage } from "@/lib/errors";
-import { formatFrequency, formatRelative } from "@/lib/format";
+import { formatRelative } from "@/lib/format";
 import { largeTitleOptions } from "@/lib/stack-options";
-import { colors, spacing } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 import {
   ActionMenu,
   Badge,
@@ -23,9 +23,10 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  IconTile,
   ListRow,
   Screen,
-  Spinner,
+  Skeleton,
   confirm,
   type ActionMenuItem,
 } from "@/ui";
@@ -38,6 +39,7 @@ function MonitorRow({ last, monitor }: { last: boolean; monitor: Monitor }) {
   const { can, current } = useWorkspace();
   const remove = useMutation({ mutationFn: () => deleteMonitor(current.id, monitor.id) });
   const openIncidentId = monitor.openIncidentId;
+  const tile = monitorTile(monitor);
 
   const removeMonitor = async () => {
     const confirmed = await confirm({
@@ -69,12 +71,15 @@ function MonitorRow({ last, monitor }: { last: boolean; monitor: Monitor }) {
   return (
     <ListRow
       chevron={false}
+      left={<IconTile icon={tile.icon} tone={tile.tone} />}
+      meta={monitorMeta(monitor)}
       right={<ActionMenu accessibilityLabel={`Actions for ${monitor.name}`} items={items} title={monitor.name} />}
       style={last ? styles.lastRow : undefined}
       subtitle={
         <View style={styles.meta}>
           <Caption numberOfLines={1}>
-            {monitorHost(monitor.url)} · {formatFrequency(monitor.frequencySeconds)}
+            {monitorHost(monitor.url)} ·{" "}
+            {monitor.lastCheckAt ? `Last check ${formatRelative(monitor.lastCheckAt)}` : "No checks yet"}
           </Caption>
           <View style={styles.badges}>
             <StatusBadge status={monitor.status} />
@@ -86,21 +91,38 @@ function MonitorRow({ last, monitor }: { last: boolean; monitor: Monitor }) {
                 hitSlop={6}
                 onPress={() => router.push(incidentHref(current.id, openIncidentId))}
               >
-                <Badge dot tone="danger">
+                <Badge dot pulse tone="danger">
                   Open
                 </Badge>
               </Pressable>
             ) : null}
           </View>
-          <Caption>
-            {monitor.lastCheckAt ? `Last check ${formatRelative(monitor.lastCheckAt)}` : "No checks yet"} ·{" "}
-            {formatResponseTime(monitor.lastResponseTimeMs)}
-          </Caption>
         </View>
       }
       title={monitor.name}
       onPress={() => router.push(monitorHref(current.id, monitor.id))}
     />
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <Card padding="none" testID="uptime-loading">
+      {[0, 1, 2].map((index) => (
+        <View
+          key={index}
+          accessibilityLabel={index === 0 ? "Loading uptime monitors" : undefined}
+          style={[styles.skeletonRow, index === 2 && styles.lastRow]}
+        >
+          <Skeleton height={36} style={styles.skeletonTile} width={36} />
+          <View style={styles.skeletonText}>
+            <Skeleton width={160} />
+            <Skeleton height={12} width={220} />
+            <Skeleton height={12} width={120} />
+          </View>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -129,7 +151,7 @@ export default function UptimeListScreen() {
                   style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
                   onPress={() => router.push(newHref)}
                 >
-                  <Feather color={colors.accent} name="plus" size={24} />
+                  <Feather color={colors.onInk} name="plus" size={18} />
                 </Pressable>
               )
             : undefined,
@@ -141,28 +163,31 @@ export default function UptimeListScreen() {
         onRefresh={() => void monitors.refetch()}
       >
         {monitors.isPending ? (
-          <Spinner label="Loading uptime monitors" />
+          <ListSkeleton />
         ) : monitors.isError ? (
           <ErrorState onRetry={() => void monitors.refetch()} />
         ) : monitors.data.length === 0 ? (
-          <Card padding="none">
+          <Card elevated>
             <EmptyState
               action={
                 manage ? (
                   <Button
                     title="Create your first monitor"
-                    variant="primary"
+                    variant="accent"
                     onPress={() => router.push(newHref)}
                   />
                 ) : undefined
               }
               description="Ping an endpoint on a schedule and get alerted when it goes down. Uptime checks never consume runs."
-              icon={<Feather color={colors.zinc400} name="activity" size={24} />}
+              icon={<IconTile icon="activity" size={44} tone="accent" />}
               title="No uptime monitors yet"
             />
           </Card>
         ) : (
-          <Card padding="none">
+          <Card
+            eyebrow={`${monitors.data.length} ${monitors.data.length === 1 ? "monitor" : "monitors"}`}
+            padding="none"
+          >
             {monitors.data.map((monitor, index) => (
               <MonitorRow key={monitor.id} last={index === monitors.data.length - 1} monitor={monitor} />
             ))}
@@ -175,8 +200,25 @@ export default function UptimeListScreen() {
 
 const styles = StyleSheet.create({
   badges: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  headerButton: { alignItems: "center", borderRadius: 8, height: 36, justifyContent: "center", width: 36 },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.full,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
   lastRow: { borderBottomWidth: 0 },
-  meta: { gap: spacing.xs + 1 },
-  pressed: { backgroundColor: colors.zinc100 },
+  meta: { gap: spacing.xs + 1, marginTop: 2 },
+  pressed: { opacity: 0.7 },
+  skeletonRow: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  skeletonText: { flex: 1, gap: spacing.sm },
+  skeletonTile: { borderRadius: radius.md },
 });

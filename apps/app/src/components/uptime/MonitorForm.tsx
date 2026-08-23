@@ -16,7 +16,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing } from "@/theme";
 import {
   Button,
   Caption,
@@ -78,7 +78,7 @@ function TestRequestOutcome({ result }: { result: TestRequestResult }) {
               <Small color={condition.passed ? colors.okDark : colors.dangerDark}>
                 {condition.passed ? "✓" : "✗"}
               </Small>
-              <Small color={colors.zinc700} style={styles.conditionText}>
+              <Small color={colors.textBody} style={styles.conditionText}>
                 {condition.type} — {condition.detail}
               </Small>
             </View>
@@ -93,13 +93,13 @@ function TestRequestOutcome({ result }: { result: TestRequestResult }) {
             style={styles.excerptToggle}
             onPress={() => setExcerptOpen((open) => !open)}
           >
-            <Feather color={colors.zinc700} name={excerptOpen ? "chevron-down" : "chevron-right"} size={14} />
-            <Caption color={colors.zinc700} style={styles.excerptLabel}>
+            <Feather color={colors.textBody} name={excerptOpen ? "chevron-down" : "chevron-right"} size={14} />
+            <Caption color={colors.textBody} style={styles.excerptLabel}>
               Response excerpt
             </Caption>
           </Pressable>
           {excerptOpen ? (
-            <Mono color={colors.zinc700} selectable style={styles.excerptText}>
+            <Mono color={colors.textBody} selectable style={styles.excerptText}>
               {result.responseExcerpt}
             </Mono>
           ) : null}
@@ -210,7 +210,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
           : "Watch an endpoint without consuming browser test runs."}
       </Muted>
 
-      <Card title="Request">
+      <Card eyebrow="Request">
         <View style={styles.fields}>
           <Controller
             control={form.control}
@@ -257,6 +257,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
                   inputMode="url"
                   invalid={Boolean(fieldState.error)}
                   keyboardType="url"
+                  mono
                   placeholder="https://api.example.com/health"
                   textContentType="URL"
                   value={field.value}
@@ -267,7 +268,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
             )}
           />
           <View style={styles.headers}>
-            <Label style={styles.headersLabel}>Headers</Label>
+            <Label color={colors.textBody}>Headers</Label>
             {headersMasked ? (
               <Muted>{headersMaskedNote}</Muted>
             ) : (
@@ -292,7 +293,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
               </Mono>
             </Caption>
             {headersListError ? (
-              <Caption accessibilityRole="alert" color={colors.danger}>
+              <Caption accessibilityRole="alert" color={colors.dangerDark}>
                 {headersListError}
               </Caption>
             ) : null}
@@ -311,8 +312,8 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
                     autoCapitalize="none"
                     autoCorrect={false}
                     invalid={Boolean(fieldState.error)}
+                    mono
                     multiline
-                    style={styles.mono}
                     value={field.value}
                     onBlur={field.onBlur}
                     onChangeText={field.onChange}
@@ -324,7 +325,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
         </View>
       </Card>
 
-      <Card title="Expectations">
+      <Card eyebrow="Expectations">
         <View style={styles.fields}>
           <Controller
             control={form.control}
@@ -365,6 +366,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
                     autoCapitalize="none"
                     autoCorrect={false}
                     invalid={Boolean(fieldState.error)}
+                    mono
                     value={field.value}
                     onBlur={field.onBlur}
                     onChangeText={field.onChange}
@@ -383,8 +385,8 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
                     autoCapitalize="none"
                     autoCorrect={false}
                     invalid={Boolean(fieldState.error)}
+                    mono
                     placeholder="$.status.healthy"
-                    style={styles.mono}
                     value={field.value}
                     onBlur={field.onBlur}
                     onChangeText={field.onChange}
@@ -396,7 +398,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
         </View>
       </Card>
 
-      <Card title="Schedule">
+      <Card eyebrow="Schedule">
         <View style={styles.fields}>
           <Controller
             control={form.control}
@@ -457,7 +459,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
         control={form.control}
         name="notifyOnRecovery"
         render={({ field }) => (
-          <Card title="Recovery">
+          <Card eyebrow="Recovery">
             <Toggle
               description="Send a recovery notification after an open incident passes."
               label="Notify when this monitor recovers"
@@ -468,11 +470,11 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
         )}
       />
 
-      <Card title="Test request">
+      <Card eyebrow="Test request">
         <View style={styles.fields}>
-          <Small color={colors.zinc600}>{testRequestNote}</Small>
+          <Small color={colors.textMuted}>{testRequestNote}</Small>
           <Button
-            icon={<Feather color={colors.zinc800} name="send" size={15} />}
+            icon={<Feather color={colors.ink} name="send" size={15} />}
             loading={requestTest.isPending}
             title="Send test request"
             onPress={() => void runTestRequest()}
@@ -488,7 +490,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
         <Button
           loading={form.formState.isSubmitting}
           title={editing ? "Save changes" : "Save monitor"}
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>
@@ -507,11 +509,9 @@ const styles = StyleSheet.create({
   excerptToggle: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
   fields: { gap: spacing.lg },
   headers: { gap: spacing.sm },
-  headersLabel: { color: colors.zinc700 },
   inlineMono: { fontSize: 12 },
-  mono: { ...typography.mono, lineHeight: undefined },
   result: { marginTop: spacing.xs },
   resultHeadline: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   resultText: { flex: 1, fontWeight: "600" },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
 });

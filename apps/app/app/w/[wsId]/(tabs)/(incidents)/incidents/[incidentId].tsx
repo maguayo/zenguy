@@ -22,6 +22,7 @@ import {
 } from "@/components/incidents/incidents-list";
 import { useNow } from "@/components/incidents/use-now";
 import { channelTypeLabels } from "@/components/notifications/channels";
+import { ChannelTile } from "@/components/notifications/ChannelTile";
 import { deliveryAttempts } from "@/components/notifications/deliveries";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -33,15 +34,16 @@ import {
   Badge,
   Body,
   Button,
-  Caption,
   Card,
   DescriptionList,
   EmptyState,
   ErrorState,
+  IconTile,
   Mono,
+  MonoSmall,
   Muted,
   Screen,
-  Spinner,
+  Skeleton,
   Title,
   type DescriptionItem,
 } from "@/ui";
@@ -66,17 +68,37 @@ function IncidentDeliveryRow({
 
   return (
     <View style={[styles.deliveryRow, last && styles.lastRow]}>
+      <ChannelTile tone={status.tone === "danger" ? "danger" : "plain"} type={delivery.channelType} />
       <View style={styles.deliveryMain}>
         <Body style={styles.deliveryName}>{delivery.channelName}</Body>
-        <Caption>{details}</Caption>
+        <MonoSmall>{details}</MonoSmall>
         {delivery.status === "FAILED" && delivery.errorSanitized ? (
           <Mono style={styles.deliveryError}>{delivery.errorSanitized}</Mono>
         ) : null}
       </View>
       <View style={styles.deliverySide}>
-        <Badge tone={status.tone}>{status.label}</Badge>
-        <Caption>{incidentDeliveryTime(delivery, timezone)}</Caption>
+        <Badge dot tone={status.tone}>
+          {status.label}
+        </Badge>
+        <MonoSmall>{incidentDeliveryTime(delivery, timezone)}</MonoSmall>
       </View>
+    </View>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <View accessibilityLabel="Loading incident" style={styles.stack}>
+      <Card elevated>
+        <Skeleton width={90} />
+        <Skeleton height={26} style={styles.gapTop} width={220} />
+        <Skeleton style={styles.gapTop} />
+      </Card>
+      <Card>
+        <Skeleton width={120} />
+        <Skeleton style={styles.gapTop} />
+        <Skeleton style={styles.gapTop} width={200} />
+      </Card>
     </View>
   );
 }
@@ -90,7 +112,7 @@ function IncidentContent({ incident, now }: { incident: IncidentDetail; now: num
   const resourceHref = incidentResourceHref(current.id, incident);
   const openedBy = openedByLink(current.id, incident);
 
-  const summary: DescriptionItem[] = [
+  const details: DescriptionItem[] = [
     {
       label: "Resource",
       value: (
@@ -99,12 +121,11 @@ function IncidentContent({ incident, now }: { incident: IncidentDetail; now: num
         </Pressable>
       ),
     },
-    { label: "Type", value: <Badge tone={resource.tone}>{resource.label}</Badge> },
     { label: "Opened", value: formatDateTime(incident.openedAt, timezone) },
     ...(incident.resolvedAt
       ? [{ label: "Resolved", value: formatDateTime(incident.resolvedAt, timezone) }]
       : []),
-    { label: "Duration", value: formatDuration(durationMs) },
+    { label: "Duration", value: <Mono>{formatDuration(durationMs)}</Mono> },
     ...(openedBy
       ? [
           {
@@ -121,28 +142,30 @@ function IncidentContent({ incident, now }: { incident: IncidentDetail; now: num
 
   return (
     <View style={styles.stack}>
-      <View style={styles.header}>
-        <Title>Incident — {incident.resourceName}</Title>
-        <StatusBadge status={incident.status} />
-        <Muted>{incidentMeta(incident, durationMs, timezone)}</Muted>
-      </View>
-
-      <View style={styles.actions}>
-        <Button
-          title={`View ${incidentResourceLabel(incident.resourceType)}`}
-          onPress={() => go(resourceHref)}
-        />
-        {incident.openedByRunId ? (
+      <Card elevated>
+        <View style={styles.summaryTop}>
+          <StatusBadge status={incident.status} />
+          <Badge tone={resource.tone}>{resource.label}</Badge>
+        </View>
+        <Title style={styles.summaryTitle}>{incident.resourceName}</Title>
+        <Muted style={styles.summaryMeta}>{incidentMeta(incident, durationMs, timezone)}</Muted>
+        <View style={styles.actions}>
+          {incident.openedByRunId ? (
+            <Button
+              title="View failing run"
+              variant="accent"
+              onPress={() => go(`/w/${current.id}/runs/${incident.openedByRunId}`)}
+            />
+          ) : null}
           <Button
-            title="View failing run"
-            variant="primary"
-            onPress={() => go(`/w/${current.id}/runs/${incident.openedByRunId}`)}
+            title={`View ${incidentResourceLabel(incident.resourceType)}`}
+            onPress={() => go(resourceHref)}
           />
-        ) : null}
-      </View>
+        </View>
+      </Card>
 
-      <Card title="Summary">
-        <DescriptionList items={summary} />
+      <Card eyebrow="Details">
+        <DescriptionList items={details} />
       </Card>
 
       <Card title="Timeline">
@@ -154,9 +177,9 @@ function IncidentContent({ incident, now }: { incident: IncidentDetail; now: num
         />
       </Card>
 
-      <Card padding="none" title="Notifications sent">
+      <Card eyebrow="Notifications sent" padding="none">
         {incident.deliveries.length === 0 ? (
-          <EmptyState title={emptyDeliveriesCopy} />
+          <EmptyState icon={<IconTile icon="bell-off" size={44} />} title={emptyDeliveriesCopy} />
         ) : (
           incident.deliveries.map((delivery, index) => (
             <IncidentDeliveryRow
@@ -191,7 +214,7 @@ export default function IncidentDetailScreen() {
         onRefresh={() => void incident.refetch()}
       >
         {incident.isPending ? (
-          <Spinner label="Loading incident" />
+          <DetailSkeleton />
         ) : incident.isError ? (
           <ErrorState
             message={itemQueryErrorMessage(incident.error)}
@@ -206,12 +229,12 @@ export default function IncidentDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.lg },
   deliveryError: {
     alignSelf: "flex-start",
-    backgroundColor: colors.zinc100,
+    backgroundColor: colors.dangerSoft,
     borderRadius: radius.sm,
-    color: colors.zinc700,
+    color: colors.dangerDark,
     fontSize: 12,
     lineHeight: 16,
     marginTop: spacing.xs,
@@ -219,9 +242,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
   },
-  deliveryMain: { flex: 1, gap: 2, minWidth: 0 },
+  deliveryMain: { flex: 1, gap: 3, minWidth: 0 },
   deliveryName: { fontWeight: "500" },
   deliveryRow: {
+    alignItems: "flex-start",
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
@@ -229,8 +253,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  deliverySide: { alignItems: "flex-end", gap: spacing.xs },
-  header: { alignItems: "flex-start", gap: spacing.sm },
+  deliverySide: { alignItems: "flex-end", gap: spacing.xs + 2 },
+  gapTop: { marginTop: spacing.md },
   lastRow: { borderBottomWidth: 0 },
-  stack: { gap: spacing.lg },
+  stack: { gap: spacing.xl },
+  summaryMeta: { marginTop: spacing.xs },
+  summaryTitle: { marginTop: spacing.md },
+  summaryTop: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
 });

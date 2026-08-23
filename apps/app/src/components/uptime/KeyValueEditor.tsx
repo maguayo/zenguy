@@ -12,7 +12,7 @@ import {
   type KeyValueRowError,
 } from "./key-value";
 
-/** Rows of key/value inputs with add/remove, ported from the web editor. */
+/** Rows of mono key/value inputs with add/remove, ported from the web editor. */
 export function KeyValueEditor({
   addLabel = "Add header",
   errors,
@@ -41,6 +41,7 @@ export function KeyValueEditor({
                 autoComplete="off"
                 autoCorrect={false}
                 invalid={Boolean(error?.key)}
+                mono
                 placeholder={keyPlaceholder}
                 style={styles.key}
                 value={row.key}
@@ -52,6 +53,7 @@ export function KeyValueEditor({
                 autoComplete="off"
                 autoCorrect={false}
                 invalid={Boolean(error?.value)}
+                mono
                 placeholder={valuePlaceholder}
                 style={styles.value}
                 value={row.value}
@@ -64,11 +66,11 @@ export function KeyValueEditor({
                 style={({ pressed }) => [styles.remove, pressed && styles.pressed]}
                 onPress={() => onChange(removeKeyValue(value, index))}
               >
-                <Feather color={colors.zinc600} name="trash-2" size={18} />
+                <Feather color={colors.zinc600} name="trash-2" size={17} />
               </Pressable>
             </View>
             {error?.key || error?.value ? (
-              <Caption accessibilityRole="alert" color={colors.danger}>
+              <Caption accessibilityRole="alert" color={colors.dangerDark}>
                 {error.key ?? error.value}
               </Caption>
             ) : null}
@@ -76,7 +78,7 @@ export function KeyValueEditor({
         );
       })}
       <Button
-        icon={<Feather color={colors.zinc800} name="plus" size={14} />}
+        icon={<Feather color={colors.ink} name="plus" size={14} />}
         size="sm"
         title={addLabel}
         onPress={() => onChange(addKeyValue(value))}
@@ -92,7 +94,7 @@ const styles = StyleSheet.create({
   remove: {
     alignItems: "center",
     borderRadius: radius.md,
-    height: 44,
+    height: 46,
     justifyContent: "center",
     width: 36,
   },

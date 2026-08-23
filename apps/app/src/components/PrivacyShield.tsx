@@ -21,21 +21,21 @@ export function PrivacyShield() {
   if (active) return null;
   return (
     <View accessibilityElementsHidden pointerEvents="none" style={styles.shield}>
-      <Wordmark dark size={28} />
+      <Wordmark size={30} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shield: {
+    alignItems: "center",
+    backgroundColor: colors.bg,
     bottom: 0,
+    justifyContent: "center",
     left: 0,
     position: "absolute",
     right: 0,
     top: 0,
-    alignItems: "center",
-    backgroundColor: colors.zinc950,
-    justifyContent: "center",
     zIndex: 1000,
   },
 });

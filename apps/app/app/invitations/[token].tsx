@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { acceptInvitation, getInvitation } from "@/api/invitations";
 import { invitationAccessMode, invitationRoleLabel } from "@/components/auth/invitation";
 import { isExpiredLink } from "@/components/auth/link-errors";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -18,16 +19,17 @@ import { Button, Card, DescriptionList, ErrorState, Label, Muted, Small, Spinner
 function InvitationExpired() {
   const router = useRouter();
   return (
-    <AuthShell
+    <AuthStatus
+      description="This invitation is no longer valid."
       footer={
         <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.replace("/")}>
           <Label color={colors.accentDark}>Back to Zenguy</Label>
         </Pressable>
       }
+      icon="clock"
       title="Invitation expired"
-    >
-      <Muted style={styles.center}>This invitation is no longer valid.</Muted>
-    </AuthShell>
+      tone="warn"
+    />
   );
 }
 
@@ -55,17 +57,17 @@ function Invitation({ token }: { token: string }) {
 
   if (invitation.isPending || status === "loading") {
     return (
-      <AuthShell title="Loading invitation">
+      <AuthStatus icon="users" title="Loading invitation">
         <Spinner label="Loading invitation" size="large" style={styles.spinner} />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
   if (invitation.isError) {
     return (
-      <AuthShell title="Invitation">
+      <AuthStatus icon="users" title="Invitation" tone="warn">
         <ErrorState onRetry={() => void invitation.refetch()} />
-      </AuthShell>
+      </AuthStatus>
     );
   }
 
@@ -79,7 +81,7 @@ function Invitation({ token }: { token: string }) {
       title="Workspace invitation"
     >
       <View style={styles.stack}>
-        <Card>
+        <Card elevated>
           <DescriptionList
             items={[
               { label: "Workspace", value: details.workspaceName },
@@ -95,8 +97,9 @@ function Invitation({ token }: { token: string }) {
             <Muted>Sign in as {details.email} to accept this invitation.</Muted>
             <Button
               fullWidth
+              size="lg"
               title="Sign in to accept"
-              variant="primary"
+              variant="accent"
               onPress={() =>
                 router.push({
                   params: { next: `/invitations/${token}` },
@@ -112,8 +115,9 @@ function Invitation({ token }: { token: string }) {
           <Button
             fullWidth
             loading={accept.isPending}
+            size="lg"
             title="Accept invitation"
-            variant="primary"
+            variant="accent"
             onPress={() => accept.mutate()}
           />
         ) : null}
@@ -121,7 +125,7 @@ function Invitation({ token }: { token: string }) {
         {mode === "different" && user ? (
           <View style={styles.stack}>
             <Card tone="warn">
-              <Small color={colors.zinc700}>
+              <Small color={colors.textBody}>
                 This invitation was sent to {details.email}. You&apos;re signed in as {user.email}.
               </Small>
             </Card>
@@ -142,7 +146,6 @@ export default function AcceptInvitationScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: { textAlign: "center" },
   spinner: { minHeight: 96 },
   stack: { gap: spacing.lg },
 });

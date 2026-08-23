@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
 
-import { colors } from "@/theme";
+import { colors, fonts } from "@/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -28,8 +28,9 @@ export default function WorkspaceTabs() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.zinc500,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontFamily: fonts.sans.medium, fontSize: 11 },
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >

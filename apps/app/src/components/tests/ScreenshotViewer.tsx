@@ -6,8 +6,8 @@ import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { absoluteArtifactUrl } from "@/lib/api";
-import { colors, radius, spacing } from "@/theme";
-import { Body, Heading, Small } from "@/ui";
+import { colors, palette, radius, spacing } from "@/theme";
+import { Body, Heading, MonoSmall, Small } from "@/ui";
 import { clampScreenshotIndex, nextScreenshotIndex, type ScreenshotItem } from "./screenshots";
 
 export { nextScreenshotIndex, type ScreenshotItem } from "./screenshots";
@@ -40,7 +40,7 @@ function NavButton({
       ]}
       onPress={onPress}
     >
-      <Feather color={colors.white} name={name} size={22} />
+      <Feather color={colors.onInk} name={name} size={22} />
     </Pressable>
   );
 }
@@ -82,7 +82,7 @@ export function ScreenshotViewer({
       <StatusBar style="light" />
       <SafeAreaView edges={["top", "bottom"]} style={styles.root}>
         <View style={styles.header}>
-          <Heading color={colors.white}>Screenshot evidence</Heading>
+          <Heading color={colors.onInk}>Screenshot evidence</Heading>
           <Pressable
             accessibilityLabel="Close"
             accessibilityRole="button"
@@ -90,7 +90,7 @@ export function ScreenshotViewer({
             style={({ pressed }) => [styles.close, pressed && styles.pressed]}
             onPress={onClose}
           >
-            <Feather color={colors.zinc300} name="x" size={22} />
+            <Feather color={colors.onInkMuted} name="x" size={22} />
           </Pressable>
         </View>
         <View style={styles.stage}>
@@ -105,8 +105,8 @@ export function ScreenshotViewer({
             />
           ) : (
             <View style={styles.fallback}>
-              <Feather color={colors.zinc400} name="image" size={40} />
-              <Body color={colors.zinc400}>Screenshot expired</Body>
+              <Feather color={colors.onInkSubtle} name="image" size={40} />
+              <Body color={colors.onInkMuted}>Screenshot expired</Body>
             </View>
           )}
           <NavButton
@@ -125,11 +125,11 @@ export function ScreenshotViewer({
           />
         </View>
         <View style={styles.footer}>
-          <Small color={colors.zinc300} style={styles.centered}>
+          <MonoSmall color={colors.onInkMuted} style={styles.centered}>
             {count === 0 ? 0 : index + 1} of {count}
-          </Small>
+          </MonoSmall>
           {screenshot?.caption ? (
-            <Small color={colors.zinc400} numberOfLines={2} style={styles.centered}>
+            <Small color={colors.onInkMuted} numberOfLines={2} style={styles.centered}>
               {screenshot.caption}
             </Small>
           ) : null}
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   close: { alignItems: "center", borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
   fallback: { alignItems: "center", gap: spacing.md, justifyContent: "center" },
   footer: {
-    borderTopColor: colors.zinc800,
+    borderTopColor: palette.inkCard,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    borderBottomColor: colors.zinc800,
+    borderBottomColor: palette.inkCard,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -160,10 +160,10 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  image: { height: "100%", width: "100%" },
+  image: { borderRadius: radius.md, height: "100%", width: "100%" },
   navButton: {
     alignItems: "center",
-    backgroundColor: "rgba(24, 24, 27, 0.7)",
+    backgroundColor: "rgba(19, 17, 13, 0.72)",
     borderRadius: radius.full,
     height: 44,
     justifyContent: "center",
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   navDisabled: { opacity: 0.3 },
   navLeft: { left: spacing.md },
   navRight: { right: spacing.md },
-  pressed: { backgroundColor: colors.zinc800 },
-  root: { backgroundColor: colors.zinc950, flex: 1 },
+  pressed: { backgroundColor: palette.inkCard },
+  root: { backgroundColor: palette.inkDeep, flex: 1 },
   stage: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.lg },
 });

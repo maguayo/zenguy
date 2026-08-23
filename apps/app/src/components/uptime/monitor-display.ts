@@ -1,4 +1,7 @@
 import type { BodyCondition, Check, Monitor } from "@/api/types";
+import { formatFrequency } from "@/lib/format";
+import type { Tone } from "@/theme";
+import type { FeatherIconName, PulseTick } from "@/ui";
 
 // Presentation helpers ported from apps/frontend/src/pages/uptime/
 // UptimeListPage.tsx and MonitorDetailPage.tsx.
@@ -81,4 +84,27 @@ export function checkSummary(check: Check): CheckSummary {
     result: passed ? "Passed" : "Failed",
     tone: passed ? "ok" : "danger",
   };
+}
+
+/** Leading tile of a monitor row: its status tone, "in motion" while checking. */
+export function monitorTile(monitor: Pick<Monitor, "checking" | "status">): { icon: FeatherIconName; tone: Tone } {
+  if (monitor.checking) return { icon: "activity", tone: "info" };
+  if (monitor.status === "UP") return { icon: "check", tone: "ok" };
+  if (monitor.status === "DOWN") return { icon: "x", tone: "danger" };
+  return { icon: "activity", tone: "neutral" };
+}
+
+/** "GET · Every 5 min · 184 ms" — the measured line of a monitor row. */
+export function monitorMeta(
+  monitor: Pick<Monitor, "frequencySeconds" | "lastResponseTimeMs" | "method">,
+): string {
+  return `${monitor.method} · ${formatFrequency(monitor.frequencySeconds)} · ${formatResponseTime(monitor.lastResponseTimeMs)}`;
+}
+
+/** Pulse ticks for the newest `max` checks (API order is newest first), oldest first. */
+export function checkTicks(checks: Pick<Check, "id" | "status">[], max = 24): PulseTick[] {
+  return checks
+    .slice(0, max)
+    .reverse()
+    .map((check) => ({ key: check.id, tone: check.status === "PASSED" ? "ok" : "danger" }));
 }

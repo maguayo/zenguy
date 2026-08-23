@@ -15,13 +15,13 @@ interface Props {
 export function Field({ children, error, hint, label, required = false }: Props) {
   return (
     <View style={styles.field}>
-      <Label style={styles.label}>
+      <Label color={colors.textBody} style={styles.label}>
         {label}
         {required ? <Label color={colors.danger}> *</Label> : null}
       </Label>
       {children}
       {error ? (
-        <Caption accessibilityRole="alert" color={colors.danger} style={styles.note}>
+        <Caption accessibilityRole="alert" color={colors.dangerDark} style={styles.note}>
           {error}
         </Caption>
       ) : hint ? (
@@ -32,7 +32,7 @@ export function Field({ children, error, hint, label, required = false }: Props)
 }
 
 const styles = StyleSheet.create({
-  field: { gap: spacing.xs },
-  label: { color: colors.zinc700, marginBottom: 2 },
+  field: { gap: spacing.xs + 2 },
+  label: { marginBottom: 1 },
   note: { marginTop: 2 },
 });

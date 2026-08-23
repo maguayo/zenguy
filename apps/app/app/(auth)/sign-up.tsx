@@ -170,12 +170,12 @@ export default function SignUp() {
               >
                 <Feather
                   color={
-                    fieldState.error ? colors.danger : field.value ? colors.accent : colors.zinc400
+                    fieldState.error ? colors.danger : field.value ? colors.accent : colors.textSubtle
                   }
                   name={field.value ? "check-square" : "square"}
                   size={22}
                 />
-                <Small color={colors.zinc600} style={styles.termsText}>
+                <Small color={colors.textBody} style={styles.termsText}>
                   I accept the{" "}
                   <Link href="/terms">
                     <Label color={colors.accentDark}>Terms of Service</Label>
@@ -200,7 +200,7 @@ export default function SignUp() {
           loading={form.formState.isSubmitting}
           size="lg"
           title="Create account"
-          variant="primary"
+          variant="accent"
           onPress={() => void submit()}
         />
       </View>

@@ -27,6 +27,13 @@ appId: com.zenguy.app
 - extendedWaitUntil:
     visible: "Usage this cycle"
     timeout: 30000
+# Dev builds show a LogBox banner over the tab bar; close it so tab taps land.
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          point: "92%,93%"
 - takeScreenshot: s01-overview
 
 # Browser tests
@@ -126,7 +133,14 @@ appId: com.zenguy.app
 - takeScreenshot: s13-settings
 - tapOn:
     id: "tab-more"
-- tapOn: ".*Account.*"
+- scrollUntilVisible:
+    element:
+      id: "more-account"
+    direction: DOWN
+    centerElement: true
+    timeout: 10000
+- tapOn:
+    id: "more-account"
 - extendedWaitUntil:
     visible: ".*Account.*"
     timeout: 20000

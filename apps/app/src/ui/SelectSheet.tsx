@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, controlHeight, radius, spacing } from "@/theme";
 import { Button } from "./Button";
 import { Input } from "./Input";
-import { Body, Heading, Muted } from "./Text";
+import { Body, Muted, Title } from "./Text";
 
 export interface SelectOption<V extends string | number> {
   description?: string;
@@ -93,15 +93,15 @@ export function SelectSheet<V extends string | number>({
         ]}
         onPress={openPicker}
       >
-        <Body color={selected ? colors.text : colors.zinc400} numberOfLines={1} style={styles.triggerText}>
+        <Body color={selected ? colors.text : colors.textSubtle} numberOfLines={1} style={styles.triggerText}>
           {selected?.label ?? placeholder}
         </Body>
-        <Feather color={colors.zinc500} name="chevron-down" size={18} />
+        <Feather color={colors.zinc600} name="chevron-down" size={18} />
       </Pressable>
       <Modal animationType="slide" presentationStyle="pageSheet" visible={open} onRequestClose={() => setOpen(false)}>
         <SafeAreaView edges={["bottom"]} style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Heading>{title ?? "Select"}</Heading>
+            <Title>{title ?? "Select"}</Title>
             <Button title="Done" variant="ghost" onPress={() => setOpen(false)} />
           </View>
           <View style={styles.search}>
@@ -152,37 +152,37 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   empty: { padding: spacing.xl, textAlign: "center" },
   invalid: { borderColor: colors.danger },
-  modal: { backgroundColor: colors.surface, flex: 1 },
+  modal: { backgroundColor: colors.bg, flex: 1 },
   modalHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    paddingTop: spacing.md,
+    paddingLeft: 20,
+    paddingRight: spacing.sm,
+    paddingTop: spacing.lg,
   },
   option: {
     alignItems: "center",
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
+    minHeight: 52,
+    paddingHorizontal: 20,
     paddingVertical: spacing.sm,
   },
   optionText: { flex: 1 },
   pressed: { backgroundColor: colors.zinc50 },
-  search: { padding: spacing.lg, paddingTop: spacing.sm },
+  search: { padding: 20, paddingTop: spacing.md },
   trigger: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderColor: colors.zinc300,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     height: controlHeight.md,
     justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 14,
   },
   triggerText: { flex: 1, marginRight: spacing.sm },
 });

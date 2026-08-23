@@ -16,7 +16,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage, itemQueryErrorMessage } from "@/lib/errors";
-import { colors, radius, spacing } from "@/theme";
+import { colors, palette, radius, spacing } from "@/theme";
 import {
   Body,
   Button,
@@ -25,6 +25,7 @@ import {
   Divider,
   ErrorState,
   Field,
+  IconTile,
   Input,
   Label,
   Muted,
@@ -168,13 +169,13 @@ export function TestForm({ testId }: { testId?: string }) {
   return (
     <Screen keyboard>
       <View style={styles.stack}>
-        <Muted>
+        <Muted style={styles.intro}>
           {editing
             ? "Update the flow, schedule, and notifications."
             : "Describe a flow for Zenguy to verify in a real browser."}
         </Muted>
 
-        <Card title="Basics">
+        <Card eyebrow="Basics">
           <View style={styles.fields}>
             <Controller
               control={form.control}
@@ -203,6 +204,7 @@ export function TestForm({ testId }: { testId?: string }) {
                     inputMode="url"
                     invalid={Boolean(fieldState.error)}
                     keyboardType="url"
+                    mono
                     placeholder="https://staging.example.com"
                     textContentType="URL"
                     value={field.value}
@@ -215,7 +217,7 @@ export function TestForm({ testId }: { testId?: string }) {
           </View>
         </Card>
 
-        <Card title="Instructions">
+        <Card eyebrow="Instructions">
           <Controller
             control={form.control}
             name="instructions"
@@ -239,14 +241,14 @@ export function TestForm({ testId }: { testId?: string }) {
           />
           <View style={styles.warning}>
             <Feather color={colors.warn} name="alert-triangle" size={16} style={styles.warningIcon} />
-            <Small color={colors.zinc700} style={styles.warningText}>
+            <Small color={colors.textBody} style={styles.warningText}>
               {stagingCredentialsCopy}
             </Small>
           </View>
           <Caption style={styles.note}>{tokenNoteCopy}</Caption>
         </Card>
 
-        <Card title="Device">
+        <Card eyebrow="Device">
           <Controller
             control={form.control}
             name="device"
@@ -266,14 +268,13 @@ export function TestForm({ testId }: { testId?: string }) {
                       ]}
                       onPress={() => field.onChange(option.value)}
                     >
-                      <Feather
-                        color={active ? colors.accentDark : colors.zinc600}
-                        name={option.icon}
-                        size={20}
-                      />
-                      <Label color={active ? colors.accentDark : colors.zinc700} style={styles.deviceLabel}>
+                      <IconTile icon={option.icon} tone={active ? "accent" : "plain"} />
+                      <Label color={active ? colors.accentInk : colors.textBody} style={styles.deviceLabel}>
                         {option.label}
                       </Label>
+                      <View style={[styles.radio, active && styles.radioActive]}>
+                        {active ? <View style={styles.radioDot} /> : null}
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -282,7 +283,7 @@ export function TestForm({ testId }: { testId?: string }) {
           />
         </Card>
 
-        <Card title="Schedule">
+        <Card eyebrow="Schedule">
           <Controller
             control={form.control}
             name="intervalHours"
@@ -303,7 +304,7 @@ export function TestForm({ testId }: { testId?: string }) {
           />
         </Card>
 
-        <Card title="Retries">
+        <Card eyebrow="Retries">
           <Controller
             control={form.control}
             name="maxRetries"
@@ -330,7 +331,7 @@ export function TestForm({ testId }: { testId?: string }) {
           render={({ field }) => <ChannelPicker value={field.value} onChange={field.onChange} />}
         />
 
-        <Card title="Recovery">
+        <Card eyebrow="Recovery">
           <Controller
             control={form.control}
             name="notifyOnRecovery"
@@ -345,11 +346,12 @@ export function TestForm({ testId }: { testId?: string }) {
           />
         </Card>
 
-        <Card title="Test it">
-          <Body color={colors.zinc700}>{runCostCopy}</Body>
+        <Card eyebrow="Test it">
+          <Body color={colors.textBody}>{runCostCopy}</Body>
           <Caption style={styles.note}>{validationNote}</Caption>
           <Button
             disabled={!form.formState.isValid || validationRunning}
+            icon={<Feather color={colors.ink} name="play" size={14} />}
             loading={validation.isPending}
             style={styles.testIt}
             title="Test it"
@@ -375,7 +377,7 @@ export function TestForm({ testId }: { testId?: string }) {
           <Button
             loading={form.formState.isSubmitting}
             title={editing ? "Save changes" : "Save test"}
-            variant="primary"
+            variant="accent"
             onPress={() => void submit()}
           />
         </View>
@@ -389,25 +391,37 @@ const styles = StyleSheet.create({
   device: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.md,
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   deviceActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  deviceLabel: { flexShrink: 1 },
+  deviceLabel: { flex: 1, flexShrink: 1 },
   devicePressed: { backgroundColor: colors.zinc50 },
-  devices: { gap: spacing.md },
+  devices: { gap: spacing.sm + 2 },
   fields: { gap: spacing.lg },
   instructions: { minHeight: 160 },
+  intro: { fontSize: 16, lineHeight: 22 },
   note: { marginTop: spacing.sm },
-  stack: { gap: spacing.lg },
+  radio: {
+    alignItems: "center",
+    borderColor: colors.borderStrong,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    height: 20,
+    justifyContent: "center",
+    width: 20,
+  },
+  radioActive: { borderColor: colors.accent },
+  radioDot: { backgroundColor: colors.accent, borderRadius: radius.full, height: 10, width: 10 },
+  stack: { gap: spacing.xl },
   testIt: { marginTop: spacing.lg },
   warning: {
     backgroundColor: colors.warnSoft,
-    borderColor: "#fde68a",
+    borderColor: palette.amberLine,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",

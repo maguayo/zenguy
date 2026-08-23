@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { colors, spacing } from "@/theme";
-import { Muted, Screen, Text, Title } from "@/ui";
+import { colors, fonts, spacing } from "@/theme";
+import { Display, Muted, Screen, Text } from "@/ui";
 
-export function Wordmark({ dark = false, size = 22 }: { dark?: boolean; size?: number }) {
+export function Wordmark({ dark = false, size = 24 }: { dark?: boolean; size?: number }) {
   return (
-    <Text style={[styles.wordmark, { color: dark ? colors.white : colors.zinc950, fontSize: size }]}>
+    <Text style={[styles.wordmark, { color: dark ? colors.onInk : colors.ink, fontSize: size, lineHeight: size * 1.2 }]}>
       zenguy
-      <Text style={[styles.wordmark, { color: "#818cf8", fontSize: size }]}>.</Text>
+      <Text style={[styles.wordmark, { color: colors.accent, fontSize: size, lineHeight: size * 1.2 }]}>.</Text>
     </Text>
   );
 }
@@ -31,7 +31,7 @@ export function AuthShell({
         <Wordmark />
       </View>
       <View style={styles.header}>
-        <Title>{title}</Title>
+        <Display>{title}</Display>
         {description ? (
           typeof description === "string" ? (
             <Muted style={styles.description}>{description}</Muted>
@@ -47,9 +47,14 @@ export function AuthShell({
 }
 
 const styles = StyleSheet.create({
-  brand: { marginBottom: spacing.xxl, marginTop: spacing.md },
-  description: { marginTop: spacing.sm },
-  footer: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.xxl, paddingTop: spacing.lg },
+  brand: { marginBottom: spacing.xxxl, marginTop: spacing.lg },
+  description: { fontSize: 16, lineHeight: 22, marginTop: spacing.sm },
+  footer: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.xxl,
+    paddingTop: spacing.lg,
+  },
   header: { marginBottom: spacing.xl },
-  wordmark: { fontWeight: "700", letterSpacing: -0.5 },
+  wordmark: { fontFamily: fonts.sans.bold, letterSpacing: -0.8 },
 });

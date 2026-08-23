@@ -12,7 +12,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 import { Button, Field, Input, Muted, PasswordInput, Screen, Title } from "@/ui";
 
 import { DomainListInput, type DomainListInputHandle } from "./DomainListInput";
@@ -145,10 +145,10 @@ export function SecretForm({ mode, onClose, open, secret }: Props) {
                     autoCorrect={false}
                     invalid={Boolean(fieldState.error)}
                     maxLength={64}
+                    mono
                     placeholder="SHOP_PASSWORD"
                     returnKeyType="next"
                     spellCheck={false}
-                    style={styles.mono}
                     textContentType="none"
                     value={field.value}
                     onBlur={field.onBlur}
@@ -163,7 +163,8 @@ export function SecretForm({ mode, onClose, open, secret }: Props) {
               <Input
                 accessibilityLabel="Key"
                 editable={false}
-                style={[styles.mono, styles.readonly]}
+                mono
+                style={styles.readonly}
                 value={secret?.key ?? ""}
               />
             </Field>
@@ -252,7 +253,7 @@ export function SecretForm({ mode, onClose, open, secret }: Props) {
             loading={save.isPending}
             size="lg"
             title={secretFormSubmitLabel(mode)}
-            variant="primary"
+            variant="accent"
             onPress={onSubmitPress}
           />
         </View>
@@ -263,9 +264,8 @@ export function SecretForm({ mode, onClose, open, secret }: Props) {
 
 const styles = StyleSheet.create({
   form: { gap: spacing.lg },
-  header: { alignItems: "flex-start", marginLeft: -spacing.md, marginTop: -spacing.sm },
-  mono: { fontFamily: typography.mono.fontFamily },
-  note: { backgroundColor: colors.zinc100, borderRadius: radius.md, padding: spacing.md },
-  readonly: { backgroundColor: colors.zinc50, color: colors.zinc600 },
-  title: { marginBottom: spacing.xl, marginTop: spacing.sm },
+  header: { alignItems: "flex-start", marginLeft: -spacing.md, marginTop: spacing.xs },
+  note: { backgroundColor: colors.surfaceSunken, borderRadius: radius.md, padding: spacing.md },
+  readonly: { backgroundColor: colors.surfaceSunken, color: colors.zinc600 },
+  title: { marginBottom: spacing.xl, marginTop: spacing.md },
 });

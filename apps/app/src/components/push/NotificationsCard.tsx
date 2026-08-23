@@ -37,7 +37,7 @@ export function NotificationsCard() {
         <Muted>Get notified on this iPhone when a test fails or a site goes down.</Muted>
         <Button
           title="Enable notifications"
-          variant="primary"
+          variant="accent"
           onPress={() => void push.requestPermission()}
         />
       </View>
@@ -73,6 +73,6 @@ export function NotificationsCard() {
 }
 
 const styles = StyleSheet.create({
-  note: { marginTop: spacing.md },
+  note: { marginTop: spacing.lg },
   stack: { gap: spacing.md },
 });

@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 
 import { colors, radius, spacing } from "@/theme";
-import { Caption, Label, Muted, Small, Text } from "@/ui";
+import { Caption, Eyebrow, Muted, Small, Text } from "@/ui";
 import { planFeatures, planPriceLabel, planPriceSuffix, planRetriesNote } from "./billing-setup";
 
 /** The plan promise shown during billing setup (same copy as the web). */
@@ -10,7 +10,7 @@ export function PlanDetails() {
   return (
     <View>
       <View style={styles.header}>
-        <Label>Zenguy</Label>
+        <Eyebrow>Zenguy</Eyebrow>
         <View style={styles.priceRow}>
           <Text style={styles.price}>{planPriceLabel}</Text>
           <Muted> {planPriceSuffix}</Muted>
@@ -19,7 +19,9 @@ export function PlanDetails() {
       <View style={styles.features}>
         {planFeatures.map((feature) => (
           <View key={feature} style={styles.feature}>
-            <Feather color={colors.ok} name="check" size={16} style={styles.check} />
+            <View style={styles.check}>
+              <Feather color={colors.okDark} name="check" size={13} />
+            </View>
             <Small style={styles.featureText}>{feature}</Small>
           </View>
         ))}
@@ -32,13 +34,26 @@ export function PlanDetails() {
 }
 
 const styles = StyleSheet.create({
-  check: { marginTop: 1 },
-  feature: { flexDirection: "row", gap: spacing.sm },
-  featureText: { color: colors.zinc700, flex: 1 },
+  check: {
+    alignItems: "center",
+    backgroundColor: colors.okSoft,
+    borderRadius: radius.full,
+    height: 20,
+    justifyContent: "center",
+    width: 20,
+  },
+  feature: { alignItems: "center", flexDirection: "row", gap: spacing.sm + 2 },
+  featureText: { color: colors.textBody, flex: 1 },
   features: { gap: spacing.md, marginTop: spacing.xl },
   header: { alignItems: "center" },
-  note: { backgroundColor: colors.zinc50, borderRadius: radius.md, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  note: {
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.md,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   noteText: { textAlign: "center" },
-  price: { color: colors.zinc950, fontSize: 34, fontWeight: "600", letterSpacing: -0.5, lineHeight: 40 },
+  price: { color: colors.ink, fontSize: 40, fontWeight: "700", letterSpacing: -1, lineHeight: 46 },
   priceRow: { alignItems: "baseline", flexDirection: "row", marginTop: spacing.sm },
 });

@@ -1,7 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
-import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { StyleSheet, Switch, View, type LayoutChangeEvent } from "react-native";
 
 import { deleteChannel, listDeliveries, testChannel, updateChannel } from "@/api/channels";
 import type { Channel } from "@/api/types";
@@ -9,14 +8,16 @@ import { useToast } from "@/contexts/ToastContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
 import { apiErrorMessage } from "@/lib/errors";
-import { colors, radius, spacing } from "@/theme";
+import { colors, spacing, toneSolid } from "@/theme";
 import {
   ActionMenu,
   Badge,
-  Body,
   Caption,
   Card,
   ErrorState,
+  Heading,
+  Mono,
+  MonoSmall,
   Muted,
   Skeleton,
   confirm,
@@ -24,7 +25,6 @@ import {
 } from "@/ui";
 
 import {
-  channelIcons,
   channelPriceLabel,
   channelReachLabel,
   channelTarget,
@@ -33,6 +33,12 @@ import {
   pausedLabel,
   testDeliveryResult,
 } from "./channels";
+import { ChannelTile } from "./ChannelTile";
+
+/** Phone numbers and masked webhooks are measured values; addresses and push read as prose. */
+function targetIsMono(channel: Channel): boolean {
+  return channel.type !== "EMAIL" && channel.type !== "PUSH";
+}
 
 export function ChannelCard({
   channel,
@@ -150,18 +156,16 @@ export function ChannelCard({
   const price = channelPriceLabel(channel);
   const reach = channelReachLabel(channel);
   const paused = pausedLabel(channel);
+  const target = channelTarget(channel);
+  const tileTone = !channel.enabled ? "plain" : channel.enabled && paused ? "warn" : channel.isDefault ? "accent" : "plain";
 
   return (
     <View onLayout={onLayout}>
-      <Card style={highlighted ? styles.highlighted : undefined}>
+      <Card elevated={highlighted} tone={highlighted ? "accent" : undefined}>
         <View style={styles.header}>
-          <View style={styles.icon}>
-            <Ionicons color={colors.zinc700} name={channelIcons[channel.type]} size={20} />
-          </View>
+          <ChannelTile size={44} tone={tileTone} type={channel.type} />
           <View style={styles.identity}>
-            <Body numberOfLines={1} style={styles.name}>
-              {channel.name}
-            </Body>
+            <Heading numberOfLines={1}>{channel.name}</Heading>
             <Caption>{channelTypeLabels[channel.type]}</Caption>
           </View>
           <ActionMenu
@@ -171,35 +175,58 @@ export function ChannelCard({
           />
         </View>
 
-        <Muted numberOfLines={1} style={styles.target}>
-          {channelTarget(channel)}
-        </Muted>
-        {price ? <Caption style={styles.price}>{price}</Caption> : null}
-        {reach ? <Caption style={styles.price}>{reach}</Caption> : null}
+        {targetIsMono(channel) ? (
+          <Mono color={colors.textBody} numberOfLines={1} style={styles.target}>
+            {target}
+          </Mono>
+        ) : (
+          <Muted numberOfLines={1} style={styles.target}>
+            {target}
+          </Muted>
+        )}
+        {price ? <MonoSmall style={styles.detail}>{price}</MonoSmall> : null}
+        {reach ? <MonoSmall style={styles.detail}>{reach}</MonoSmall> : null}
+        {channel.enabled && paused ? (
+          <View style={styles.paused}>
+            <View style={[styles.dot, { backgroundColor: toneSolid.warn }]} />
+            <Caption color={colors.warn}>{paused}</Caption>
+          </View>
+        ) : null}
 
-        <View style={styles.badges}>
-          {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}
-          {channel.isDefault ? <Badge tone="accent">Default</Badge> : null}
-          {channel.enabled && paused ? <Badge tone="warn">{paused}</Badge> : null}
-          {channel.verifiedAt ? <Badge tone="ok">Verified</Badge> : null}
-          {loadingLastDelivery ? (
-            <Skeleton height={12} width={96} />
-          ) : (
-            <View style={styles.delivery}>
-              {channel.lastDeliveryStatus ? (
-                <View
-                  style={[
-                    styles.deliveryDot,
-                    {
-                      backgroundColor:
-                        channel.lastDeliveryStatus === "SENT" ? colors.ok : colors.danger,
-                    },
-                  ]}
-                />
-              ) : null}
-              <Caption>{lastDeliveryText(channel.lastDeliveryStatus, lastDelivery)}</Caption>
-            </View>
-          )}
+        <View style={styles.footer}>
+          <View style={styles.badges}>
+            {!channel.enabled ? <Badge tone="neutral">Disabled</Badge> : null}
+            {channel.isDefault ? <Badge tone="accent">Default</Badge> : null}
+            {channel.verifiedAt ? <Badge tone="ok">Verified</Badge> : null}
+            {loadingLastDelivery ? (
+              <Skeleton height={12} width={96} />
+            ) : (
+              <View style={styles.delivery}>
+                {channel.lastDeliveryStatus ? (
+                  <View
+                    style={[
+                      styles.dot,
+                      {
+                        backgroundColor:
+                          channel.lastDeliveryStatus === "SENT" ? toneSolid.ok : toneSolid.danger,
+                      },
+                    ]}
+                  />
+                ) : null}
+                <Caption>{lastDeliveryText(channel.lastDeliveryStatus, lastDelivery)}</Caption>
+              </View>
+            )}
+          </View>
+          {manage ? (
+            <Switch
+              accessibilityLabel={channel.enabled ? `Disable ${channel.name}` : `Enable ${channel.name}`}
+              disabled={toggle.isPending}
+              ios_backgroundColor={colors.borderStrong}
+              trackColor={{ false: colors.borderStrong, true: colors.accent }}
+              value={channel.enabled}
+              onValueChange={() => void toggleChannel()}
+            />
+          ) : null}
         </View>
 
         {deliveries.isError ? (
@@ -217,27 +244,25 @@ export function ChannelCard({
 const styles = StyleSheet.create({
   badges: {
     alignItems: "center",
+    flex: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
-    marginTop: spacing.md,
     minHeight: 24,
   },
   delivery: { alignItems: "center", flexDirection: "row", gap: 6 },
-  deliveryDot: { borderRadius: 3, height: 6, width: 6 },
   deliveryError: { paddingBottom: 0, paddingTop: spacing.md },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: spacing.md },
-  highlighted: { borderColor: colors.accent, borderWidth: 1 },
-  icon: {
+  detail: { marginTop: spacing.xs },
+  dot: { borderRadius: 3, height: 6, width: 6 },
+  footer: {
     alignItems: "center",
-    backgroundColor: colors.zinc100,
-    borderRadius: radius.md,
-    height: 40,
-    justifyContent: "center",
-    width: 40,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    marginTop: spacing.md,
   },
-  identity: { flex: 1, gap: 2, minWidth: 0, paddingTop: 2 },
-  name: { fontWeight: "600" },
-  price: { marginTop: spacing.xs },
+  header: { alignItems: "center", flexDirection: "row", gap: spacing.md },
+  identity: { flex: 1, gap: 2, minWidth: 0 },
+  paused: { alignItems: "center", flexDirection: "row", gap: 6, marginTop: spacing.sm },
   target: { marginTop: spacing.md },
 });

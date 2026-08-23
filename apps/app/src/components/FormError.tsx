@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-import { colors, radius, spacing } from "@/theme";
+import { colors, palette, radius, spacing } from "@/theme";
 import { Small } from "@/ui";
 
 /** Form-level (root) error, mirroring the web's danger callout. */
@@ -16,10 +16,10 @@ export function FormError({ message }: { message: string | undefined }) {
 const styles = StyleSheet.create({
   box: {
     backgroundColor: colors.dangerSoft,
-    borderColor: "#fecaca",
+    borderColor: palette.redLine,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: 14,
+    paddingVertical: spacing.md - 2,
   },
 });
