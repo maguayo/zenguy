@@ -1,6 +1,9 @@
-import type { ActivityLoaders } from "./activity";
+import { Hono } from "hono";
+import { activityRoutes, type ActivityLoaders } from "./activity";
 import type { Loaders } from "./data";
 import { buildApp } from "../app";
+import type { AppEnv } from "../env";
+import { AppError } from "../errors";
 import {
   FakeAdminSessionStore,
   allowAdminAccess,
@@ -74,6 +77,48 @@ function fakeLoaders(): FakeLoaders {
   };
 }
 
+// The activity routes are mounted by the admin-v2 client branch, not by app.ts
+// in this tree, so the tests mount them on a harness that mirrors the app's
+// /api hardening (Access identity, no-store, JSON error envelope) and shares
+// the session store that a login through the real app populated.
+function harnessFor(
+  bindings: ReturnType<typeof fakeBindings>,
+  sessions: FakeAdminSessionStore,
+  loaders: FakeLoaders,
+) {
+  const harness = new Hono<AppEnv>();
+  harness.use("*", async (context, next) => {
+    const identity = await allowAdminAccess.verify(context.req.raw);
+    if (identity === null) throw new AppError("FORBIDDEN", "Cloudflare Access required");
+    context.set("accessEmail", identity.email);
+    context.set("accessSubject", identity.subject);
+    await next();
+  });
+  harness.use("/api/*", async (context, next) => {
+    await next();
+    context.header("Cache-Control", "no-store");
+  });
+  harness.onError((error, context) => {
+    const appError =
+      error instanceof AppError ? error : new AppError("INTERNAL", "Unexpected error");
+    return context.json(
+      { error: { code: appError.code, message: appError.message } },
+      appError.status as 400,
+    );
+  });
+  harness.route(
+    "/api",
+    activityRoutes({
+      db: bindings.DB,
+      clock,
+      adminUserIds: bindings.ADMIN_USER_IDS,
+      sessions,
+      loaders,
+    }),
+  );
+  return harness;
+}
+
 async function loggedIn(loaders: FakeLoaders) {
   const bindings = fakeBindings();
   const sessions = new FakeAdminSessionStore();
@@ -91,12 +136,14 @@ async function loggedIn(loaders: FakeLoaders) {
     body: JSON.stringify({ email: "marcos@aguayo.es", password: "abc123456" }),
   });
   const cookie = (response.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
+
+  const harness = harnessFor(bindings, sessions, loaders);
   return {
     bindings,
     sessions,
     cookie,
-    get: (path: string) => app.request(path, { headers: { Cookie: cookie } }),
-    anonymous: (path: string) => app.request(path),
+    get: (path: string) => harness.request(path, { headers: { Cookie: cookie } }),
+    anonymous: (path: string) => harness.request(path),
   };
 }
 
@@ -232,14 +279,11 @@ describe("admin activity routes", () => {
     const session = await loggedIn(fakeLoaders());
 
     // The server-side row still exists; only the stable-id allowlist changed.
-    const revoked = buildApp(fakeBindings({ ADMIN_USER_IDS: "usr_someone_else" }), {
-      fetch: okFetch,
-      delay: noDelay,
-      clock,
-      loaders: fakeLoaders(),
-      sessions: session.sessions,
-      accessVerifier: allowAdminAccess,
-    });
+    const revoked = harnessFor(
+      fakeBindings({ ADMIN_USER_IDS: "usr_someone_else" }),
+      session.sessions,
+      fakeLoaders(),
+    );
 
     for (const path of PATHS) {
       const response = await revoked.request(path, { headers: { Cookie: session.cookie } });
