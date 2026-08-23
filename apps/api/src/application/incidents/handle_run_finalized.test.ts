@@ -10,6 +10,7 @@ import type { NotificationChannel } from "../../domain/channels/types";
 import type { Incident } from "../../domain/incidents/types";
 import type { Workspace } from "../../domain/workspaces/types";
 import { FixedClock } from "../../shared/clock";
+import { FakeTrackEvent } from "../../test/fakes/activity";
 import { FakeIds } from "../../test/fakes/ids";
 import {
   FakeAttemptRepo,
@@ -172,6 +173,7 @@ async function fixture() {
   const reports = new RecordingReports();
   const clock = new FixedClock(NOW);
   const ids = new FakeIds();
+  const track = new FakeTrackEvent();
   await workspaces.insert(WORKSPACE);
   await channels.insert(channel("ch_enabled", true));
   await channels.insert(channel("ch_disabled", false));
@@ -187,6 +189,7 @@ async function fixture() {
     appUrl: "https://app.zenguy.test",
     clock,
     ids,
+    track,
   });
   const addRun = async (
     value: TestRun,
@@ -206,6 +209,7 @@ async function fixture() {
     reports,
     clock,
     ids,
+    track,
     handler,
     addRun,
   };
@@ -267,6 +271,19 @@ describe("HandleRunFinalized", () => {
     expect(value.dispatch.calls[0]?.message.lines.join(" ")).toContain(
       "{{SHOP_TOKEN}} was rejected",
     );
+    expect(value.track.ofType("incident.opened")).toEqual([
+      expect.objectContaining({
+        userId: null,
+        workspaceId: first.workspaceId,
+        source: "server",
+        resourceId: incident.id,
+        properties: {
+          kind: "BROWSER_TEST",
+          browserTestId: "bt_checkout",
+          runId: first.id,
+        },
+      }),
+    ]);
 
     const second = run("run_second_failure", "TIMEOUT", {
       finishedAt: NOW + 1_000,
@@ -289,6 +306,8 @@ describe("HandleRunFinalized", () => {
       incidentId: incident.id,
     });
     expect(value.reports.runIds).toEqual([first.id, second.id]);
+    // Appending a failure to the open incident is not a new transition.
+    expect(value.track.calls).toHaveLength(1);
   });
 
   it.each([
@@ -330,6 +349,20 @@ describe("HandleRunFinalized", () => {
         );
       }
       expect(value.reports.runIds).toEqual([]);
+      expect(value.track.calls).toHaveLength(1);
+      expect(value.track.ofType("incident.resolved")).toEqual([
+        expect.objectContaining({
+          userId: null,
+          workspaceId: recovery.workspaceId,
+          source: "server",
+          resourceId: incident.id,
+          properties: {
+            kind: "BROWSER_TEST",
+            browserTestId: "bt_checkout",
+            runId: recovery.id,
+          },
+        }),
+      ]);
     },
   );
 
@@ -350,6 +383,7 @@ describe("HandleRunFinalized", () => {
     expect(value.incidents.incidents.size).toBe(0);
     expect(value.events.events.size).toBe(0);
     expect(value.dispatch.calls).toEqual([]);
+    expect(value.track.calls).toEqual([]);
     expect(value.reports.runIds).toEqual([validation.id]);
     expect(alert.mock.calls.join(" ")).toContain('"event":"run_system_error"');
     expect(alert.mock.calls.join(" ")).toContain(
@@ -370,6 +404,7 @@ describe("HandleRunFinalized", () => {
     expect(value.incidents.incidents.size).toBe(0);
     expect(value.events.events.size).toBe(0);
     expect(value.dispatch.calls).toEqual([]);
+    expect(value.track.calls).toEqual([]);
     expect(value.reports.runIds).toEqual([]);
   });
 

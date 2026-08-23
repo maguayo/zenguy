@@ -1,5 +1,6 @@
 import type { Workspace } from "../../domain/workspaces/types";
 import { FixedClock } from "../../shared/clock";
+import { FakeTrackEvent } from "../../test/fakes/activity";
 import { FakeIds } from "../../test/fakes/ids";
 import { FakePushDeviceRepo } from "../../test/fakes/push";
 import { RegisterPushDevice } from "./register_push_device";
@@ -115,5 +116,58 @@ describe("RegisterPushDevice", () => {
     await expect(
       register.execute({ userId: "usr_a", token: TOKEN, platform: "ios" }),
     ).resolves.toMatchObject({ token: TOKEN });
+  });
+});
+
+describe("RegisterPushDevice activity", () => {
+  function tracked(track: FakeTrackEvent): RegisterPushDevice {
+    return new RegisterPushDevice(
+      new FakePushDeviceRepo(),
+      { listForUser: async () => [] },
+      { execute: async () => ({ created: false, channelId: null }) },
+      new FixedClock(NOW),
+      new FakeIds(),
+      track,
+    );
+  }
+
+  it("records push_device.registered in user scope with the platform", async () => {
+    const track = new FakeTrackEvent();
+
+    const device = await tracked(track).execute({
+      userId: "usr_a",
+      token: TOKEN,
+      platform: "ios",
+    });
+
+    expect(track.calls).toEqual([
+      {
+        type: "push_device.registered",
+        userId: "usr_a",
+        source: "server",
+        resourceId: device.id,
+        properties: { platform: "ios" },
+      },
+    ]);
+  });
+
+  it("records nothing for an invalid token", async () => {
+    const track = new FakeTrackEvent();
+
+    await expect(
+      tracked(track).execute({ userId: "usr_a", token: "apns:abc", platform: "ios" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(track.calls).toEqual([]);
+  });
+
+  it("records a device once, not on every launch re-registration", async () => {
+    const track = new FakeTrackEvent();
+    const register = tracked(track);
+
+    await register.execute({ userId: "usr_a", token: TOKEN, platform: "ios" });
+    await register.execute({ userId: "usr_a", token: TOKEN, platform: "ios" });
+    await register.execute({ userId: "usr_b", token: TOKEN, platform: "ios" });
+
+    expect(track.calls).toHaveLength(1);
   });
 });

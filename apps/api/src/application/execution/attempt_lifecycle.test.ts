@@ -12,6 +12,7 @@ import type { AttemptMessage } from "../../domain/queues";
 import type { Workspace } from "../../domain/workspaces/types";
 import { FixedClock } from "../../shared/clock";
 import { ATTEMPT_TIMEOUT_MS } from "../../shared/constants";
+import { FakeTrackEvent } from "../../test/fakes/activity";
 import { FakeIds } from "../../test/fakes/ids";
 import {
   FakeArtifactRepo,
@@ -193,6 +194,7 @@ async function fixture(options: {
   const queue = new RecordingAttemptQueue();
   const storage = new RecordingStorage();
   const finalized = new RecordingRunFinalizedHandler();
+  const track = new FakeTrackEvent();
   const recordUsage = new RecordRunUsage(usageEvents, clock, ids);
   const realReverseUsage = new ReverseRunUsage(usageEvents, clock);
   const reverseCalls: string[] = [];
@@ -237,6 +239,7 @@ async function fixture(options: {
     clock,
     ids,
     runFinalizedHandler: finalized,
+    track,
   });
   return {
     lifecycle,
@@ -254,6 +257,7 @@ async function fixture(options: {
     outboxPublisher,
     storage,
     finalized,
+    track,
     reverseCalls,
   };
 }
@@ -422,7 +426,98 @@ describe("AttemptLifecycle", () => {
       status: "PASSED",
       passedAfterRetry: true,
     });
+    const run = await value.runs.findByIdForExecution(RUN.id);
+    if (run === null) throw new Error("run missing");
+    expect(value.track.ofType("browser_test.run_passed")).toEqual([
+      expect.objectContaining({
+        userId: run.triggeredByUserId,
+        workspaceId: run.workspaceId,
+        source: "server",
+        resourceId: run.browserTestId,
+        properties: expect.objectContaining({
+          runId: run.id,
+          runSource: run.source,
+          attemptCount: expect.any(Number),
+          durationMs: expect.any(Number),
+          retried: expect.any(Boolean),
+        }),
+      }),
+    ]);
+    expect(value.track.calls[0]).toMatchObject({
+      userId: "usr_owner",
+      properties: {
+        runSource: "MANUAL",
+        attemptCount: 3,
+        retried: true,
+      },
+    });
   });
+
+  it.each([
+    { status: "FAILED", type: "browser_test.run_failed" },
+    { status: "TIMEOUT", type: "browser_test.run_timed_out" },
+  ] as const)(
+    "tracks a scheduled run that ends $status after its last retry exactly once",
+    async ({ status, type }) => {
+      const value = await fixture({
+        run: {
+          source: "SCHEDULED",
+          triggeredByUserId: null,
+          status: "RUNNING",
+          startedAt: NOW,
+          attemptCount: 4,
+        },
+        attempt: { attemptIndex: 3, status: "RUNNING", startedAt: NOW },
+      });
+      value.clock.advance(5_000);
+      const state = await current(value, ATTEMPT.id);
+
+      await value.lifecycle.onAttemptFinished(state.run, state.attempt, {
+        ...FAILED,
+        status,
+      });
+
+      await expect(value.runs.findByIdForExecution(RUN.id)).resolves.toMatchObject({
+        status,
+      });
+      expect(value.track.calls).toHaveLength(1);
+      expect(value.track.ofType(type)).toEqual([
+        expect.objectContaining({
+          userId: null,
+          workspaceId: WORKSPACE.id,
+          source: "server",
+          resourceId: TEST.id,
+          properties: expect.objectContaining({
+            runId: RUN.id,
+            runSource: "SCHEDULED",
+            attemptCount: expect.any(Number),
+            durationMs: 5_000,
+            retried: false,
+          }),
+        }),
+      ]);
+
+      // The finalization job is COMPLETED: replaying the same entry points
+      // must not record the terminal event again.
+      await value.lifecycle.onAttemptFinished(state.run, state.attempt, {
+        ...FAILED,
+        status,
+      });
+      await expect(
+        value.lifecycle.claim({
+          kind: "attempt",
+          runId: RUN.id,
+          attemptId: ATTEMPT.id,
+          attemptIndex: 3,
+          executionGeneration: ATTEMPT.queuedAt,
+        }),
+      ).resolves.toBe("skip");
+      await value.lifecycle.resumePendingJobs();
+
+      expect(value.track.ofType(type)).toHaveLength(1);
+      expect(value.track.calls).toHaveLength(1);
+    },
+  );
 
   it("does not persist usage when the atomic start loses its claim", async () => {
     const value = await fixture();
@@ -725,6 +820,9 @@ describe("AttemptLifecycle", () => {
     expect(value.usageEvents.events.get(usageEventId)?.reversedAt).toBe(NOW);
     expect(value.finalized.runs).toHaveLength(1);
     expect(value.durable.jobs.get(pending?.id ?? "")?.status).toBe("COMPLETED");
+    // The event is recorded only once the finalization actually completes.
+    expect(value.track.ofType("browser_test.run_errored")).toHaveLength(1);
+    expect(value.track.calls).toHaveLength(1);
     handler.mockRestore();
   });
 
@@ -760,6 +858,22 @@ describe("AttemptLifecycle", () => {
     });
     expect(value.reverseCalls).toEqual([RUN.id]);
     expect(value.usageEvents.events.get(usageEventId)?.reversedAt).toBe(NOW);
+    expect(value.track.calls).toHaveLength(1);
+    expect(value.track.ofType("browser_test.run_errored")).toEqual([
+      expect.objectContaining({
+        userId: RUN.triggeredByUserId,
+        workspaceId: WORKSPACE.id,
+        source: "server",
+        resourceId: TEST.id,
+        properties: expect.objectContaining({
+          runId: RUN.id,
+          runSource: "MANUAL",
+          attemptCount: expect.any(Number),
+          durationMs: expect.any(Number),
+          retried: false,
+        }),
+      }),
+    ]);
   });
 
   it("turns a stale running delivery into WORKER_LOST and skips execution", async () => {
@@ -813,6 +927,7 @@ describe("AttemptLifecycle", () => {
     expect(value.reverseCalls).toEqual([RUN.id]);
     expect(value.finalized.runs).toEqual([]);
     expect(value.queue.calls).toEqual([]);
+    expect(value.track.calls).toEqual([]);
     expect(alert).not.toHaveBeenCalled();
     alert.mockRestore();
   });
@@ -875,6 +990,7 @@ describe("AttemptLifecycle", () => {
       systemErrorCode: "CANCELLED",
     });
     expect(value.finalized.runs).toEqual([]);
+    expect(value.track.calls).toEqual([]);
   });
 
   it("alerts and skips a missing or mismatched delivery", async () => {

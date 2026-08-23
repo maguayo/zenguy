@@ -1,5 +1,10 @@
+import type { TrackEvent } from "../activity/track_event";
 import type { RecordRunUsage } from "../billing/record_run_usage";
 import type { ReverseRunUsage } from "../billing/reverse_run_usage";
+import {
+  ACTIVITY_EVENTS,
+  type ActivityEventType,
+} from "../../domain/activity/catalog";
 import type {
   ArtifactRepo,
   AttemptRepo,
@@ -75,7 +80,18 @@ export interface AttemptLifecycleDependencies {
   clock: Clock;
   ids: IdGenerator;
   runFinalizedHandler: RunFinalizedHandler;
+  track?: Pick<TrackEvent, "execute">;
 }
+
+const RUN_ACTIVITY: Record<
+  "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR",
+  ActivityEventType
+> = {
+  PASSED: ACTIVITY_EVENTS.browserTestRunPassed,
+  FAILED: ACTIVITY_EVENTS.browserTestRunFailed,
+  TIMEOUT: ACTIVITY_EVENTS.browserTestRunTimedOut,
+  SYSTEM_ERROR: ACTIVITY_EVENTS.browserTestRunErrored,
+};
 
 function isRunTerminal(run: TestRun): boolean {
   return (
@@ -576,6 +592,27 @@ export class AttemptLifecycle {
     }
     if (payload.handleFinalized !== false) {
       await this.dependencies.runFinalizedHandler.handle(run, run.snapshot);
+      // Recorded right before the job completes: the early return above keeps
+      // a completed job from emitting twice. A crash between this call and
+      // completeJob can duplicate the event, which is acceptable for analytics.
+      // Cancellations (handleFinalized === false: the test or workspace was
+      // deleted) are not execution outcomes and record nothing.
+      await this.dependencies.track?.execute({
+        type: RUN_ACTIVITY[run.status as keyof typeof RUN_ACTIVITY],
+        userId: run.triggeredByUserId,
+        workspaceId: run.workspaceId,
+        source: "server",
+        resourceId: run.browserTestId,
+        properties: {
+          runId: run.id,
+          runSource: run.source,
+          attemptCount: run.attemptCount,
+          durationMs: run.durationMs ?? 0,
+          // Named "retried" on purpose: metadata keys containing "pass" are
+          // redacted by sanitizeAuditMetadata.
+          retried: run.passedAfterRetry,
+        },
+      });
     }
     await this.dependencies.durable.completeJob(
       job.id,

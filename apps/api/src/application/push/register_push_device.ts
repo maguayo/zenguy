@@ -1,3 +1,4 @@
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { PushDeviceRepo } from "../../domain/push/repo";
 import {
   isExpoPushToken,
@@ -9,6 +10,7 @@ import type { Clock } from "../../shared/clock";
 import { validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
 import { logEvent } from "../../shared/log";
+import type { TrackEvent } from "../activity/track_event";
 import type { EnsureDefaultPushChannel } from "./ensure_default_push_channel";
 
 export interface RegisterPushDeviceInput {
@@ -40,6 +42,7 @@ export class RegisterPushDevice {
     private readonly defaultChannel: Pick<EnsureDefaultPushChannel, "execute">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly track?: Pick<TrackEvent, "execute">,
   ) {}
 
   async execute(input: RegisterPushDeviceInput): Promise<PushDevice> {
@@ -87,6 +90,17 @@ export class RegisterPushDevice {
       } catch {
         logEvent("default_push_channel_failed", { workspaceId: workspace.id });
       }
+    }
+    // The app re-registers its token on every launch; only a device that was
+    // not known before is a registration worth recording.
+    if (existing === null) {
+      await this.track?.execute({
+        type: ACTIVITY_EVENTS.pushDeviceRegistered,
+        userId: input.userId,
+        source: "server",
+        resourceId: device.id,
+        properties: { platform: input.platform },
+      });
     }
     return device;
   }

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { TrackEvent } from "../../application/activity/track_event";
 import type { EnsureDefaultPushChannel } from "../../application/push/ensure_default_push_channel";
 import {
   ListPushDevices,
@@ -23,6 +24,7 @@ export interface PushDeviceRoutesDependencies {
   workspaces: Pick<WorkspaceRepo, "listForUser">;
   pushDevices: PushDeviceRepo;
   defaultPushChannel: Pick<EnsureDefaultPushChannel, "execute">;
+  track?: Pick<TrackEvent, "execute">;
   clock: Clock;
   ids: IdGenerator;
   config: Pick<AppConfig, "jwtSecret">;
@@ -48,6 +50,7 @@ export function pushDeviceRoutes(
     dependencies.defaultPushChannel,
     dependencies.clock,
     dependencies.ids,
+    dependencies.track,
   );
   const list = new ListPushDevices(dependencies.pushDevices);
   const update = new UpdatePushDevice(dependencies.pushDevices, dependencies.clock);

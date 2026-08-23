@@ -1,3 +1,4 @@
+import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type {
   AttemptRepo,
   RunRepo,
@@ -24,6 +25,7 @@ import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
 import { platformAlert } from "../../shared/log";
 import { truncate } from "../../shared/redact";
+import type { TrackEvent } from "../activity/track_event";
 import type { DispatchNotifications } from "../channels/dispatch_notifications";
 
 type NotificationDispatch = Pick<DispatchNotifications, "execute">;
@@ -40,6 +42,7 @@ export interface HandleRunFinalizedDependencies {
   appUrl: string;
   clock: Clock;
   ids: IdGenerator;
+  track?: Pick<TrackEvent, "execute">;
 }
 
 function finalAttempt(attempts: TestAttempt[]): TestAttempt | null {
@@ -158,6 +161,15 @@ export class HandleRunFinalized implements RunFinalizedHandler {
       await this.appendFailure(opened, run, at);
       return;
     }
+    // Only the call that actually inserted the incident records the transition.
+    await this.dependencies.track?.execute({
+      type: ACTIVITY_EVENTS.incidentOpened,
+      userId: null,
+      workspaceId: run.workspaceId,
+      source: "server",
+      resourceId: opened.id,
+      properties: { kind: "BROWSER_TEST", browserTestId: testId, runId: run.id },
+    });
 
     if (opened.openedByRunId === run.id) {
       await this.completeOpenedFailure(opened, run, snapshot, lastAttempt);
@@ -230,6 +242,18 @@ export class HandleRunFinalized implements RunFinalizedHandler {
     if (incident.status === "OPEN") {
       await this.dependencies.incidents.resolve(incident.id, at, {
         runId: run.id,
+      });
+      await this.dependencies.track?.execute({
+        type: ACTIVITY_EVENTS.incidentResolved,
+        userId: null,
+        workspaceId: run.workspaceId,
+        source: "server",
+        resourceId: incident.id,
+        properties: {
+          kind: "BROWSER_TEST",
+          browserTestId: incident.browserTestId,
+          runId: run.id,
+        },
       });
     }
     await this.dependencies.events.insert(
