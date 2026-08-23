@@ -106,8 +106,11 @@ function attempt(id = "att_1"): TestAttempt {
     consoleErrorsJson: '["console"]',
     networkErrorsJson: '["network"]',
     tokenUsage: 123,
+    inputTokens: 100,
+    outputTokens: 23,
     modelName: "gpt-5-mini",
     runnerVersion: "runner-test",
+    runnerKind: "fallback",
     systemErrorCode: "WORKER_LOST",
     createdAt: 100,
   };
@@ -446,20 +449,29 @@ describe("D1 browser test repositories", () => {
       consoleErrorsJson: null,
       networkErrorsJson: null,
       tokenUsage: null,
+      inputTokens: null,
+      outputTokens: null,
       modelName: null,
       runnerVersion: null,
+      runnerKind: null,
       systemErrorCode: null,
     });
     await attempts.update(running.id, {
       status: "STARTING",
       startedAt: 600,
       summary: "new summary",
+      inputTokens: 5,
+      outputTokens: 6,
+      runnerKind: "primary",
     });
     await expect(attempts.listForRun("run_1")).resolves.toEqual([
       expect.objectContaining({
         status: "STARTING",
         startedAt: 600,
         summary: "new summary",
+        inputTokens: 5,
+        outputTokens: 6,
+        runnerKind: "primary",
       }),
     ]);
 

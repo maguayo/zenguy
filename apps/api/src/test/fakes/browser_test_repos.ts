@@ -524,8 +524,11 @@ export class FakeAttemptRepo implements AttemptRepo {
         consoleErrorsJson: null,
         networkErrorsJson: null,
         tokenUsage: null,
+        inputTokens: null,
+        outputTokens: null,
         modelName: null,
         runnerVersion: null,
+        runnerKind: null,
         systemErrorCode: null,
       });
     }

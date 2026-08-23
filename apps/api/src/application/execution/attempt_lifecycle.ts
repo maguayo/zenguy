@@ -15,6 +15,7 @@ import {
 import type {
   TestAttempt,
   TestRun,
+  RunnerKind,
 } from "../../domain/browser_tests/types";
 import type { AttemptMessage } from "../../domain/queues";
 import type { DurableWorkflowRepo } from "../../domain/durability/repo";
@@ -30,6 +31,17 @@ import type { PublishQueueOutbox } from "../durability/publish_outbox";
 
 export const WORKER_LOST_GRACE_MS = 120_000;
 
+/** The reported total wins; otherwise the breakdown adds up to it. */
+export function totalTokenUsage(
+  outcome: Pick<AttemptOutcome, "tokenUsage" | "inputTokens" | "outputTokens">,
+): number | null {
+  if (outcome.tokenUsage !== undefined) return outcome.tokenUsage;
+  if (outcome.inputTokens === undefined && outcome.outputTokens === undefined) {
+    return null;
+  }
+  return (outcome.inputTokens ?? 0) + (outcome.outputTokens ?? 0);
+}
+
 export interface AttemptOutcome {
   status: "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR";
   summary?: string;
@@ -38,8 +50,11 @@ export interface AttemptOutcome {
   failureReason?: string;
   systemErrorCode?: string;
   tokenUsage?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   modelName?: string;
   runnerVersion?: string;
+  runnerKind?: RunnerKind;
   visitedUrls: string[];
   consoleErrors: unknown[];
   networkErrors: unknown[];
@@ -101,8 +116,11 @@ function queuedAttempt(input: {
     consoleErrorsJson: null,
     networkErrorsJson: null,
     tokenUsage: null,
+    inputTokens: null,
+    outputTokens: null,
     modelName: null,
     runnerVersion: null,
+    runnerKind: null,
     systemErrorCode: null,
     createdAt: input.createdAt,
   };
@@ -305,9 +323,12 @@ export class AttemptLifecycle {
           visitedUrlsJson: JSON.stringify(outcome.visitedUrls),
           consoleErrorsJson: JSON.stringify(outcome.consoleErrors),
           networkErrorsJson: JSON.stringify(outcome.networkErrors),
-          tokenUsage: outcome.tokenUsage ?? null,
+          tokenUsage: totalTokenUsage(outcome),
+          inputTokens: outcome.inputTokens ?? null,
+          outputTokens: outcome.outputTokens ?? null,
           modelName: outcome.modelName ?? null,
           runnerVersion: outcome.runnerVersion ?? null,
+          runnerKind: outcome.runnerKind ?? null,
           systemErrorCode: outcome.systemErrorCode ?? null,
         },
         job: createDurableJob({
@@ -590,8 +611,11 @@ export class AttemptLifecycle {
           consoleErrorsJson: "[]",
           networkErrorsJson: "[]",
           tokenUsage: null,
+          inputTokens: null,
+          outputTokens: null,
           modelName: null,
           runnerVersion: null,
+          runnerKind: null,
           systemErrorCode: "CANCELLED",
         },
         job: createDurableJob({

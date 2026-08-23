@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { attemptMessageSchema } from "../queues";
+import type { RunnerKind } from "./types";
 
 export const MAX_RUNNER_SCREENSHOT_BASE64_LENGTH = 3_000_000;
 
@@ -80,8 +81,11 @@ export const runnerOutcomeSchema = z
     failureReason: z.string().max(2_000).optional(),
     systemErrorCode: z.string().min(1).max(80).optional(),
     tokenUsage: z.number().int().nonnegative().max(10_000_000).optional(),
+    inputTokens: z.number().int().nonnegative().max(10_000_000).optional(),
+    outputTokens: z.number().int().nonnegative().max(10_000_000).optional(),
     modelName: z.string().min(1).max(200),
     runnerVersion: z.string().min(1).max(200),
+    runnerKind: z.enum(["primary", "fallback"]).optional(),
     visitedUrls: z.array(z.string().max(4_096)).max(100),
     consoleErrors: z.array(consoleEntrySchema).max(50),
     networkErrors: z.array(networkEntrySchema).max(50),
@@ -109,6 +113,18 @@ export const runnerOutcomeSchema = z
       });
     }
   });
+
+/**
+ * Runners that predate `runnerKind` still identify themselves through the
+ * version string prefix (see runner/browser_worker.py).
+ */
+export function runnerKindFromVersion(
+  runnerVersion: string,
+): RunnerKind | null {
+  if (runnerVersion.startsWith("zenguy-fallback-runner/")) return "fallback";
+  if (runnerVersion.startsWith("zenguy-local-runner/")) return "primary";
+  return null;
+}
 
 export const runnerCompleteSchema = z
   .object({

@@ -125,8 +125,11 @@ function attemptFor(
     consoleErrorsJson: "[]",
     networkErrorsJson: "[]",
     tokenUsage: 123,
+    inputTokens: null,
+    outputTokens: null,
     modelName: SNAPSHOT.modelName,
     runnerVersion: SNAPSHOT.runnerVersion,
+    runnerKind: null,
     systemErrorCode:
       value.status === "SYSTEM_ERROR" ? "BROWSER_LAUNCH_FAILED" : null,
     createdAt: value.queuedAt,

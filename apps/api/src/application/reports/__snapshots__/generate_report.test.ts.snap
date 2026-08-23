@@ -78,8 +78,8 @@ The page showed {{API_TOKEN}} rejected
 ## Technical metadata
 
 - Model: gpt-5-mini
-- Runner version: zenguy-runner/1.0.0
-- Token usage: 250
+- Runner: fallback (zenguy-fallback-runner/2.0.0)
+- Token usage: 250 (input 230, output 20)
 - Run ID: run_report_failure
 - Attempt IDs: att_report_zero, att_report_one
 

@@ -79,6 +79,12 @@ export class GetAttempt {
       durationMs: attempt.durationMs,
       summary: attempt.summary,
       failureReason: attempt.failureReason,
+      tokenUsage: attempt.tokenUsage,
+      inputTokens: attempt.inputTokens,
+      outputTokens: attempt.outputTokens,
+      modelName: attempt.modelName,
+      runnerKind: attempt.runnerKind,
+      runnerVersion: attempt.runnerVersion,
       latestStep:
         latestStep === null
           ? null
@@ -96,9 +102,6 @@ export class GetAttempt {
             },
       expectedResult: attempt.expectedResult,
       actualResult: attempt.actualResult,
-      tokenUsage: attempt.tokenUsage,
-      modelName: attempt.modelName,
-      runnerVersion: attempt.runnerVersion,
       systemErrorCode: attempt.systemErrorCode,
       visitedUrls: parseArray<string>(attempt.visitedUrlsJson),
       consoleErrors: parseArray<ConsoleErrorOutput>(attempt.consoleErrorsJson),

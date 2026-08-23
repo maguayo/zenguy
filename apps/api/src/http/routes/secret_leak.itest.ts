@@ -276,8 +276,11 @@ describe("workspace read endpoint secret-leak sweep", () => {
       ]),
       networkErrorsJson: "[]",
       tokenUsage: 20,
+      inputTokens: null,
+      outputTokens: null,
       modelName: "gpt-5-mini",
       runnerVersion: "leak-sweep",
+      runnerKind: null,
       systemErrorCode: null,
       createdAt: run.createdAt,
     };

@@ -39,7 +39,7 @@
 
 10. **Índice nuevo para el poll**: migración `0017_fallback_claim_index.sql` (`test_attempts(status, queued_at)`), porque `claim-stale` se consulta cada pocos segundos.
 
-11. **Trazabilidad**: los runs del fallback quedan registrados con `runnerVersion = zenguy-fallback-runner/2.0.0+browser-use-0.13.8`, `modelName = gpt-5-mini` y delivery ids `fallback-<host>-<uuid>`, así distingues en la UI/BD qué ejecutó cada camino.
+11. **Trazabilidad**: los runs del fallback quedan registrados con `runnerVersion = zenguy-fallback-runner/2.0.0+browser-use-0.13.8`, `modelName = gpt-5-mini` y delivery ids `fallback-<host>-<uuid>`, así distingues en la UI/BD qué ejecutó cada camino. Desde el 23-08-2026 cada intento guarda además `runner_kind` (`primary` = worker local del Mac, `fallback` = VPS; la API lo infiere del prefijo de `runnerVersion` si un runner antiguo no lo manda) y el desglose de tokens `input_tokens` / `output_tokens` (de `usage.total_prompt_tokens` / `total_completion_tokens` de browser-use; `token_usage` sigue siendo el total), visibles en el detalle del intento, el run y el informe.
 
 ## Cómo se comporta en cada escenario
 

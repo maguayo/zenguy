@@ -110,8 +110,11 @@ const ATTEMPT: TestAttempt = {
   consoleErrorsJson: null,
   networkErrorsJson: null,
   tokenUsage: null,
+  inputTokens: null,
+  outputTokens: null,
   modelName: null,
   runnerVersion: null,
+  runnerKind: null,
   systemErrorCode: null,
   createdAt: NOW,
 };
@@ -285,6 +288,36 @@ describe("AttemptLifecycle", () => {
     await expect(value.lifecycle.claim(message, "lease_2")).resolves.toBe(
       "skip",
     );
+  });
+
+  it("persists the token breakdown and runner kind reported with the outcome", async () => {
+    const value = await fixture();
+    const message: AttemptMessage = {
+      kind: "attempt",
+      runId: RUN.id,
+      attemptId: ATTEMPT.id,
+      attemptIndex: 0,
+      executionGeneration: ATTEMPT.queuedAt,
+    };
+    await expect(value.lifecycle.claim(message)).resolves.toBe("execute");
+    const state = await current(value, ATTEMPT.id);
+
+    await value.lifecycle.onAttemptFinished(state.run, state.attempt, {
+      ...PASSED,
+      inputTokens: 70,
+      outputTokens: 20,
+      runnerKind: "fallback",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    });
+
+    await expect(value.attempts.findById(ATTEMPT.id)).resolves.toMatchObject({
+      status: "PASSED",
+      tokenUsage: 90,
+      inputTokens: 70,
+      outputTokens: 20,
+      runnerKind: "fallback",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    });
   });
 
   it("runs the full 26.2 flow with delays and records usage once", async () => {

@@ -10,6 +10,7 @@ import type {
   RunnerOutcomeInput,
   RunnerStepInput,
 } from "../../domain/browser_tests/runner_protocol";
+import { runnerKindFromVersion } from "../../domain/browser_tests/runner_protocol";
 import type {
   RunArtifact,
   RunSnapshot,
@@ -358,8 +359,12 @@ export class ExternalRunner {
       failureReason: safeOptional(redactor, input.failureReason),
       systemErrorCode: safeOptional(redactor, input.systemErrorCode),
       tokenUsage: input.tokenUsage,
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
       modelName: truncate(redactor.redact(input.modelName), 200),
       runnerVersion: truncate(redactor.redact(input.runnerVersion), 200),
+      runnerKind:
+        input.runnerKind ?? runnerKindFromVersion(input.runnerVersion) ?? undefined,
       visitedUrls: input.visitedUrls.map((url) =>
         redactor.redact(sanitizeUrl(url)),
       ),

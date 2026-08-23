@@ -110,8 +110,11 @@ function attempt(input: {
       },
     ]),
     tokenUsage: input.tokenUsage,
+    inputTokens: input.tokenUsage - 10,
+    outputTokens: 10,
     modelName: RUN.snapshot.modelName,
-    runnerVersion: RUN.snapshot.runnerVersion,
+    runnerVersion: "zenguy-fallback-runner/2.0.0",
+    runnerKind: "fallback",
     systemErrorCode: null,
     createdAt: input.queuedAt,
   };
@@ -294,6 +297,9 @@ describe("GenerateReport", () => {
       "- Attempt 1, step 2: {{ARTIFACT:art_screen_one}}",
     );
     expect(markdown.endsWith(`${REPORT_FOOTER}\n`)).toBe(true);
+    // Who ran it and what it cost, per run: totals across both attempts.
+    expect(markdown).toContain("- Runner: fallback (zenguy-fallback-runner/2.0.0)");
+    expect(markdown).toContain("- Token usage: 250 (input 230, output 20)");
     const headings = [
       "## Instructions",
       "## Result",

@@ -159,8 +159,11 @@ const ATTEMPT_ZERO: TestAttempt = {
     },
   ]),
   tokenUsage: 120,
+  inputTokens: 100,
+  outputTokens: 20,
   modelName: "gpt-5-mini",
-  runnerVersion: "zenguy-runner/1.0.0",
+  runnerVersion: "zenguy-fallback-runner/2.0.0",
+  runnerKind: "fallback",
   systemErrorCode: null,
   createdAt: NOW - 2_000,
 };
@@ -443,6 +446,15 @@ describe("run read and artifact routes", () => {
       latestStep: { description: "Click pay" },
       latestScreenshot: { id: NEW_SCREENSHOT.id },
     });
+    // The run view tells who executed each attempt and what it cost.
+    expect(detailBody.data.attempts[0]).toMatchObject({
+      tokenUsage: 120,
+      inputTokens: 100,
+      outputTokens: 20,
+      modelName: "gpt-5-mini",
+      runnerKind: "fallback",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    });
     expect(detailBody.data.attempts[1]?.latestScreenshot?.url).toContain(
       `/api/artifact-content?id=${NEW_SCREENSHOT.id}`,
     );
@@ -458,6 +470,10 @@ describe("run read and artifact routes", () => {
     await expect(attempt.json()).resolves.toMatchObject({
       data: {
         id: ATTEMPT_ONE.id,
+        tokenUsage: 120,
+        inputTokens: 100,
+        outputTokens: 20,
+        runnerKind: "fallback",
         visitedUrls: ["https://example.com/checkout"],
         consoleErrors: [{ message: "checkout failed" }],
         networkErrors: [{ method: "POST", statusCode: 500 }],

@@ -441,8 +441,11 @@ async function seedFixture(
     consoleErrorsJson: "[]",
     networkErrorsJson: "[]",
     tokenUsage: 10,
+    inputTokens: null,
+    outputTokens: null,
     modelName: "gpt-5-mini",
     runnerVersion: "rbac-matrix",
+    runnerKind: null,
     systemErrorCode: null,
     createdAt: NOW - 2_000,
   };

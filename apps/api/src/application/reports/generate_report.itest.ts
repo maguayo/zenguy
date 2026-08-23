@@ -99,8 +99,11 @@ const ATTEMPT: TestAttempt = {
   consoleErrorsJson: "[]",
   networkErrorsJson: "[]",
   tokenUsage: 456,
+  inputTokens: null,
+  outputTokens: null,
   modelName: RUN.snapshot.modelName,
   runnerVersion: RUN.snapshot.runnerVersion,
+  runnerKind: null,
   systemErrorCode: null,
   createdAt: RUN.queuedAt,
 };

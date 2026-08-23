@@ -122,8 +122,11 @@ function attempt(
     consoleErrorsJson: null,
     networkErrorsJson: null,
     tokenUsage: null,
+    inputTokens: null,
+    outputTokens: null,
     modelName: null,
     runnerVersion: null,
+    runnerKind: null,
     systemErrorCode: null,
     createdAt: NOW - FALLBACK_CLAIM_MIN_AGE_MS,
     ...overrides,
@@ -344,5 +347,92 @@ describe("ExternalRunner.claimStale", () => {
         delaySeconds: INFRA_RETRY_DELAY_SECONDS,
       },
     ]);
+  });
+});
+
+describe("ExternalRunner.complete", () => {
+  function outcome(overrides: Record<string, unknown> = {}) {
+    return {
+      status: "PASSED" as const,
+      summary: "ok",
+      modelName: "gpt-5-mini",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+      visitedUrls: [],
+      consoleErrors: [],
+      networkErrors: [],
+      ...overrides,
+    };
+  }
+
+  async function claimed() {
+    const older = run("run_older");
+    const fixtureValue = await fixture({
+      runs: [older],
+      attempts: [attempt("att_older", older.id)],
+    });
+    const job = await fixtureValue.runner.claimStale({ deliveryId: "fallback-1" });
+    if (job === null) throw new Error("expected a claimed job");
+    return { ...fixtureValue, reference: job.reference };
+  }
+
+  it("stores the token breakdown and runner kind reported by the runner", async () => {
+    const { runner, attempts, reference } = await claimed();
+
+    await expect(
+      runner.complete(
+        reference,
+        outcome({
+          tokenUsage: 120,
+          inputTokens: 100,
+          outputTokens: 20,
+          runnerKind: "fallback",
+        }),
+      ),
+    ).resolves.toBe(true);
+
+    await expect(attempts.findById("att_older")).resolves.toMatchObject({
+      status: "PASSED",
+      tokenUsage: 120,
+      inputTokens: 100,
+      outputTokens: 20,
+      runnerKind: "fallback",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    });
+  });
+
+  it.each([
+    { runnerVersion: "zenguy-fallback-runner/2.0.0+browser-use-0.13.8", kind: "fallback" },
+    { runnerVersion: "zenguy-local-runner/2.0.0+browser-use-0.13.8", kind: "primary" },
+    { runnerVersion: "someone-else/1.0.0", kind: null },
+  ])(
+    "infers the runner kind from $runnerVersion when it is not reported",
+    async ({ runnerVersion, kind }) => {
+      const { runner, attempts, reference } = await claimed();
+
+      await runner.complete(reference, outcome({ runnerVersion, tokenUsage: 7 }));
+
+      await expect(attempts.findById("att_older")).resolves.toMatchObject({
+        runnerKind: kind,
+        inputTokens: null,
+        outputTokens: null,
+        tokenUsage: 7,
+      });
+    },
+  );
+
+  it("derives the total from the breakdown when only the breakdown is reported", async () => {
+    const { runner, attempts, reference } = await claimed();
+
+    await runner.complete(
+      reference,
+      outcome({ inputTokens: 30, outputTokens: 12, runnerKind: "primary" }),
+    );
+
+    await expect(attempts.findById("att_older")).resolves.toMatchObject({
+      tokenUsage: 42,
+      inputTokens: 30,
+      outputTokens: 12,
+      runnerKind: "primary",
+    });
   });
 });

@@ -130,8 +130,11 @@ export class CreateRun {
       consoleErrorsJson: null,
       networkErrorsJson: null,
       tokenUsage: null,
+      inputTokens: null,
+      outputTokens: null,
       modelName: null,
       runnerVersion: null,
+      runnerKind: null,
       systemErrorCode: null,
       createdAt: now,
     };

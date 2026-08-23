@@ -150,8 +150,11 @@ describe("streamRunUpdates", () => {
       consoleErrorsJson: "[]",
       networkErrorsJson: "[]",
       tokenUsage: null,
+      inputTokens: null,
+      outputTokens: null,
       modelName: "gpt-5-mini",
       runnerVersion: "test",
+      runnerKind: null,
       systemErrorCode: null,
       createdAt: NOW,
     };

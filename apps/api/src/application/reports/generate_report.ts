@@ -111,6 +111,20 @@ function reportDate(run: TestRun, now: number): number {
   return run.finishedAt ?? now;
 }
 
+/** Total across attempts, with the prompt/completion split when any attempt reported it. */
+export function tokenUsageLine(
+  attempts: Pick<TestAttempt, "tokenUsage" | "inputTokens" | "outputTokens">[],
+): string {
+  const total = attempts.reduce((sum, attempt) => sum + (attempt.tokenUsage ?? 0), 0);
+  const hasBreakdown = attempts.some(
+    (attempt) => attempt.inputTokens !== null || attempt.outputTokens !== null,
+  );
+  if (!hasBreakdown) return String(total);
+  const input = attempts.reduce((sum, attempt) => sum + (attempt.inputTokens ?? 0), 0);
+  const output = attempts.reduce((sum, attempt) => sum + (attempt.outputTokens ?? 0), 0);
+  return `${total} (input ${input}, output ${output})`;
+}
+
 function finalAttempt(attempts: TestAttempt[]): TestAttempt | null {
   return attempts.at(-1) ?? null;
 }
@@ -336,8 +350,8 @@ export function buildFailureReport(input: {
     "## Technical metadata",
     "",
     `- Model: ${inline(redactor, lastAttempt?.modelName) || "unknown"}`,
-    `- Runner version: ${inline(redactor, lastAttempt?.runnerVersion) || "unknown"}`,
-    `- Token usage: ${attempts.reduce((sum, attempt) => sum + (attempt.tokenUsage ?? 0), 0)}`,
+    `- Runner: ${lastAttempt?.runnerKind ?? "unknown"} (${inline(redactor, lastAttempt?.runnerVersion) || "unknown"})`,
+    `- Token usage: ${tokenUsageLine(attempts)}`,
     `- Run ID: ${run.id}`,
     `- Attempt IDs: ${attempts.map((attempt) => attempt.id).join(", ") || "none"}`,
     "",

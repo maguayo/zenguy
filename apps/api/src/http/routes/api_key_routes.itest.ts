@@ -205,8 +205,11 @@ const ATTEMPT: TestAttempt = {
   consoleErrorsJson: "[]",
   networkErrorsJson: "[]",
   tokenUsage: 10,
+  inputTokens: null,
+  outputTokens: null,
   modelName: "gpt-5-mini",
   runnerVersion: "api-key-itest",
+  runnerKind: null,
   systemErrorCode: null,
   createdAt: NOW - 2_000,
 };

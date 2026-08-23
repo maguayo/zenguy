@@ -5,6 +5,7 @@ import type {
   RunSource,
   RunStatus,
   StepResult,
+  RunnerKind,
 } from "../../domain/browser_tests/types";
 
 export type UserRefOutput = { userId: string; name: string } | null;
@@ -33,6 +34,12 @@ export interface AttemptSummaryOutput {
   durationMs: number | null;
   summary: string | null;
   failureReason: string | null;
+  tokenUsage: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  modelName: string | null;
+  runnerKind: RunnerKind | null;
+  runnerVersion: string | null;
   latestStep: {
     description: string;
     actionType: string;
@@ -96,9 +103,6 @@ export interface NetworkErrorOutput {
 export interface AttemptDetailOutput extends AttemptSummaryOutput {
   expectedResult: string | null;
   actualResult: string | null;
-  tokenUsage: number | null;
-  modelName: string | null;
-  runnerVersion: string | null;
   systemErrorCode: string | null;
   visitedUrls: string[];
   consoleErrors: ConsoleErrorOutput[];

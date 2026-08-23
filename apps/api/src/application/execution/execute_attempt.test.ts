@@ -115,8 +115,11 @@ const ATTEMPT: TestAttempt = {
   consoleErrorsJson: null,
   networkErrorsJson: null,
   tokenUsage: null,
+  inputTokens: null,
+  outputTokens: null,
   modelName: null,
   runnerVersion: null,
+  runnerKind: null,
   systemErrorCode: null,
   createdAt: NOW,
 };
@@ -484,8 +487,11 @@ describe("ExecuteAttempt", () => {
       expectedResult: "Checkout is available.",
       actualResult: "Checkout was available.",
       tokenUsage: 12,
+      inputTokens: null,
+      outputTokens: null,
       modelName: RUN.snapshot.modelName,
       runnerVersion: RUNNER_VERSION,
+      runnerKind: null,
       systemErrorCode: null,
     });
     const savedAttempt = await value.attempts.findById(ATTEMPT.id);
@@ -691,6 +697,8 @@ describe("ExecuteAttempt", () => {
       status: "SYSTEM_ERROR",
       systemErrorCode: "BROWSER_LAUNCH_FAILED",
       tokenUsage: 0,
+      inputTokens: null,
+      outputTokens: null,
       modelName: RUN.snapshot.modelName,
       runnerVersion: RUNNER_VERSION,
     });

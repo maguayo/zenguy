@@ -13,6 +13,7 @@ import type {
   RunSummaryRow,
   TestAttempt,
   TestRun,
+  RunnerKind,
 } from "./types";
 
 export interface BrowserTestUpdate {
@@ -106,8 +107,11 @@ export interface AttemptUpdate {
   consoleErrorsJson?: string | null;
   networkErrorsJson?: string | null;
   tokenUsage?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
   modelName?: string | null;
   runnerVersion?: string | null;
+  runnerKind?: RunnerKind | null;
   systemErrorCode?: string | null;
 }
 

@@ -94,11 +94,17 @@ export interface TestAttempt {
   consoleErrorsJson: string | null;
   networkErrorsJson: string | null;
   tokenUsage: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
   modelName: string | null;
   runnerVersion: string | null;
+  runnerKind: RunnerKind | null;
   systemErrorCode: string | null;
   createdAt: number;
 }
+
+/** Which executor ran an attempt: the primary queue-driven worker or the plan-B fallback runner. */
+export type RunnerKind = "primary" | "fallback";
 
 export interface RunStep {
   id: string;

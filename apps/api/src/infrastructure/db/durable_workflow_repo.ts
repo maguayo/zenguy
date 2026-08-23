@@ -107,8 +107,9 @@ function insertAttemptStatement(database: D1Database, attempt: TestAttempt) {
          queued_at, started_at, finished_at, duration_ms, summary,
          expected_result, actual_result, failure_reason, visited_urls_json,
          console_errors_json, network_errors_json, token_usage, model_name,
-         runner_version, system_error_code, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         runner_version, system_error_code, created_at,
+         input_tokens, output_tokens, runner_kind)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       attempt.id,
@@ -132,6 +133,9 @@ function insertAttemptStatement(database: D1Database, attempt: TestAttempt) {
       attempt.runnerVersion,
       attempt.systemErrorCode,
       attempt.createdAt,
+      attempt.inputTokens,
+      attempt.outputTokens,
+      attempt.runnerKind,
     );
 }
 
@@ -231,8 +235,11 @@ function attemptUpdateStatement(
     add("network_errors_json", fields.networkErrorsJson);
   }
   if (fields.tokenUsage !== undefined) add("token_usage", fields.tokenUsage);
+  if (fields.inputTokens !== undefined) add("input_tokens", fields.inputTokens);
+  if (fields.outputTokens !== undefined) add("output_tokens", fields.outputTokens);
   if (fields.modelName !== undefined) add("model_name", fields.modelName);
   if (fields.runnerVersion !== undefined) add("runner_version", fields.runnerVersion);
+  if (fields.runnerKind !== undefined) add("runner_kind", fields.runnerKind);
   if (fields.systemErrorCode !== undefined) {
     add("system_error_code", fields.systemErrorCode);
   }
@@ -367,8 +374,9 @@ export class D1DurableWorkflowRepo
              queued_at, started_at, finished_at, duration_ms, summary,
              expected_result, actual_result, failure_reason, visited_urls_json,
              console_errors_json, network_errors_json, token_usage, model_name,
-             runner_version, system_error_code, created_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+             runner_version, system_error_code, created_at,
+             input_tokens, output_tokens, runner_kind)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
            WHERE EXISTS (
              SELECT 1 FROM durable_jobs WHERE id = ? AND status = 'PENDING'
            )`,
@@ -395,6 +403,9 @@ export class D1DurableWorkflowRepo
           attempt.runnerVersion,
           attempt.systemErrorCode,
           attempt.createdAt,
+          attempt.inputTokens,
+          attempt.outputTokens,
+          attempt.runnerKind,
           input.jobId,
         ),
       this.database
@@ -462,6 +473,7 @@ export class D1DurableWorkflowRepo
                failure_reason = NULL, visited_urls_json = NULL,
                console_errors_json = NULL, network_errors_json = NULL,
                token_usage = NULL, model_name = NULL, runner_version = NULL,
+               input_tokens = NULL, output_tokens = NULL, runner_kind = NULL,
                system_error_code = NULL
            WHERE id = ? AND EXISTS (
              SELECT 1 FROM durable_jobs WHERE id = ? AND status = 'PENDING'

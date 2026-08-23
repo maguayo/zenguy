@@ -313,7 +313,9 @@ class BrowserUseIntegrationTests(unittest.TestCase):
                 actual_result="Example Domain heading was visible",
                 failure_reason="",
             ),
-            usage=SimpleNamespace(total_tokens=42),
+            usage=SimpleNamespace(
+                total_tokens=42, total_prompt_tokens=30, total_completion_tokens=12
+            ),
             urls=lambda: ["https://example.com/"],
         )
 
@@ -326,8 +328,32 @@ class BrowserUseIntegrationTests(unittest.TestCase):
 
         self.assertEqual(outcome["status"], "PASSED")
         self.assertEqual(outcome["tokenUsage"], 42)
+        self.assertEqual(outcome["inputTokens"], 30)
+        self.assertEqual(outcome["outputTokens"], 12)
+        self.assertEqual(outcome["runnerKind"], "primary")
         self.assertEqual(outcome["visitedUrls"], ["https://example.com/"])
         self.assertIn("browser-use-0.13.8", outcome["runnerVersion"])
+
+    def test_outcome_omits_the_token_breakdown_when_browser_use_lacks_it(self):
+        history = SimpleNamespace(
+            structured_output=worker.BrowserTestResult(
+                status="PASSED",
+                summary="ok",
+                expected_result="ok",
+                actual_result="ok",
+                failure_reason="",
+            ),
+            usage=SimpleNamespace(total_tokens=42),
+            urls=lambda: [],
+        )
+
+        outcome = worker.browser_use_outcome(
+            history, {"instructions": "x"}, worker.Redactor({}), "qwen/qwen3.8-27b"
+        )
+
+        self.assertEqual(outcome["tokenUsage"], 42)
+        self.assertNotIn("inputTokens", outcome)
+        self.assertNotIn("outputTokens", outcome)
 
     def test_llm_provider_failure_maps_to_system_error(self):
         history = SimpleNamespace(
@@ -454,6 +480,7 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertTrue(config.headless)
         self.assertEqual(config.cloudflare_queues_token, "")
         self.assertIn("fallback", config.runner_version)
+        self.assertEqual(config.runner_kind, "fallback")
 
     def test_fallback_config_honors_environment_overrides(self):
         config = worker.RunnerConfig.for_fallback(
@@ -577,9 +604,11 @@ class FallbackModelTests(unittest.TestCase):
             worker.Redactor({}),
             "gpt-5-mini",
             runner_version="zenguy-fallback-runner/2.0.0",
+            runner_kind="fallback",
         )
 
         self.assertEqual(outcome["runnerVersion"], "zenguy-fallback-runner/2.0.0")
+        self.assertEqual(outcome["runnerKind"], "fallback")
 
 
 class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):

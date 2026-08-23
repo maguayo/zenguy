@@ -253,6 +253,9 @@ class RunnerConfig:
     mode: str = "queue"
     model_native_structured: bool = False
     runner_version: str = RUNNER_VERSION
+    # Reported with every outcome so the API can tell which executor ran an
+    # attempt: the primary local worker or the plan-B fallback on the VPS.
+    runner_kind: str = "primary"
     chrome_executable: Path | None = CHROME_EXECUTABLE
 
     @classmethod
@@ -391,6 +394,7 @@ class RunnerConfig:
             poll_seconds=max(1.0, poll_seconds),
             visibility_timeout_ms=DEFAULT_VISIBILITY_TIMEOUT_MS,
             mode="fallback",
+            runner_kind="fallback",
             model_native_structured=True,
             runner_version=FALLBACK_RUNNER_VERSION,
             chrome_executable=chrome_executable,
@@ -1404,6 +1408,24 @@ def _history_token_usage(history: Any) -> int:
     return total if isinstance(total, int) and total >= 0 else 0
 
 
+def _history_token_breakdown(history: Any) -> dict[str, int]:
+    """The total plus the prompt/completion split when browser-use exposes it.
+
+    The split keys are omitted (not zeroed) when unavailable so the API keeps
+    them as unknown instead of recording a false zero.
+    """
+    usage = getattr(history, "usage", None)
+    breakdown: dict[str, int] = {"tokenUsage": _history_token_usage(history)}
+    for key, attribute in (
+        ("inputTokens", "total_prompt_tokens"),
+        ("outputTokens", "total_completion_tokens"),
+    ):
+        value = getattr(usage, attribute, None)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            breakdown[key] = value
+    return breakdown
+
+
 def _history_visited_urls(history: Any, redactor: Redactor) -> list[str]:
     try:
         raw_urls = history.urls()
@@ -1457,6 +1479,7 @@ def browser_use_outcome(
     redactor: Redactor,
     model_name: str,
     runner_version: str = RUNNER_VERSION,
+    runner_kind: str = "primary",
 ) -> dict[str, Any]:
     structured: BrowserTestResult | None = None
     with contextlib.suppress(Exception):
@@ -1511,9 +1534,10 @@ def browser_use_outcome(
         }
     outcome.update(
         {
-            "tokenUsage": _history_token_usage(history),
+            **_history_token_breakdown(history),
             "modelName": model_name,
             "runnerVersion": runner_version,
+            "runnerKind": runner_kind,
             "visitedUrls": _history_visited_urls(history, redactor),
             "consoleErrors": [],
             "networkErrors": [],
@@ -1649,6 +1673,7 @@ class JobExecutor:
                 redactor,
                 model_name,
                 self.config.runner_version,
+                self.config.runner_kind,
             )
         except AttemptNoLongerActive:
             return
@@ -1659,9 +1684,10 @@ class JobExecutor:
                 "expectedResult": str(snapshot.get("instructions", ""))[:2_000],
                 "actualResult": "not verified",
                 "failureReason": "browser-use did not finish before the attempt deadline",
-                "tokenUsage": _history_token_usage(history),
+                **_history_token_breakdown(history),
                 "modelName": model_name,
                 "runnerVersion": self.config.runner_version,
+                "runnerKind": self.config.runner_kind,
                 "visitedUrls": _history_visited_urls(history, redactor) if history else [],
                 "consoleErrors": [],
                 "networkErrors": [],
@@ -1679,9 +1705,10 @@ class JobExecutor:
                 "summary": summary,
                 "failureReason": reason,
                 "systemErrorCode": code,
-                "tokenUsage": _history_token_usage(history),
+                **_history_token_breakdown(history),
                 "modelName": model_name,
                 "runnerVersion": self.config.runner_version,
+                "runnerKind": self.config.runner_kind,
                 "visitedUrls": _history_visited_urls(history, redactor) if history else [],
                 "consoleErrors": [],
                 "networkErrors": [],

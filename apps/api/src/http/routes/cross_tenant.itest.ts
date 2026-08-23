@@ -182,8 +182,11 @@ describe("cross-tenant route isolation", () => {
       consoleErrorsJson: "[]",
       networkErrorsJson: "[]",
       tokenUsage: 10,
+      inputTokens: null,
+      outputTokens: null,
       modelName: "gpt-5-mini",
       runnerVersion: "cross-tenant-test",
+      runnerKind: null,
       systemErrorCode: null,
       createdAt: run.createdAt,
     };

@@ -140,8 +140,9 @@ export class D1RunRepo implements RunRepo {
              queued_at, started_at, finished_at, duration_ms, summary,
              expected_result, actual_result, failure_reason, visited_urls_json,
              console_errors_json, network_errors_json, token_usage, model_name,
-             runner_version, system_error_code, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             runner_version, system_error_code, created_at,
+             input_tokens, output_tokens, runner_kind)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           attempt.id,
@@ -165,6 +166,9 @@ export class D1RunRepo implements RunRepo {
           attempt.runnerVersion,
           attempt.systemErrorCode,
           attempt.createdAt,
+          attempt.inputTokens,
+          attempt.outputTokens,
+          attempt.runnerKind,
         ),
     ]);
   }

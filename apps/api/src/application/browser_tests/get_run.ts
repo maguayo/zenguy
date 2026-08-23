@@ -55,6 +55,12 @@ export class GetRun {
         durationMs: attempt.durationMs,
         summary: attempt.summary,
         failureReason: attempt.failureReason,
+        tokenUsage: attempt.tokenUsage,
+        inputTokens: attempt.inputTokens,
+        outputTokens: attempt.outputTokens,
+        modelName: attempt.modelName,
+        runnerKind: attempt.runnerKind,
+        runnerVersion: attempt.runnerVersion,
         latestStep,
         latestScreenshot:
           latestScreenshot === null
