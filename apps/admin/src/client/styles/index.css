@@ -2,7 +2,7 @@
  * Zenguy Admin visual rules — the product rules from apps/frontend/src/styles/index.css
  * minus the display serif: this is an internal ops panel, not a marketing surface.
  * - Cards use bg-white border border-zinc-200 rounded-lg. Shadows are reserved for overlays.
- * - Page containers use max-w-6xl mx-auto px-4 md:px-6 py-6.
+ * - Page containers use max-w-7xl mx-auto px-4 md:px-6 py-6 (widened from 6xl for the chart grid).
  * - Page titles use text-xl font-semibold; section titles use text-sm font-semibold text-zinc-900.
  * - Secondary text uses text-zinc-500; ids, versions and run ids use font-mono.
  * - Indigo is the only accent. Status colors are only for status. No gradients or dark mode.
@@ -16,6 +16,10 @@
 
   --color-accent-50: #eef2ff;
   --color-accent-100: #e0e7ff;
+  /* The light half of a two-part accent measure (token split on the run cost
+     chart). SVG fills cannot read a utility class, so components/charts/theme.ts
+     repeats these as hex literals — change one and change the other. */
+  --color-accent-400: #818cf8;
   --color-accent-600: #4f46e5;
   --color-accent-700: #4338ca;
 

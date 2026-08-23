@@ -1,44 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type {
-  Overview,
-  RecentRun,
-  UserSummary,
-  WorkerSummary,
-} from "../../shared/types";
-import { KpiGrid } from "./KpiGrid";
+import type { RecentRun, UserSummary, WorkerSummary } from "../../shared/types";
 import { RecentRunsTable } from "./RecentRunsTable";
-import { RunsWindowsSection } from "./RunsWindowsSection";
 import { Section } from "./Section";
-import { UptimeSection } from "./UptimeSection";
 import { UsersTable } from "./UsersTable";
 import { WorkersSection } from "./WorkersSection";
 
 const NOW = 1_800_000_000_000;
-
-const overview: Overview = {
-  browserRuns: {
-    past: {
-      h1: { avgDurationMs: 12_000, byStatus: { FAILED: 1, PASSED: 1 }, passRate: 0.5, total: 2 },
-      h3: { avgDurationMs: 11_000, byStatus: { PASSED: 3 }, passRate: 1, total: 3 },
-      h24: { avgDurationMs: null, byStatus: {}, passRate: null, total: 0 },
-    },
-    upcoming: { h1: 4, h3: 9, h24: 42 },
-  },
-  browserTests: { active: 7 },
-  uptimeChecks: {
-    past: {
-      h1: { avgResponseMs: 210, down: 1, total: 60, up: 59 },
-      h3: { avgResponseMs: 205, down: 1, total: 180, up: 179 },
-      h24: { avgResponseMs: null, down: 0, total: 0, up: 0 },
-    },
-    upcoming: { h1: 60, h3: 180, h24: 1_440 },
-  },
-  uptimeMonitors: { down: 1, total: 5, unknown: 1, up: 3 },
-  users: { newLast7d: 2, total: 12, verified: 9 },
-  workspaces: { total: 4 },
-};
 
 const onlineWorker: WorkerSummary = {
   currentAttempt: {
@@ -53,7 +22,10 @@ const onlineWorker: WorkerSummary = {
   lastSeenAt: NOW - 2_000,
   mode: "local",
   online: true,
+  runs24h: 42,
+  runs7d: 310,
   startedAt: NOW - 7_200_000,
+  tokens24h: 12_400,
   version: "1.4.2",
 };
 
@@ -64,7 +36,10 @@ const offlineWorker: WorkerSummary = {
   lastSeenAt: NOW - 60_000,
   mode: "fallback",
   online: false,
+  runs24h: 0,
+  runs7d: 4,
   startedAt: NOW - 3_600_000,
+  tokens24h: 0,
   version: "1.4.1",
 };
 
@@ -79,7 +54,6 @@ describe("workers section", () => {
   it("shows an empty state when no worker has ever reported", () => {
     const html = renderToStaticMarkup(<WorkersSection workers={{ now: NOW, workers: [] }} />);
     expect(html).toContain("No workers have reported yet");
-    expect(html).not.toContain("0 of 0");
   });
 
   it("shows liveness, mode, version and the running attempt of each worker", () => {
@@ -97,27 +71,17 @@ describe("workers section", () => {
     expect(html).toContain("Fallback (VPS)");
     expect(html).toContain("Idle");
   });
-});
 
-describe("browser runs windows", () => {
-  it("shows each past window with its pass rate and what is due next", () => {
-    const html = renderToStaticMarkup(<RunsWindowsSection overview={overview} />);
-    expect(html).toContain("1h");
-    expect(html).toContain("3h");
-    expect(html).toContain("24h");
-    expect(html).toContain("50%");
-    expect(html).toContain("Next 24h");
-    expect(html).toContain("No runs");
-  });
-});
-
-describe("uptime section", () => {
-  it("shows monitor states and the check windows", () => {
-    const html = renderToStaticMarkup(<UptimeSection overview={overview} />);
-    expect(html).toContain("Monitors");
-    expect(html).toContain("Next 24h");
-    expect(html).toContain("210 ms");
-    expect(html).toContain("No checks");
+  it("attributes runs and tokens to the worker that did the work", () => {
+    const html = renderToStaticMarkup(
+      <WorkersSection workers={{ now: NOW, workers: [onlineWorker] }} />,
+    );
+    expect(html).toContain("Runs 24 h");
+    expect(html).toContain("42");
+    expect(html).toContain("Runs 7 d");
+    expect(html).toContain("310");
+    expect(html).toContain("Tokens 24 h");
+    expect(html).toContain("12.4k");
   });
 });
 
@@ -167,17 +131,6 @@ describe("recent runs table", () => {
   it("shows an empty state with no runs", () => {
     const html = renderToStaticMarkup(<RecentRunsTable now={NOW} runs={[]} />);
     expect(html).toContain("No runs yet");
-  });
-});
-
-describe("kpi grid", () => {
-  it("shows the platform totals", () => {
-    const html = renderToStaticMarkup(<KpiGrid overview={overview} />);
-    expect(html).toContain("Platform");
-    expect(html).toContain("Users");
-    expect(html).toContain("Workspaces");
-    expect(html).toContain("Active browser tests");
-    expect(html).toContain("Monitors");
   });
 });
 

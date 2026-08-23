@@ -56,3 +56,9 @@ export function percent(ratio: number | null): string {
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-GB").format(value);
 }
+
+/** A change with its sign always shown, using a real minus sign: "+12", "−3", "0". */
+export function formatSigned(value: number): string {
+  if (value === 0) return "0";
+  return `${value > 0 ? "+" : "−"}${formatNumber(Math.abs(value))}`;
+}

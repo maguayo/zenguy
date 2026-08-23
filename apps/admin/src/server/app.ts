@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import type { AppEnv, Bindings, Clock } from "./env";
 import { systemClock } from "./env";
 import { AppError } from "./errors";
+import { requireSession } from "./require_session";
+import type { AnalyticsLoaders } from "./routes/analytics";
+import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
 import type { Loaders } from "./routes/data";
 import { dataRoutes } from "./routes/data";
@@ -10,7 +13,7 @@ export interface AppOverrides {
   clock?: Clock;
   fetch?: typeof fetch;
   delay?: (milliseconds: number) => Promise<void>;
-  loaders?: Partial<Loaders>;
+  loaders?: Partial<Loaders & AnalyticsLoaders>;
 }
 
 const CSP = [
@@ -109,6 +112,20 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
       clock,
       adminEmails: env.ADMIN_EMAILS,
       secret: env.ADMIN_SESSION_SECRET,
+      loaders: overrides.loaders,
+    }),
+  );
+
+  app.route(
+    "/api",
+    analyticsRoutes({
+      db: env.DB,
+      clock,
+      guard: requireSession({
+        secret: env.ADMIN_SESSION_SECRET,
+        clock,
+        adminEmails: env.ADMIN_EMAILS,
+      }),
       loaders: overrides.loaders,
     }),
   );

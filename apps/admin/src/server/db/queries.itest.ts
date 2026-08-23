@@ -418,6 +418,10 @@ describe("admin D1 queries", () => {
       firstSeenAt: NOW - HOUR,
       lastSeenAt: NOW - 3_000,
       online: true,
+      // Windows key off each attempt's RUN created_at: run_fail is 5 h old and run_running 30 h old; neither carries tokens.
+      runs24h: 1,
+      runs7d: 2,
+      tokens24h: 0,
       currentAttempt: {
         attemptId: "att_running",
         runId: "run_running",

@@ -1,4 +1,10 @@
-import type { Overview, RecentRun, UserSummary, WorkersResponse } from "../shared/types";
+import type {
+  Analytics,
+  Overview,
+  RecentRun,
+  UserSummary,
+  WorkersResponse,
+} from "../shared/types";
 
 /** A non-2xx answer from the admin API, carrying its `{ error: { code, message } }` body. */
 export class ApiError extends Error {
@@ -42,6 +48,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  analytics: (days: number) => request<Analytics>(`/api/analytics?days=${days}`),
   login: (email: string, password: string) =>
     request<{ email: string }>("/api/auth/login", {
       body: JSON.stringify({ email, password }),
