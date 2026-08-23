@@ -6,7 +6,6 @@ import { decryptSecret } from "../../shared/crypto";
 import { FakeAlertRepo } from "../../test/fakes/alerts";
 import { FakeBrowserTestRepo } from "../../test/fakes/browser_test_repos";
 import { FakeIds } from "../../test/fakes/ids";
-import { FakePushDeviceRepo } from "../../test/fakes/push";
 import { FakeChannelRepo } from "../../test/fakes/repos";
 import { FakeMonitorRepo } from "../../test/fakes/uptime_repos";
 import {
@@ -122,8 +121,8 @@ describe("EnsureDefaultPushChannel", () => {
     expect(await channels.list("ws_1")).toHaveLength(0);
   });
 
-  it("adopts a push channel that already exists instead of adding a second one", async () => {
-    const { channels, alerts, ensure } = await fixture();
+  it("adopts a push channel that already exists, promotes it, and attaches it everywhere", async () => {
+    const { channels, alerts, tests, monitors, ensure } = await fixture();
     await channels.insert({
       id: "ch_push_manual",
       workspaceId: "ws_1",
@@ -142,38 +141,26 @@ describe("EnsureDefaultPushChannel", () => {
       channelId: "ch_push_manual",
     });
     expect(await channels.list("ws_1")).toHaveLength(1);
+    await expect(channels.findById("ws_1", "ch_push_manual")).resolves.toMatchObject({
+      isDefault: true,
+    });
+    expect(await tests.getChannelIds("bt_1")).toEqual(["ch_email", "ch_push_manual"]);
+    expect(await monitors.getChannelIds("mon_1")).toEqual(["ch_push_manual"]);
     expect(alerts.settings.get("ws_1")?.defaultPushChannelCreatedAt).toBe(NOW);
   });
 
-  it("backfills workspaces reported by the device repository", async () => {
+  it("backfills every pending workspace even before a device is registered", async () => {
     const { alerts, channels, ensure } = await fixture();
-    const devices = new FakePushDeviceRepo();
-    devices.members.set("ws_1", ["usr_a"]);
-    devices.members.set("ws_2", ["usr_b"]);
-    devices.members.set("ws_marked", ["usr_a"]);
-    devices.devices.set("pd_a", {
-      id: "pd_a",
-      userId: "usr_a",
-      token: "ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]",
-      platform: "ios",
-      deviceName: null,
-      appVersion: null,
-      enabled: true,
-      disabledReason: null,
-      lastSeenAt: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    });
-    devices.markedWorkspaces.add("ws_marked");
     alerts.settings.set("ws_marked", {
       ...defaultAlertSettings("ws_marked", 1),
       defaultPushChannelCreatedAt: 1,
     });
+    alerts.workspaceIdsNeedingDefaultPushChannel = ["ws_1", "ws_2", "ws_marked"];
 
-    const backfill = new BackfillDefaultPushChannels(devices, ensure);
-    await expect(backfill.execute()).resolves.toEqual({ created: 1 });
+    const backfill = new BackfillDefaultPushChannels(alerts, ensure);
+    await expect(backfill.execute()).resolves.toEqual({ created: 2 });
     expect(await channels.list("ws_1")).toHaveLength(1);
-    expect(await channels.list("ws_2")).toHaveLength(0);
+    expect(await channels.list("ws_2")).toHaveLength(1);
     expect(await channels.list("ws_marked")).toHaveLength(0);
   });
 });

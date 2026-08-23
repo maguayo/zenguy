@@ -1,9 +1,7 @@
-import { D1AlertRepo } from "./alert_repo";
 import { D1MemberRepo } from "./member_repo";
 import { D1PushDeviceRepo } from "./push_device_repo";
 import { D1UserRepo } from "./user_repo";
 import { D1WorkspaceRepo } from "./workspace_repo";
-import { defaultAlertSettings } from "../../domain/alerts/types";
 import type { PushDevice } from "../../domain/push/types";
 import { freshDb, testEnv } from "../../test/helpers";
 
@@ -121,13 +119,6 @@ describe("D1PushDeviceRepo", () => {
     ]);
     await expect(repo.reachForWorkspace("ws_push")).resolves.toEqual({ devices: 3, members: 2 });
     await expect(repo.reachForWorkspace("ws_other")).resolves.toEqual({ devices: 0, members: 0 });
-
-    await expect(repo.listWorkspacesNeedingPushChannel(10)).resolves.toEqual(["ws_push"]);
-    await new D1AlertRepo(bindings.DB).insertSettings({
-      ...defaultAlertSettings("ws_push", 1),
-      defaultPushChannelCreatedAt: 1,
-    });
-    await expect(repo.listWorkspacesNeedingPushChannel(10)).resolves.toEqual([]);
 
     await repo.disableTokens([T("a1"), T("missing")], "DeviceNotRegistered", 50);
     await expect(repo.findById("usr_a", "pd_a1")).resolves.toMatchObject({

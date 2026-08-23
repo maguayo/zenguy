@@ -5,6 +5,7 @@ import type { Channel, Delivery } from "../../api/types";
 import { formatEuros } from "../../lib/format";
 import {
   ChannelSummary,
+  canChangeChannelDefault,
   channelPriceLabel,
   channelTarget,
   closeChannelPanel,
@@ -135,6 +136,8 @@ describe("notification channels list", () => {
     const html = renderToStaticMarkup(<ChannelSummary channel={push} />);
     expect(html).toContain("Mobile push");
     expect(html).toContain("3 devices · 2 members · free");
+    expect(canChangeChannelDefault(push)).toBe(false);
+    expect(canChangeChannelDefault(baseChannel)).toBe(true);
   });
 
   it("uses the delivery outcome for the exact test toast", () => {

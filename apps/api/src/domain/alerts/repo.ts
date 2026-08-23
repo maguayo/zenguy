@@ -75,4 +75,5 @@ export interface AlertRepo {
   listWorkspacesNeedingDefaultChannel(
     limit: number,
   ): Promise<WorkspaceNeedingDefaultChannel[]>;
+  listWorkspaceIdsNeedingDefaultPushChannel(limit: number): Promise<string[]>;
 }

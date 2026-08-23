@@ -1,6 +1,20 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, MoreHorizontal, Plus, Upload } from "lucide-react";
+import {
+  Bell,
+  CalendarClock,
+  CheckCircle2,
+  CircleAlert,
+  Download,
+  Globe2,
+  Laptop,
+  MoreHorizontal,
+  Play,
+  Plus,
+  Smartphone,
+  Upload,
+} from "lucide-react";
+import clsx from "clsx";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
@@ -11,7 +25,7 @@ import {
   type ExportFormat,
   type ImportTestsSummary,
 } from "../../api/tests";
-import type { BrowserTest } from "../../api/types";
+import type { BrowserTest, RunSource } from "../../api/types";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -22,14 +36,19 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { IconButton } from "../../components/ui/IconButton";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { Table, type TableColumn } from "../../components/ui/Table";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { saveBlob } from "../../lib/download";
 import { apiErrorMessage } from "../../lib/errors";
-import { formatInterval, formatRelative } from "../../lib/format";
+import {
+  formatDateTime,
+  formatDuration,
+  formatInterval,
+  formatRelative,
+} from "../../lib/format";
 import { isActiveRun, useRunNow } from "./hooks";
 
 export function importSummaryMessage(
@@ -101,11 +120,26 @@ function TestActions({ test }: { test: BrowserTest }) {
 
   return (
     <>
-      <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+      <div className="flex items-center justify-end gap-1.5">
+        {can("tests.run") ? (
+          <Button
+            aria-label={`Run ${test.name} now`}
+            className="hidden lg:inline-flex"
+            disabled={isActiveRun(test) || run.pending}
+            size="sm"
+            onClick={run.requestRun}
+          >
+            <Play aria-hidden="true" className="size-3.5" />
+            Run
+          </Button>
+        ) : null}
         <Dropdown
           items={items}
           trigger={
-            <IconButton aria-label={`Actions for ${test.name}`}>
+            <IconButton
+              aria-label={`Actions for ${test.name}`}
+              className="size-9"
+            >
               <MoreHorizontal aria-hidden="true" className="size-4" />
             </IconButton>
           }
@@ -125,81 +159,295 @@ function TestActions({ test }: { test: BrowserTest }) {
   );
 }
 
-export function testColumns(workspaceId: string): TableColumn<BrowserTest>[] {
-  return [
-    {
-      header: "Name",
-      key: "name",
-      render: (test) => (
-        <div className="min-w-52">
-          <p className="font-medium text-zinc-900">{test.name}</p>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {test.device === "DESKTOP" ? "Desktop" : "Mobile"} ·{" "}
-            {formatInterval(test.intervalHours)}
-          </p>
+export const testListHeaders = ["Test", "Last run", "Next run", "Alerts"] as const;
+
+const testListGrid =
+  "lg:grid-cols-[minmax(260px,1.7fr)_minmax(155px,0.85fr)_minmax(135px,0.72fr)_minmax(165px,0.9fr)_auto]";
+
+export function testHost(url: string): string {
+  try {
+    return new URL(url).host || "Unknown host";
+  } catch {
+    return "Unknown host";
+  }
+}
+
+export function alertChannelsLabel(count: number): string {
+  if (count === 0) return "No alert channels";
+  return `${count} alert ${count === 1 ? "channel" : "channels"}`;
+}
+
+export function runSourceLabel(source: RunSource): string {
+  switch (source) {
+    case "MANUAL":
+      return "Manual";
+    case "VALIDATION":
+      return "Validation";
+    case "SCHEDULED":
+      return "Scheduled";
+  }
+}
+
+function indicatorClass(test: BrowserTest): string {
+  if (test.openIncidentId) return "bg-danger-600";
+  switch (test.lastRun?.status) {
+    case "PASSED":
+      return "bg-ok-600";
+    case "FAILED":
+      return "bg-danger-600";
+    case "TIMEOUT":
+      return "bg-warn-600";
+    case "QUEUED":
+    case "RUNNING":
+      return "bg-info-600 motion-safe:animate-pulse";
+    default:
+      return "bg-zinc-400";
+  }
+}
+
+function MobileCellLabel({ children }: { children: string }) {
+  return (
+    <p className="pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 lg:hidden">
+      {children}
+    </p>
+  );
+}
+
+export function TestRowContent({
+  test,
+  timezone,
+  workspaceId,
+}: {
+  test: BrowserTest;
+  timezone: string;
+  workspaceId: string;
+}) {
+  const DeviceIcon = test.device === "DESKTOP" ? Laptop : Smartphone;
+  const deviceLabel = test.device === "DESKTOP" ? "Desktop" : "Mobile";
+  const lastRunAt =
+    test.lastRun?.finishedAt ?? test.lastRun?.startedAt ?? test.lastRun?.createdAt;
+
+  return (
+    <>
+      <div className="min-w-0 pr-10 lg:pr-0" role="cell">
+        <div className="flex items-start gap-3">
+          <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-700">
+            <DeviceIcon aria-hidden="true" className="size-5" />
+            <span
+              aria-hidden="true"
+              className={clsx(
+                "absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white",
+                indicatorClass(test),
+              )}
+            />
+          </span>
+          <div className="min-w-0 flex-1">
+            <Link
+              className="block truncate text-sm font-semibold text-zinc-950 hover:text-accent-700 hover:underline"
+              to={`/w/${workspaceId}/tests/${test.id}`}
+            >
+              {test.name}
+            </Link>
+            <p
+              className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-zinc-500"
+              title={testHost(test.startUrl)}
+            >
+              <Globe2 aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate">{testHost(test.startUrl)}</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600">
+                <DeviceIcon aria-hidden="true" className="size-3" />
+                {deviceLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600">
+                <CalendarClock aria-hidden="true" className="size-3" />
+                {formatInterval(test.intervalHours)}
+              </span>
+            </div>
+          </div>
         </div>
-      ),
-    },
-    {
-      header: "Last status",
-      key: "lastStatus",
-      render: (test) =>
-        test.lastRun ? (
-          <div className="space-y-1">
+      </div>
+
+      <div
+        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        role="cell"
+      >
+        <MobileCellLabel>Last run</MobileCellLabel>
+        <div className="min-w-0">
+          {test.lastRun ? (
             <StatusBadge
               passedAfterRetry={test.lastRun.passedAfterRetry}
               status={test.lastRun.status}
             />
-            {test.lastRun.finishedAt ? (
-              <p className="text-xs text-zinc-500">{formatRelative(test.lastRun.finishedAt)}</p>
-            ) : null}
-          </div>
-        ) : (
-          "—"
-        ),
-    },
-    {
-      header: "Next run",
-      key: "nextRun",
-      render: (test) => <span className="whitespace-nowrap">{formatRelative(test.nextRunAt)}</span>,
-    },
-    {
-      header: "Incident",
-      key: "incident",
-      render: (test) =>
-        test.openIncidentId ? (
-          <Link
-            className="inline-flex"
-            to={`/w/${workspaceId}/incidents/${test.openIncidentId}`}
-            onClick={(event) => event.stopPropagation()}
+          ) : (
+            <Badge tone="neutral">Not run yet</Badge>
+          )}
+          <p
+            className="mt-1.5 whitespace-nowrap text-xs text-zinc-500"
+            title={lastRunAt ? formatDateTime(lastRunAt, timezone) : undefined}
           >
-            <Badge tone="danger">Open</Badge>
-          </Link>
-        ) : (
-          "—"
-        ),
-    },
-    {
-      className: "w-12 text-right",
-      header: <span className="sr-only">Actions</span>,
-      key: "actions",
-      render: (test) => <TestActions test={test} />,
-    },
-  ];
+            {lastRunAt ? formatRelative(lastRunAt) : "Waiting for first run"}
+            {test.lastRun?.durationMs !== null && test.lastRun?.durationMs !== undefined
+              ? ` · ${formatDuration(test.lastRun.durationMs)}`
+              : null}
+            {test.lastRun ? ` · ${runSourceLabel(test.lastRun.source)}` : null}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        role="cell"
+      >
+        <MobileCellLabel>Next run</MobileCellLabel>
+        <div>
+          <p
+            className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
+            title={formatDateTime(test.nextRunAt, timezone)}
+          >
+            <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
+            {formatRelative(test.nextRunAt)}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">Automatic</p>
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        role="cell"
+      >
+        <MobileCellLabel>Alerts</MobileCellLabel>
+        <div className="space-y-1.5">
+          {test.openIncidentId ? (
+            <Link
+              className="inline-flex"
+              to={`/w/${workspaceId}/incidents/${test.openIncidentId}`}
+            >
+              <Badge tone="danger">
+                <CircleAlert aria-hidden="true" className="size-3" />
+                Open incident
+              </Badge>
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ok-700">
+              <CheckCircle2 aria-hidden="true" className="size-3.5" />
+              All clear
+            </span>
+          )}
+          <p className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Bell aria-hidden="true" className="size-3.5" />
+            {alertChannelsLabel(test.channelIds.length)}
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TestsListSkeleton() {
+  return (
+    <Card
+      aria-label="Loading browser tests"
+      className="overflow-hidden"
+      padding="none"
+      role="status"
+    >
+      <div className="divide-y divide-zinc-200">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="flex items-center gap-3 px-4 py-4">
+            <Skeleton className="size-11 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-44 max-w-full" />
+              <Skeleton className="h-3 w-32 max-w-full" />
+            </div>
+            <Skeleton className="hidden h-6 w-20 sm:block" />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function BrowserTestsList({
+  tests,
+  timezone,
+  workspaceId,
+}: {
+  tests: BrowserTest[];
+  timezone: string;
+  workspaceId: string;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <Card className="overflow-hidden" padding="none">
+      <div aria-label="Browser tests" role="table">
+        <div
+          className="hidden border-b border-zinc-200 bg-zinc-50/80 lg:block"
+          role="rowgroup"
+        >
+          <div
+            className={clsx(
+              "grid items-center gap-6 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
+              testListGrid,
+            )}
+            role="row"
+          >
+            {testListHeaders.map((header) => (
+              <div key={header} role="columnheader">
+                {header}
+              </div>
+            ))}
+            <div className="sr-only" role="columnheader">
+              Actions
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-zinc-200" role="rowgroup">
+          {tests.map((test) => (
+            <div
+              key={test.id}
+              className={clsx(
+                "relative grid cursor-pointer grid-cols-1 gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-zinc-50/80",
+                testListGrid,
+              )}
+              role="row"
+              onClick={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("a, button")) return;
+                navigate(`/w/${workspaceId}/tests/${test.id}`);
+              }}
+            >
+              <TestRowContent
+                test={test}
+                timezone={timezone}
+                workspaceId={workspaceId}
+              />
+              <div
+                className="absolute right-3 top-3 lg:static lg:self-center"
+                role="cell"
+              >
+                <TestActions test={test} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 export default function TestsListPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
   const handleMutationError = useMutationError();
-  const { can, current } = useWorkspace();
+  const { can, current, timezone } = useWorkspace();
   const fileInput = useRef<HTMLInputElement>(null);
   const tests = useQuery({
     queryFn: () => listTests(current.id),
     queryKey: ["ws", current.id, "tests"],
   });
-  const columns = testColumns(current.id);
   const importFile = useMutation({
     mutationFn: (text: string) => importTests(current.id, text),
   });
@@ -231,7 +479,7 @@ export default function TestsListPage() {
       <PageHeader
         actions={
           canManage || hasTests ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {hasTests ? (
                 <Dropdown
                   align="end"
@@ -285,38 +533,38 @@ export default function TestsListPage() {
             </div>
           ) : undefined
         }
+        description="Scheduled customer journeys, checked in a fresh browser on every run."
         title="Browser Tests"
       />
 
       {tests.isError ? (
         <ErrorState onRetry={() => void tests.refetch()} />
-      ) : (
+      ) : tests.isPending ? (
+        <TestsListSkeleton />
+      ) : tests.data.length === 0 ? (
         <Card className="overflow-hidden" padding="none">
-          <Table
-            columns={columns}
-            empty={
-              <EmptyState
-                action={
-                  can("tests.manage") ? (
-                    <Link
-                      className="inline-flex h-9 items-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
-                      to={`/w/${current.id}/tests/new`}
-                    >
-                      Create your first test
-                    </Link>
-                  ) : undefined
-                }
-                className="m-4"
-                description="Describe a flow in plain language and Zenguy will verify it in a real browser on a schedule."
-                title="No browser tests yet"
-              />
+          <EmptyState
+            action={
+              can("tests.manage") ? (
+                <Link
+                  className="inline-flex h-9 items-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
+                  to={`/w/${current.id}/tests/new`}
+                >
+                  Create your first test
+                </Link>
+              ) : undefined
             }
-            loading={tests.isPending}
-            rowKey={(test) => test.id}
-            rows={tests.data ?? []}
-            onRowClick={(test) => navigate(`/w/${current.id}/tests/${test.id}`)}
+            className="m-4"
+            description="Describe a flow in plain language and Zenguy will verify it in a real browser on a schedule."
+            title="No browser tests yet"
           />
         </Card>
+      ) : (
+        <BrowserTestsList
+          tests={tests.data}
+          timezone={timezone}
+          workspaceId={current.id}
+        />
       )}
     </div>
   );

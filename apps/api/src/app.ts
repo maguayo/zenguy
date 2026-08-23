@@ -264,7 +264,7 @@ export function buildApp(
     clock,
     overrides.ids ?? realIds,
   );
-  const defaultChannel = new EnsureDefaultEmailChannel(
+  const defaultEmailChannel = new EnsureDefaultEmailChannel(
     channels,
     alerts,
     config.encryptionKey,
@@ -512,7 +512,8 @@ export function buildApp(
       invitations,
       billingCanceller,
       subscriptions,
-      defaultChannel,
+      defaultEmailChannel,
+      defaultPushChannel,
       audit,
       clock,
       ids: overrides.ids ?? realIds,

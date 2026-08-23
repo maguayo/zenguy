@@ -31,9 +31,10 @@ describe("channel picker", () => {
     expect(
       defaultChannelIds([
         channel({ id: "ch_default", isDefault: true }),
+        channel({ id: "ch_push", isDefault: true, type: "PUSH" }),
         channel({ id: "ch_disabled", enabled: false, isDefault: true }),
         channel({ id: "ch_plain" }),
       ]),
-    ).toEqual(["ch_default"]);
+    ).toEqual(["ch_default", "ch_push"]);
   });
 });

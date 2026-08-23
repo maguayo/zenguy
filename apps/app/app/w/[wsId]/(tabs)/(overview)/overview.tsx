@@ -196,8 +196,7 @@ function OverviewBody({
             value={data.browserTests.runningRuns}
           />
           <StatTile
-            hint="last 24 h"
-            label="Failed"
+            label="Failed 24h"
             tone={data.browserTests.failed24h > 0 ? "danger" : "neutral"}
             value={data.browserTests.failed24h}
             onPress={
@@ -231,8 +230,7 @@ function OverviewBody({
             }
           />
           <StatTile
-            hint="avg · 24 h"
-            label="Response"
+            label="Avg · 24h"
             value={data.uptime.avgResponseTimeMs24h === null ? "—" : `${Math.round(data.uptime.avgResponseTimeMs24h)} ms`}
           />
         </View>

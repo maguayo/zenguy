@@ -278,5 +278,10 @@ describe("D1AlertRepo", () => {
         ownerEmail: "owner@alerts.test",
       },
     ]);
+    expect(await repo.listWorkspaceIdsNeedingDefaultPushChannel(10)).toEqual([
+      "ws_bare",
+      "ws_has_channel",
+      "ws_marked",
+    ]);
   });
 });

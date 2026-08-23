@@ -192,22 +192,4 @@ export class D1PushDeviceRepo implements PushDeviceRepo {
     );
   }
 
-  async listWorkspacesNeedingPushChannel(limit: number): Promise<string[]> {
-    const rows = await all<{ workspace_id: string }>(
-      this.database
-        .prepare(
-          `SELECT DISTINCT w.id AS workspace_id
-           FROM workspaces w
-           JOIN workspace_members m ON m.workspace_id = w.id
-           JOIN user_push_devices d ON d.user_id = m.user_id AND d.enabled = 1
-           LEFT JOIN workspace_alert_settings s ON s.workspace_id = w.id
-           WHERE w.deleted_at IS NULL
-             AND (s.workspace_id IS NULL OR s.default_push_channel_created_at IS NULL)
-           ORDER BY w.id ASC
-           LIMIT ?`,
-        )
-        .bind(limit),
-    );
-    return rows.map((row) => row.workspace_id);
-  }
 }

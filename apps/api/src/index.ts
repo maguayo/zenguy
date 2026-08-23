@@ -555,7 +555,6 @@ function buildDefaultChannelBackfill(
   alerts: D1AlertRepo,
 ): { execute(): Promise<unknown> } {
   const channels = new D1ChannelRepo(env.DB);
-  const pushDevices = new D1PushDeviceRepo(env.DB);
   const email = new BackfillDefaultEmailChannels(
     alerts,
     new EnsureDefaultEmailChannel(
@@ -567,7 +566,7 @@ function buildDefaultChannelBackfill(
     ),
   );
   const push = new BackfillDefaultPushChannels(
-    pushDevices,
+    alerts,
     new EnsureDefaultPushChannel(
       channels,
       alerts,

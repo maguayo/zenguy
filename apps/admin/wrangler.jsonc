@@ -1,0 +1,30 @@
+{
+  // admin.zenguy.com — internal read-only platform panel. One Worker serves
+  // the SPA (Workers Assets) and its API under /api/*; it binds the
+  // PRODUCTION database and only ever runs SELECT statements.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zenguy-admin",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "routes": [{ "pattern": "admin.zenguy.com", "custom_domain": true }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zenguy-db",
+      "database_id": "82cdd9c1-591f-45c4-a115-17fcdc18950b"
+    }
+  ],
+  "vars": {
+    "ADMIN_EMAILS": "marcos@aguayo.es",
+    "ZENGUY_API_ORIGIN": "https://api.zenguy.com"
+  }
+  // Secret (wrangler secret put): ADMIN_SESSION_SECRET (>= 32 chars)
+}

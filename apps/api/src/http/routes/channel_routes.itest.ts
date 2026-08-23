@@ -327,6 +327,52 @@ describe("channel routes", () => {
     });
   });
 
+  it("always keeps the workspace mobile push channel in defaults", async () => {
+    const created = await app.request(`/api/workspaces/${WORKSPACE.id}/channels`, {
+      method: "POST",
+      headers: headers("owner"),
+      body: JSON.stringify({
+        name: "Mobile push",
+        type: "PUSH",
+        config: { recipients: "WORKSPACE_MEMBERS" },
+        isDefault: false,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as { data: { id: string; isDefault: boolean } };
+    expect(createdBody.data.isDefault).toBe(true);
+
+    const unset = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${createdBody.data.id}`,
+      {
+        method: "PATCH",
+        headers: headers("admin"),
+        body: JSON.stringify({ isDefault: false }),
+      },
+    );
+    expect(unset.status).toBe(400);
+    await expect(unset.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: [{ field: "isDefault", message: expect.stringContaining("always") }],
+      },
+    });
+    await expect(
+      channels.findById(WORKSPACE.id, createdBody.data.id),
+    ).resolves.toMatchObject({ isDefault: true });
+
+    const keep = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/channels/${createdBody.data.id}`,
+      {
+        method: "PATCH",
+        headers: headers("admin"),
+        body: JSON.stringify({ isDefault: true }),
+      },
+    );
+    expect(keep.status).toBe(200);
+    await expect(keep.json()).resolves.toMatchObject({ data: { isDefault: true } });
+  });
+
   it("gates paid channel types behind the add-on and prices them per destination", async () => {
     const blocked = await app.request(`/api/workspaces/${WORKSPACE.id}/channels`, {
       method: "POST",

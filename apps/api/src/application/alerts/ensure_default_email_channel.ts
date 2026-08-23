@@ -45,7 +45,9 @@ export class EnsureDefaultEmailChannel {
       return { created: false, channelId: null };
     }
     const existing = await this.channels.list(input.workspaceId);
-    if (existing.length > 0) {
+    // The automatic push channel must not prevent recovery of the automatic
+    // owner-email channel if workspace creation failed between the two steps.
+    if (existing.some((channel) => channel.type !== "PUSH")) {
       await this.markCreated(input.workspaceId, now);
       return { created: false, channelId: null };
     }

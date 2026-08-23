@@ -21,6 +21,8 @@ export const PAID_CHANNELS_OFF_MESSAGE =
   "Turn on SMS & calls under Alerts before adding this channel";
 export const PUSH_CHANNEL_EXISTS_MESSAGE =
   "This workspace already has a mobile push channel";
+export const PUSH_DEFAULT_REQUIRED_MESSAGE =
+  "Mobile push is always a default channel";
 
 export class CreateChannel {
   constructor(
@@ -70,7 +72,7 @@ export class CreateChannel {
         this.encryptionKey,
       ),
       enabled: true,
-      isDefault: input.isDefault === true,
+      isDefault: input.type === "PUSH" || input.isDefault === true,
       verifiedAt: null,
       lastDeliveryStatus: null,
       createdBy: input.actor.id,

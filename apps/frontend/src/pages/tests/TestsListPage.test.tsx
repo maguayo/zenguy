@@ -5,9 +5,13 @@ import { MemoryRouter } from "react-router-dom";
 import type { BrowserTest } from "../../api/types";
 import { ApiError } from "../../lib/api";
 import {
+  TestRowContent,
+  alertChannelsLabel,
   importErrorMessage,
   importSummaryMessage,
-  testColumns,
+  runSourceLabel,
+  testHost,
+  testListHeaders,
 } from "./TestsListPage";
 
 const test: BrowserTest = {
@@ -56,25 +60,67 @@ describe("import feedback", () => {
   });
 });
 
-describe("browser tests table", () => {
+describe("browser tests list", () => {
   it("keeps the required column order", () => {
-    expect(testColumns("ws_1").map((column) => column.key)).toEqual([
-      "name",
-      "lastStatus",
-      "nextRun",
-      "incident",
-      "actions",
-    ]);
+    expect(testListHeaders).toEqual(["Test", "Last run", "Next run", "Alerts"]);
   });
 
-  it("renders device, interval, and incident details", () => {
-    const columns = testColumns("ws_1");
-    const name = renderToStaticMarkup(<>{columns[0]?.render(test)}</>);
-    const incident = renderToStaticMarkup(
-      <MemoryRouter>{columns[3]?.render(test)}</MemoryRouter>,
+  it("renders a rich identity, schedule, and incident state", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent test={test} timezone="Europe/Madrid" workspaceId="ws_1" />
+      </MemoryRouter>,
     );
-    expect(name).toContain("Desktop · Every 6 hours");
-    expect(incident).toContain("/w/ws_1/incidents/incident_1");
-    expect(incident).toContain("Open");
+    expect(html).toContain("Checkout");
+    expect(html).toContain(">example.com<");
+    expect(html).toContain("Desktop");
+    expect(html).toContain("Every 6 hours");
+    expect(html).toContain("Not run yet");
+    expect(html).toContain("No alert channels");
+    expect(html).toContain("/w/ws_1/incidents/incident_1");
+    expect(html).toContain("Open incident");
+  });
+
+  it("shows completed-run duration, source, and clear alert coverage", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent
+          test={{
+            ...test,
+            channelIds: ["ch_email", "ch_push"],
+            lastRun: {
+              createdAt: "2026-08-19T09:58:00.000Z",
+              durationMs: 90_000,
+              finishedAt: "2026-08-19T10:00:00.000Z",
+              id: "run_1",
+              passedAfterRetry: false,
+              source: "SCHEDULED",
+              startedAt: "2026-08-19T09:58:30.000Z",
+              status: "PASSED",
+            },
+            openIncidentId: null,
+          }}
+          timezone="Europe/Madrid"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Passed");
+    expect(html).toContain("1m 30s");
+    expect(html).toContain("Scheduled");
+    expect(html).toContain("All clear");
+    expect(html).toContain("2 alert channels");
+  });
+
+  it("uses safe host and metadata labels", () => {
+    expect(testHost("https://user:secret@example.com/path?token=private")).toBe(
+      "example.com",
+    );
+    expect(testHost("not a url")).toBe("Unknown host");
+    expect(alertChannelsLabel(0)).toBe("No alert channels");
+    expect(alertChannelsLabel(1)).toBe("1 alert channel");
+    expect(alertChannelsLabel(3)).toBe("3 alert channels");
+    expect(runSourceLabel("MANUAL")).toBe("Manual");
+    expect(runSourceLabel("VALIDATION")).toBe("Validation");
   });
 });

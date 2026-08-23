@@ -356,7 +356,8 @@ export class D1AlertRepo implements AlertRepo {
            WHERE w.deleted_at IS NULL
              AND (s.workspace_id IS NULL OR s.default_email_channel_created_at IS NULL)
              AND NOT EXISTS (
-               SELECT 1 FROM notification_channels c WHERE c.workspace_id = w.id
+               SELECT 1 FROM notification_channels c
+               WHERE c.workspace_id = w.id AND c.type <> 'PUSH'
              )
            ORDER BY w.created_at ASC, w.id ASC
            LIMIT ?`,
@@ -368,5 +369,24 @@ export class D1AlertRepo implements AlertRepo {
       ownerUserId: row.owner_user_id,
       ownerEmail: row.owner_email,
     }));
+  }
+
+  async listWorkspaceIdsNeedingDefaultPushChannel(
+    limit: number,
+  ): Promise<string[]> {
+    const rows = await all<{ workspace_id: string }>(
+      this.database
+        .prepare(
+          `SELECT w.id AS workspace_id
+           FROM workspaces w
+           LEFT JOIN workspace_alert_settings s ON s.workspace_id = w.id
+           WHERE w.deleted_at IS NULL
+             AND (s.workspace_id IS NULL OR s.default_push_channel_created_at IS NULL)
+           ORDER BY w.created_at ASC, w.id ASC
+           LIMIT ?`,
+        )
+        .bind(limit),
+    );
+    return rows.map((row) => row.workspace_id);
   }
 }

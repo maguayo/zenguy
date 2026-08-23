@@ -28,7 +28,7 @@ function optionalText(value: string | null | undefined, max: number): string | n
  * Registers (or re-registers) the Expo push token of the caller's device.
  * A token belongs to one device: registering it again moves it to the
  * current user, re-enables it and refreshes its metadata. Every workspace the
- * user belongs to then receives its default push channel.
+ * user belongs to is also checked for a missing legacy default push channel.
  */
 export class RegisterPushDevice {
   constructor(

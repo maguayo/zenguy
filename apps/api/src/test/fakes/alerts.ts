@@ -21,6 +21,7 @@ export class FakeAlertRepo implements AlertRepo {
   readonly balances = new Map<string, number>();
   readonly entries: AlertCreditEntry[] = [];
   workspacesNeedingDefaultChannel: WorkspaceNeedingDefaultChannel[] = [];
+  workspaceIdsNeedingDefaultPushChannel: string[] = [];
 
   async findSettings(workspaceId: string): Promise<AlertSettings | null> {
     const settings = this.settings.get(workspaceId);
@@ -155,5 +156,11 @@ export class FakeAlertRepo implements AlertRepo {
     limit: number,
   ): Promise<WorkspaceNeedingDefaultChannel[]> {
     return this.workspacesNeedingDefaultChannel.slice(0, limit).map(clone);
+  }
+
+  async listWorkspaceIdsNeedingDefaultPushChannel(
+    limit: number,
+  ): Promise<string[]> {
+    return this.workspaceIdsNeedingDefaultPushChannel.slice(0, limit);
   }
 }

@@ -12,7 +12,10 @@ import type { User } from "../../domain/users/types";
 import type { Clock } from "../../shared/clock";
 import { encryptSecret } from "../../shared/crypto";
 import { forbidden, notFound, validation } from "../../shared/errors";
-import { PAID_CHANNELS_OFF_MESSAGE } from "./create_channel";
+import {
+  PAID_CHANNELS_OFF_MESSAGE,
+  PUSH_DEFAULT_REQUIRED_MESSAGE,
+} from "./create_channel";
 import { channelName, parseChannelConfig } from "./input";
 import { channelOutput, type ChannelOutput } from "./types";
 
@@ -54,6 +57,11 @@ export class UpdateChannel {
       input.channelId,
     );
     if (channel === null) throw notFound("Notification channel");
+    if (channel.type === "PUSH" && input.isDefault === false) {
+      throw validation([
+        { field: "isDefault", message: PUSH_DEFAULT_REQUIRED_MESSAGE },
+      ]);
+    }
     const paid = await loadPaidChannelContext(this.alerts, input.workspaceId);
     if (
       input.enabled === true &&

@@ -4,6 +4,7 @@ import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
 import { uniqueSlug } from "../../domain/workspaces/slug";
 import type { User } from "../../domain/users/types";
 import type { EnsureDefaultEmailChannel } from "../alerts/ensure_default_email_channel";
+import type { EnsureDefaultPushChannel } from "../push/ensure_default_push_channel";
 import type { WriteAudit } from "../audit/write_audit";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
@@ -15,7 +16,8 @@ export interface CreateWorkspaceDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
   subscriptions: SubscriptionRepo;
-  defaultChannel: Pick<EnsureDefaultEmailChannel, "execute">;
+  defaultEmailChannel: Pick<EnsureDefaultEmailChannel, "execute">;
+  defaultPushChannel: Pick<EnsureDefaultPushChannel, "execute">;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
   ids: IdGenerator;
@@ -72,13 +74,23 @@ export class CreateWorkspace {
     // first test or monitor alerts someone. Failing here must not undo the
     // workspace; the hourly backfill retries.
     try {
-      await this.dependencies.defaultChannel.execute({
+      await this.dependencies.defaultEmailChannel.execute({
         workspaceId: workspace.id,
         ownerUserId: input.actor.id,
         ownerEmail: input.actor.email,
       });
     } catch {
       logEvent("default_email_channel_failed", { workspaceId: workspace.id });
+    }
+    // Mobile push is also a free default from day one. It can have zero reach
+    // until a member registers a device, but tests and monitors may safely
+    // preselect it in the meantime.
+    try {
+      await this.dependencies.defaultPushChannel.execute({
+        workspaceId: workspace.id,
+      });
+    } catch {
+      logEvent("default_push_channel_failed", { workspaceId: workspace.id });
     }
     await this.dependencies.audit.execute({
       workspaceId: workspace.id,

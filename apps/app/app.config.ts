@@ -8,7 +8,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "zenguy",
   // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
   owner: "maguayo",
-  version: "0.2.0",
+  version: "0.2.1",
   // EAS Update: one runtime per app version. Any native change (dependency with
   // native code, config plugin, permission, entitlement, icon, splash) must
   // bump `version`, so an OTA update can never reach an incompatible binary.

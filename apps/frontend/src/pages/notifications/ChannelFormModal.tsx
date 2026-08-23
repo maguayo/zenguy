@@ -167,6 +167,7 @@ export function channelConfigFromValues(values: ChannelFormValues): ChannelConfi
 export function createChannelInput(values: ChannelFormValues): CreateChannelInput {
   return {
     config: channelConfigFromValues(values),
+    ...(values.type === "PUSH" ? { isDefault: true } : {}),
     name: values.name.trim(),
     type: values.type,
   };
@@ -360,8 +361,8 @@ export function ChannelFormModal({
           {selectedType === "PUSH" ? (
             <p className="rounded-md bg-zinc-50 p-3 text-sm text-zinc-600">
               Sends a push notification to every member of this workspace who has the Zenguy
-              iPhone app installed and allowed notifications. Free, no setup needed — Zenguy
-              usually creates this channel for you the first time someone installs the app.
+              iPhone app installed and allowed notifications. Free, no setup needed — every
+              workspace gets this default channel automatically.
             </p>
           ) : null}
 

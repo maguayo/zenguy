@@ -85,6 +85,36 @@ describe("EnsureDefaultEmailChannel", () => {
     expect(alerts.settings.get("ws_1")?.defaultEmailChannelCreatedAt).toBe(NOW);
   });
 
+  it("still creates owner email when the automatic push channel already exists", async () => {
+    const { channels, ensure } = fixture();
+    await channels.insert({
+      id: "ch_push",
+      workspaceId: "ws_1",
+      name: "Mobile push",
+      type: "PUSH",
+      encryptedConfig: "enc",
+      enabled: true,
+      isDefault: true,
+      verifiedAt: null,
+      lastDeliveryStatus: null,
+      createdBy: null,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    await expect(
+      ensure.execute({
+        workspaceId: "ws_1",
+        ownerUserId: "usr_owner",
+        ownerEmail: "owner@acme.test",
+      }),
+    ).resolves.toMatchObject({ created: true });
+    expect((await channels.list("ws_1")).map((channel) => channel.type).sort()).toEqual([
+      "EMAIL",
+      "PUSH",
+    ]);
+  });
+
   it("skips an invalid owner address but never retries it", async () => {
     const { channels, alerts, ensure } = fixture();
     await expect(

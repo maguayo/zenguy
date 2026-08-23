@@ -168,38 +168,55 @@ describe("workspace routes", () => {
     });
   });
 
-  it("gives every new workspace a default email channel to its owner", async () => {
+  it("gives every new workspace default email and mobile push channels", async () => {
     const created = await createWorkspace();
     const list = await channels.list(created.id);
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({
+    expect(list).toHaveLength(2);
+    expect(list.find((channel) => channel.type === "EMAIL")).toMatchObject({
       type: "EMAIL",
       name: "Workspace email",
       enabled: true,
       isDefault: true,
       createdBy: USERS.owner.id,
     });
-    expect(list[0]?.verifiedAt).not.toBeNull();
+    expect(list.find((channel) => channel.type === "EMAIL")?.verifiedAt).not.toBeNull();
+    expect(list.find((channel) => channel.type === "PUSH")).toMatchObject({
+      type: "PUSH",
+      name: "Mobile push",
+      enabled: true,
+      isDefault: true,
+      createdBy: null,
+    });
     await expect(alerts.findSettings(created.id)).resolves.toMatchObject({
       paidChannelsEnabled: false,
       dailyPaidAlertLimit: 20,
+      defaultEmailChannelCreatedAt: expect.any(Number),
+      defaultPushChannelCreatedAt: expect.any(Number),
     });
-    expect((await alerts.findSettings(created.id))?.defaultEmailChannelCreatedAt).not.toBeNull();
 
     const listed = await app.request(`/api/workspaces/${created.id}/channels`, {
       headers: { Authorization: tokens.owner },
     });
-    await expect(listed.json()).resolves.toMatchObject({
-      data: [
-        {
+    const listedBody = (await listed.json()) as { data: unknown[] };
+    expect(listedBody.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           type: "EMAIL",
           isDefault: true,
           price: null,
           paused: null,
           configPreview: { emails: [USERS.owner.email] },
-        },
-      ],
-    });
+        }),
+        expect.objectContaining({
+          type: "PUSH",
+          isDefault: true,
+          price: null,
+          paused: null,
+          reach: { devices: 0, members: 0 },
+          configPreview: { recipients: "WORKSPACE_MEMBERS" },
+        }),
+      ]),
+    );
   });
 
   it("returns a field validation error for an invalid timezone", async () => {

@@ -9,7 +9,6 @@ export class FakePushDeviceRepo implements PushDeviceRepo {
   readonly devices = new Map<string, PushDevice>();
   /** workspaceId → member user ids, used to resolve tokens per workspace. */
   readonly members = new Map<string, string[]>();
-  readonly markedWorkspaces = new Set<string>();
 
   async findByToken(token: string): Promise<PushDevice | null> {
     for (const device of this.devices.values()) {
@@ -90,11 +89,5 @@ export class FakePushDeviceRepo implements PushDeviceRepo {
         this.devices.set(device.id, { ...device, enabled: false, disabledReason: reason, updatedAt: at });
       }
     }
-  }
-
-  async listWorkspacesNeedingPushChannel(limit: number): Promise<string[]> {
-    return [...this.members.keys()]
-      .filter((workspaceId) => !this.markedWorkspaces.has(workspaceId) && this.memberDevices(workspaceId).length > 0)
-      .slice(0, limit);
   }
 }

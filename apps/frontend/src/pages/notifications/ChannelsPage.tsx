@@ -107,6 +107,10 @@ export function pausedLabel(channel: Channel): string | null {
     : "Paused · no credit";
 }
 
+export function canChangeChannelDefault(channel: Pick<Channel, "type">): boolean {
+  return channel.type !== "PUSH";
+}
+
 export function lastDeliveryText(
   status: Channel["lastDeliveryStatus"],
   delivery?: Delivery,
@@ -303,12 +307,20 @@ function ChannelActions({ channel }: { channel: Channel }) {
             onSelect: () =>
               setSearchParams(openChannelPanel(searchParams, "channel", channel.id)),
           },
-          {
-            disabled: setDefault.isPending,
-            icon: channel.isDefault ? <StarOff className="size-4" /> : <Star className="size-4" />,
-            label: channel.isDefault ? "Remove from defaults" : "Use as default",
-            onSelect: () => void toggleDefault(),
-          },
+          ...(canChangeChannelDefault(channel)
+            ? [
+                {
+                  disabled: setDefault.isPending,
+                  icon: channel.isDefault ? (
+                    <StarOff className="size-4" />
+                  ) : (
+                    <Star className="size-4" />
+                  ),
+                  label: channel.isDefault ? "Remove from defaults" : "Use as default",
+                  onSelect: () => void toggleDefault(),
+                },
+              ]
+            : []),
           {
             disabled: toggle.isPending,
             icon: <Power className="size-4" />,

@@ -33,6 +33,4 @@ export interface PushDeviceRepo {
   ): Promise<{ token: string; userId: string }[]>;
   reachForWorkspace(workspaceId: string): Promise<PushReach>;
   disableTokens(tokens: string[], reason: string, at: number): Promise<void>;
-  /** Workspaces with an enabled member device but no default push channel yet. */
-  listWorkspacesNeedingPushChannel(limit: number): Promise<string[]>;
 }

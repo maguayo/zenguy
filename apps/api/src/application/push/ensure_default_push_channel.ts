@@ -1,7 +1,6 @@
 import type { AlertRepo } from "../../domain/alerts/repo";
 import type { BrowserTestRepo } from "../../domain/browser_tests/repo";
 import type { ChannelRepo } from "../../domain/channels/repo";
-import type { PushDeviceRepo } from "../../domain/push/repo";
 import { DEFAULT_PUSH_CHANNEL_NAME } from "../../domain/push/types";
 import type { MonitorRepo } from "../../domain/uptime/repo";
 import type { Clock } from "../../shared/clock";
@@ -16,15 +15,15 @@ export interface DefaultPushChannelResult {
 }
 
 /**
- * Creates the workspace's free "Mobile push" channel the first time one of
- * its members can receive push notifications. The channel is preselected for
- * new tests and monitors and, once, attached to every existing one so alerts
- * reach phones without anyone editing their configuration. A deleted channel
- * is never recreated (the settings row remembers the creation).
+ * Gives every workspace its free "Mobile push" channel exactly once. The
+ * channel is preselected for new tests and monitors and attached to every
+ * existing one so notifications start flowing as soon as a member registers
+ * a device. A deleted channel is never recreated because the settings row
+ * remembers the creation.
  */
 export class EnsureDefaultPushChannel {
   constructor(
-    private readonly channels: Pick<ChannelRepo, "insert" | "list">,
+    private readonly channels: Pick<ChannelRepo, "insert" | "list" | "update">,
     private readonly alerts: Pick<
       AlertRepo,
       "findSettings" | "insertSettings" | "updateSettings"
@@ -46,6 +45,10 @@ export class EnsureDefaultPushChannel {
       (channel) => channel.type === "PUSH",
     );
     if (existing !== undefined) {
+      if (existing.isDefault !== true) {
+        await this.channels.update(existing.id, { isDefault: true }, now);
+      }
+      await this.attachToAll(input.workspaceId, existing.id);
       await this.markCreated(input.workspaceId, now);
       return { created: false, channelId: existing.id };
     }
@@ -67,8 +70,7 @@ export class EnsureDefaultPushChannel {
       createdAt: now,
       updatedAt: now,
     });
-    await this.tests.addChannelToAll(input.workspaceId, channelId);
-    await this.monitors.addChannelToAll(input.workspaceId, channelId);
+    await this.attachToAll(input.workspaceId, channelId);
     await this.markCreated(input.workspaceId, now);
     logEvent("default_push_channel_created", { workspaceId: input.workspaceId });
     return { created: true, channelId };
@@ -81,18 +83,25 @@ export class EnsureDefaultPushChannel {
       now,
     );
   }
+
+  private async attachToAll(workspaceId: string, channelId: string): Promise<void> {
+    await this.tests.addChannelToAll(workspaceId, channelId);
+    await this.monitors.addChannelToAll(workspaceId, channelId);
+  }
 }
 
-/** Hourly: workspaces whose members registered devices before joining, etc. */
+/** Hourly backfill for workspaces created before default push channels existed. */
 export class BackfillDefaultPushChannels {
   constructor(
-    private readonly devices: Pick<PushDeviceRepo, "listWorkspacesNeedingPushChannel">,
+    private readonly alerts: Pick<AlertRepo, "listWorkspaceIdsNeedingDefaultPushChannel">,
     private readonly ensure: Pick<EnsureDefaultPushChannel, "execute">,
     private readonly batchSize = 50,
   ) {}
 
   async execute(): Promise<{ created: number }> {
-    const pending = await this.devices.listWorkspacesNeedingPushChannel(this.batchSize);
+    const pending = await this.alerts.listWorkspaceIdsNeedingDefaultPushChannel(
+      this.batchSize,
+    );
     let created = 0;
     for (const workspaceId of pending) {
       const result = await this.ensure.execute({ workspaceId });

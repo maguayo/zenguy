@@ -87,6 +87,7 @@ describe("channel form", () => {
   it("builds a fixed config for mobile push channels", () => {
     expect(createChannelInput({ ...values, name: "Phones", type: "PUSH" })).toEqual({
       config: { recipients: "WORKSPACE_MEMBERS" },
+      isDefault: true,
       name: "Phones",
       type: "PUSH",
     });
