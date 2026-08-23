@@ -37,6 +37,8 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -72,6 +74,8 @@ DEFAULT_FALLBACK_MODEL_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_FALLBACK_MODEL_NAME = "gpt-5-mini"
 DEFAULT_FALLBACK_REASONING_EFFORT = "low"
 DEFAULT_POLL_SECONDS = 5.0
+HEARTBEAT_SECONDS = 5.0
+HEARTBEAT_HTTP_TIMEOUT_SECONDS = 10
 DEFAULT_VISIBILITY_TIMEOUT_MS = 900_000
 DEFAULT_HTTP_TIMEOUT_SECONDS = 60.0
 ENVIRONMENTS: dict[str, dict[str, str]] = {
@@ -257,6 +261,7 @@ class RunnerConfig:
     # attempt: the primary local worker or the plan-B fallback on the VPS.
     runner_kind: str = "primary"
     chrome_executable: Path | None = CHROME_EXECUTABLE
+    worker_id: str = "worker"
 
     @classmethod
     def for_environment(
@@ -298,6 +303,9 @@ class RunnerConfig:
             browser_channel="chrome",
             poll_seconds=DEFAULT_POLL_SECONDS,
             visibility_timeout_ms=DEFAULT_VISIBILITY_TIMEOUT_MS,
+            worker_id=resolve_worker_id(
+                os.environ.get("ZENGUY_WORKER_ID") or secrets.get("worker_id")
+            ),
         )
 
     @classmethod
@@ -332,6 +340,8 @@ class RunnerConfig:
             model_api_key = (
                 model_api_key or secrets.get("openai_api_key", "").strip()
             )
+        else:
+            secrets = {}
         if len(runner_token) < 32:
             raise ConfigError(
                 "The fallback runner needs ZENGUY_RUNNER_TOKEN or a valid "
@@ -398,6 +408,9 @@ class RunnerConfig:
             model_native_structured=True,
             runner_version=FALLBACK_RUNNER_VERSION,
             chrome_executable=chrome_executable,
+            worker_id=resolve_worker_id(
+                env.get("ZENGUY_WORKER_ID") or secrets.get("worker_id")
+            ),
         )
 
 
@@ -614,12 +627,18 @@ class AppClient:
     def __init__(self, config: RunnerConfig) -> None:
         self.root = f"{config.zenguy_api_url}/api/runner"
         self.headers = {"Authorization": f"Bearer {config.zenguy_runner_token}"}
+        self.worker_id = config.worker_id
 
     async def claim(
         self, delivery_id: str, message: Mapping[str, Any]
     ) -> dict[str, Any] | None:
         response = await self._post(
-            "/attempts/claim", {"deliveryId": delivery_id, "message": message}
+            "/attempts/claim",
+            {
+                "deliveryId": delivery_id,
+                "message": message,
+                "workerId": self.worker_id,
+            },
         )
         data = self._data(response)
         disposition = data.get("disposition")
@@ -632,7 +651,8 @@ class AppClient:
 
     async def claim_stale(self, delivery_id: str) -> dict[str, Any] | None:
         response = await self._post(
-            "/attempts/claim-stale", {"deliveryId": delivery_id}
+            "/attempts/claim-stale",
+            {"deliveryId": delivery_id, "workerId": self.worker_id},
         )
         data = self._data(response)
         disposition = data.get("disposition")
@@ -686,6 +706,16 @@ class AppClient:
         if disposition != "COMPLETED":
             raise RetryableRunnerError("Zenguy returned an invalid completion response")
         return True
+
+    def heartbeat_sync(self, payload: Mapping[str, Any]) -> None:
+        """Single attempt, synchronous: the heartbeat thread retries on its own tick."""
+        _json_request(
+            f"{self.root}/heartbeat",
+            method="POST",
+            headers=self.headers,
+            payload=payload,
+            timeout=HEARTBEAT_HTTP_TIMEOUT_SECONDS,
+        )
 
     async def _post(
         self,
@@ -1722,6 +1752,58 @@ class JobExecutor:
         await self.app.complete(reference, redactor.deep(outcome))
 
 
+class Heartbeat:
+    """Daemon thread that tells the API this worker is alive every few seconds."""
+
+    def __init__(
+        self,
+        app: AppClient,
+        *,
+        worker_id: str,
+        mode: str,
+        version: str,
+        started_at: int,
+        interval: float = HEARTBEAT_SECONDS,
+    ) -> None:
+        self.app = app
+        self.payload = {
+            "workerId": worker_id,
+            "mode": mode,
+            "version": version,
+            "startedAt": started_at,
+        }
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="zenguy-heartbeat", daemon=True)
+
+    def beat_once(self) -> bool:
+        try:
+            self.app.heartbeat_sync(self.payload)
+            return True
+        except Exception as error:  # noqa: BLE001 - a heartbeat must never kill the worker
+            fields: dict[str, Any] = {
+                "workerId": self.payload["workerId"],
+                "error": type(error).__name__,
+            }
+            if isinstance(error, HttpRequestError):
+                fields["status"] = error.status
+            log("heartbeat_failed", **fields)
+            return False
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=HEARTBEAT_HTTP_TIMEOUT_SECONDS + 1)
+
+    def _run(self) -> None:
+        self.beat_once()
+        while not self._stop.wait(self.interval):
+            self.beat_once()
+
+
 class Worker:
     def __init__(self, config: RunnerConfig, *, once: bool) -> None:
         self.config = config
@@ -1730,6 +1812,13 @@ class Worker:
         self.app = AppClient(config)
         self.executor = JobExecutor(config, self.app)
         self.stopping = asyncio.Event()
+        self.heartbeat = Heartbeat(
+            self.app,
+            worker_id=config.worker_id,
+            mode="local",
+            version=config.runner_version,
+            started_at=int(time.time() * 1000),
+        )
 
     async def run(self) -> None:
         log(
@@ -1741,24 +1830,28 @@ class Worker:
             headless=self.config.headless,
             once=self.once,
         )
-        while not self.stopping.is_set():
-            try:
-                messages = await self.queue.pull()
-            except RetryableRunnerError as error:
-                log("queue_pull_failed", error=type(error).__name__)
-                if self.once:
-                    raise
-                await self._wait(self.config.poll_seconds)
-                continue
-            if not messages:
+        self.heartbeat.start()
+        try:
+            while not self.stopping.is_set():
+                try:
+                    messages = await self.queue.pull()
+                except RetryableRunnerError as error:
+                    log("queue_pull_failed", error=type(error).__name__)
+                    if self.once:
+                        raise
+                    await self._wait(self.config.poll_seconds)
+                    continue
+                if not messages:
+                    if self.once:
+                        return
+                    await self._wait(self.config.poll_seconds)
+                    continue
+                await self._process(messages[0])
                 if self.once:
                     return
-                await self._wait(self.config.poll_seconds)
-                continue
-            await self._process(messages[0])
-            if self.once:
-                return
-        log("runner_stopped")
+            log("runner_stopped")
+        finally:
+            self.heartbeat.stop()
 
     async def _process(self, raw_message: Mapping[str, Any]) -> None:
         lease_id = raw_message.get("lease_id")
@@ -1805,6 +1898,24 @@ class Worker:
             await asyncio.wait_for(self.stopping.wait(), timeout=seconds)
 
 
+WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def resolve_worker_id(explicit: str | None) -> str:
+    """Identity reported in heartbeats and claims.
+
+    Explicit values (``ZENGUY_WORKER_ID`` or ``worker_id`` in the local JSON)
+    must already match the API alphabet; otherwise the hostname is sanitised.
+    """
+    value = (explicit or "").strip()
+    if value:
+        if not WORKER_ID_PATTERN.match(value):
+            raise ConfigError("worker_id must be 1-64 chars of [A-Za-z0-9._-]")
+        return value
+    host = re.sub(r"[^A-Za-z0-9._-]+", "-", socket.gethostname())[:64].strip("-.")
+    return host or "worker"
+
+
 def new_fallback_delivery_id() -> str:
     host = re.sub(r"[^A-Za-z0-9.-]", "-", socket.gethostname())[:64].strip("-")
     return f"fallback-{host or 'host'}-{uuid.uuid4().hex}"
@@ -1826,6 +1937,13 @@ class FallbackWorker:
         self.app = AppClient(config)
         self.executor = JobExecutor(config, self.app)
         self.stopping = asyncio.Event()
+        self.heartbeat = Heartbeat(
+            self.app,
+            worker_id=config.worker_id,
+            mode="fallback",
+            version=config.runner_version,
+            started_at=int(time.time() * 1000),
+        )
 
     async def run(self) -> None:
         log(
@@ -1837,21 +1955,25 @@ class FallbackWorker:
             headless=self.config.headless,
             once=self.once,
         )
-        while not self.stopping.is_set():
-            processed = False
-            try:
-                processed = await self._poll_once()
-            except FatalRunnerError:
-                raise
-            except PoisonMessage as error:
-                log("fallback_payload_rejected", reason=str(error))
-            except Exception as error:
-                log("fallback_poll_failed", error=type(error).__name__)
-            if self.once:
-                return
-            if not processed:
-                await self._wait(self.config.poll_seconds)
-        log("fallback_runner_stopped")
+        self.heartbeat.start()
+        try:
+            while not self.stopping.is_set():
+                processed = False
+                try:
+                    processed = await self._poll_once()
+                except FatalRunnerError:
+                    raise
+                except PoisonMessage as error:
+                    log("fallback_payload_rejected", reason=str(error))
+                except Exception as error:
+                    log("fallback_poll_failed", error=type(error).__name__)
+                if self.once:
+                    return
+                if not processed:
+                    await self._wait(self.config.poll_seconds)
+            log("fallback_runner_stopped")
+        finally:
+            self.heartbeat.stop()
 
     async def _poll_once(self) -> bool:
         delivery_id = new_fallback_delivery_id()

@@ -4,6 +4,8 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import threading
+import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -166,6 +168,25 @@ class ConfigurationSafetyTests(unittest.TestCase):
                 asyncio.run(
                     worker.assert_public_network_url("https://public.example")
                 )
+
+
+class WorkerIdentityTests(unittest.TestCase):
+    def test_explicit_worker_id_wins(self):
+        self.assertEqual(worker.resolve_worker_id("vps-hetzner_1"), "vps-hetzner_1")
+
+    def test_hostname_is_sanitised_to_the_allowed_alphabet(self):
+        with mock.patch.object(worker.socket, "gethostname", return_value="Marcos’s MacBook Pro.local"):
+            self.assertEqual(worker.resolve_worker_id(None), "Marcos-s-MacBook-Pro.local")
+
+    def test_hostname_is_capped_and_never_empty(self):
+        with mock.patch.object(worker.socket, "gethostname", return_value="x" * 100):
+            self.assertEqual(len(worker.resolve_worker_id("")), 64)
+        with mock.patch.object(worker.socket, "gethostname", return_value="***"):
+            self.assertEqual(worker.resolve_worker_id(None), "worker")
+
+    def test_rejects_invalid_explicit_ids(self):
+        with self.assertRaises(worker.ConfigError):
+            worker.resolve_worker_id("bad id!")
 
 
 class BrowserUseIntegrationTests(unittest.TestCase):
@@ -651,6 +672,7 @@ class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_claim_stale_posts_to_the_stale_endpoint(self):
         client = object.__new__(worker.AppClient)
+        client.worker_id = "fallback-worker"
         calls = []
 
         async def execute_post(path, payload, **_kwargs):
@@ -660,7 +682,13 @@ class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):
         client._post = execute_post
         job = await client.claim_stale("fallback-x")
         self.assertEqual(
-            calls, [("/attempts/claim-stale", {"deliveryId": "fallback-x"})]
+            calls,
+            [
+                (
+                    "/attempts/claim-stale",
+                    {"deliveryId": "fallback-x", "workerId": "fallback-worker"},
+                )
+            ],
         )
         self.assertEqual(job, {"reference": {}})
 
@@ -669,6 +697,142 @@ class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         client._post = skip_post
         self.assertIsNone(await client.claim_stale("fallback-y"))
+
+
+class AppClientIdentityTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _config(**overrides):
+        base = dict(
+            environment="staging",
+            cloudflare_account_id="account",
+            cloudflare_queue_id="queue",
+            cloudflare_queues_token="c" * 64,
+            zenguy_api_url="https://staging-app.zenguy.com",
+            zenguy_runner_token="r" * 64,
+            model_base_url="http://127.0.0.1:1234/v1",
+            model_name="qwen/qwen3.8-27b",
+            model_api_key="local-runner",
+            model_vision=True,
+            model_reasoning_effort="xhigh",
+            allow_remote_model=False,
+            headless=False,
+            browser_channel="chrome",
+            poll_seconds=5,
+            visibility_timeout_ms=900_000,
+            worker_id="mac-1",
+        )
+        base.update(overrides)
+        return worker.RunnerConfig(**base)
+
+    async def test_claim_posts_the_configured_worker_id(self):
+        client = worker.AppClient(self._config())
+        with mock.patch.object(
+            worker,
+            "_json_request",
+            return_value={
+                "data": {"disposition": "EXECUTE", "job": {"reference": {}}}
+            },
+        ) as fake:
+            await client.claim("delivery-1", {"kind": "attempt"})
+
+        self.assertEqual(fake.call_args.kwargs["payload"]["workerId"], "mac-1")
+
+    async def test_claim_stale_posts_the_configured_worker_id(self):
+        client = worker.AppClient(self._config())
+        with mock.patch.object(
+            worker,
+            "_json_request",
+            return_value={
+                "data": {"disposition": "EXECUTE", "job": {"reference": {}}}
+            },
+        ) as fake:
+            await client.claim_stale("delivery-2")
+
+        self.assertEqual(fake.call_args.kwargs["payload"]["workerId"], "mac-1")
+
+    def test_heartbeat_sync_posts_to_the_heartbeat_endpoint(self):
+        client = worker.AppClient(self._config())
+        payload = {
+            "workerId": "mac-1",
+            "mode": "local",
+            "version": "v1",
+            "startedAt": 1,
+        }
+
+        with mock.patch.object(
+            worker, "_json_request", return_value={"data": {}}
+        ) as fake:
+            client.heartbeat_sync(payload)
+
+        args, kwargs = fake.call_args
+        self.assertTrue(args[0].endswith("/api/runner/heartbeat"))
+        self.assertEqual(kwargs["method"], "POST")
+        self.assertEqual(kwargs["timeout"], 10)
+        self.assertEqual(kwargs["payload"], payload)
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer " + "r" * 64)
+
+
+class HeartbeatTests(unittest.TestCase):
+    def _app(self, calls, fail=False):
+        class FakeApp:
+            def heartbeat_sync(self, payload):
+                calls.append(payload)
+                if fail:
+                    raise worker.RetryableRunnerError("down")
+        return FakeApp()
+
+    def test_beat_once_posts_the_identity_payload(self):
+        calls = []
+        beat = worker.Heartbeat(self._app(calls), worker_id="mac-1", mode="local", version="v1", started_at=123)
+        self.assertTrue(beat.beat_once())
+        self.assertEqual(calls, [{"workerId": "mac-1", "mode": "local", "version": "v1", "startedAt": 123}])
+
+    def test_failures_are_logged_and_do_not_raise(self):
+        calls = []
+        beat = worker.Heartbeat(self._app(calls, fail=True), worker_id="mac-1", mode="fallback", version="v1", started_at=1)
+        with mock.patch.object(worker, "log") as log:
+            self.assertFalse(beat.beat_once())
+        log.assert_called_once_with("heartbeat_failed", workerId="mac-1", error="RetryableRunnerError")
+
+    def test_http_failures_include_the_response_status(self):
+        calls = []
+
+        class FakeApp:
+            def heartbeat_sync(self, payload):
+                calls.append(payload)
+                raise worker.HttpRequestError(401, "unauthorized")
+
+        beat = worker.Heartbeat(
+            FakeApp(), worker_id="mac-1", mode="local", version="v1", started_at=1
+        )
+        with mock.patch.object(worker, "log") as log:
+            self.assertFalse(beat.beat_once())
+        log.assert_called_once_with(
+            "heartbeat_failed", workerId="mac-1", error="HttpRequestError", status=401
+        )
+
+    def test_thread_beats_on_the_interval_until_stopped(self):
+        calls = []
+        reached_three = threading.Event()
+
+        class FakeApp:
+            def heartbeat_sync(self, payload):
+                calls.append(payload)
+                if len(calls) >= 3:
+                    reached_three.set()
+
+        beat = worker.Heartbeat(
+            FakeApp(), worker_id="mac-1", mode="local", version="v1", started_at=1, interval=0.01
+        )
+        beat.start()
+        self.assertTrue(
+            reached_three.wait(5), "heartbeat thread did not reach 3 calls in time"
+        )
+        beat.stop()
+        count = len(calls)
+        self.assertGreaterEqual(count, 3)
+        time.sleep(0.05)
+        self.assertEqual(len(calls), count)
 
 
 if __name__ == "__main__":

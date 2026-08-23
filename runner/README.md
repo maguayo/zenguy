@@ -100,6 +100,13 @@ Never reuse the Cloudflare Queues token as the Zenguy runner token. The former
 leases queue messages; the latter can read an accepted job and write its
 execution results.
 
+## Worker identity and heartbeat
+
+Each worker sends `POST /api/runner/heartbeat` every 5 s with its `workerId`
+(env `ZENGUY_WORKER_ID`, `worker_id` in `.browser_worker.local.json`, or the
+sanitised hostname); claims carry the same id so admin.zenguy.com can
+attribute runs.
+
 ## Fallback runner (plan B)
 
 `--fallback` turns the same executor into the backup runner meant for an
