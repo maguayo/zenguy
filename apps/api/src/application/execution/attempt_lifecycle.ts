@@ -151,6 +151,7 @@ export class AttemptLifecycle {
   async claim(
     message: AttemptMessage,
     runnerDeliveryId?: string,
+    claimedByRunnerId?: string,
   ): Promise<"execute" | "skip"> {
     const [run, attempt] = await Promise.all([
       this.dependencies.runs.findByIdForExecution(message.runId),
@@ -237,6 +238,7 @@ export class AttemptLifecycle {
       attempt.id,
       now,
       runnerDeliveryId,
+      claimedByRunnerId,
     ))
       ? "execute"
       : "skip";

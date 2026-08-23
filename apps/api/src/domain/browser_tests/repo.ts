@@ -128,6 +128,7 @@ export interface AttemptRepo {
     id: string,
     claimedAt: number,
     runnerDeliveryId?: string,
+    claimedByRunnerId?: string,
   ): Promise<boolean>;
   isRunnerDeliveryOwner(id: string, runnerDeliveryId: string): Promise<boolean>;
   markRunning(

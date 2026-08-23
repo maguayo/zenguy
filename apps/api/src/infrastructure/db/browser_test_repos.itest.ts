@@ -648,6 +648,50 @@ describe("D1 browser test repositories", () => {
     });
   });
 
+  it("records which runner worker claimed the attempt", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    const attempts = new D1AttemptRepo(database);
+    const queuedRun = testRun({
+      id: "run_claim_worker",
+      testId: null,
+      status: "QUEUED",
+      createdAt: 1_000,
+    });
+    const queuedAttempt: TestAttempt = {
+      ...attempt("att_claim_worker"),
+      testRunId: queuedRun.id,
+      status: "QUEUED",
+      retryDelaySeconds: 0,
+      queuedAt: 1_000,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null,
+    };
+    const claimedBy = async (): Promise<string | null> =>
+      (
+        await database
+          .prepare("SELECT claimed_by_runner_id FROM test_attempts WHERE id = ?")
+          .bind(queuedAttempt.id)
+          .first<{ claimed_by_runner_id: string | null }>()
+      )?.claimed_by_runner_id ?? null;
+    await runs.insert(queuedRun);
+    await attempts.insert(queuedAttempt);
+
+    await expect(
+      attempts.claimQueued(
+        queuedAttempt.id,
+        2_000,
+        "delivery-1",
+        "vps-fallback",
+      ),
+    ).resolves.toBe(true);
+    await expect(claimedBy()).resolves.toBe("vps-fallback");
+
+    await attempts.resetForInfraRetry(queuedAttempt.id, 3_000);
+    await expect(claimedBy()).resolves.toBeNull();
+  });
+
   it("deduplicates concurrent attempt starts into one linked usage event", async () => {
     const database = testEnv().DB;
     const runs = new D1RunRepo(database);

@@ -249,7 +249,10 @@ describe("ExternalRunner.claimStale", () => {
       ],
     });
 
-    const job = await runner.claimStale({ deliveryId: "fallback-1" });
+    const job = await runner.claimStale({
+      deliveryId: "fallback-1",
+      workerId: "vps-fallback",
+    });
 
     expect(job).toMatchObject({
       reference: {
@@ -268,9 +271,26 @@ describe("ExternalRunner.claimStale", () => {
     await expect(
       attempts.isRunnerDeliveryOwner("att_older", "fallback-1"),
     ).resolves.toBe(true);
+    expect(attempts.claimedBy.get("att_older")).toBe("vps-fallback");
     await expect(attempts.findById("att_fresh")).resolves.toMatchObject({
       status: "QUEUED",
     });
+  });
+
+  it("claims without recording a worker when the runner sends no id", async () => {
+    const older = run("run_anonymous");
+    const { runner, attempts } = await fixture({
+      runs: [older],
+      attempts: [attempt("att_anonymous", older.id)],
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-1" }),
+    ).resolves.not.toBeNull();
+    await expect(attempts.findById("att_anonymous")).resolves.toMatchObject({
+      status: "STARTING",
+    });
+    expect(attempts.claimedBy.get("att_anonymous")).toBeUndefined();
   });
 
   it("never claims an attempt already taken by the local worker", async () => {

@@ -2,7 +2,9 @@ import { buildApp } from "../../app";
 import type { ExternalRunnerJob } from "../../application/execution/external_runner";
 import type { RunnerAttemptReference } from "../../domain/browser_tests/runner_protocol";
 import type { AttemptMessage } from "../../domain/queues";
+import { FixedClock } from "../../shared/clock";
 import { fakeBindings } from "../../test/fakes/bindings";
+import { FakeRunnerWorkerRepo } from "../../test/fakes/runners";
 
 const TOKEN = "runner-test-secret".padEnd(32, "-");
 const MESSAGE: AttemptMessage = {
@@ -89,7 +91,11 @@ describe("external runner routes", () => {
     const response = await app.request("/api/runner/attempts/claim", {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ deliveryId: "queue-message-1", message: MESSAGE }),
+      body: JSON.stringify({
+        deliveryId: "queue-message-1",
+        message: MESSAGE,
+        workerId: "mac-1",
+      }),
     });
 
     expect(response.status).toBe(200);
@@ -100,7 +106,29 @@ describe("external runner routes", () => {
     expect(externalRunner.claim).toHaveBeenCalledWith({
       deliveryId: "queue-message-1",
       message: MESSAGE,
+      workerId: "mac-1",
     });
+  });
+
+  it("rejects claims from a malformed worker id", async () => {
+    const externalRunner = runner();
+    const app = buildApp(fakeBindings(), { externalRunner });
+
+    const response = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        deliveryId: "queue-message-1",
+        message: MESSAGE,
+        workerId: "bad id!",
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
+    expect(externalRunner.claim).not.toHaveBeenCalled();
   });
 
   it("lets the fallback worker claim stale attempts without a queue message", async () => {
@@ -178,5 +206,94 @@ describe("external runner routes", () => {
     expect(invalidOutcome.status).toBe(400);
     expect(externalRunner.start).not.toHaveBeenCalled();
     expect(externalRunner.complete).not.toHaveBeenCalled();
+  });
+});
+
+describe("runner heartbeat", () => {
+  it("rejects heartbeats without the runner token", async () => {
+    const runnerWorkers = new FakeRunnerWorkerRepo();
+    const app = buildApp(fakeBindings(), {
+      externalRunner: runner(),
+      runnerWorkers,
+    });
+
+    const response = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workerId: "mac-1",
+        mode: "local",
+        version: "zenguy-local-runner/2.0.0",
+        startedAt: 1,
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(runnerWorkers.workers.size).toBe(0);
+  });
+
+  it("upserts the worker with the server clock", async () => {
+    const runnerWorkers = new FakeRunnerWorkerRepo();
+    const clock = new FixedClock(50_000);
+    const app = buildApp(fakeBindings(), {
+      externalRunner: runner(),
+      runnerWorkers,
+      clock,
+    });
+    const body = JSON.stringify({
+      workerId: "mac-1",
+      mode: "local",
+      version: "zenguy-local-runner/2.0.0",
+      startedAt: 40_000,
+    });
+
+    const first = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: headers(),
+      body,
+    });
+    clock.advance(5_000);
+    const second = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: headers(),
+      body,
+    });
+
+    expect(first.status).toBe(200);
+    expect(first.headers.get("Cache-Control")).toBe("no-store");
+    await expect(second.json()).resolves.toEqual({ data: { ok: true } });
+    expect(runnerWorkers.workers.get("mac-1")).toEqual({
+      id: "mac-1",
+      mode: "local",
+      version: "zenguy-local-runner/2.0.0",
+      startedAt: 40_000,
+      firstSeenAt: 50_000,
+      lastSeenAt: 55_000,
+    });
+  });
+
+  it("validates the heartbeat payload", async () => {
+    const runnerWorkers = new FakeRunnerWorkerRepo();
+    const app = buildApp(fakeBindings(), {
+      externalRunner: runner(),
+      runnerWorkers,
+    });
+
+    const response = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        workerId: "bad id!",
+        mode: "queue",
+        version: "",
+        startedAt: -1,
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
+    expect(runnerWorkers.workers.size).toBe(0);
   });
 });

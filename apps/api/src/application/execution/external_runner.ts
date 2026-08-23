@@ -164,6 +164,7 @@ export class ExternalRunner {
       (await this.dependencies.lifecycle.claim(
         input.message,
         input.deliveryId,
+        input.workerId,
       )) === "skip"
     ) {
       return null;
@@ -191,6 +192,7 @@ export class ExternalRunner {
 
   async claimStale(input: {
     deliveryId: string;
+    workerId?: string;
   }): Promise<ExternalRunnerJob | null> {
     const now = this.dependencies.clock.now();
     // Also surface abandoned STARTING/RUNNING attempts: claiming them runs
@@ -204,6 +206,7 @@ export class ExternalRunner {
     for (const candidate of candidates) {
       const job = await this.claim({
         deliveryId: input.deliveryId,
+        workerId: input.workerId,
         message: {
           kind: "attempt",
           runId: candidate.testRunId,

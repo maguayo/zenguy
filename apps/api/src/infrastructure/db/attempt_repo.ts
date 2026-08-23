@@ -123,15 +123,23 @@ export class D1AttemptRepo implements AttemptRepo {
     id: string,
     claimedAt: number,
     runnerDeliveryId?: string,
+    claimedByRunnerId?: string,
   ): Promise<boolean> {
     const result = await run(
       this.database
         .prepare(
           `UPDATE test_attempts
-           SET status = 'STARTING', started_at = ?, runner_delivery_id = ?
+           SET status = 'STARTING', started_at = ?, runner_delivery_id = ?,
+               claimed_by_runner_id = ?
            WHERE id = ? AND status = 'QUEUED' AND queued_at <= ?`,
         )
-        .bind(claimedAt, runnerDeliveryId ?? null, id, claimedAt),
+        .bind(
+          claimedAt,
+          runnerDeliveryId ?? null,
+          claimedByRunnerId ?? null,
+          id,
+          claimedAt,
+        ),
     );
     return result.meta.changes === 1;
   }
@@ -436,7 +444,7 @@ export class D1AttemptRepo implements AttemptRepo {
         .prepare(
           `UPDATE test_attempts
            SET status = 'QUEUED', queued_at = ?, started_at = NULL,
-               runner_delivery_id = NULL,
+               runner_delivery_id = NULL, claimed_by_runner_id = NULL,
                finished_at = NULL, duration_ms = NULL, summary = NULL,
                expected_result = NULL, actual_result = NULL,
                failure_reason = NULL, visited_urls_json = NULL,

@@ -112,6 +112,8 @@ import { auditRoutes } from "./http/routes/audit";
 import { apiKeyRoutes } from "./http/routes/api_keys";
 import { publicApiRoutes } from "./http/routes/public_api";
 import { runnerRoutes } from "./http/routes/runner";
+import type { RunnerWorkerRepo } from "./domain/runners/repo";
+import { D1RunnerWorkerRepo } from "./infrastructure/db/runner_worker_repo";
 import type { ApiKeyRepo } from "./domain/api_keys/repo";
 import type { AlertRepo } from "./domain/alerts/repo";
 import { D1AlertRepo } from "./infrastructure/db/alert_repo";
@@ -188,6 +190,7 @@ export interface AppOverrides {
     ExternalRunner,
     "claim" | "claimStale" | "start" | "recordStep" | "complete"
   >;
+  runnerWorkers?: RunnerWorkerRepo;
 }
 
 export function buildApp(
@@ -238,6 +241,8 @@ export function buildApp(
     overrides.browserTests ?? new D1BrowserTestRepo(env.DB);
   const runs = overrides.runs ?? new D1RunRepo(env.DB);
   const attempts = overrides.attempts ?? new D1AttemptRepo(env.DB);
+  const runnerWorkers =
+    overrides.runnerWorkers ?? new D1RunnerWorkerRepo(env.DB);
   const steps = overrides.steps ?? new D1StepRepo(env.DB);
   const artifacts = overrides.artifacts ?? new D1ArtifactRepo(env.DB);
   const artifactStorage =
@@ -437,7 +442,12 @@ export function buildApp(
   );
   app.route(
     "/api/runner",
-    runnerRoutes({ token: config.runnerApiToken, runner: externalRunner }),
+    runnerRoutes({
+      token: config.runnerApiToken,
+      runner: externalRunner,
+      workers: runnerWorkers,
+      clock,
+    }),
   );
   app.route(
     "/api",

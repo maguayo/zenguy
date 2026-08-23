@@ -3,10 +3,13 @@ import type { ExternalRunner } from "../../application/execution/external_runner
 import {
   runnerClaimSchema,
   runnerCompleteSchema,
+  runnerHeartbeatSchema,
   runnerStaleClaimSchema,
   runnerStartSchema,
   runnerStepSchema,
 } from "../../domain/browser_tests/runner_protocol";
+import type { RunnerWorkerRepo } from "../../domain/runners/repo";
+import type { Clock } from "../../shared/clock";
 import { timingSafeEqualText } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
 import type { AppEnv } from "../env";
@@ -18,6 +21,8 @@ export interface RunnerRoutesDependencies {
     ExternalRunner,
     "claim" | "claimStale" | "start" | "recordStep" | "complete"
   >;
+  workers: Pick<RunnerWorkerRepo, "recordHeartbeat">;
+  clock: Clock;
 }
 
 function bearerToken(header: string | undefined): string {
@@ -37,6 +42,14 @@ export function runnerRoutes(
     }
     await next();
     context.header("Cache-Control", "no-store");
+  });
+
+  app.post("/heartbeat", zjson(runnerHeartbeatSchema), async (context) => {
+    await dependencies.workers.recordHeartbeat(
+      context.req.valid("json"),
+      dependencies.clock.now(),
+    );
+    return context.json({ data: { ok: true } });
   });
 
   app.post("/attempts/claim", zjson(runnerClaimSchema), async (context) => {

@@ -379,6 +379,7 @@ export class FakeRunRepo implements RunRepo {
 export class FakeAttemptRepo implements AttemptRepo {
   readonly attempts = new Map<string, TestAttempt>();
   readonly runnerDeliveryIds = new Map<string, string>();
+  readonly claimedBy = new Map<string, string | undefined>();
   readonly latest = new Map<
     string,
     Pick<AttemptWithLatest, "latestStep" | "latestScreenshot">
@@ -412,6 +413,7 @@ export class FakeAttemptRepo implements AttemptRepo {
     id: string,
     claimedAt: number,
     runnerDeliveryId?: string,
+    claimedByRunnerId?: string,
   ): Promise<boolean> {
     const attempt = this.attempts.get(id);
     if (
@@ -427,6 +429,7 @@ export class FakeAttemptRepo implements AttemptRepo {
     if (runnerDeliveryId !== undefined) {
       this.runnerDeliveryIds.set(id, runnerDeliveryId);
     }
+    this.claimedBy.set(id, claimedByRunnerId);
     return true;
   }
 
@@ -531,6 +534,7 @@ export class FakeAttemptRepo implements AttemptRepo {
 
   async resetForInfraRetry(id: string, queuedAt: number): Promise<void> {
     this.runnerDeliveryIds.delete(id);
+    this.claimedBy.delete(id);
     const attempt = this.attempts.get(id);
     if (attempt !== undefined) {
       this.attempts.set(id, {

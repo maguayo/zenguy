@@ -6,6 +6,13 @@ export const MAX_RUNNER_SCREENSHOT_BASE64_LENGTH = 3_000_000;
 
 export const runnerDeliveryIdSchema = z.string().min(1).max(256);
 
+export const runnerWorkerIdSchema = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9._-]{1,64}$/u,
+    "Worker id must be 1-64 chars of [A-Za-z0-9._-]",
+  );
+
 export const runnerAttemptReferenceSchema = z
   .object({
     runId: z.string().min(1),
@@ -20,11 +27,15 @@ export const runnerClaimSchema = z
   .object({
     deliveryId: runnerDeliveryIdSchema,
     message: attemptMessageSchema,
+    workerId: runnerWorkerIdSchema.optional(),
   })
   .strict();
 
 export const runnerStaleClaimSchema = z
-  .object({ deliveryId: runnerDeliveryIdSchema })
+  .object({
+    deliveryId: runnerDeliveryIdSchema,
+    workerId: runnerWorkerIdSchema.optional(),
+  })
   .strict();
 
 export const runnerStartSchema = z
@@ -133,9 +144,19 @@ export const runnerCompleteSchema = z
   })
   .strict();
 
+export const runnerHeartbeatSchema = z
+  .object({
+    workerId: runnerWorkerIdSchema,
+    mode: z.enum(["local", "fallback"]),
+    version: z.string().min(1).max(200),
+    startedAt: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export type RunnerAttemptReference = z.infer<
   typeof runnerAttemptReferenceSchema
 >;
 export type RunnerClaimInput = z.infer<typeof runnerClaimSchema>;
 export type RunnerStepInput = z.infer<typeof runnerStepSchema>;
 export type RunnerOutcomeInput = z.infer<typeof runnerOutcomeSchema>;
+export type RunnerHeartbeatInput = z.infer<typeof runnerHeartbeatSchema>;
