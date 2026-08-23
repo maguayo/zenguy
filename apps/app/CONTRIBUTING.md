@@ -52,7 +52,9 @@ Spec: `docs/superpowers/specs/2026-08-23-ios-app-redesign-design.md`.
   with a breathing dot (`Badge pulse`, `StatusBadge`). Green/red/amber are for
   status only; there is no blue.
 - History reads left to right: `PulseStrip` takes ticks oldest-first and
-  breathes the newest one while work is in progress.
+  breathes the newest one while work is in progress. The tests and uptime
+  lists draw it under each row from `recentRuns` / `recentChecks`; detail
+  screens build it from their own history queries.
 - Motion is one orchestrated entrance (`Hero` reveal) plus breathing dots and
   `Press` scale; everything honours Reduce Motion through `useReducedMotion`.
 - Light only: `userInterfaceStyle: "light"`; tokens live in one place so a

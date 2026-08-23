@@ -65,8 +65,10 @@ card titles.
 **Signature: the pulse.** A heartbeat strip — a row of small rounded ticks,
 one per recent run or check, coloured by result, the newest one breathing when
 something is in progress. It sits in the overview hero (ink card on paper, the
-only dark element in the app) and on every test and monitor detail, and the
-same dot language is used by status pills. It encodes real history (result
+only dark element in the app), on every test and monitor detail, and under
+every row of the tests and uptime lists (the API returns the last 20 results
+per item as `recentRuns` / `recentChecks`; empty slots stay grey). The same
+dot language is used by status pills. It encodes real history (result
 order matters), which is why it earns the place of the one memorable element.
 Everything around it stays quiet.
 
