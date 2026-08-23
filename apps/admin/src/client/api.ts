@@ -1,9 +1,11 @@
 import type {
+  ActivityFeedResponse,
   Analytics,
   Overview,
   RecentRun,
   UserSummary,
   WorkersResponse,
+  WorkspacesResponse,
 } from "../shared/types";
 
 /** A non-2xx answer from the admin API, carrying its `{ error: { code, message } }` body. */
@@ -48,6 +50,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  /** No filter means no `type` parameter at all: an empty one is a 400. */
+  activity: (type?: string) =>
+    request<ActivityFeedResponse>(
+      `/api/activity?limit=50${type ? `&type=${encodeURIComponent(type)}` : ""}`,
+    ),
   analytics: (days: number) => request<Analytics>(`/api/analytics?days=${days}`),
   login: (email: string, password: string) =>
     request<{ email: string }>("/api/auth/login", {
@@ -60,4 +67,5 @@ export const api = {
   recentRuns: () => request<{ runs: RecentRun[] }>("/api/runs/recent?limit=50"),
   users: () => request<{ users: UserSummary[] }>("/api/users?limit=50"),
   workers: () => request<WorkersResponse>("/api/workers"),
+  workspaces: () => request<WorkspacesResponse>("/api/workspaces?limit=50"),
 };

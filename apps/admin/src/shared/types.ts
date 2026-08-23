@@ -209,3 +209,52 @@ export interface Analytics {
   monitorsDown: MonitorDownRow[];
   openIncidents: OpenIncidentRow[];
 }
+
+// --- Activity -------------------------------------------------------------
+// Client-safe copies of the contracts the activity endpoints answer with.
+// `ActivitySource`, `ActivityFeedEvent` and `ActivityFeedResponse` mirror
+// src/server/db/activity.ts; `LastRunStatus`, `WorkspaceActivitySummary` and
+// `WorkspacesResponse` mirror src/server/db/workspaces.ts. The client cannot
+// import those files (Worker-only tsconfig), so the shapes are duplicated here
+// and must stay structurally identical — change one, change the other.
+
+export type ActivitySource = "web" | "app" | "api" | "server";
+
+export interface ActivityFeedEvent {
+  id: string;
+  type: string;
+  occurredAt: number;
+  source: ActivitySource;
+  /** Null for system-originated events, or when the user no longer exists. */
+  actor: { id: string; name: string; email: string } | null;
+  /** Null for user-scoped events, or when the workspace no longer exists. */
+  workspace: { id: string; name: string } | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  properties: Record<string, unknown> | null;
+}
+
+export type ActivityFeedResponse = { events: ActivityFeedEvent[] } | Unavailable;
+
+export type LastRunStatus = "PASSED" | "FAILED" | "TIMEOUT" | "SYSTEM_ERROR";
+
+export interface WorkspaceActivitySummary {
+  id: string;
+  name: string;
+  slug: string;
+  ownerEmail: string | null;
+  memberCount: number;
+  createdAt: number;
+  /** Newest event with a user behind it; system-originated rows do not count. */
+  lastActiveAt: number | null;
+  lastWebAt: number | null;
+  lastAppAt: number | null;
+  /** Newest `user.logged_in` of any current member (logins carry no workspace). */
+  lastLoginAt: number | null;
+  lastTestCreatedAt: number | null;
+  lastRunAt: number | null;
+  lastRunStatus: LastRunStatus | null;
+  lastAlertSentAt: number | null;
+}
+
+export type WorkspacesResponse = { workspaces: WorkspaceActivitySummary[] } | Unavailable;

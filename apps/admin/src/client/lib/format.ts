@@ -46,6 +46,11 @@ export function formatDateTime(ms: number): string {
   return new Date(ms).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** The day alone, for columns where the hour would only widen the table. */
+export function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-GB", { dateStyle: "medium" });
+}
+
 /** A 0..1 ratio as a whole percentage: "83%", "—" when there is nothing to rate. */
 export function percent(ratio: number | null): string {
   if (ratio === null) return EM_DASH;

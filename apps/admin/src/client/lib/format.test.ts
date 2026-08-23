@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatDate,
   formatDateTime,
   formatDuration,
   formatNumber,
@@ -27,6 +28,8 @@ describe("format helpers", () => {
     expect(relativeSeconds(0, 50 * 3_600_000)).toBe("2d 2h ago");
     expect(formatDuration(3 * 3_600_000 + 4 * 60_000)).toBe("3h 04m");
     expect(formatDateTime(Date.UTC(2026, 7, 15, 12, 0))).toContain("Aug 2026");
+    expect(formatDate(Date.UTC(2026, 7, 15, 12, 0))).toContain("Aug 2026");
+    expect(formatDate(Date.UTC(2026, 7, 15, 12, 0))).not.toContain(":");
     expect(formatNumber(12_345)).toBe("12,345");
   });
 });

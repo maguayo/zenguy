@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import type { Overview } from "../../shared/types";
 import { api } from "../api";
-import { ActiveWorkspacesTable } from "../components/ActiveWorkspacesTable";
+import { ActivityFeed } from "../components/ActivityFeed";
 import { AlertSpendCard } from "../components/AlertSpendCard";
 import { ActiveUsersChart } from "../components/charts/ActiveUsersChart";
 import { ChecksChart } from "../components/charts/ChecksChart";
@@ -23,6 +23,9 @@ import { Section } from "../components/Section";
 import { TestLeaderboard } from "../components/TestLeaderboard";
 import { UsersTable } from "../components/UsersTable";
 import { WorkersSection } from "../components/WorkersSection";
+import { WorkspacesTable } from "../components/WorkspacesTable";
+import { parseActivityType, readStoredActivityType, storeActivityType } from "../lib/activity";
+import type { ActivityEventType } from "../lib/activity";
 import { formatNumber, percent } from "../lib/format";
 import { readStoredRange, storeRange } from "../lib/range";
 import type { RangeDays } from "../lib/range";
@@ -30,11 +33,13 @@ import { fillAnalytics } from "../lib/series";
 import type { FilledSeries } from "../lib/series";
 
 const REFETCH_MS = {
+  activity: 30_000,
   analytics: 60_000,
   overview: 30_000,
   runs: 30_000,
   users: 60_000,
   workers: 5_000,
+  workspaces: 60_000,
 };
 
 /**
@@ -92,6 +97,9 @@ function checksFooter(overview: Overview | undefined): string | undefined {
 
 export function DashboardPage({ email }: { email: string }) {
   const [range, setRange] = useState<RangeDays>(readStoredRange);
+  const [activityType, setActivityType] = useState<ActivityEventType | null>(
+    readStoredActivityType,
+  );
 
   const analytics = useQuery({
     // The last answer stays on screen while a new range loads: no skeleton flash,
@@ -121,6 +129,20 @@ export function DashboardPage({ email }: { email: string }) {
     queryKey: ["users"],
     refetchInterval: REFETCH_MS.users,
   });
+  const activity = useQuery({
+    // Changing the filter changes the key; the previous page of events stays on
+    // screen until the filtered one lands, so the card never blinks empty.
+    placeholderData: (previous) => previous,
+    queryFn: () => api.activity(activityType ?? undefined),
+    queryKey: ["activity", activityType],
+    refetchInterval: REFETCH_MS.activity,
+  });
+  const workspaces = useQuery({
+    placeholderData: (previous) => previous,
+    queryFn: api.workspaces,
+    queryKey: ["workspaces"],
+    refetchInterval: REFETCH_MS.workspaces,
+  });
   // A full reload on sign-out: it drops every cached production number from memory.
   const signOut = useMutation({
     mutationFn: api.logout,
@@ -128,7 +150,7 @@ export function DashboardPage({ email }: { email: string }) {
   });
 
   const now = Date.now();
-  const sections = [analytics, overview, workers, runs, users];
+  const sections = [analytics, overview, workers, runs, users, activity, workspaces];
   // Shaped once per payload, not once per render: the workers query repolls
   // every five seconds and every chart below is memoised on its series.
   const series = useMemo(
@@ -139,6 +161,14 @@ export function DashboardPage({ email }: { email: string }) {
   function chooseRange(days: RangeDays) {
     setRange(days);
     storeRange(days);
+  }
+
+  // Parsed on the way in as well as on boot: only a type the catalog knows ever
+  // reaches the query string, and `?type=` empty is a 400.
+  function chooseActivityType(raw: string | null) {
+    const type = parseActivityType(raw);
+    setActivityType(type);
+    storeActivityType(type);
   }
 
   return (
@@ -251,6 +281,19 @@ export function DashboardPage({ email }: { email: string }) {
           </Section>
         </Row>
 
+        <Row title="Activity">
+          <Section now={now} query={activity} subject="activity" title="Activity">
+            {(data) => (
+              <ActivityFeed
+                feed={data}
+                now={now}
+                onTypeChange={chooseActivityType}
+                type={activityType}
+              />
+            )}
+          </Section>
+        </Row>
+
         <Row title="Workers">
           <Section now={now} query={workers} subject="workers" title="Workers">
             {(data) => <WorkersSection workers={data} />}
@@ -258,9 +301,9 @@ export function DashboardPage({ email }: { email: string }) {
         </Row>
 
         <Row title="Tests & workspaces">
-          <Section now={now} query={analytics} subject="leaderboards" title="Tests & workspaces">
-            {(data) => (
-              <div className="space-y-4">
+          <div className="space-y-4">
+            <Section now={now} query={analytics} subject="leaderboards" title="Tests">
+              {(data) => (
                 <div className="grid gap-4 lg:grid-cols-2">
                   <TestLeaderboard
                     kind="failing"
@@ -269,10 +312,21 @@ export function DashboardPage({ email }: { email: string }) {
                   />
                   <TestLeaderboard kind="slow" rows={data.slowestTests} title="Slowest tests" />
                 </div>
-                <ActiveWorkspacesTable now={now} rows={data.activeWorkspaces} />
-              </div>
-            )}
-          </Section>
+              )}
+            </Section>
+            {/* Its own section: the activity columns come from /api/workspaces
+                and the 30-day counters from analytics, so an analytics outage
+                must not take the workspace list down with it. */}
+            <Section now={now} query={workspaces} subject="workspaces" title="Workspaces">
+              {(data) => (
+                <WorkspacesTable
+                  active={analytics.data?.activeWorkspaces}
+                  now={now}
+                  workspaces={data}
+                />
+              )}
+            </Section>
+          </div>
         </Row>
 
         <Row title="Latest activity">

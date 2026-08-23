@@ -2,14 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type {
-  ActiveWorkspaceRow,
   AnalyticsBusiness,
   DeliveriesDay,
   MonitorDownRow,
   OpenIncidentRow,
   TestLeaderboardRow,
 } from "../../shared/types";
-import { ActiveWorkspacesTable } from "./ActiveWorkspacesTable";
 import { AlertSpendCard } from "./AlertSpendCard";
 import { KpiCard } from "./KpiCard";
 import { MonitorsCard } from "./MonitorsCard";
@@ -203,37 +201,5 @@ describe("test leaderboards", () => {
       <TestLeaderboard kind="failing" rows={[]} title="Top failing tests" />,
     );
     expect(html).toContain("No test failed in the last 7 days");
-  });
-});
-
-describe("active workspaces table", () => {
-  const row: ActiveWorkspaceRow = {
-    lastRunAt: NOW - 124_000,
-    monitors: 3,
-    name: "Acme",
-    runs: 120,
-    subscription: "paddle",
-    workspaceId: "ws_1",
-  };
-
-  it("shows how each workspace pays and when it last ran something", () => {
-    const html = renderToStaticMarkup(<ActiveWorkspacesTable now={NOW} rows={[row]} />);
-    expect(html).toContain("Acme");
-    expect(html).toContain("Paying");
-    expect(html).toContain("120");
-    expect(html).toContain("2m 4s ago");
-  });
-
-  it("handles a workspace with no run and no plan", () => {
-    const html = renderToStaticMarkup(
-      <ActiveWorkspacesTable now={NOW} rows={[{ ...row, lastRunAt: null, subscription: "none" }]} />,
-    );
-    expect(html).toContain("Never");
-    expect(html).toContain("No plan");
-  });
-
-  it("says nothing ran rather than drawing an empty table", () => {
-    const html = renderToStaticMarkup(<ActiveWorkspacesTable now={NOW} rows={[]} />);
-    expect(html).toContain("No workspace ran anything in the last 30 days");
   });
 });

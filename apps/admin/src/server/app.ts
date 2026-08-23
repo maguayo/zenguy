@@ -3,6 +3,8 @@ import type { AppEnv, Bindings, Clock } from "./env";
 import { systemClock } from "./env";
 import { AppError } from "./errors";
 import { requireSession } from "./require_session";
+import type { ActivityLoaders } from "./routes/activity";
+import { activityRoutes } from "./routes/activity";
 import type { AnalyticsLoaders } from "./routes/analytics";
 import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
@@ -13,7 +15,8 @@ export interface AppOverrides {
   clock?: Clock;
   fetch?: typeof fetch;
   delay?: (milliseconds: number) => Promise<void>;
-  loaders?: Partial<Loaders & AnalyticsLoaders>;
+  /** Every route group reads its own keys out of the one injected object. */
+  loaders?: Partial<Loaders & AnalyticsLoaders & ActivityLoaders>;
 }
 
 const CSP = [
@@ -126,6 +129,17 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
         clock,
         adminEmails: env.ADMIN_EMAILS,
       }),
+      loaders: overrides.loaders,
+    }),
+  );
+
+  app.route(
+    "/api",
+    activityRoutes({
+      db: env.DB,
+      clock,
+      secret: env.ADMIN_SESSION_SECRET,
+      adminEmails: env.ADMIN_EMAILS,
       loaders: overrides.loaders,
     }),
   );
