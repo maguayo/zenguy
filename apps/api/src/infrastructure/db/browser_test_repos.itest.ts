@@ -138,6 +138,32 @@ function runUsage(
 describe("D1 browser test repositories", () => {
   beforeEach(freshDb);
 
+  it("lists the recent runs per test oldest first, capped per test", async () => {
+    const tests = new D1BrowserTestRepo(testEnv().DB);
+    const runs = new D1RunRepo(testEnv().DB);
+    await tests.insert(browserTest("bt_a", 500, "ws_1", 1));
+    await tests.insert(browserTest("bt_b", 500, "ws_1", 2));
+    await tests.insert(browserTest("bt_other", 500, "ws_2", 3));
+    await runs.insert(testRun({ id: "run_a1", testId: "bt_a", status: "PASSED", createdAt: 100 }));
+    await runs.insert(testRun({ id: "run_a2", testId: "bt_a", status: "FAILED", createdAt: 200 }));
+    await runs.insert(testRun({ id: "run_a3", testId: "bt_a", status: "PASSED", createdAt: 300 }));
+    await runs.insert(testRun({ id: "run_a4", testId: "bt_a", status: "RUNNING", createdAt: 400 }));
+    await runs.insert(testRun({ id: "run_b1", testId: "bt_b", status: "TIMEOUT", createdAt: 150 }));
+    await runs.insert(
+      testRun({ id: "run_o1", testId: "bt_other", status: "PASSED", createdAt: 160, workspaceId: "ws_2" }),
+    );
+
+    const recent = await runs.recentRunsPerTest("ws_1", 3);
+    expect(recent.get("bt_a")).toEqual([
+      { id: "run_a2", status: "FAILED", finishedAt: 210 },
+      { id: "run_a3", status: "PASSED", finishedAt: 310 },
+      { id: "run_a4", status: "RUNNING", finishedAt: null },
+    ]);
+    expect(recent.get("bt_b")).toEqual([{ id: "run_b1", status: "TIMEOUT", finishedAt: 160 }]);
+    expect(recent.has("bt_other")).toBe(false);
+    expect(await runs.recentRunsPerTest("ws_empty", 3)).toEqual(new Map());
+  });
+
   it("round-trips tests, channels, soft deletion, and optimistic due claims", async () => {
     const repo = new D1BrowserTestRepo(testEnv().DB);
     const due = browserTest("bt_due", 500, "ws_1", 1);

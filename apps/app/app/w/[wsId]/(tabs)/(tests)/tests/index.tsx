@@ -12,7 +12,7 @@ import {
   listTests,
   type ExportFormat,
 } from "@/api/tests";
-import type { BrowserTest } from "@/api/types";
+import type { BrowserTest, RunTick } from "@/api/types";
 import { StatusBadge, statusPresentation } from "@/components/StatusBadge";
 import { testSubtitle } from "@/components/tests/labels";
 import {
@@ -40,10 +40,12 @@ import {
   ErrorState,
   IconTile,
   ListRow,
+  PulseStrip,
   Screen,
   Skeleton,
   type ActionMenuItem,
   type FeatherIconName,
+  type PulseTick,
 } from "@/ui";
 
 /** Leading tile: the last result's tone, a breathing dot while a run is active. */
@@ -53,6 +55,11 @@ export function testTile(test: BrowserTest): { icon: FeatherIconName; tone: "acc
   const icon: FeatherIconName =
     tone === "ok" ? "check" : tone === "danger" ? "x" : tone === "warn" ? "clock" : tone === "info" ? "play" : "globe";
   return { icon, tone };
+}
+
+/** History strip ticks: one per recent run, oldest first; grey slots when there is no data. */
+export function runTicks(runs: RunTick[] | undefined): PulseTick[] {
+  return (runs ?? []).map((run) => ({ key: run.id, tone: statusPresentation(run.status).tone }));
 }
 
 function TestRow({ last, test }: { last: boolean; test: BrowserTest }) {
@@ -121,6 +128,7 @@ function TestRow({ last, test }: { last: boolean; test: BrowserTest }) {
             {test.lastRun?.finishedAt ? <Caption>{formatRelative(test.lastRun.finishedAt)}</Caption> : null}
             {test.openIncidentId ? <Badge dot pulse tone="danger">Open incident</Badge> : null}
           </View>
+          <PulseStrip live={isActiveRun(test)} max={20} size="sm" style={styles.strip} ticks={runTicks(test.recentRuns)} />
         </View>
       }
       title={test.name}
@@ -286,4 +294,5 @@ const styles = StyleSheet.create({
   skeletonText: { flex: 1, gap: spacing.sm },
   skeletonTile: { borderRadius: radius.md },
   statusRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  strip: { marginTop: 2, maxWidth: 220 },
 });

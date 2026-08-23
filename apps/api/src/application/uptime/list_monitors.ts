@@ -4,6 +4,9 @@ import type { UserRepo } from "../../domain/users/repo";
 import type { Role } from "../../domain/workspaces/types";
 import { monitorOutput, type MonitorOutput } from "./types";
 
+/** Ticks shown in the list's history strip. */
+const RECENT_CHECKS = 20;
+
 export class ListMonitors {
   constructor(
     private readonly monitors: MonitorRepo,
@@ -16,7 +19,10 @@ export class ListMonitors {
     workspaceId: string;
     role: Role;
   }): Promise<MonitorOutput[]> {
-    const monitors = await this.monitors.list(input.workspaceId);
+    const [monitors, recentChecks] = await Promise.all([
+      this.monitors.list(input.workspaceId),
+      this.monitors.recentChecksPerMonitor(input.workspaceId, RECENT_CHECKS),
+    ]);
     return Promise.all(
       monitors.map(async (monitor) => {
         const [channelIds, creator, incident] = await Promise.all([
@@ -31,6 +37,7 @@ export class ListMonitors {
           channelIds,
           creator,
           incident,
+          recentChecks: recentChecks.get(monitor.id) ?? [],
           role: input.role,
           encryptionKey: this.encryptionKey,
         });

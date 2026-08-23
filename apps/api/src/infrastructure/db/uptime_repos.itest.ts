@@ -76,6 +76,33 @@ function check(input: {
 describe("D1 uptime repositories", () => {
   beforeEach(freshDb);
 
+  it("lists the recent checks per monitor oldest first, capped per monitor", async () => {
+    const monitors = new D1MonitorRepo(testEnv().DB);
+    const checks = new D1CheckRepo(testEnv().DB);
+    await monitors.insert(monitor("mon_a"));
+    await monitors.insert(monitor("mon_b"));
+    const failed = {
+      ...check({ id: "chk_a2", monitorId: "mon_a", cycleId: "cyc_2", attemptIndex: 0, checkedAt: 200 }),
+      status: "FAILED" as const,
+    };
+    for (const value of [
+      check({ id: "chk_a1", monitorId: "mon_a", cycleId: "cyc_1", attemptIndex: 0, checkedAt: 100 }),
+      failed,
+      check({ id: "chk_a3", monitorId: "mon_a", cycleId: "cyc_3", attemptIndex: 0, checkedAt: 300 }),
+      check({ id: "chk_b1", monitorId: "mon_b", cycleId: "cyc_4", attemptIndex: 0, checkedAt: 150 }),
+    ]) {
+      await checks.insertIfAbsent(value);
+    }
+
+    const recent = await monitors.recentChecksPerMonitor("ws_uptime_repo", 2);
+    expect(recent.get("mon_a")).toEqual([
+      { id: "chk_a2", status: "FAILED", checkedAt: 200 },
+      { id: "chk_a3", status: "PASSED", checkedAt: 300 },
+    ]);
+    expect(recent.get("mon_b")).toEqual([{ id: "chk_b1", status: "PASSED", checkedAt: 150 }]);
+    expect(await monitors.recentChecksPerMonitor("ws_other", 2)).toEqual(new Map());
+  });
+
   it("encrypts config at rest, claims due monitors without overlapping cycles, and joins incident names", async () => {
     const repo = new D1MonitorRepo(testEnv().DB);
     const encrypted = await encryptMonitorSensitive(

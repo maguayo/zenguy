@@ -27,6 +27,10 @@ appId: com.zenguy.app
 - extendedWaitUntil:
     visible: "Usage this cycle"
     timeout: 30000
+# The push soft prompt appears after the first workspace loads on a fresh session.
+- tapOn:
+    text: "Not now"
+    optional: true
 # Dev builds show a LogBox banner over the tab bar; close it so tab taps land.
 - runFlow:
     when:

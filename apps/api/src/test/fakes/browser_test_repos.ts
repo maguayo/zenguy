@@ -17,6 +17,7 @@ import type {
   RunStatus,
   RunStep,
   RunSummaryRow,
+  RunTick,
   TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
@@ -289,6 +290,29 @@ export class FakeRunRepo implements RunRepo {
     const infraAttempts = run.infraAttempts + 1;
     this.runs.set(runId, { ...run, infraAttempts });
     return infraAttempts;
+  }
+
+  async recentRunsPerTest(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, RunTick[]>> {
+    const ticks = new Map<string, RunTick[]>();
+    const runs = [...this.runs.values()]
+      .filter(
+        (run) => run.workspaceId === workspaceId && run.browserTestId !== null,
+      )
+      .sort(
+        (left, right) =>
+          right.createdAt - left.createdAt || right.id.localeCompare(left.id),
+      );
+    for (const run of runs) {
+      const testId = run.browserTestId ?? "";
+      const list = ticks.get(testId) ?? [];
+      if (list.length >= limit) continue;
+      list.unshift({ id: run.id, status: run.status, finishedAt: run.finishedAt });
+      ticks.set(testId, list);
+    }
+    return ticks;
   }
 
   async lastRunSummaryPerTest(

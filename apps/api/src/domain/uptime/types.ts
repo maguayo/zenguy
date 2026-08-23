@@ -78,3 +78,10 @@ export interface MonitorStatusCounts {
   down: number;
   unknown: number;
 }
+
+/** One recent check result for a history strip; lists are oldest first. */
+export interface CheckTick {
+  id: string;
+  status: CheckStatus;
+  checkedAt: number;
+}

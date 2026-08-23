@@ -5,6 +5,9 @@ import type {
 import type { UserRepo } from "../../domain/users/repo";
 import { browserTestOutput, type BrowserTestOutput } from "./types";
 
+/** Ticks shown in the list's history strip. */
+const RECENT_RUNS = 20;
+
 export class ListBrowserTests {
   constructor(
     private readonly tests: BrowserTestRepo,
@@ -13,9 +16,10 @@ export class ListBrowserTests {
   ) {}
 
   async execute(input: { workspaceId: string }): Promise<BrowserTestOutput[]> {
-    const [tests, summaries] = await Promise.all([
+    const [tests, summaries, recentRuns] = await Promise.all([
       this.tests.list(input.workspaceId),
       this.runs.lastRunSummaryPerTest(input.workspaceId),
+      this.runs.recentRunsPerTest(input.workspaceId, RECENT_RUNS),
     ]);
     return Promise.all(
       tests.map(async (test) => {
@@ -30,6 +34,7 @@ export class ListBrowserTests {
           channelIds,
           creator,
           summaries.get(test.id) ?? null,
+          recentRuns.get(test.id) ?? [],
         );
       }),
     );

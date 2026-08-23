@@ -3,6 +3,7 @@ import type {
   BodyCondition,
   ClaimedUptimeMonitor,
   MonitorMethod,
+  CheckTick,
   MonitorStatusCounts,
   UptimeCheck,
   UptimeMonitor,
@@ -57,6 +58,11 @@ export interface MonitorRepo {
   addChannelToAll(workspaceId: string, channelId: string): Promise<void>;
   getChannelIds(monitorId: string): Promise<string[]>;
   statusCounts(workspaceId: string): Promise<MonitorStatusCounts>;
+  /** Last `limit` check results per monitor of the workspace (oldest first). */
+  recentChecksPerMonitor(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, CheckTick[]>>;
 }
 
 export interface CheckRepo {

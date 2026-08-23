@@ -162,3 +162,10 @@ export interface AttemptWithLatest {
   latestStep: LatestStepSummary | null;
   latestScreenshot: LatestScreenshotSummary | null;
 }
+
+/** One recent run result for a history strip; lists are oldest first. */
+export interface RunTick {
+  id: string;
+  status: RunStatus;
+  finishedAt: number | null;
+}

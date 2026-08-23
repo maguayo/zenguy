@@ -8,6 +8,7 @@ import type {
 } from "../../domain/uptime/repo";
 import type {
   ClaimedUptimeMonitor,
+  CheckTick,
   MonitorStatusCounts,
   UptimeCheck,
   UptimeMonitor,
@@ -21,6 +22,8 @@ function copy<T>(value: T): T {
 
 export class FakeMonitorRepo implements MonitorRepo {
   readonly monitors = new Map<string, UptimeMonitor>();
+  /** Recent check ticks per monitor id, oldest first (set by tests). */
+  readonly recentChecks = new Map<string, CheckTick[]>();
   readonly channelIds = new Map<string, string[]>();
 
   async insert(monitor: UptimeMonitor): Promise<void> {
@@ -184,6 +187,19 @@ export class FakeMonitorRepo implements MonitorRepo {
 
   async getChannelIds(monitorId: string): Promise<string[]> {
     return [...(this.channelIds.get(monitorId) ?? [])];
+  }
+
+  async recentChecksPerMonitor(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, CheckTick[]>> {
+    const ticks = new Map<string, CheckTick[]>();
+    for (const [monitorId, list] of this.recentChecks) {
+      const monitor = this.monitors.get(monitorId);
+      if (monitor === undefined || monitor.workspaceId !== workspaceId) continue;
+      ticks.set(monitorId, list.slice(-limit).map((tick) => ({ ...tick })));
+    }
+    return ticks;
   }
 
   async statusCounts(workspaceId: string): Promise<MonitorStatusCounts> {

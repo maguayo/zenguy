@@ -8,6 +8,7 @@ import type {
   RunSource,
   RunStatus,
   RunSummaryRow,
+  RunTick,
   TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
@@ -329,6 +330,38 @@ export class D1RunRepo implements RunRepo {
         .bind(runId),
     );
     return row?.infra_attempts ?? 0;
+  }
+
+  async recentRunsPerTest(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, RunTick[]>> {
+    const rows = await all<
+      Pick<RunRow, "browser_test_id" | "id" | "status" | "finished_at">
+    >(
+      this.database
+        .prepare(
+          `SELECT browser_test_id, id, status, finished_at
+           FROM (
+             SELECT browser_test_id, id, status, finished_at,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY browser_test_id ORDER BY created_at DESC, id DESC
+                    ) AS row_number
+             FROM test_runs
+             WHERE workspace_id = ? AND browser_test_id IS NOT NULL
+           ) WHERE row_number <= ?
+           ORDER BY browser_test_id, row_number DESC`,
+        )
+        .bind(workspaceId, limit),
+    );
+    const ticks = new Map<string, RunTick[]>();
+    for (const row of rows) {
+      if (row.browser_test_id === null) continue;
+      const list = ticks.get(row.browser_test_id) ?? [];
+      list.push({ id: row.id, status: row.status, finishedAt: row.finished_at });
+      ticks.set(row.browser_test_id, list);
+    }
+    return ticks;
   }
 
   async lastRunSummaryPerTest(

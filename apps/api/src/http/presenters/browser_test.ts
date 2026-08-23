@@ -10,6 +10,10 @@ export function presentBrowserTest(test: BrowserTestOutput) {
     nextRunAt: new Date(test.nextRunAt).toISOString(),
     createdAt: new Date(test.createdAt).toISOString(),
     updatedAt: new Date(test.updatedAt).toISOString(),
+    recentRuns: test.recentRuns.map((tick) => ({
+      ...tick,
+      finishedAt: iso(tick.finishedAt),
+    })),
     lastRun:
       test.lastRun === null
         ? null

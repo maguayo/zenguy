@@ -176,6 +176,13 @@ export type RunSummary = {
   status: RunStatus;
 } | null;
 
+/** One recent run result for the list's history strip (oldest first). */
+export interface RunTick {
+  finishedAt: string | null;
+  id: string;
+  status: RunStatus;
+}
+
 export interface BrowserTest {
   channelIds: string[];
   createdAt: string;
@@ -190,6 +197,7 @@ export interface BrowserTest {
   nextRunAt: string;
   notifyOnRecovery: boolean;
   openIncidentId: string | null;
+  recentRuns?: RunTick[];
   startUrl: string;
   updatedAt: string;
 }
@@ -331,6 +339,13 @@ export interface MonitorInput {
   url: string;
 }
 
+/** One recent check result for the list's history strip (oldest first). */
+export interface CheckTick {
+  checkedAt: string;
+  id: string;
+  status: "PASSED" | "FAILED";
+}
+
 export interface Monitor
   extends Omit<
     MonitorInput,
@@ -350,6 +365,7 @@ export interface Monitor
   lastResponseTimeMs: number | null;
   nextCheckAt: string;
   openIncidentId: string | null;
+  recentChecks?: CheckTick[];
   status: "UNKNOWN" | "UP" | "DOWN";
   updatedAt: string;
 }

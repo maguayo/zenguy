@@ -7,7 +7,7 @@ import type { Monitor } from "@/api/types";
 import { deleteMonitor, listMonitors } from "@/api/uptime";
 import { StatusBadge } from "@/components/StatusBadge";
 import { editMonitorHref, incidentHref, monitorHref, newMonitorHref } from "@/components/uptime/links";
-import { monitorHost, monitorMeta, monitorTile } from "@/components/uptime/monitor-display";
+import { checkTicks, monitorHost, monitorMeta, monitorTile } from "@/components/uptime/monitor-display";
 import { useToast } from "@/contexts/ToastContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMutationError } from "@/hooks/useMutationError";
@@ -25,6 +25,7 @@ import {
   ErrorState,
   IconTile,
   ListRow,
+  PulseStrip,
   Screen,
   Skeleton,
   confirm,
@@ -97,6 +98,7 @@ function MonitorRow({ last, monitor }: { last: boolean; monitor: Monitor }) {
               </Pressable>
             ) : null}
           </View>
+          <PulseStrip live={monitor.checking} max={20} size="sm" style={styles.strip} ticks={checkTicks(monitor.recentChecks ?? [], 20)} />
         </View>
       }
       title={monitor.name}
@@ -199,6 +201,7 @@ export default function UptimeListScreen() {
 }
 
 const styles = StyleSheet.create({
+  strip: { marginTop: 2, maxWidth: 220 },
   badges: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6 },
   headerButton: {
     alignItems: "center",

@@ -11,6 +11,7 @@ import type {
   RunStatus,
   RunStep,
   RunSummaryRow,
+  RunTick,
   TestAttempt,
   TestRun,
   RunnerKind,
@@ -84,6 +85,11 @@ export interface RunRepo {
   lastRunSummaryPerTest(
     workspaceId: string,
   ): Promise<Map<string, RunSummaryRow>>;
+  /** Last `limit` runs per test (oldest first), including queued and running ones. */
+  recentRunsPerTest(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, RunTick[]>>;
   scheduledOccurrenceExists(
     testId: string,
     scheduledFor: number,

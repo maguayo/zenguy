@@ -4,6 +4,7 @@ import type {
   BodyCondition,
   MonitorHeader,
   MonitorMethod,
+  CheckTick,
   MonitorStatus,
   UptimeMonitor,
 } from "../../domain/uptime/types";
@@ -33,6 +34,7 @@ export interface MonitorOutput {
   lastCheckAt: number | null;
   lastResponseTimeMs: number | null;
   openIncidentId: string | null;
+  recentChecks: CheckTick[];
   createdBy: { userId: string; name: string } | null;
   createdAt: number;
   updatedAt: number;
@@ -43,6 +45,7 @@ export async function monitorOutput(input: {
   channelIds: string[];
   creator: User | null;
   incident: Incident | null;
+  recentChecks?: CheckTick[];
   role: Role;
   encryptionKey: Uint8Array;
 }): Promise<MonitorOutput> {
@@ -77,6 +80,7 @@ export async function monitorOutput(input: {
       input.incident?.workspaceId === input.monitor.workspaceId
         ? input.incident.id
         : null,
+    recentChecks: (input.recentChecks ?? []).map((tick) => ({ ...tick })),
     createdBy:
       input.creator === null
         ? null

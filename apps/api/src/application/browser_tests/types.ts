@@ -4,6 +4,7 @@ import type {
   RunSource,
   RunStatus,
   RunSummaryRow,
+  RunTick,
 } from "../../domain/browser_tests/types";
 import type { User } from "../../domain/users/types";
 
@@ -32,6 +33,7 @@ export interface BrowserTestOutput {
   createdBy: { userId: string; name: string } | null;
   createdAt: number;
   updatedAt: number;
+  recentRuns: RunTick[];
   lastRun: RunSummaryOutput | null;
   openIncidentId: null;
 }
@@ -55,6 +57,7 @@ export function browserTestOutput(
   channelIds: string[],
   creator: User | null,
   lastRun: RunSummaryRow | null,
+  recentRuns: RunTick[] = [],
 ): BrowserTestOutput {
   return {
     id: test.id,
@@ -72,6 +75,7 @@ export function browserTestOutput(
     createdAt: test.createdAt,
     updatedAt: test.updatedAt,
     lastRun: runSummary(lastRun),
+    recentRuns: recentRuns.map((tick) => ({ ...tick })),
     openIncidentId: null,
   };
 }

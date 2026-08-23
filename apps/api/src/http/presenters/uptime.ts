@@ -13,6 +13,10 @@ export function presentMonitor(monitor: MonitorOutput) {
     lastCheckAt: nullableIso(monitor.lastCheckAt),
     createdAt: new Date(monitor.createdAt).toISOString(),
     updatedAt: new Date(monitor.updatedAt).toISOString(),
+    recentChecks: monitor.recentChecks.map((tick) => ({
+      ...tick,
+      checkedAt: new Date(tick.checkedAt).toISOString(),
+    })),
   };
 }
 

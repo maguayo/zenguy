@@ -8,6 +8,8 @@ import type {
   ClaimedUptimeMonitor,
   MonitorMethod,
   MonitorStatus,
+  CheckStatus,
+  CheckTick,
   MonitorStatusCounts,
   UptimeMonitor,
 } from "../../domain/uptime/types";
@@ -364,6 +366,40 @@ export class D1MonitorRepo implements MonitorRepo {
         .bind(monitorId),
     );
     return rows.map((row) => row.notification_channel_id);
+  }
+
+  async recentChecksPerMonitor(
+    workspaceId: string,
+    limit: number,
+  ): Promise<Map<string, CheckTick[]>> {
+    const rows = await all<{
+      uptime_monitor_id: string;
+      id: string;
+      status: CheckStatus;
+      checked_at: number;
+    }>(
+      this.database
+        .prepare(
+          `SELECT uptime_monitor_id, id, status, checked_at
+           FROM (
+             SELECT uptime_monitor_id, id, status, checked_at,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY uptime_monitor_id ORDER BY checked_at DESC, id DESC
+                    ) AS row_number
+             FROM uptime_checks
+             WHERE workspace_id = ?
+           ) WHERE row_number <= ?
+           ORDER BY uptime_monitor_id, row_number DESC`,
+        )
+        .bind(workspaceId, limit),
+    );
+    const ticks = new Map<string, CheckTick[]>();
+    for (const row of rows) {
+      const list = ticks.get(row.uptime_monitor_id) ?? [];
+      list.push({ id: row.id, status: row.status, checkedAt: row.checked_at });
+      ticks.set(row.uptime_monitor_id, list);
+    }
+    return ticks;
   }
 
   async statusCounts(workspaceId: string): Promise<MonitorStatusCounts> {
