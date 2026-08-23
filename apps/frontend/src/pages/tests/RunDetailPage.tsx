@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { downloadReport, getRun } from "../../api/tests";
 import type { AttemptSummary, Run } from "../../api/types";
-import { AttemptDetail } from "../../components/AttemptDetail";
+import { AttemptDetail, runnerLabel } from "../../components/AttemptDetail";
 import { CopyButton } from "../../components/CopyButton";
 import { RunSourceBadge } from "../../components/RunSourceBadge";
 import { RunStatusPanel } from "../../components/RunStatusPanel";
@@ -43,6 +43,19 @@ export function defaultExpandedAttemptId(attempts: AttemptSummary[]): string | n
     attempts.find((attempt) => attempt.status === "FAILED")?.id ??
     attempts.at(-1)?.id ??
     null
+  );
+}
+
+export function executingAttempt(attempts: AttemptSummary[]): AttemptSummary | null {
+  return (
+    [...attempts]
+      .reverse()
+      .find(
+        (attempt) =>
+          attempt.runnerKind !== null ||
+          attempt.runnerVersion !== null ||
+          attempt.modelName !== null,
+      ) ?? null
   );
 }
 
@@ -147,6 +160,7 @@ export default function RunDetailPage() {
 
   const data: Run = run.data;
   const hasReport = data.status === "FAILED" || data.status === "TIMEOUT";
+  const executed = executingAttempt(data.attempts);
 
   return (
     <div className="space-y-6">
@@ -244,8 +258,20 @@ export default function RunDetailPage() {
                 "—"
               ),
             },
-            { label: "Model", value: data.snapshot.modelName },
-            { label: "Runner", value: data.snapshot.runnerVersion },
+            { label: "Model", value: executed?.modelName ?? "—" },
+            {
+              label: "Runner",
+              value: executed ? (
+                <span className="inline-flex flex-wrap items-baseline gap-x-2">
+                  {runnerLabel(executed)}
+                  {executed.runnerKind !== null && executed.runnerVersion !== null ? (
+                    <span className="font-mono text-xs text-zinc-500">{executed.runnerVersion}</span>
+                  ) : null}
+                </span>
+              ) : (
+                "—"
+              ),
+            },
           ]}
         />
       </Card>

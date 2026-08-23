@@ -4,9 +4,10 @@ import { ChevronDown, ImageOff } from "lucide-react";
 import clsx from "clsx";
 
 import { getAttempt } from "../api/tests";
-import type { ArtifactRef, Attempt, Step } from "../api/types";
+import type { ArtifactRef, Attempt, AttemptSummary, Step } from "../api/types";
 import { itemQueryErrorMessage } from "../lib/errors";
 import { formatTime } from "../lib/format";
+import { filmstripItems } from "./ScreenshotFilmstrip";
 import { ScreenshotViewer, type ScreenshotItem } from "./ScreenshotViewer";
 import { StatusBadge } from "./StatusBadge";
 import { Badge } from "./ui/Badge";
@@ -16,13 +17,34 @@ import { Skeleton } from "./ui/Skeleton";
 import { Tooltip } from "./ui/Tooltip";
 
 export function screenshotItems(attempt: Attempt): ScreenshotItem[] {
-  return attempt.screenshots.map((screenshot, index) => {
-    const step = attempt.steps.find((candidate) => candidate.screenshot?.id === screenshot.id);
-    return {
-      ...screenshot,
-      caption: step?.description ?? `Screenshot ${index + 1}`,
-    };
-  });
+  return filmstripItems(attempt);
+}
+
+const RUNNER_KIND_LABELS = { fallback: "Fallback", primary: "Primary" } as const;
+
+export function runnerLabel(
+  attempt: Pick<AttemptSummary, "runnerKind" | "runnerVersion">,
+): string {
+  if (attempt.runnerKind !== null) return RUNNER_KIND_LABELS[attempt.runnerKind];
+  return attempt.runnerVersion ?? "—";
+}
+
+function count(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+export function tokensLine(
+  attempt: Pick<
+    AttemptSummary,
+    "inputTokens" | "modelName" | "outputTokens" | "runnerKind" | "runnerVersion" | "tokenUsage"
+  >,
+): string {
+  const breakdown =
+    attempt.inputTokens !== null && attempt.outputTokens !== null
+      ? ` (${count(attempt.inputTokens)} in · ${count(attempt.outputTokens)} out)`
+      : "";
+  const tokens = attempt.tokenUsage === null ? "—" : `${count(attempt.tokenUsage)}${breakdown}`;
+  return `Tokens: ${tokens} · Model: ${attempt.modelName ?? "—"} · Runner: ${runnerLabel(attempt)}`;
 }
 
 function EmptyCapture() {
@@ -254,8 +276,8 @@ export function AttemptDetail({
             System error code: {data.systemErrorCode}
           </p>
         ) : null}
-        <p className="mt-3 text-xs text-zinc-500">
-          Tokens: {data.tokenUsage?.toLocaleString("en-US") ?? "—"} · Model: {data.modelName ?? "—"}
+        <p className="mt-3 text-xs text-zinc-500" title={data.runnerVersion ?? undefined}>
+          {tokensLine(data)}
         </p>
       </div>
 

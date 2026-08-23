@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/api";
 import {
   defaultExpandedAttemptId,
   draftValidationNote,
+  executingAttempt,
   expiredRunMessage,
   isMissingRun,
   reportNote,
@@ -17,13 +18,19 @@ function attempt(id: string, status: AttemptSummary["status"]): AttemptSummary {
     failureReason: null,
     finishedAt: null,
     id,
+    inputTokens: null,
     latestScreenshot: null,
     latestStep: null,
+    modelName: null,
+    outputTokens: null,
     queuedAt: "2026-08-19T10:00:00.000Z",
     retryDelaySeconds: 0,
+    runnerKind: null,
+    runnerVersion: null,
     startedAt: null,
     status,
     summary: null,
+    tokenUsage: null,
   };
 }
 
@@ -67,5 +74,20 @@ describe("run detail", () => {
     expect(draftValidationNote).toBe(
       "This was a validation run of an unsaved draft. It doesn't open incidents or send alerts.",
     );
+  });
+});
+
+describe("run execution details", () => {
+  it("reports the runner and model of the last attempt that actually ran", () => {
+    const queued = attempt("attempt_3", "RUNNING");
+    const executed = {
+      ...attempt("attempt_2", "FAILED"),
+      modelName: "gpt-5-mini",
+      runnerKind: "fallback" as const,
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    };
+    expect(executingAttempt([attempt("attempt_1", "FAILED"), executed, queued])).toBe(executed);
+    expect(executingAttempt([attempt("attempt_1", "PASSED")])).toBeNull();
+    expect(executingAttempt([])).toBeNull();
   });
 });

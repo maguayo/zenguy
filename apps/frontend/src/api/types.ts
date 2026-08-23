@@ -242,19 +242,27 @@ export interface RunSnapshot {
   viewport: { height: number; width: number };
 }
 
+export type RunnerKind = "primary" | "fallback";
+
 export interface AttemptSummary {
   attemptIndex: number;
   durationMs: number | null;
   failureReason: string | null;
   finishedAt: string | null;
   id: string;
+  inputTokens: number | null;
   latestScreenshot: { id: string; url: string } | null;
   latestStep: { actionType: string; description: string; timestamp: string } | null;
+  modelName: string | null;
+  outputTokens: number | null;
   queuedAt: string;
   retryDelaySeconds: number;
+  runnerKind: RunnerKind | null;
+  runnerVersion: string | null;
   startedAt: string | null;
   status: AttemptStatus;
   summary: string | null;
+  tokenUsage: number | null;
 }
 
 export interface Run {
@@ -297,7 +305,6 @@ export interface Attempt extends AttemptSummary {
   actualResult: string | null;
   consoleErrors: { level: string; message: string; timestamp: string; url: string | null }[];
   expectedResult: string | null;
-  modelName: string | null;
   networkErrors: {
     durationMs: number | null;
     errorType: string | null;
@@ -306,11 +313,9 @@ export interface Attempt extends AttemptSummary {
     path: string;
     statusCode: number | null;
   }[];
-  runnerVersion: string | null;
   screenshots: ArtifactRef[];
   steps: Step[];
   systemErrorCode: string | null;
-  tokenUsage: number | null;
   visitedUrls: string[];
 }
 

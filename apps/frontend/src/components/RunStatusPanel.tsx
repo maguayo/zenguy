@@ -6,6 +6,8 @@ import type { AttemptStatus, Run, RunStatus } from "../api/types";
 import { itemQueryErrorMessage } from "../lib/errors";
 import { formatDuration } from "../lib/format";
 import { subscribeRun } from "../lib/sse";
+import { filmstripItems, ScreenshotFilmstrip } from "./ScreenshotFilmstrip";
+import { ScreenshotViewer } from "./ScreenshotViewer";
 import { StatusBadge } from "./StatusBadge";
 import { Card } from "./ui/Card";
 import { ErrorState } from "./ui/ErrorState";
@@ -40,6 +42,7 @@ export function RunStatusPanel({
   const queryKey = useMemo(() => ["ws", wsId, "runs", runId] as const, [runId, wsId]);
   const [sseFailed, setSseFailed] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const run = useQuery({
     queryFn: () => getRun(wsId, runId),
     queryKey,
@@ -50,16 +53,19 @@ export function RunStatusPanel({
     },
   });
   const latestAttempt = run.data?.attempts.at(-1);
-  const needsAttemptDetail =
-    Boolean(latestAttempt) &&
-    Boolean(run.data && ["FAILED", "TIMEOUT"].includes(run.data.status));
+  const runStatus = run.data?.status;
+  const runActive = runStatus !== undefined && !isTerminalRun(runStatus);
+  const runFailed = runStatus === "FAILED" || runStatus === "TIMEOUT";
+  // The compact panel only needs the attempt for the expected/observed
+  // comparison; the full panel also shows every step screenshot.
+  const needsAttemptDetail = Boolean(latestAttempt) && (!compact || runFailed);
   const attemptDetail = useQuery({
     enabled: needsAttemptDetail,
     queryFn: () => getAttempt(wsId, latestAttempt?.id ?? ""),
     queryKey: ["ws", wsId, "attempts", latestAttempt?.id],
+    refetchInterval: runActive ? 2_000 : false,
   });
   const liveUrl = run.data?.live?.url;
-  const runStatus = run.data?.status;
 
   useEffect(() => setSseFailed(false), [runId]);
 
@@ -109,6 +115,7 @@ export function RunStatusPanel({
   const latestStep = latestAttempt?.latestStep;
   const latestScreenshot = latestAttempt?.latestScreenshot;
   const active = !isTerminalRun(run.data.status);
+  const filmstrip = !compact && attemptDetail.data ? filmstripItems(attemptDetail.data) : [];
   const elapsed = run.data.startedAt
     ? formatDuration(active ? Math.max(0, now - new Date(run.data.startedAt).getTime()) : run.data.durationMs)
     : "—";
@@ -159,7 +166,9 @@ export function RunStatusPanel({
       ) : !isTerminalRun(run.data.status) ? (
         <p className="text-sm text-zinc-500">Waiting for the browser to start…</p>
       ) : null}
-      {latestScreenshot ? (
+      {filmstrip.length > 0 ? (
+        <ScreenshotFilmstrip items={filmstrip} onOpen={setViewerIndex} />
+      ) : latestScreenshot ? (
         <img
           alt="Latest validation screenshot"
           className={compact ? "max-h-48 w-full rounded-md object-cover object-top" : "w-full rounded-md"}
@@ -213,6 +222,14 @@ export function RunStatusPanel({
           </p>
         </Card>
       ) : null}
+      {compact ? null : (
+        <ScreenshotViewer
+          initialIndex={viewerIndex ?? 0}
+          open={viewerIndex !== null}
+          screenshots={filmstrip}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
     </div>
   );
 }
