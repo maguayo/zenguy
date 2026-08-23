@@ -12,14 +12,38 @@ import type { AppConfig } from "../../shared/config";
 import { RATE_LIMITS } from "../../shared/constants";
 import type { IdGenerator } from "../../shared/ids";
 import { sha256Hex } from "../../shared/crypto";
-import {
-  enforceRateLimitScopes,
-  normalizeRateLimitAddress,
-  type RateLimiter,
-} from "../../shared/ratelimit";
+import { AppError } from "../../shared/errors";
+import type { RateLimiter } from "../../shared/ratelimit";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { zjson } from "../validate";
+
+// Local copies of the multi-scope limiter helpers: every scope is charged in
+// parallel and the first exhausted one answers 429 with its retry hint.
+async function enforceScopes(
+  limiter: RateLimiter,
+  keys: readonly string[],
+  rule: { readonly limit: number; readonly windowSeconds: number },
+): Promise<void> {
+  const results = await Promise.all(
+    keys.map((key) => limiter.hit(key, rule.limit, rule.windowSeconds)),
+  );
+  const blocked = results.find((result) => !result.allowed);
+  if (blocked !== undefined) {
+    throw new AppError(
+      "RATE_LIMITED",
+      "Too many requests",
+      undefined,
+      blocked.retryAfterSeconds,
+    );
+  }
+}
+
+function normalizeAddress(value: string | undefined): string {
+  if (value === undefined) return "unknown";
+  const raw = value.trim().toLowerCase();
+  return /^[0-9a-f:.]{1,64}$/iu.test(raw) ? raw : "invalid";
+}
 
 export interface ActivityRoutesDependencies {
   users: UserRepo;
@@ -85,11 +109,11 @@ export function activityRoutes(
     requireAuth(dependencies),
     requireVerifiedEmail,
     async (context, next) => {
-      const address = normalizeRateLimitAddress(
+      const address = normalizeAddress(
         context.req.header("CF-Connecting-IP"),
       );
       const addressHash = await sha256Hex(address);
-      await enforceRateLimitScopes(
+      await enforceScopes(
         dependencies.rateLimiter,
         [
           `events:user:${context.get("user").id}`,
@@ -97,7 +121,7 @@ export function activityRoutes(
         ],
         RATE_LIMITS.events,
       );
-      await enforceRateLimitScopes(
+      await enforceScopes(
         dependencies.rateLimiter,
         [
           `events:daily:user:${context.get("user").id}`,
@@ -105,7 +129,7 @@ export function activityRoutes(
         ],
         RATE_LIMITS.events_daily,
       );
-      await enforceRateLimitScopes(
+      await enforceScopes(
         dependencies.rateLimiter,
         ["events:daily:global"],
         RATE_LIMITS.events_global_daily,

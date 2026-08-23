@@ -30,6 +30,7 @@ export const ID_PREFIXES = {
   apiKey: "ak",
   alertCreditEntry: "ace",
   pushDevice: "pd",
+  activityEvent: "act",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

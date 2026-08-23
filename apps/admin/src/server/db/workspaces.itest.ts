@@ -89,8 +89,26 @@ function insertEvent(event: EventSeed): D1PreparedStatement {
   );
 }
 
+/**
+ * Tombstones a workspace. The deployed schema only has `deleted_at`; the
+ * deletion-saga migration (0029) adds `deletion_state`, which is kept
+ * consistent when present so the row looks like a real completed deletion.
+ */
+async function tombstone(id: string, at: number): Promise<D1PreparedStatement> {
+  const columns = await env.DB.prepare("PRAGMA table_info(workspaces)").all<{ name: string }>();
+  const hasSaga = columns.results.some((column) => column.name === "deletion_state");
+  return hasSaga
+    ? env.DB.prepare(
+        `UPDATE workspaces
+         SET deleted_at = ?, deletion_state = 'COMPLETED', deletion_completed_at = ?
+         WHERE id = ?`,
+      ).bind(at, at, id)
+    : env.DB.prepare("UPDATE workspaces SET deleted_at = ? WHERE id = ?").bind(at, id);
+}
+
 async function seed(): Promise<void> {
   await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
+  const tombstoneGone = await tombstone("ws_gone", NOW - DAY);
   await env.DB.batch([
     insertUser("usr_one", "One", "one@example.com"),
     insertUser("usr_two", "Two", "two@example.com"),
@@ -102,11 +120,7 @@ async function seed(): Promise<void> {
     insertMember("wm_two", "ws_acme", "usr_two", "MEMBER"),
     insertMember("wm_gone", "ws_gone", "usr_one", "OWNER"),
     // Tombstoned after its member row: 0029 fences member inserts on deleted workspaces.
-    env.DB.prepare(
-      `UPDATE workspaces
-       SET deleted_at = ?, deletion_state = 'COMPLETED', deletion_completed_at = ?
-       WHERE id = ?`,
-    ).bind(NOW - DAY, NOW - DAY, "ws_gone"),
+    tombstoneGone,
     // Logins carry no workspace; they reach a workspace through its members.
     insertEvent({
       id: "act_login_one",

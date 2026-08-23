@@ -90,4 +90,19 @@ export const RATE_LIMITS = {
   report_download: { limit: 60, windowSeconds: 3600 },
   public_api: { limit: 120, windowSeconds: 60 },
   subscription_grants: { limit: 20, windowSeconds: 3600 },
+  /**
+   * Best-effort telemetry, capped per actor and per source IP. Clients flush
+   * one batch per navigation (1 s debounce), so the budget is in batches: a
+   * person rarely exceeds ~60 page views a minute, and an office NAT shares
+   * the IP scope, hence 120.
+   */
+  events: { limit: 120, windowSeconds: 60 },
+  /** Long-window storage budget: 5,000 batches (≤ 125,000 events) per actor/IP/day. */
+  events_daily: { limit: 5_000, windowSeconds: 86_400 },
+  /**
+   * Circuit breaker so telemetry fails before core product data can exhaust
+   * the shared D1 store: ~2.5× the expected daily batch volume at 100 active
+   * users (spec §11); raise when the product grows.
+   */
+  events_global_daily: { limit: 50_000, windowSeconds: 86_400 },
 } as const;

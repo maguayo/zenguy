@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { useAuth, type AuthStatus } from "../contexts/AuthContext";
 import { createActivityQueue, type ActivityQueue } from "../lib/activity/queue";
 import { visitEventFor } from "../lib/activity/route-events";
-import { apiBeacon } from "../lib/api";
+import { sendActivityBeacon } from "../lib/activity/beacon";
 
 /**
  * Only verified, signed-in sessions report activity: the API rejects batches
@@ -26,7 +26,7 @@ export function ActivityTracker() {
 
   if (queueRef.current === null) {
     queueRef.current = createActivityQueue({
-      send: (events) => apiBeacon("/api/me/events", { events }),
+      send: sendActivityBeacon,
     });
   }
 

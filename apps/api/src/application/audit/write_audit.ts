@@ -54,8 +54,10 @@ export class WriteAudit {
       });
       // Bridge only after the audit row is persisted. `TrackEvent` sanitizes
       // the raw metadata itself and never throws, so it cannot reach the catch.
+      const activityType = AUDIT_TO_ACTIVITY[input.action];
+      if (activityType === undefined) return;
       await this.dependencies.activity?.execute({
-        type: AUDIT_TO_ACTIVITY[input.action],
+        type: activityType,
         userId: input.actorUserId,
         workspaceId: input.workspaceId,
         source: "server",

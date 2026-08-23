@@ -26,6 +26,9 @@ describe("D1ActivityEventRepo", () => {
 
   beforeEach(async () => {
     await freshDb();
+    // freshDb() only learns about this table with the wiring commit; clearing
+    // it here keeps the suite hermetic on either schema.
+    await testEnv().DB.prepare("DELETE FROM activity_events").run();
     repo = new D1ActivityEventRepo(testEnv().DB);
   });
 

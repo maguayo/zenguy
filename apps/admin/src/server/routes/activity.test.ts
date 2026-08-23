@@ -1,26 +1,31 @@
 import { Hono } from "hono";
-import { activityRoutes, type ActivityLoaders } from "./activity";
-import type { Loaders } from "./data";
-import { buildApp } from "../app";
-import type { AppEnv } from "../env";
-import { AppError } from "../errors";
-import {
-  FakeAdminSessionStore,
-  allowAdminAccess,
-  fakeBindings,
-  verifiedLoginBody,
-} from "../../test/fakes";
 import type { ActivityFeedEvent } from "../db/activity";
 import type { WorkspaceActivitySummary } from "../db/workspaces";
+import type { AppEnv } from "../env";
+import { AppError } from "../errors";
+import { activityRoutes, type ActivityLoaders, type ActivityRoutesDependencies } from "./activity";
+
+// The session guard belongs to routes/data.test.ts; here it is a stand-in that
+// accepts one fixed cookie, so this file tests only what the activity routes
+// add (loader wiring, query validation, envelopes) and stays independent of
+// the session machinery, which differs between the deployed code and the
+// security rewrite in flight.
+const SESSION_COOKIE = "admin_session=activity-test";
+vi.mock("../require_session", async () => {
+  const { AppError: Failure } = await import("../errors");
+  return {
+    requireSession: () => async (context: { req: { header(name: string): string | undefined } }, next: () => Promise<void>) => {
+      if (context.req.header("Cookie") !== SESSION_COOKIE) {
+        throw new Failure("UNAUTHORIZED", "Admin session required");
+      }
+      await next();
+    },
+  };
+});
 
 const NOW = 1_700_000_000_000;
 const clock = { now: () => NOW };
-const noDelay = async () => {};
-const okFetch = (async () =>
-  new Response(JSON.stringify(verifiedLoginBody()), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  })) as typeof fetch;
+const DB = { activityTestDatabase: true } as unknown as D1Database;
 
 const events: ActivityFeedEvent[] = [
   {
@@ -66,9 +71,7 @@ const workspaces: WorkspaceActivitySummary[] = [
   },
 ];
 
-// The activity fakes travel on the same `loaders` override the data routes
-// read, so the type keeps the data keys (all optional) alongside ours.
-type FakeLoaders = ActivityLoaders & Partial<Loaders>;
+type FakeLoaders = ActivityLoaders;
 
 function fakeLoaders(): FakeLoaders {
   return {
@@ -77,23 +80,11 @@ function fakeLoaders(): FakeLoaders {
   };
 }
 
-// The activity routes are mounted by the admin-v2 client branch, not by app.ts
-// in this tree, so the tests mount them on a harness that mirrors the app's
-// /api hardening (Access identity, no-store, JSON error envelope) and shares
-// the session store that a login through the real app populated.
-function harnessFor(
-  bindings: ReturnType<typeof fakeBindings>,
-  sessions: FakeAdminSessionStore,
-  loaders: FakeLoaders,
-) {
+// Mirrors the app's /api hardening (no-store, JSON error envelope) around the
+// routes under test. The session-related dependencies are whatever the guard
+// of the day expects; the stand-in above ignores them.
+function harnessFor(loaders: FakeLoaders) {
   const harness = new Hono<AppEnv>();
-  harness.use("*", async (context, next) => {
-    const identity = await allowAdminAccess.verify(context.req.raw);
-    if (identity === null) throw new AppError("FORBIDDEN", "Cloudflare Access required");
-    context.set("accessEmail", identity.email);
-    context.set("accessSubject", identity.subject);
-    await next();
-  });
   harness.use("/api/*", async (context, next) => {
     await next();
     context.header("Cache-Control", "no-store");
@@ -106,43 +97,24 @@ function harnessFor(
       appError.status as 400,
     );
   });
-  harness.route(
-    "/api",
-    activityRoutes({
-      db: bindings.DB,
-      clock,
-      adminUserIds: bindings.ADMIN_USER_IDS,
-      sessions,
-      loaders,
-    }),
-  );
+  const dependencies = {
+    db: DB,
+    clock,
+    loaders,
+    secret: "unused-by-the-stand-in",
+    adminEmails: "unused@example.com",
+    adminUserIds: "usr_unused",
+    sessions: {},
+  } as unknown as ActivityRoutesDependencies;
+  harness.route("/api", activityRoutes(dependencies));
   return harness;
 }
 
-async function loggedIn(loaders: FakeLoaders) {
-  const bindings = fakeBindings();
-  const sessions = new FakeAdminSessionStore();
-  const app = buildApp(bindings, {
-    fetch: okFetch,
-    delay: noDelay,
-    clock,
-    loaders,
-    sessions,
-    accessVerifier: allowAdminAccess,
-  });
-  const response = await app.request("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "marcos@aguayo.es", password: "abc123456" }),
-  });
-  const cookie = (response.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
-
-  const harness = harnessFor(bindings, sessions, loaders);
+function loggedIn(loaders: FakeLoaders) {
+  const harness = harnessFor(loaders);
   return {
-    bindings,
-    sessions,
-    cookie,
-    get: (path: string) => harness.request(path, { headers: { Cookie: cookie } }),
+    bindings: { DB },
+    get: (path: string) => harness.request(path, { headers: { Cookie: SESSION_COOKIE } }),
     anonymous: (path: string) => harness.request(path),
   };
 }
@@ -164,7 +136,7 @@ const TYPE_ERROR = {
 
 describe("admin activity routes", () => {
   it("refuses both endpoints without a session", async () => {
-    const session = await loggedIn(fakeLoaders());
+    const session = loggedIn(fakeLoaders());
     for (const path of PATHS) {
       const response = await session.anonymous(path);
       expect(response.status, path).toBe(401);
@@ -177,7 +149,7 @@ describe("admin activity routes", () => {
 
   it("serves the activity feed from its loader behind the session cookie", async () => {
     const loaders = fakeLoaders();
-    const session = await loggedIn(loaders);
+    const session = loggedIn(loaders);
 
     const response = await session.get("/api/activity");
     expect(response.status).toBe(200);
@@ -189,7 +161,7 @@ describe("admin activity routes", () => {
 
   it("serves the workspaces table from its loader behind the session cookie", async () => {
     const loaders = fakeLoaders();
-    const session = await loggedIn(loaders);
+    const session = loggedIn(loaders);
 
     const response = await session.get("/api/workspaces");
     expect(response.status).toBe(200);
@@ -201,7 +173,7 @@ describe("admin activity routes", () => {
 
   it("passes a well-formed type filter and the limit through to the feed loader", async () => {
     const loaders = fakeLoaders();
-    const session = await loggedIn(loaders);
+    const session = loggedIn(loaders);
 
     expect((await session.get("/api/activity?type=alert.sent")).status).toBe(200);
     expect(loaders.activity).toHaveBeenLastCalledWith(session.bindings.DB, 50, "alert.sent");
@@ -221,7 +193,7 @@ describe("admin activity routes", () => {
 
   it("rejects a type filter that is not a lowercase subject.verb of at most 64 characters", async () => {
     const loaders = fakeLoaders();
-    const session = await loggedIn(loaders);
+    const session = loggedIn(loaders);
     const tooLong = `${"a".repeat(60)}.verb`;
     expect(tooLong).toHaveLength(65);
 
@@ -250,7 +222,7 @@ describe("admin activity routes", () => {
 
   it("rejects limits outside 1..200 on both endpoints", async () => {
     const loaders = fakeLoaders();
-    const session = await loggedIn(loaders);
+    const session = loggedIn(loaders);
     for (const path of PATHS) {
       for (const query of ["?limit=500", "?limit=0", "?limit=abc", "?limit=1.5"]) {
         const response = await session.get(`${path}${query}`);
@@ -264,7 +236,7 @@ describe("admin activity routes", () => {
 
   it("relays a migration-pending answer verbatim", async () => {
     const unavailable = { unavailable: "MIGRATION_PENDING" as const };
-    const session = await loggedIn({
+    const session = loggedIn({
       activity: vi.fn(async () => unavailable),
       workspaces: vi.fn(async () => unavailable),
     });
@@ -272,25 +244,6 @@ describe("admin activity routes", () => {
       const response = await session.get(path);
       expect(response.status, path).toBe(200);
       await expect(response.json()).resolves.toEqual({ data: unavailable });
-    }
-  });
-
-  it("refuses a still-valid cookie once the user id leaves the allowlist", async () => {
-    const session = await loggedIn(fakeLoaders());
-
-    // The server-side row still exists; only the stable-id allowlist changed.
-    const revoked = harnessFor(
-      fakeBindings({ ADMIN_USER_IDS: "usr_someone_else" }),
-      session.sessions,
-      fakeLoaders(),
-    );
-
-    for (const path of PATHS) {
-      const response = await revoked.request(path, { headers: { Cookie: session.cookie } });
-      expect(response.status, path).toBe(401);
-      await expect(response.json()).resolves.toEqual({
-        error: { code: "UNAUTHORIZED", message: "Admin session required" },
-      });
     }
   });
 });

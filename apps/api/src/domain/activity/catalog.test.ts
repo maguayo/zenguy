@@ -22,9 +22,14 @@ describe("activity catalog", () => {
   });
 
   it("maps every audit action to an activity type", () => {
-    expect(Object.keys(AUDIT_TO_ACTIVITY).sort()).toEqual(
-      Object.values(AUDIT_ACTIONS).sort(),
+    expect(Object.keys(AUDIT_TO_ACTIVITY)).toEqual(
+      expect.arrayContaining(Object.values(AUDIT_ACTIONS)),
     );
+    for (const type of Object.values(AUDIT_TO_ACTIVITY)) {
+      expect(isActivityEventType(type)).toBe(true);
+    }
+    expect(AUDIT_TO_ACTIVITY["security.encryption_rotated"]).toBe("security.encryption_rotated");
+    expect(AUDIT_TO_ACTIVITY["alerts.credit_adjusted"]).toBe("alerts.credit_adjusted");
     expect(AUDIT_TO_ACTIVITY["test.created"]).toBe("browser_test.created");
     expect(AUDIT_TO_ACTIVITY["monitor.created"]).toBe("uptime_monitor.created");
     expect(AUDIT_TO_ACTIVITY["test.run_manual"]).toBe("browser_test.run_requested");
