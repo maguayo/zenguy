@@ -10,10 +10,11 @@ import { CopyButton } from "@/components/CopyButton";
 import { RunSourceBadge } from "@/components/RunSourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AttemptDetail } from "@/components/tests/AttemptDetail";
-import { deviceLabel } from "@/components/tests/labels";
+import { deviceLabel, runnerLabel } from "@/components/tests/labels";
 import {
   defaultExpandedAttemptId,
   draftValidationNote,
+  executedBy,
   expiredRunMessage,
   isMissingRun,
   reportNote,
@@ -68,6 +69,7 @@ function AttemptCard({
         <Caption style={styles.attemptMeta}>
           {formatDuration(attempt.durationMs)}
           {attempt.retryDelaySeconds > 0 ? ` · waited ${attempt.retryDelaySeconds} s` : ""}
+          {attempt.runnerKind ? ` · ${runnerLabel(attempt.runnerKind)}` : ""}
         </Caption>
         <Feather color={colors.zinc500} name={expanded ? "chevron-up" : "chevron-down"} size={18} />
       </Pressable>
@@ -132,6 +134,7 @@ export default function RunDetailScreen() {
     data !== undefined && (data.status === "FAILED" || data.status === "TIMEOUT") && can("reports.download");
   const testId = data?.testId ?? null;
   const incidentId = data?.incidentId ?? null;
+  const executor = data ? executedBy(data.attempts) : null;
 
   return (
     <>
@@ -250,8 +253,21 @@ export default function RunDetailScreen() {
                       "—"
                     ),
                   },
-                  { label: "Model", value: data.snapshot.modelName },
-                  { label: "Runner", value: data.snapshot.runnerVersion },
+                  // The executor that actually ran the test, not the one planned at creation.
+                  { label: "Model", value: executor?.modelName ?? data.snapshot.modelName },
+                  {
+                    label: "Runner",
+                    value: executor ? (
+                      <View>
+                        <Body>{runnerLabel(executor.runnerKind)}</Body>
+                        {executor.runnerVersion ? (
+                          <Caption selectable>{executor.runnerVersion}</Caption>
+                        ) : null}
+                      </View>
+                    ) : (
+                      "—"
+                    ),
+                  },
                 ]}
               />
             </Card>

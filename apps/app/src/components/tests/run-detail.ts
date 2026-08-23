@@ -11,6 +11,20 @@ export function isMissingRun(error: unknown): boolean {
   return isUnavailableItem(error);
 }
 
+/** The latest attempt a runner actually executed: it tells which executor and model ran the test. */
+export function executedBy(attempts: AttemptSummary[]): AttemptSummary | null {
+  for (let index = attempts.length - 1; index >= 0; index -= 1) {
+    const attempt = attempts[index];
+    if (
+      attempt &&
+      (attempt.runnerKind !== null || attempt.runnerVersion !== null || attempt.modelName !== null)
+    ) {
+      return attempt;
+    }
+  }
+  return null;
+}
+
 /** The first failed attempt is the interesting one; otherwise the latest. */
 export function defaultExpandedAttemptId(attempts: AttemptSummary[]): string | null {
   return (

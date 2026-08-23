@@ -5,7 +5,9 @@ import {
   deviceDescription,
   deviceLabel,
   retriesLabel,
+  runnerLabel,
   testSubtitle,
+  tokensLabel,
 } from "./labels";
 
 describe("browser test labels", () => {
@@ -15,6 +17,20 @@ describe("browser test labels", () => {
     expect(deviceLabel("MOBILE")).toBe("Mobile");
     expect(deviceDescription("DESKTOP")).toBe("Desktop · 1440 × 900");
     expect(deviceDescription("MOBILE")).toBe("Mobile · 390 × 844");
+  });
+
+  it("names the executor of an attempt", () => {
+    expect(runnerLabel("primary")).toBe("Primary");
+    expect(runnerLabel("fallback")).toBe("Fallback");
+    expect(runnerLabel(null)).toBe("—");
+  });
+
+  it("formats token usage with the prompt/completion split when known", () => {
+    expect(tokensLabel({ inputTokens: 11_000, outputTokens: 1_345, tokenUsage: 12_345 })).toBe(
+      "12,345 (11,000 in · 1,345 out)",
+    );
+    expect(tokensLabel({ inputTokens: null, outputTokens: null, tokenUsage: 12_345 })).toBe("12,345");
+    expect(tokensLabel({ inputTokens: null, outputTokens: null, tokenUsage: null })).toBe("—");
   });
 
   it("pluralizes retries and counts attempts against the maximum", () => {

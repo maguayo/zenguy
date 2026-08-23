@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api";
 import {
   defaultExpandedAttemptId,
   draftValidationNote,
+  executedBy,
   expiredRunMessage,
   isMissingRun,
   reportNote,
@@ -17,17 +18,43 @@ function attempt(id: string, status: AttemptSummary["status"]): AttemptSummary {
     failureReason: null,
     finishedAt: null,
     id,
+    inputTokens: null,
     latestScreenshot: null,
     latestStep: null,
+    modelName: null,
+    outputTokens: null,
     queuedAt: "2026-08-19T10:00:00.000Z",
     retryDelaySeconds: 0,
+    runnerKind: null,
+    runnerVersion: null,
     startedAt: null,
     status,
     summary: null,
+    tokenUsage: null,
   };
 }
 
 describe("run detail", () => {
+  it("reports who executed the run from the latest attempt a runner finished", () => {
+    const first: AttemptSummary = {
+      ...attempt("attempt_1", "FAILED"),
+      modelName: "qwen/qwen3.8-27b",
+      runnerKind: "primary",
+      runnerVersion: "zenguy-local-runner/2.0.0",
+    };
+    const second: AttemptSummary = {
+      ...attempt("attempt_2", "PASSED"),
+      modelName: "gpt-5-mini",
+      runnerKind: "fallback",
+      runnerVersion: "zenguy-fallback-runner/2.0.0",
+    };
+    const queued = attempt("attempt_3", "QUEUED");
+
+    expect(executedBy([first, second, queued])).toBe(second);
+    expect(executedBy([queued])).toBeNull();
+    expect(executedBy([])).toBeNull();
+  });
+
   it("expands the first failed attempt, otherwise the last", () => {
     expect(
       defaultExpandedAttemptId([

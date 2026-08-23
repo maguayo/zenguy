@@ -12,6 +12,7 @@ import { itemQueryErrorMessage } from "@/lib/errors";
 import { formatTime } from "@/lib/format";
 import { colors, radius, spacing, toneColors, type Tone } from "@/theme";
 import { Badge, Body, Caption, Card, ErrorState, Heading, Mono, Muted, Skeleton, Small } from "@/ui";
+import { runnerLabel, tokensLabel } from "@/components/tests/labels";
 import { ExpectedObserved } from "./ExpectedObserved";
 import { ScreenshotViewer } from "./ScreenshotViewer";
 import { screenshotItems, type ScreenshotItem } from "./screenshots";
@@ -212,7 +213,8 @@ export function AttemptDetail({
           </Mono>
         ) : null}
         <Caption style={styles.gapTop}>
-          Tokens: {data.tokenUsage?.toLocaleString("en-US") ?? "—"} · Model: {data.modelName ?? "—"}
+          Tokens: {tokensLabel(data)} · Model: {data.modelName ?? "—"} · Runner:{" "}
+          {runnerLabel(data.runnerKind)}
         </Caption>
       </View>
 
