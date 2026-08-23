@@ -12,6 +12,9 @@ export class ApiError extends Error {
   }
 }
 
+/** react-query key for the admin session: the gate reads it, login seeds it. */
+export const SESSION_QUERY_KEY = ["me"] as const;
+
 interface Envelope<T> {
   data?: T;
   error?: { code: string; message: string };

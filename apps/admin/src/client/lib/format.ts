@@ -1,9 +1,14 @@
 const EM_DASH = "—";
 
-/** An elapsed span in its two most significant units: "3s", "2m 4s", "2h 0m", "2d 2h". */
+/**
+ * An elapsed span in its two most significant units: "3s", "90s", "2m 4s",
+ * "2h 0m", "2d 2h". Anything under two minutes stays in raw seconds because
+ * worker staleness is judged against a 15s heartbeat window, where "75s ago"
+ * reads faster than "1m 15s ago".
+ */
 export function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1_000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 120) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
   const hours = Math.floor(minutes / 60);
@@ -23,7 +28,9 @@ export function relativeSeconds(from: number, now: number): string {
 export function formatDuration(ms: number | null): string {
   if (ms === null) return EM_DASH;
   const total = Math.max(0, ms);
-  if (total < 1_000) return `${(total / 1_000).toFixed(1)}s`;
+  // Rounded on the integer millisecond count: 0.85 is not representable, so
+  // (850 / 1_000).toFixed(1) would report 0.8s.
+  if (total < 1_000) return `${(Math.round(total / 100) / 10).toFixed(1)}s`;
   const totalSeconds = Math.floor(total / 1_000);
   const seconds = totalSeconds % 60;
   const totalMinutes = Math.floor(totalSeconds / 60);
