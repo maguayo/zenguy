@@ -107,6 +107,12 @@ Each worker sends `POST /api/runner/heartbeat` every 5 s with its `workerId`
 sanitised hostname); claims carry the same id so admin.zenguy.com can
 attribute runs.
 
+Deploy the API **before** pointing a runner that sends `workerId` at it. The
+claim schemas are strict, so an API that predates the field answers `400` to
+every claim (which the runner treats as a poison message). For staging that
+means pushing `main` to `staging` and letting the deploy finish before
+restarting `zenguy-fallback-staging` or running `./browser_worker.py --staging`.
+
 ## Fallback runner (plan B)
 
 `--fallback` turns the same executor into the backup runner meant for an

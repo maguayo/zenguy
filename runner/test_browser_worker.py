@@ -767,7 +767,8 @@ class AppClientIdentityTests(unittest.IsolatedAsyncioTestCase):
         args, kwargs = fake.call_args
         self.assertTrue(args[0].endswith("/api/runner/heartbeat"))
         self.assertEqual(kwargs["method"], "POST")
-        self.assertEqual(kwargs["timeout"], 10)
+        self.assertEqual(kwargs["timeout"], worker.HEARTBEAT_HTTP_TIMEOUT_SECONDS)
+        self.assertLess(worker.HEARTBEAT_HTTP_TIMEOUT_SECONDS, worker.HEARTBEAT_SECONDS)
         self.assertEqual(kwargs["payload"], payload)
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer " + "r" * 64)
 

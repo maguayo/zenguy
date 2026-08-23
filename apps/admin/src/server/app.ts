@@ -30,6 +30,7 @@ function withSecurityHeaders(response: Response): Response {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "same-origin");
   headers.set("X-Frame-Options", "DENY");
+  headers.set("Strict-Transport-Security", "max-age=31536000");
   headers.set("Content-Security-Policy", CSP);
   return new Response(response.body, {
     status: response.status,
@@ -38,7 +39,15 @@ function withSecurityHeaders(response: Response): Response {
   });
 }
 
+const MIN_SESSION_SECRET_LENGTH = 32;
+
 export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppEnv> {
+  // Fail closed: a missing or short secret would sign sessions with a guessable
+  // key, so the Worker refuses to build and answers 500 to every request until
+  // the secret is set properly.
+  if ((env.ADMIN_SESSION_SECRET ?? "").length < MIN_SESSION_SECRET_LENGTH) {
+    throw new Error("ADMIN_SESSION_SECRET must be at least 32 characters");
+  }
   const app = new Hono<AppEnv>();
   const clock = overrides.clock ?? systemClock;
   const fetchImpl = overrides.fetch ?? fetch.bind(globalThis);

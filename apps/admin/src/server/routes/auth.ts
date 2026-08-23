@@ -22,6 +22,9 @@ const loginSchema = z.object({
   password: z.string().min(1).max(100),
 });
 
+/** Upper bound for the delegated login call to the production API. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+
 type Verdict = "valid" | "invalid" | "rate_limited" | "unavailable";
 
 async function verifyWithApi(
@@ -35,6 +38,9 @@ async function verifyWithApi(
       method: "POST",
       headers: { "content-type": "application/json", "user-agent": "zenguy-admin/1.0" },
       body: JSON.stringify({ email, password }),
+      // A hung API must not hold the login request open: the abort throws and
+      // lands on the "unavailable" path below like any other transport failure.
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch {
     return "unavailable";

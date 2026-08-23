@@ -75,7 +75,9 @@ DEFAULT_FALLBACK_MODEL_NAME = "gpt-5-mini"
 DEFAULT_FALLBACK_REASONING_EFFORT = "low"
 DEFAULT_POLL_SECONDS = 5.0
 HEARTBEAT_SECONDS = 5.0
-HEARTBEAT_HTTP_TIMEOUT_SECONDS = 10
+# Shorter than the interval on purpose: a stalled POST must never make the
+# worker look offline (the API drops a worker after 15 s without a beat).
+HEARTBEAT_HTTP_TIMEOUT_SECONDS = 4
 DEFAULT_VISIBILITY_TIMEOUT_MS = 900_000
 DEFAULT_HTTP_TIMEOUT_SECONDS = 60.0
 ENVIRONMENTS: dict[str, dict[str, str]] = {
@@ -1799,9 +1801,17 @@ class Heartbeat:
             self._thread.join(timeout=HEARTBEAT_HTTP_TIMEOUT_SECONDS + 1)
 
     def _run(self) -> None:
-        self.beat_once()
-        while not self._stop.wait(self.interval):
+        # Fixed deadline rather than "sleep interval after each attempt": the wait
+        # shrinks by however long the POST took, so a slow request cannot push the
+        # next beat past the window the API uses to call a worker online. A beat
+        # slower than the whole interval simply resyncs on the current time.
+        next_at = time.monotonic()
+        while True:
             self.beat_once()
+            now = time.monotonic()
+            next_at = max(next_at + self.interval, now)
+            if self._stop.wait(next_at - now):
+                return
 
 
 class Worker:

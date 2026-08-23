@@ -48,7 +48,10 @@ export class D1RunnerWorkerRepo implements RunnerWorkerRepo {
   async findById(id: string): Promise<RunnerWorker | null> {
     const row = await one<RunnerWorkerRow>(
       this.database
-        .prepare("SELECT * FROM runner_workers WHERE id = ?")
+        .prepare(
+          `SELECT id, mode, version, started_at, first_seen_at, last_seen_at
+           FROM runner_workers WHERE id = ?`,
+        )
         .bind(id),
     );
     return row === null

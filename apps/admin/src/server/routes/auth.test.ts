@@ -100,6 +100,26 @@ describe("admin auth", () => {
     });
   });
 
+  it("bounds the upstream call and reports a timeout as unavailable", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    const app = buildApp(fakeBindings(), {
+      fetch: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        inits.push(init);
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }) as typeof fetch,
+      delay: noDelay,
+      clock,
+    });
+
+    const response = await login(app, { email: "marcos@aguayo.es", password: "x" });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "SERVICE_UNAVAILABLE", message: "Production API is not reachable" },
+    });
+    expect(inits[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("treats an API error status as unavailable rather than a bad password", async () => {
     for (const status of [500, 502, 503]) {
       const app = buildApp(fakeBindings(), {

@@ -34,6 +34,15 @@ jobs:
       - name: API integration tests
         working-directory: apps/api
         run: pnpm test:integration
+      - name: Typecheck admin
+        working-directory: apps/admin
+        run: pnpm typecheck
+      - name: Admin unit tests
+        working-directory: apps/admin
+        run: pnpm test
+      - name: Admin integration tests
+        working-directory: apps/admin
+        run: pnpm test:integration
       - name: Migrate production D1
         working-directory: apps/api
         env:

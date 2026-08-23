@@ -9,6 +9,13 @@ import { upcomingWindows } from "../occurrences";
 
 const TERMINAL_RUN_STATUSES = new Set(["PASSED", "FAILED", "TIMEOUT", "SYSTEM_ERROR"]);
 
+type WindowKey = "h1" | "h3" | "h24";
+
+/** Bound as ?1/?2/?3 by the window queries: the h1, h3 and h24 cut-offs. */
+function cutoffs(now: number): [number, number, number] {
+  return [now - HOUR_MS, now - 3 * HOUR_MS, now - 24 * HOUR_MS];
+}
+
 interface CountsRow {
   total: number;
   verified: number | null;
@@ -22,21 +29,33 @@ interface MonitorCountsRow {
   unknown: number | null;
 }
 
-interface RunStatusRow {
+interface RunWindowRow {
   status: string;
-  total: number;
-  duration_sum: number | null;
-  duration_count: number;
+  h1_total: number;
+  h1_duration_sum: number | null;
+  h1_duration_count: number;
+  h3_total: number;
+  h3_duration_sum: number | null;
+  h3_duration_count: number;
+  h24_total: number;
+  h24_duration_sum: number | null;
+  h24_duration_count: number;
 }
 
-interface CheckStatusRow {
+interface CheckWindowRow {
   status: string;
-  total: number;
-  response_sum: number | null;
-  response_count: number;
+  h1_total: number;
+  h1_response_sum: number | null;
+  h1_response_count: number;
+  h3_total: number;
+  h3_response_sum: number | null;
+  h3_response_count: number;
+  h24_total: number;
+  h24_response_sum: number | null;
+  h24_response_count: number;
 }
 
-function toRunsWindow(rows: RunStatusRow[]): PastRunsWindow {
+function toRunsWindow(rows: RunWindowRow[], key: WindowKey): PastRunsWindow {
   const byStatus: Record<string, number> = {};
   let total = 0;
   let finished = 0;
@@ -44,12 +63,15 @@ function toRunsWindow(rows: RunStatusRow[]): PastRunsWindow {
   let durationSum = 0;
   let durationCount = 0;
   for (const row of rows) {
-    byStatus[row.status] = row.total;
-    total += row.total;
-    if (TERMINAL_RUN_STATUSES.has(row.status)) finished += row.total;
-    if (row.status === "PASSED") passed += row.total;
-    durationSum += row.duration_sum ?? 0;
-    durationCount += row.duration_count;
+    const count = row[`${key}_total`];
+    // The status only has rows in a wider window: it is absent from this one.
+    if (count === 0) continue;
+    byStatus[row.status] = count;
+    total += count;
+    if (TERMINAL_RUN_STATUSES.has(row.status)) finished += count;
+    if (row.status === "PASSED") passed += count;
+    durationSum += row[`${key}_duration_sum`] ?? 0;
+    durationCount += row[`${key}_duration_count`];
   }
   return {
     total,
@@ -59,18 +81,20 @@ function toRunsWindow(rows: RunStatusRow[]): PastRunsWindow {
   };
 }
 
-function toChecksWindow(rows: CheckStatusRow[]): PastChecksWindow {
+function toChecksWindow(rows: CheckWindowRow[], key: WindowKey): PastChecksWindow {
   let total = 0;
   let up = 0;
   let down = 0;
   let responseSum = 0;
   let responseCount = 0;
   for (const row of rows) {
-    total += row.total;
-    if (row.status === "PASSED") up += row.total;
-    else down += row.total;
-    responseSum += row.response_sum ?? 0;
-    responseCount += row.response_count;
+    const count = row[`${key}_total`];
+    if (count === 0) continue;
+    total += count;
+    if (row.status === "PASSED") up += count;
+    else down += count;
+    responseSum += row[`${key}_response_sum`] ?? 0;
+    responseCount += row[`${key}_response_count`];
   }
   return {
     total,
@@ -80,65 +104,74 @@ function toChecksWindow(rows: CheckStatusRow[]): PastChecksWindow {
   };
 }
 
-async function runsWindow(
-  db: D1Database,
-  now: number,
-  hours: number,
-): Promise<PastRunsWindow> {
-  const { results } = await db
-    .prepare(
-      `SELECT status,
-              COUNT(*) AS total,
-              SUM(duration_ms) AS duration_sum,
-              COUNT(duration_ms) AS duration_count
-       FROM test_runs
-       WHERE created_at >= ?
-       GROUP BY status`,
-    )
-    .bind(now - hours * HOUR_MS)
-    .all<RunStatusRow>();
-  return toRunsWindow(results);
-}
-
-async function checksWindow(
-  db: D1Database,
-  now: number,
-  hours: number,
-): Promise<PastChecksWindow> {
-  const { results } = await db
-    .prepare(
-      `SELECT status,
-              COUNT(*) AS total,
-              SUM(response_time_ms) AS response_sum,
-              COUNT(response_time_ms) AS response_count
-       FROM uptime_checks
-       WHERE checked_at >= ?
-       GROUP BY status`,
-    )
-    .bind(now - hours * HOUR_MS)
-    .all<CheckStatusRow>();
-  return toChecksWindow(results);
-}
-
+/**
+ * All three windows out of a single 24 h scan. The panel polls the overview
+ * every 30 seconds against the production database, so one GROUP BY query per
+ * window meant three full scans of the table per request; the CASE columns
+ * bucket the same rows in one pass (see migration 0024 for the index).
+ */
 async function pastRunWindows(db: D1Database, now: number): Promise<Windows<PastRunsWindow>> {
-  const [h1, h3, h24] = await Promise.all([
-    runsWindow(db, now, 1),
-    runsWindow(db, now, 3),
-    runsWindow(db, now, 24),
-  ]);
-  return { h1, h3, h24 };
+  const { results } = await db
+    .prepare(
+      `SELECT status,
+              SUM(CASE WHEN created_at >= ?1 THEN 1 ELSE 0 END) AS h1_total,
+              SUM(CASE WHEN created_at >= ?1 THEN COALESCE(duration_ms, 0) ELSE 0 END)
+                AS h1_duration_sum,
+              SUM(CASE WHEN created_at >= ?1 AND duration_ms IS NOT NULL THEN 1 ELSE 0 END)
+                AS h1_duration_count,
+              SUM(CASE WHEN created_at >= ?2 THEN 1 ELSE 0 END) AS h3_total,
+              SUM(CASE WHEN created_at >= ?2 THEN COALESCE(duration_ms, 0) ELSE 0 END)
+                AS h3_duration_sum,
+              SUM(CASE WHEN created_at >= ?2 AND duration_ms IS NOT NULL THEN 1 ELSE 0 END)
+                AS h3_duration_count,
+              COUNT(*) AS h24_total,
+              SUM(COALESCE(duration_ms, 0)) AS h24_duration_sum,
+              COUNT(duration_ms) AS h24_duration_count
+       FROM test_runs
+       WHERE created_at >= ?3
+       GROUP BY status`,
+    )
+    .bind(...cutoffs(now))
+    .all<RunWindowRow>();
+  return {
+    h1: toRunsWindow(results, "h1"),
+    h3: toRunsWindow(results, "h3"),
+    h24: toRunsWindow(results, "h24"),
+  };
 }
 
+/** Same single-scan shape as pastRunWindows, over uptime_checks.checked_at. */
 async function pastCheckWindows(
   db: D1Database,
   now: number,
 ): Promise<Windows<PastChecksWindow>> {
-  const [h1, h3, h24] = await Promise.all([
-    checksWindow(db, now, 1),
-    checksWindow(db, now, 3),
-    checksWindow(db, now, 24),
-  ]);
-  return { h1, h3, h24 };
+  const { results } = await db
+    .prepare(
+      `SELECT status,
+              SUM(CASE WHEN checked_at >= ?1 THEN 1 ELSE 0 END) AS h1_total,
+              SUM(CASE WHEN checked_at >= ?1 THEN COALESCE(response_time_ms, 0) ELSE 0 END)
+                AS h1_response_sum,
+              SUM(CASE WHEN checked_at >= ?1 AND response_time_ms IS NOT NULL THEN 1 ELSE 0 END)
+                AS h1_response_count,
+              SUM(CASE WHEN checked_at >= ?2 THEN 1 ELSE 0 END) AS h3_total,
+              SUM(CASE WHEN checked_at >= ?2 THEN COALESCE(response_time_ms, 0) ELSE 0 END)
+                AS h3_response_sum,
+              SUM(CASE WHEN checked_at >= ?2 AND response_time_ms IS NOT NULL THEN 1 ELSE 0 END)
+                AS h3_response_count,
+              COUNT(*) AS h24_total,
+              SUM(COALESCE(response_time_ms, 0)) AS h24_response_sum,
+              COUNT(response_time_ms) AS h24_response_count
+       FROM uptime_checks
+       WHERE checked_at >= ?3
+       GROUP BY status`,
+    )
+    .bind(...cutoffs(now))
+    .all<CheckWindowRow>();
+  return {
+    h1: toChecksWindow(results, "h1"),
+    h3: toChecksWindow(results, "h3"),
+    h24: toChecksWindow(results, "h24"),
+  };
 }
 
 /** Platform-wide counters and the past/upcoming activity windows. Read only. */

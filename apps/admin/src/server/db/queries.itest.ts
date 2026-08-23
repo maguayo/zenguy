@@ -334,6 +334,55 @@ describe("admin D1 queries", () => {
     expect(overview.uptimeChecks.upcoming).toEqual({ h1: 12, h3: 36, h24: 288 });
   });
 
+  it("buckets every window out of the single 24h scan", async () => {
+    await env.DB.prepare(
+      `INSERT INTO test_runs
+         (id, workspace_id, browser_test_id, source, status, snapshot_json, queued_at,
+          started_at, finished_at, duration_ms, attempt_count, passed_after_retry, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "run_two_hours",
+        "ws_acme",
+        "bt_home",
+        "SCHEDULED",
+        "TIMEOUT",
+        JSON.stringify({ name: "Homepage" }),
+        NOW - 2 * HOUR,
+        NOW - 2 * HOUR,
+        NOW - 2 * HOUR + 30_000,
+        30_000,
+        1,
+        0,
+        NOW - 2 * HOUR,
+      )
+      .run();
+
+    const overview = await loadOverview(env.DB, NOW);
+
+    // A two hour old run belongs to h3 and h24, never to h1.
+    expect(overview.browserRuns.past.h1.byStatus).toEqual({ PASSED: 1 });
+    expect(overview.browserRuns.past.h3).toEqual({
+      total: 2,
+      byStatus: { PASSED: 1, TIMEOUT: 1 },
+      passRate: 0.5,
+      avgDurationMs: 45_000,
+    });
+    expect(overview.browserRuns.past.h24.byStatus).toEqual({
+      PASSED: 1,
+      FAILED: 1,
+      TIMEOUT: 1,
+    });
+    // chk_bad is two hours old too, and buckets the same way.
+    expect(overview.uptimeChecks.past.h1.down).toBe(0);
+    expect(overview.uptimeChecks.past.h3).toEqual({
+      total: 2,
+      up: 1,
+      down: 1,
+      avgResponseMs: 120,
+    });
+  });
+
   it("reports empty windows instead of dividing by zero", async () => {
     await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
     const overview = await loadOverview(env.DB, NOW);
