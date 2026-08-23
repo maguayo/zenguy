@@ -123,6 +123,7 @@ export default function VerifyEmail() {
   const submit = form.handleSubmit(async () => resend());
   return (
     <AuthShell
+      hasHeader
       description="This verification link is invalid or has expired."
       title="Verify your email"
     >

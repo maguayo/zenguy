@@ -56,6 +56,7 @@ export default function SignUp() {
 
   return (
     <AuthShell
+      hasHeader
       description="Start free with the complete Zenguy plan. No card required."
       footer={
         <Muted>

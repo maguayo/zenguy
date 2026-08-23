@@ -63,6 +63,7 @@ export default function ForgotPassword() {
 
   return (
     <AuthShell
+      hasHeader
       description="Enter your email and we'll send you a reset link."
       footer={footer}
       title="Forgot password?"

@@ -18,16 +18,19 @@ export function AuthShell({
   children,
   description,
   footer,
+  hasHeader = false,
   title,
 }: {
   children: ReactNode;
   description?: ReactNode;
   footer?: ReactNode;
+  /** The native stack shows a header (back button): skip the extra top inset. */
+  hasHeader?: boolean;
   title: string;
 }) {
   return (
-    <Screen keyboard safe={["top", "bottom"]}>
-      <View style={styles.brand}>
+    <Screen keyboard safe={hasHeader ? ["bottom"] : ["top", "bottom"]}>
+      <View style={[styles.brand, hasHeader && styles.brandUnderHeader]}>
         <Wordmark />
       </View>
       <View style={styles.header}>
@@ -48,6 +51,7 @@ export function AuthShell({
 
 const styles = StyleSheet.create({
   brand: { marginBottom: spacing.xxxl, marginTop: spacing.lg },
+  brandUnderHeader: { marginBottom: spacing.xxl, marginTop: spacing.xs },
   description: { fontSize: 16, lineHeight: 22, marginTop: spacing.sm },
   footer: {
     borderTopColor: colors.border,

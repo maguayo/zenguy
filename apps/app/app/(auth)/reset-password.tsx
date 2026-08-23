@@ -95,6 +95,7 @@ export default function ResetPassword() {
 
   return (
     <AuthShell
+      hasHeader
       description={
         linkToken
           ? undefined
