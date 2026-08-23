@@ -4,6 +4,8 @@
    Zenguy marketing site — faithful port of the approved design
    ("Zenguy Marketing Site.html"). Every color and size below is taken 1:1
    from that file. Do not restyle; only extend.
+   2026-08-22: hero copy/type and the "merge vs production" band come from
+   the revision "Zenguy Home standalone-src.html" (tokens marked hero rev.).
 ──────────────────────────────────────────────────────────────────────────── */
 
 @theme {
@@ -22,10 +24,12 @@
   --color-parch: #c9c2b3; /* body on dark                rgb(201,194,179)*/
   --color-sand: #d8d1c2; /* faint borders/dots          rgb(216,209,194)*/
   --color-faint: #b5ac9d; /* pricing X icons             #B5AC9D         */
+  --color-stone: #6b655b; /* quiet text on cream, AA     #6B655B hero rev.*/
   --color-violet: #625ed7; /* accent                      rgb(98,94,215)  */
   --color-violet-deep: #4f4bc4;
   --color-violet-ink: #2d2b7e; /* secret chip text            rgb(45,43,126)  */
   --color-violet-bg: #eeedfb; /* secret chip bg              rgb(238,237,251)*/
+  --color-violet-soft: #a9a3f0; /* headline accent on ink      #A9A3F0 hero rev.*/
   --color-red: #e5484d; /* failed                      rgb(229,72,77)  */
   --color-green: #46a758; /* up / passed                 rgb(70,167,88)  */
 }

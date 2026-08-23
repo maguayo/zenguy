@@ -10,45 +10,35 @@ const thumbs = [
 ];
 ---
 
-<section class="px-10 pt-[104px] pb-24 max-md:px-5 max-md:pt-16 max-md:pb-16">
+<section class="px-10 pt-[92px] pb-[100px] max-md:px-5 max-md:pt-16 max-md:pb-16">
   <div
-    class="container-site grid grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] items-center gap-[72px] max-lg:grid-cols-1 max-lg:gap-16"
+    class="container-site grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-[72px] max-lg:grid-cols-1 max-lg:gap-16"
   >
     <div class="flex flex-col items-start gap-[26px]">
-      <span
-        class="inline-flex items-center gap-[9px] rounded-full border border-line bg-surface px-3 py-1.5 text-[12.5px] text-body"
-      >
-        <span class="zg-pulse h-[7px] w-[7px] rounded-full bg-violet" aria-hidden="true"></span>
-        Now testing every hour, on real browsers
-      </span>
-
       <h1
-        class="m-0 font-semibold text-[62px] leading-[1.06] tracking-[-0.03em] [text-wrap:balance] max-md:text-[42px]"
+        class="m-0 text-[64px] font-bold leading-[0.99] tracking-[-0.042em] [text-wrap:balance] max-md:text-[42px]"
       >
-        You describe the flow. Zenguy keeps checking it works.
+        Browser tests you write in English, run every hour on a real browser.
       </h1>
 
-      <p class="m-0 max-w-[520px] text-[17px] leading-[1.62] text-body [text-wrap:pretty]">
-        Browser tests written in plain English, run on a schedule from a real browser. When
-        something breaks you get the screenshots, the steps, and the reason, before your customers
-        tell you.
+      <p class="m-0 max-w-[540px] text-[20px] leading-[1.5] text-body [text-wrap:pretty] max-md:text-[18px]">
+        Describe a flow once. Zenguy walks it on a schedule and, when it stops working, sends you
+        the screenshots, the steps and the reason before a customer finds it.
       </p>
 
-      <div class="flex items-center gap-3">
-        <a href="https://app.zenguy.com" class="btn btn-violet rounded-[10px] px-[22px] py-[13px] text-[15px] font-medium">
+      <div class="flex flex-wrap items-center gap-3.5">
+        <a href="https://app.zenguy.com" class="btn btn-violet rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
           Start free
         </a>
-        <a href="#how" class="btn btn-outline rounded-[10px] px-5 py-[13px] text-[15px] font-medium">
-          See how it works
+        <a href="#evidence" class="btn btn-outline rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
+          See a real failure
         </a>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2 text-[13.5px] text-muted">
-        <span>39 € a month.</span>
-        <span class="h-1 w-1 rounded-full bg-sand" aria-hidden="true"></span>
-        <span>300 runs included.</span>
-        <span class="h-1 w-1 rounded-full bg-sand" aria-hidden="true"></span>
-        <span>No per-seat pricing.</span>
+      <div class="flex flex-wrap items-center gap-x-[22px] gap-y-1.5 font-mono text-sm text-stone">
+        <span>39 € a month</span>
+        <span>300 runs</span>
+        <span>uptime free</span>
       </div>
     </div>
 
@@ -74,7 +64,7 @@ const thumbs = [
           <div class="flex items-center gap-2.5 pt-3.5">
             <span class="text-xs text-muted">No selectors. No code. No framework to learn.</span>
             <div class="flex-1"></div>
-            <span class="rounded-lg bg-ink px-[13px] py-[7px] text-[12.5px] font-medium text-surface">Test it</span>
+            <span class="whitespace-nowrap rounded-lg bg-ink px-[13px] py-[7px] text-[12.5px] font-medium text-surface">Test it</span>
           </div>
         </div>
       </div>

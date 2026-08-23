@@ -1,0 +1,71 @@
+---
+// "Merge vs production" band — ported from the 2026-08-22 hero revision
+// ("Zenguy Home standalone-src.html"). One outage told as a timeline: the
+// merge that CI blessed, the production break, and when someone finds out.
+// Desktop draws a horizontal track above three aligned columns; below lg the
+// track is hidden and each moment carries its own dot inline.
+const moments = [
+  {
+    time: "14:02 · merge",
+    tone: "text-green",
+    dot: "bg-green",
+    align: "",
+    body: "214 tests pass, build ships, everyone goes home. This part already works.",
+  },
+  {
+    time: "03:14 · production",
+    tone: "text-red",
+    dot: "bg-red zg-pulse",
+    align: "text-center max-lg:text-left",
+    body: "A third-party price feed goes quiet. The checkout total becomes 0,00 €, with a 200 on every request.",
+  },
+  {
+    time: "09:40 · a customer emails",
+    tone: "text-surface/50",
+    dot: "bg-surface/50",
+    align: "text-right max-lg:text-left",
+    body: "Thirteen hours later. Or 03:21, if something walked the flow and told you.",
+  },
+];
+---
+
+<section id="production" class="bg-ink px-10 pt-[84px] pb-[88px] max-md:px-5 max-md:py-16">
+  <div class="container-site flex flex-col gap-10">
+    <h2
+      class="m-0 max-w-[900px] text-[44px] font-bold leading-[1.06] tracking-[-0.035em] text-surface [text-wrap:pretty] max-md:text-[32px]"
+    >
+      {/* Kept on one line: the compiler drops the whitespace between text and the span */}
+      Your tests prove the merge was fine. <span class="text-violet-soft">This proves production still is.</span>
+    </h2>
+
+    <div class="flex flex-col gap-4">
+      <!-- Track: merge ╌╌╌ outage ─── discovery (desktop only; the list below carries the dots on small screens) -->
+      <div class="flex items-center max-lg:hidden" aria-hidden="true">
+        <span class="h-[13px] w-[13px] shrink-0 rounded-full bg-green"></span>
+        <span class="track-dashed h-0.5 flex-1"></span>
+        <span class="zg-pulse h-[13px] w-[13px] shrink-0 rounded-full bg-red"></span>
+        <span class="h-0.5 flex-1 bg-white/14"></span>
+        <span class="h-[13px] w-[13px] shrink-0 rounded-full bg-surface/50"></span>
+      </div>
+
+      <ol class="m-0 grid list-none grid-cols-3 gap-7 p-0 max-lg:grid-cols-1 max-lg:gap-6">
+        {moments.map((m) => (
+          <li class:list={["flex flex-col gap-[7px]", m.align]}>
+            <span class:list={["inline-flex items-center gap-2.5 font-mono text-[13px]", m.tone]}>
+              <span class:list={["hidden h-[9px] w-[9px] shrink-0 rounded-full max-lg:inline-block", m.dot]} aria-hidden="true"></span>
+              {m.time}
+            </span>
+            <span class="text-[16px] leading-[1.5] text-parch [text-wrap:pretty]">{m.body}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Dashed segment of the track — verbatim from the design */
+  .track-dashed {
+    background: repeating-linear-gradient(to right, rgba(255, 255, 255, 0.22) 0 6px, transparent 6px 12px);
+  }
+</style>

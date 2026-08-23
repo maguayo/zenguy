@@ -27,6 +27,9 @@ custom domains with SSL enabled.
 
 ## Porting notes
 
+- 2026-08-22: the hero copy/type and the dark "merge vs production" band (`Production.astro`,
+  placed right after the hero) come from the revision `Zenguy Home standalone-src.html`. Its two new
+  colours are the `--color-stone` / `--color-violet-soft` tokens; the hero keeps the original cards.
 - Every color, size, and line of copy comes 1:1 from the design file; tokens live in
   `src/styles/global.css` (`@theme`). Do not restyle — extend.
 - Fonts: Geist, Geist Mono, Caveat (Google Fonts; the original embedded them as data URIs).
