@@ -32,6 +32,7 @@
   --color-violet-soft: #a9a3f0; /* headline accent on ink      #A9A3F0 hero rev.*/
   --color-red: #e5484d; /* failed                      rgb(229,72,77)  */
   --color-green: #46a758; /* up / passed                 rgb(70,167,88)  */
+  --color-amber: #b26a14; /* timeout / warn (iOS app palette, 2026-08-23) */
 }
 
 @layer base {

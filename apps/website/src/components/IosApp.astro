@@ -1,0 +1,312 @@
+---
+// iOS app — the workspace on the phone, placed after Alerts because push is
+// the channel the app adds. The device is drawn in HTML at the app's own
+// logical size (402 × 874 pt; sizes, radii and colours come from
+// apps/app/src/theme) and scaled with a transform, so it stays crisp on every
+// display and faithful to the real Overview screen. The push banner continues
+// the 03:21 story told by Production and Alerts.
+import Icon from "./Icon.astro";
+import Logo from "./Logo.astro";
+
+// Set this to the https://apps.apple.com/… link once the app is public
+// (apps/app/README.md → "Public App Store release"). Until then the facts line
+// says "App Store soon" and no store button is rendered.
+const appStoreUrl: string | null = null;
+
+const features = [
+  {
+    icon: "bell" as const,
+    title: "Push notifications, free",
+    body: "A channel like email or Slack, preselected for every test and monitor. One notification when an incident opens, one when it passes again.",
+  },
+  {
+    icon: "activity" as const,
+    title: "The overview in one line",
+    body: "“All clear.” or “1 incident open.” Under it, the last results in order, the newest breathing while something runs.",
+  },
+  {
+    icon: "scanface" as const,
+    title: "Locked with Face ID",
+    body: "App Lock asks for Face ID when you come back, and the app switcher never shows your workspace.",
+  },
+];
+
+// The Overview a minute after the 03:21 push: one incident open and the re-run
+// already going. Tile tones are the app's (bg / border / fg per tone).
+const tones = {
+  neutral: { tile: "border-line bg-surface", label: "text-muted", value: "text-ink", dot: "" },
+  info: { tile: "border-[#cfcdf4] bg-violet-bg", label: "text-violet-deep", value: "text-violet-deep", dot: "bg-violet" },
+  danger: { tile: "border-[#f5bdbf] bg-[#fcebec]", label: "text-[#c1363b]", value: "text-[#c1363b]", dot: "bg-red" },
+  ok: { tile: "border-[#b9dfc2] bg-[#e7f3ea]", label: "text-[#2f7f3f]", value: "text-[#2f7f3f]", dot: "bg-green" },
+} as const;
+type ToneName = keyof typeof tones;
+
+interface Tile {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: ToneName;
+}
+
+const groups: { title: string; action: string; tiles: Tile[] }[] = [
+  {
+    title: "Browser tests",
+    action: "All tests →",
+    tiles: [
+      { label: "Tests", value: "12", tone: "neutral" },
+      { label: "Running", value: "1", tone: "info" },
+      { label: "Failed", value: "1", hint: "last 24 h", tone: "danger" },
+    ],
+  },
+  {
+    title: "Uptime",
+    action: "All monitors →",
+    tiles: [
+      { label: "Up", value: "5", tone: "ok" },
+      { label: "Down", value: "0", tone: "neutral" },
+      { label: "Response", value: "212 ms", hint: "avg · 24 h", tone: "neutral" },
+    ],
+  },
+];
+
+// Pulse strip: 24 slots, oldest first; empty slots stay quiet. The newest tick
+// breathes while the re-run is in progress (the hero dot's keyframes).
+const STRIP_SLOTS = 24;
+const results = "gggggagggggggggggr".split("");
+const tickColor: Record<string, string> = { g: "bg-green", a: "bg-amber", r: "bg-red" };
+
+// Tab bar, Ionicons-style: the active tab is the filled grid.
+const tabs = [
+  {
+    label: "Overview",
+    active: true,
+    icon: '<rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/>',
+  },
+  { label: "Tests", active: false, icon: '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.8" ry="9"/><path d="M3 12h18"/>' },
+  { label: "Uptime", active: false, icon: '<path d="M2.5 12h3.5l2.5-6.5 4 13 2.5-6.5h6.5"/>' },
+  {
+    label: "Incidents",
+    active: false,
+    icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.3" r="1" fill="currentColor" stroke="none"/>',
+  },
+  {
+    label: "More",
+    active: false,
+    icon: '<circle cx="12" cy="12" r="9"/><circle cx="7.8" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.2" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
+  },
+];
+---
+
+<section id="app" class="px-10 py-24 max-md:px-5 max-md:py-16">
+  <div
+    class="container-site grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-16 max-lg:grid-cols-1 max-lg:gap-14"
+  >
+    <div class="flex flex-col gap-5">
+      <span class="eyebrow">iOS app</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] [text-wrap:balance] max-md:text-[32px]">
+        Now on your iPhone, with the whole story one tap away.
+      </h2>
+      <p class="m-0 text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+        A push when an incident opens, another when it recovers. Tap it and you're on the same
+        steps, screenshots and reason as on the web, with enough in hand to decide whether it can
+        wait until morning. If it can't, run the test again from the phone.
+      </p>
+      <div class="flex flex-col gap-4 pt-1.5">
+        {features.map((f) => (
+          <div class="flex items-start gap-[13px]">
+            <Icon name={f.icon} size={17} class="mt-0.5" />
+            <div class="flex flex-col gap-[3px]">
+              <span class="text-[14.5px] font-semibold">{f.title}</span>
+              <span class="text-[13.5px] leading-[1.55] text-body">{f.body}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {appStoreUrl ? (
+        <a
+          href={appStoreUrl}
+          class="btn btn-ink mt-1.5 inline-flex w-fit items-center gap-2.5 rounded-[10px] px-5 py-3 text-[14.5px] font-medium"
+        >
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+            <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
+          </svg>
+          Download on the App Store
+        </a>
+      ) : null}
+      <div class="flex flex-wrap items-center gap-x-[22px] gap-y-1.5 font-mono text-sm text-stone">
+        <span>iPhone</span>
+        <span>free with every workspace</span>
+        {appStoreUrl ? null : <span>App Store soon</span>}
+      </div>
+    </div>
+
+    <p class="sr-only">
+      Mock of the app's Overview screen: one incident open, the last 18 results as a strip with the
+      newest breathing, tiles for tests and uptime, and the push notification for the failed
+      checkout test.
+    </p>
+
+    <div class="phone relative mx-auto max-md:mt-8" aria-hidden="true">
+      <div class="phone__frame rounded-[54px] bg-ink p-3">
+        <div class="phone__screen relative overflow-hidden rounded-[42px] bg-cream">
+          <div class="phone__canvas relative font-sans text-ink">
+            <!-- Dynamic Island + status bar -->
+            <div class="absolute left-1/2 top-[11px] h-[37px] w-[126px] -translate-x-1/2 rounded-full bg-black"></div>
+            <div class="absolute inset-x-0 top-[18px] flex h-[22px] items-center justify-between pl-[50px] pr-[36px]">
+              <span class="text-[17px] font-semibold leading-none tracking-[-0.2px]">03:21</span>
+              <span class="flex items-center gap-[7px]">
+                <svg width="19" height="12" viewBox="0 0 19 12" fill="currentColor"><rect x="0" y="8" width="3.4" height="4" rx="1"/><rect x="5.2" y="5.5" width="3.4" height="6.5" rx="1"/><rect x="10.4" y="3" width="3.4" height="9" rx="1"/><rect x="15.6" y="0" width="3.4" height="12" rx="1"/></svg>
+                <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M1.2 4.2a10.6 10.6 0 0 1 14.6 0"/><path d="M4.1 7.1a6.4 6.4 0 0 1 8.8 0"/><path d="M7 10a2.2 2.2 0 0 1 3 0"/></svg>
+                <svg width="27" height="13" viewBox="0 0 27 13" fill="none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="currentColor" stroke-opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2" fill="currentColor"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" fill="currentColor" fill-opacity=".4"/></svg>
+              </span>
+            </div>
+
+            <!-- Overview (clipped by the tab bar, like the real scroll view) -->
+            <div class="absolute inset-x-0 top-[116px] bottom-[83px] overflow-hidden px-[20px]">
+              <span class="block text-[34px] font-bold leading-[40px] tracking-[-0.8px]">Overview</span>
+
+              <div class="card-shadow mt-[20px] rounded-[20px] bg-ink p-[24px]">
+                <span class="block font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px] text-dusk">Acme Commerce</span>
+                <span class="mt-[12px] block text-[34px] font-bold leading-[40px] tracking-[-0.8px] text-surface">1 incident open.</span>
+                <span class="mt-[8px] block text-[14px] leading-[19px] text-parch">12 tests · 5 monitors · 1 running</span>
+                <div class="mt-[16px] flex items-center gap-[3px]">
+                  {Array.from({ length: STRIP_SLOTS - results.length }, () => (
+                    <span class="h-[18px] min-w-[4px] max-w-[10px] flex-1 rounded-[3px] bg-inkcard"></span>
+                  ))}
+                  {results.map((r, i) => (
+                    <span
+                      class:list={[
+                        "h-[18px] min-w-[4px] max-w-[10px] flex-1 rounded-[3px]",
+                        tickColor[r],
+                        i === results.length - 1 && "zg-pulse",
+                      ]}
+                    ></span>
+                  ))}
+                </div>
+                <div class="mt-[12px] flex items-center justify-between">
+                  <span class="font-mono text-[11px] leading-[14px] text-dusk">Last 18 results</span>
+                  <span class="text-[14px] font-medium leading-[19px] text-surface">Open incidents →</span>
+                </div>
+              </div>
+
+              {groups.map((g) => (
+                <div class="mt-[24px]">
+                  <div class="flex items-center justify-between py-[8px]">
+                    <span class="font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px] text-muted">{g.title}</span>
+                    <span class="text-[14px] font-medium leading-[19px] text-violet-deep">{g.action}</span>
+                  </div>
+                  <div class="mt-[4px] flex gap-[8px]">
+                    {g.tiles.map((t) => {
+                      const tone = tones[t.tone];
+                      return (
+                        <div class:list={["flex min-h-[84px] min-w-0 flex-1 flex-col gap-[4px] rounded-[14px] border p-[14px]", tone.tile]}>
+                          <div class="flex items-center gap-[6px]">
+                            {tone.dot ? <span class:list={["h-[6px] w-[6px] shrink-0 rounded-full", tone.dot]}></span> : null}
+                            <span class:list={["truncate font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px]", tone.label]}>{t.label}</span>
+                          </div>
+                          <span class:list={["text-[26px] font-semibold leading-[32px] tracking-[-0.6px]", tone.value]}>{t.value}</span>
+                          {t.hint ? <span class:list={["text-[12px] font-medium leading-[16px]", tone.label]}>{t.hint}</span> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div class="mt-[12px] rounded-[14px] border border-line bg-surface p-[16px]">
+                <span class="block text-[17px] font-semibold leading-[22px] tracking-[-0.2px]">Usage this cycle</span>
+                <div class="mt-[10px] flex items-baseline justify-between">
+                  <span class="font-mono text-[13px] leading-[18px] text-body">148 of 300 runs</span>
+                  <span class="font-mono text-[11px] leading-[14px] text-muted">renews 1 Sep</span>
+                </div>
+                <div class="mt-[8px] h-[6px] overflow-hidden rounded-full bg-[#eae4d9]">
+                  <div class="h-full w-[49%] rounded-full bg-violet"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab bar + home indicator -->
+            <div class="absolute inset-x-0 bottom-0 h-[83px] border-t border-line bg-surface">
+              <div class="flex h-[50px] items-start px-[6px] pt-[7px]">
+                {tabs.map((t) => (
+                  <div class:list={["flex flex-1 flex-col items-center gap-[4px]", t.active ? "text-ink" : "text-muted"]}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="25"
+                      height="25"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      set:html={t.icon}
+                    />
+                    <span class="text-[11px] font-medium leading-[13px]">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div class="absolute bottom-[8px] left-1/2 h-[5px] w-[139px] -translate-x-1/2 rounded-full bg-ink"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- The push, as it lands -->
+      <div
+        class="card-shadow absolute -top-[10px] right-[-88px] w-[322px] rounded-[22px] border border-line bg-surface p-[13px] max-md:-top-[56px] max-md:right-0 max-md:w-[min(322px,calc(100vw-40px))]"
+      >
+        <div class="flex items-start gap-[11px]">
+          <Logo iconOnly iconSize={38} />
+          <div class="min-w-0 flex-1">
+            <div class="flex items-baseline justify-between gap-2">
+              <span class="truncate text-[14px] font-semibold leading-[18px]">Checkout — production failed</span>
+              <span class="shrink-0 text-[11.5px] text-muted">now</span>
+            </div>
+            <p class="m-0 mt-[2px] text-[13.5px] leading-[18px] text-body">
+              Failed after 3 retries in 6 min 41 s. Order total showed 0,00 € instead of 149,00 €.
+            </p>
+          </div>
+        </div>
+      </div>
+      <span
+        class="font-hand absolute right-[-52px] top-[98px] rotate-[3deg] text-[26px] leading-none font-bold text-violet max-md:right-1 max-md:top-[52px]"
+        >triage from bed</span
+      >
+    </div>
+  </div>
+</section>
+
+<style>
+  /* The screen is authored at the app's logical size and scaled as a whole,
+     so every value inside matches apps/app/src/theme 1:1. */
+  .phone {
+    --ps: 0.76;
+    width: calc(402px * var(--ps) + 24px);
+  }
+  @media (max-width: 48rem) {
+    .phone {
+      --ps: 0.68;
+    }
+  }
+  @media (max-width: 22.4rem) {
+    .phone {
+      --ps: 0.6;
+    }
+  }
+  .phone__frame {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      rgba(19, 17, 13, 0.05) 0px 2px 4px,
+      rgba(19, 17, 13, 0.18) 0px 24px 48px;
+  }
+  .phone__screen {
+    width: calc(402px * var(--ps));
+    height: calc(874px * var(--ps));
+  }
+  .phone__canvas {
+    width: 402px;
+    height: 874px;
+    transform: scale(var(--ps));
+    transform-origin: 0 0;
+  }
+</style>

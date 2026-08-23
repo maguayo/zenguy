@@ -30,6 +30,13 @@ custom domains with SSL enabled.
 - 2026-08-22: the hero copy/type and the dark "merge vs production" band (`Production.astro`,
   placed right after the hero) come from the revision `Zenguy Home standalone-src.html`. Its two new
   colours are the `--color-stone` / `--color-violet-soft` tokens; the hero keeps the original cards.
+- 2026-08-23: the "iOS app" section (`IosApp.astro`, after Alerts) is not from a mock. The phone is
+  drawn in HTML at the app's logical size (402 × 874 pt, values from `apps/app/src/theme`) and scaled
+  with a transform; the Overview it shows mirrors the real screen (reference captures in the
+  "Zenguy Paper & Pulse" artifact). `appStoreUrl` at the top of the component is `null` until the app
+  is public on the App Store — set it and the "Download on the App Store" button replaces the
+  "App Store soon" fact. New: `--color-amber` token, `bell`/`activity`/`scanface` icons, nav and
+  footer "iOS app" links, "Push" in the Alerts channel list, `border-t` on Uptime.
 - Every color, size, and line of copy comes 1:1 from the design file; tokens live in
   `src/styles/global.css` (`@theme`). Do not restyle — extend.
 - Fonts: Geist, Geist Mono, Caveat (Google Fonts; the original embedded them as data URIs).
