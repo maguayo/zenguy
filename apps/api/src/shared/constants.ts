@@ -28,6 +28,9 @@ export const INFRA_RETRY_DELAY_SECONDS = 30;
 // A queued attempt older than this may be claimed by the fallback runner; the
 // primary (local) worker keeps exclusive first access during the window.
 export const FALLBACK_CLAIM_MIN_AGE_MS = 10_000;
+// A runner worker that has not sent a heartbeat for this long is shown as
+// offline (3 missed 5-second heartbeats). apps/admin replicates this value.
+export const RUNNER_ONLINE_THRESHOLD_MS = 15_000;
 
 export const MAX_AGENT_STEPS = 40;
 export const MAX_ELEMENTS = 150;
