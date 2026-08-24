@@ -718,6 +718,20 @@ class BrowserUseIntegrationTests(unittest.TestCase):
         self.assertIn("pypdf==6.16.1 \\", lock)
         self.assertIn("pip==26.2.1 \\", lock)
         self.assertIn("--hash=sha256:", lock)
+        self.assertIn("--python-platform x86_64-manylinux_2_36", lock)
+        self.assertIn("--python-version 3.12.14", lock)
+        self.assertIn("--only-binary :all:", lock)
+        self.assertIn("--generate-hashes", lock)
+        self.assertFalse(any(
+            ";" in line
+            for line in lock.splitlines()
+            if not line.lstrip().startswith("#")
+        ))
+        requirement_lines = [
+            line for line in lock.splitlines()
+            if line and not line.startswith((" ", "#")) and "==" in line
+        ]
+        self.assertEqual(len(requirement_lines), 107)
 
     def test_profile_disables_downloads_pdfs_and_forces_the_proxy(self):
         class FakeProfile:

@@ -734,7 +734,7 @@ Los dos Dockerfiles del runner usaban el snapshot Debian por HTTP y desactivaban
 
 `pip --require-hashes` valida el archivo descargado, pero no impide elegir una distribución fuente y ejecutar su backend PEP 517 durante una build privilegiada. Un hash aprobado por error para un sdist ampliaría así la superficie de supply chain.
 
-- [x] Instalar el lock completo con `--no-deps --only-binary=:all: --require-hashes` tanto en Docker como en CI y fijar esa invariante en el guard del repositorio.
+- [x] Instalar el lock completo con `--no-deps --only-binary=:all: --require-hashes` tanto en Docker como en CI, resolverlo exclusivamente para CPython 3.12.14/Linux amd64-glibc 2.36 —sin markers macOS/Windows— y fijar esas invariantes en el guard del repositorio.
 
 ### SEC-55 — Alta — La toolchain privilegiada de imágenes era mutable o vulnerable
 

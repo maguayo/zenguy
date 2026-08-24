@@ -265,9 +265,13 @@ privilege only to its fixed Docker orchestration commands via systemd's `+`
 prefix; every other preflight runs as the locked-down service user, while the
 actual image explicitly runs as UID/GID `10001:10001`.
 
-`requirements.lock` contiene el grafo transitivo completo y hashes de PyPI.
-Docker y CI aceptan únicamente wheels hash-verificadas; un sdist no puede
-introducir un backend de build o dependencias de compilación fuera del lock.
+`requirements.lock` contiene el grafo transitivo completo y hashes de PyPI para
+el único artefacto soportado en producción: CPython 3.12.14 sobre Linux amd64
+con glibc 2.36 (Debian Bookworm). No es un lock universal: excluir explícitamente
+dependencias y markers de macOS/Windows evita que `pip` evalúe versiones de
+kernel no PEP 440 en Linux. Docker y CI aceptan únicamente wheels
+hash-verificadas; un sdist no puede introducir un backend de build o
+dependencias de compilación fuera del lock.
 `browser-use==0.13.8` still declares exact metadata pins for `click==8.3.1`,
 `mcp==1.26.0` and `pypdf==6.14.2`; the reviewed lock deliberately overrides
 them with `8.4.2`, `1.29.0` and `6.16.1`. A plain `pip check` therefore reports
@@ -280,8 +284,10 @@ Para actualizarlo de forma deliberada, revisa primero
 
 ```bash
 uv pip compile runner/requirements.txt \
-  --override runner/requirements-overrides.txt \
-  --universal --generate-hashes --python-version 3.11 \
+  --overrides runner/requirements-overrides.txt \
+  --python-platform x86_64-manylinux_2_36 \
+  --python-version 3.12.14 \
+  --only-binary :all: --generate-hashes \
   --output-file runner/requirements.lock
 ```
 

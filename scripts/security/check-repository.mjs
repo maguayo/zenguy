@@ -1984,7 +1984,35 @@ if (
   );
 }
 const runnerDockerfile = readFileSync("runner/deploy/Dockerfile", "utf8");
+const runnerRequirementsLock = readFileSync(
+  "runner/requirements.lock",
+  "utf8",
+);
+for (const invariant of [
+  "--python-platform x86_64-manylinux_2_36",
+  "--python-version 3.12.14",
+  "--only-binary :all:",
+  "--generate-hashes",
+]) {
+  if (!runnerRequirementsLock.includes(invariant)) {
+    failures.push(
+      `runner/requirements.lock: missing Linux wheels-only invariant ${invariant}`,
+    );
+  }
+}
 if (
+  runnerRequirementsLock
+    .split("\n")
+    .some((line) => !line.trimStart().startsWith("#") && line.includes(";"))
+) {
+  failures.push(
+    "runner/requirements.lock: exact production Linux lock must not contain conditional requirement markers",
+  );
+}
+if (
+  !runnerDockerfile.startsWith(
+    "FROM python:3.12.14-slim-bookworm@sha256:a116514e19457bcb7af7efe9c3dd0b9b71e85b317694e7882a1c52aa15a78134\n",
+  ) ||
   !runnerDockerfile.includes("--no-deps --only-binary=:all: --require-hashes") ||
   !runnerDockerfile.includes(
     "test -s /etc/ssl/certs/ca-certificates.crt",
@@ -2375,6 +2403,17 @@ const runnerImageWorkflow = readFileSync(
   ".github/workflows/runner-images.yml",
   "utf8",
 );
+if (
+  !runnerImageWorkflow.includes("python-version: 3.12.14") ||
+  !runnerImageWorkflow.includes(
+    '"$RUNNER_TEMP/runner-env/bin/pip" install --no-deps \\\n            --only-binary=:all: --require-hashes \\\n            --requirement runner/requirements.lock',
+  ) ||
+  (runnerImageWorkflow.match(/platforms: linux\/amd64/gu) ?? []).length !== 2
+) {
+  failures.push(
+    "runner-images.yml: lock install and both image builds must remain aligned to CPython 3.12.14/Linux amd64",
+  );
+}
 const buildxInstaller = readFileSync(
   "scripts/security/install-buildx.sh",
   "utf8",
@@ -2580,6 +2619,16 @@ if (frontendHeaders.includes("script-src 'self' https://cdn.paddle.com;")) {
 const exceptions = JSON.parse(readFileSync("security/audit-exceptions.json", "utf8"));
 const today = new Date().toISOString().slice(0, 10);
 const securityWorkflow = readFileSync(".github/workflows/security.yml", "utf8");
+if (
+  !securityWorkflow.includes("python-version: 3.12.14") ||
+  !securityWorkflow.includes(
+    '"$RUNNER_TEMP/runner-env/bin/pip" install --no-deps \\\n            --only-binary=:all: --require-hashes \\\n            --requirement runner/requirements.lock',
+  )
+) {
+  failures.push(
+    "security.yml: hashed lock audit must remain aligned to CPython 3.12.14/Linux amd64",
+  );
+}
 if (!securityWorkflow.includes("node --test apps/api/scripts/local-secrets.test.mjs")) {
   failures.push("security.yml: memory-only Keychain transport tests must run in CI");
 }
