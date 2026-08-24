@@ -1502,6 +1502,11 @@ for (const path of workflowPaths) {
   if (/^\s*pull_request_target\s*:/mu.test(workflow)) {
     failures.push(`${path}: pull_request_target is forbidden for repository code`);
   }
+  if (/^\s*cache:\s*(?:pnpm|["']pnpm["'])\s*(?:#.*)?$/mu.test(workflow)) {
+    failures.push(
+      `${path}: setup-node pnpm caching is forbidden while pinned pnpm is bootstrapped only after setup-node`,
+    );
+  }
   if (
     path !== ".github/workflows/runner-images.yml" &&
     /^(?:\s+)(?:packages|id-token):\s*write\s*$/mu.test(workflow)
