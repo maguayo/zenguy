@@ -2629,8 +2629,14 @@ if (
     "security.yml: hashed lock audit must remain aligned to CPython 3.12.14/Linux amd64",
   );
 }
-if (!securityWorkflow.includes("node --test apps/api/scripts/local-secrets.test.mjs")) {
-  failures.push("security.yml: memory-only Keychain transport tests must run in CI");
+if (
+  !securityWorkflow.includes(
+    "timeout --signal=TERM --kill-after=5s 30s\n          node --test apps/api/scripts/local-secrets.test.mjs",
+  )
+) {
+  failures.push(
+    "security.yml: bounded memory-only Keychain transport tests must run in CI",
+  );
 }
 if (
   !securityWorkflow.includes(

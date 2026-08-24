@@ -269,7 +269,7 @@ test("child processes receive an allowlisted environment", () => {
   });
 });
 
-test("the private FIFO serves repeat reads without persisting payload bytes", async () => {
+test("the private FIFO serves repeat reads without persisting payload bytes", { timeout: 15_000 }, async () => {
   const transport = createPrivateSecretFifo();
   const fifoStat = lstatSync(transport.path);
   assert.equal(fifoStat.isFIFO(), true);
@@ -282,13 +282,14 @@ test("the private FIFO serves repeat reads without persisting payload bytes", as
       transport.path,
       String(process.pid),
     ],
-    { stdio: ["ignore", "ignore", "pipe", "pipe"] },
+    { stdio: ["ignore", "ignore", "inherit", "pipe"] },
   );
-  const exitPromise = once(writer, "exit");
-  let stderr = "";
-  writer.stderr.setEncoding("utf8");
-  writer.stderr.on("data", (chunk) => {
-    stderr += chunk;
+  const closePromise = once(writer, "close");
+  let descriptorError = null;
+  writer.stdio[3].on("error", (error) => {
+    if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
+      descriptorError = error;
+    }
   });
   const payload = "JWT_SECRET='synthetic-test-only'\n";
   writer.stdio[3].end(Buffer.from(payload, "utf8"));
@@ -300,7 +301,7 @@ test("the private FIFO serves repeat reads without persisting payload bytes", as
         readFile(transport.path, "utf8"),
         new Promise((_, reject) => {
           timeout = setTimeout(
-            () => reject(new Error(`FIFO read timed out: ${stderr}`)),
+            () => reject(new Error("FIFO read timed out")),
             5_000,
           );
         }),
@@ -316,12 +317,13 @@ test("the private FIFO serves repeat reads without persisting payload bytes", as
     assert.equal(lstatSync(transport.path).size, 0);
   } finally {
     writer.kill("SIGKILL");
-    await exitPromise;
+    await closePromise;
     rmSync(transport.directory, { recursive: true, force: true });
   }
+  assert.ifError(descriptorError);
 });
 
-test("the FIFO writer exits if its supervisor disappears while no reader exists", async () => {
+test("the FIFO writer exits if its supervisor disappears while no reader exists", { timeout: 5_000 }, async () => {
   const transport = createPrivateSecretFifo();
   const writer = spawn(
     process.execPath,
@@ -330,14 +332,21 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
       transport.path,
       "99999999",
     ],
-    { stdio: ["ignore", "ignore", "pipe", "pipe"] },
+    { stdio: ["ignore", "ignore", "inherit", "pipe"] },
   );
+  const closePromise = once(writer, "close");
+  let descriptorError = null;
+  writer.stdio[3].on("error", (error) => {
+    if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
+      descriptorError = error;
+    }
+  });
   writer.stdio[3].end(Buffer.from("JWT_SECRET='synthetic-test-only'\n", "utf8"));
 
   let timeout;
   try {
     const [code] = await Promise.race([
-      once(writer, "exit"),
+      closePromise,
       new Promise((_, reject) => {
         timeout = setTimeout(
           () => reject(new Error("orphan FIFO writer did not exit")),
@@ -350,10 +359,11 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
     clearTimeout(timeout);
     if (writer.exitCode === null && writer.signalCode === null) {
       writer.kill("SIGKILL");
-      await once(writer, "exit");
     }
+    await closePromise;
     rmSync(transport.directory, { recursive: true, force: true });
   }
+  assert.ifError(descriptorError);
 });
 
 test("Keychain probes use the fixed service and never request a value", () => {

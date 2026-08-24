@@ -82,7 +82,9 @@ jobs:
         run: node scripts/security/check-repository.mjs
 
       - name: Validate memory-only Keychain secret transport
-        run: node --test apps/api/scripts/local-secrets.test.mjs
+        run: >-
+          timeout --signal=TERM --kill-after=5s 30s
+          node --test apps/api/scripts/local-secrets.test.mjs
 
       - name: Test read-only remote-control guards
         run: node --test scripts/security/audit-cloudflare-edge.test.mjs apps/api/scripts/verify-remote-secrets.test.mjs apps/admin/scripts/verify-remote-secrets.test.mjs
