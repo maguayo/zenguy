@@ -124,8 +124,8 @@ importers:
         specifier: ^6.9.4
         version: 6.9.4
       eas-cli:
-        specifier: 22.0.0
-        version: 22.0.0(@types/node@26.2.0)(supports-color@8.1.1)(typescript@6.0.3)
+        specifier: 22.2.0
+        version: 22.2.0(@types/node@26.2.0)(supports-color@8.1.1)(typescript@6.0.3)
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(supports-color@8.1.1)
@@ -147,10 +147,10 @@ importers:
 
 packages:
 
-  '@0no-co/graphql.web@1.3.4':
-    resolution: {integrity: sha512-imSwulOeDQodRy/olQmVEo2PiY6ntjkZ9eiGdw6lMYylh/tay9b7MusyJBmEnkL8GiKRKr6ltr+D42mY5bd8Bg==}
+  '@0no-co/graphql.web@1.3.3':
+    resolution: {integrity: sha512-4gFGBdyaFmQ6n9euhp5JtIGS4ZeivwDr1tCPENUxTvy5wyv532yOtFCr9zzYAJh1s6uibgC+TRXUcay+mxzCoQ==}
     peerDependencies:
-      graphql: ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
+      graphql: ^14.0.0 || ^15.0.0 || ^16.0.0
     peerDependenciesMeta:
       graphql:
         optional: true
@@ -711,6 +711,9 @@ packages:
   '@expo/config-plugins@10.1.2':
     resolution: {integrity: sha512-IMYCxBOcnuFStuK0Ay+FzEIBKrwW8OVUMc65+v0+i7YFIIe8aL342l7T4F8lR4oCfhXn7d6M5QPgXvjtc/gAcw==}
 
+  '@expo/config-plugins@55.0.11':
+    resolution: {integrity: sha512-85ZSmIK8rMfvYbG/2IHtwnykVdb6LI0ZavduM3ZwUMThyyVegYjVsO5Zek2ec8xzPhCmYX0ar5onnFEcwUDUlw==}
+
   '@expo/config-plugins@55.0.7':
     resolution: {integrity: sha512-XZUoDWrsHEkH3yasnDSJABM/UxP5a1ixzRwU/M+BToyn/f0nTrSJJe/Ay/FpxkI4JSNz2n0e06I23b2bleXKVA==}
 
@@ -944,8 +947,8 @@ packages:
     resolution: {integrity: sha512-eb9xxd/LbuEGSdua4NumCu/McVB9EM+F/JxB9pWgnERw4HQ9XyTNH1KapG6oqLWR8TuRK2LQfzJlmNi94CVobw==}
     engines: {node: '>=12'}
 
-  '@expo/steps@22.0.0':
-    resolution: {integrity: sha512-zkd7IDvDAgWs2yuMTfLtKGYCwxE4dJJG++kSaXBLP4vIEWkROwDhHwBwBKKvRYcTskinyh19AdeSQ3rQB3aI6w==}
+  '@expo/steps@22.1.0':
+    resolution: {integrity: sha512-E4CtFq3xNj6StMCsATevwJrIMcKP8SGDJAefKVd5XT9g+NrNhyNM6mX9xY+Gts1y++AJeQ3EJ7nD55QsHd5tKg==}
     engines: {node: '>=18'}
 
   '@expo/sudo-prompt@9.3.2':
@@ -1920,6 +1923,9 @@ packages:
   '@urql/core@4.0.11':
     resolution: {integrity: sha512-FFdY97vF5xnUrElcGw9erOLvtu+KGMLfwrLNDfv4IPgdp2IBsiGe+Kb7Aypfd3kH//BETewVSLm3+y2sSzjX6A==}
 
+  '@urql/core@6.0.3':
+    resolution: {integrity: sha512-0F39XWR21+IVLJfsqBvLShvoSzxT6h6wWXwrDhN8j9J+IEVOpQIUNHwpgjsp+2ePzn9aCH+rpDonn3HOAUnn9A==}
+
   '@urql/exchange-retry@1.2.0':
     resolution: {integrity: sha512-1O/biKiVhhn0EtvDF4UOvz325K4RrLupfL8rHcmqD2TBLv4qVDWQuzx4JGa1FfqjjRb+C9TNZ6w19f32Mq85Ug==}
 
@@ -1973,11 +1979,6 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
-
-  agent-cli-detector@0.1.2:
-    resolution: {integrity: sha512-qdZ/9JFORtTKJNhT/IczMeEfEUbUU0K5umYeiIQHX+AjHs+Y9SXVzSgaYlpZeyNMrvuh2HpZiOTpvS57iPfBkQ==}
-    engines: {node: '>=18.18'}
-    hasBin: true
 
   agent-cli-detector@0.1.6:
     resolution: {integrity: sha512-vKrPeEVN3upDF3GjWxsWBbwQgMtNJ8VB1cduPvK3svmmz4ENpS7yaPxbogsbe3w+xp9xp2Cu+0Ar41rjAR4+lA==}
@@ -2652,6 +2653,10 @@ packages:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
     engines: {node: '>=12'}
 
+  dotenv@16.6.1:
+    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+    engines: {node: '>=12'}
+
   dtrace-provider@0.8.8:
     resolution: {integrity: sha512-b7Z7cNtHPhH9EJhNNbbeqTcXB8LGFFZhq1PGgEvpeHlzd36bhbdTWoE/Ba/YguqpBSlAPKnARWhVlhunCMwfxg==}
     engines: {node: '>=0.10'}
@@ -2660,8 +2665,8 @@ packages:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
 
-  eas-cli@22.0.0:
-    resolution: {integrity: sha512-25a1wR+cLkr5ONKQANanYRyXLdO4CYkSZAP//PqdpezBXbmb/hPWc2i2sg5MJ2O+5bJUbu1FAY64xPZ9VfsHbg==}
+  eas-cli@22.2.0:
+    resolution: {integrity: sha512-q+03oX9lXB/QjqQkn12y1TQiriU7Ia1TKPwh8oK49xrNs6WEkLPoXaYo2yZa+faZzMOgyDdYym1dLA3u+a2JWA==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -3195,6 +3200,10 @@ packages:
     resolution: {integrity: sha512-oX2ruAFQwf/Orj8m737Y5adxDQO0LAB7/S5MnxCdTNDd4p6BsyIVsv9JQsATbTSq8KHRpLwIHbVlUNatxd+1Ow==}
     engines: {node: '>=8.6.0'}
 
+  fast-glob@3.3.3:
+    resolution: {integrity: sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==}
+    engines: {node: '>=8.6.0'}
+
   fast-json-stable-stringify@2.1.0:
     resolution: {integrity: sha512-lhd/wF+Lk98HZoTCtlVraHtfh5XYijIjalXck7saUtuanSDyLMxnHhSXEDJqHxD7msR8D0uCmqlkwjCV8xvwHw==}
 
@@ -3293,6 +3302,10 @@ packages:
 
   fs-extra@11.2.0:
     resolution: {integrity: sha512-PmDi3uwK5nFuXh7XDTlVnS17xJS7vW36is2+w3xcv8SVxiB4NyATf4ctkVY5bkSjX0Y4nbvZCq1/EjtEyr9ktw==}
+    engines: {node: '>=14.14'}
+
+  fs-extra@11.4.0:
+    resolution: {integrity: sha512-EQsFzMUJkCKGr1ePqlYADkIUmHW1s3ZXr5Yqy6wbGrfUCphpl2maM/kyOIRA2HpP3AaFQTZXD4ldjek+nccddA==}
     engines: {node: '>=14.14'}
 
   fs.realpath@1.0.0:
@@ -4393,6 +4406,10 @@ packages:
     resolution: {integrity: sha512-bNH9mmM9qsJ2X4r2Nat1B//1dJVcn3+iBLa3IgqJ7EbGaDNepL9QSHOxN4ng33s52VMMhhIfgCYDk3C4ZmlDAg==}
     engines: {node: '>=10'}
 
+  minimatch@5.1.9:
+    resolution: {integrity: sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==}
+    engines: {node: '>=10'}
+
   minimatch@9.0.9:
     resolution: {integrity: sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==}
     engines: {node: '>=16 || 14 >=14.17'}
@@ -4492,6 +4509,15 @@ packages:
 
   node-fetch@2.6.7:
     resolution: {integrity: sha512-ZjMPFEfVx5j+y2yF35Kzx5sF7kDzxuDj6ziH4FFbOp87zKDZNx8yExJIb05OGF4Nlt9IHFIMBkRl41VdvcNdbQ==}
+    engines: {node: 4.x || >=6.0.0}
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+
+  node-fetch@2.7.0:
+    resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
     engines: {node: 4.x || >=6.0.0}
     peerDependencies:
       encoding: ^0.1.0
@@ -5875,7 +5901,7 @@ packages:
 
 snapshots:
 
-  '@0no-co/graphql.web@1.3.4(graphql@16.8.1)':
+  '@0no-co/graphql.web@1.3.3(graphql@16.8.1)':
     optionalDependencies:
       graphql: 16.8.1
 
@@ -6630,6 +6656,24 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@expo/config-plugins@55.0.11(supports-color@8.1.1)':
+    dependencies:
+      '@expo/config-types': 55.0.6
+      '@expo/json-file': 10.0.16
+      '@expo/plist': 0.5.4
+      '@expo/sdk-runtime-versions': 1.0.0
+      chalk: 4.1.2
+      debug: 4.4.3(supports-color@8.1.1)
+      getenv: 2.0.0
+      glob: 13.0.6
+      resolve-from: 5.0.0
+      semver: 7.8.5
+      slugify: 1.6.9
+      xcode: 3.0.1
+      xml2js: 0.6.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@expo/config-plugins@55.0.7(supports-color@8.1.1)':
     dependencies:
       '@expo/config-types': 55.0.6
@@ -6693,7 +6737,7 @@ snapshots:
 
   '@expo/config@55.0.10(supports-color@8.1.1)(typescript@6.0.3)':
     dependencies:
-      '@expo/config-plugins': 55.0.7(supports-color@8.1.1)
+      '@expo/config-plugins': 55.0.11(supports-color@8.1.1)
       '@expo/config-types': 55.0.6
       '@expo/json-file': 10.2.0
       '@expo/require-utils': 55.0.7(supports-color@8.1.1)(typescript@6.0.3)
@@ -7111,7 +7155,7 @@ snapshots:
       '@segment/loosely-validate-event': 2.0.0
       fetch-retry: 4.1.1
       md5: 2.3.0
-      node-fetch: 2.6.7
+      node-fetch: 2.7.0
       remove-trailing-slash: 0.1.1
       uuid: 8.3.2
     transitivePeerDependencies:
@@ -7129,14 +7173,14 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
-  '@expo/steps@22.0.0':
+  '@expo/steps@22.1.0':
     dependencies:
       '@expo/eas-build-job': 22.0.0
       '@expo/logger': 22.0.0
       '@expo/spawn-async': 1.8.0
       arg: 5.0.2
-      fast-glob: 3.3.2
-      fs-extra: 11.2.0
+      fast-glob: 3.3.3
+      fs-extra: 11.4.0
       joi: 17.13.6
       jsep: 1.4.0
       lodash.clonedeep: 4.5.0
@@ -8218,14 +8262,21 @@ snapshots:
 
   '@urql/core@4.0.11(graphql@16.8.1)':
     dependencies:
-      '@0no-co/graphql.web': 1.3.4(graphql@16.8.1)
+      '@0no-co/graphql.web': 1.3.3(graphql@16.8.1)
+      wonka: 6.3.6
+    transitivePeerDependencies:
+      - graphql
+
+  '@urql/core@6.0.3(graphql@16.8.1)':
+    dependencies:
+      '@0no-co/graphql.web': 1.3.3(graphql@16.8.1)
       wonka: 6.3.6
     transitivePeerDependencies:
       - graphql
 
   '@urql/exchange-retry@1.2.0(graphql@16.8.1)':
     dependencies:
-      '@urql/core': 4.0.11(graphql@16.8.1)
+      '@urql/core': 6.0.3(graphql@16.8.1)
       wonka: 6.3.6
     transitivePeerDependencies:
       - graphql
@@ -8272,8 +8323,6 @@ snapshots:
       - supports-color
 
   agent-base@7.1.4: {}
-
-  agent-cli-detector@0.1.2: {}
 
   agent-cli-detector@0.1.6: {}
 
@@ -8987,11 +9036,13 @@ snapshots:
 
   dotenv-expand@11.0.7:
     dependencies:
-      dotenv: 16.4.7
+      dotenv: 16.6.1
 
   dotenv@16.3.1: {}
 
   dotenv@16.4.7: {}
+
+  dotenv@16.6.1: {}
 
   dtrace-provider@0.8.8:
     dependencies:
@@ -9004,7 +9055,7 @@ snapshots:
       es-errors: 1.3.0
       gopd: 1.2.0
 
-  eas-cli@22.0.0(@types/node@26.2.0)(supports-color@8.1.1)(typescript@6.0.3):
+  eas-cli@22.2.0(@types/node@26.2.0)(supports-color@8.1.1)(typescript@6.0.3):
     dependencies:
       '@expo/apple-utils': 2.1.22
       '@expo/code-signing-certificates': 0.0.5
@@ -9026,7 +9077,7 @@ snapshots:
       '@expo/results': 1.0.0
       '@expo/rudder-sdk-node': 1.1.1
       '@expo/spawn-async': 1.7.2
-      '@expo/steps': 22.0.0
+      '@expo/steps': 22.1.0
       '@expo/timeago.js': 1.0.0
       '@oclif/core': 4.14.0
       '@oclif/plugin-autocomplete': 3.2.56(supports-color@8.1.1)
@@ -9034,7 +9085,7 @@ snapshots:
       '@sentry/node': 7.77.0(supports-color@8.1.1)
       '@urql/core': 4.0.11(graphql@16.8.1)
       '@urql/exchange-retry': 1.2.0(graphql@16.8.1)
-      agent-cli-detector: 0.1.2
+      agent-cli-detector: 0.1.6
       ajv: 8.11.0
       ajv-formats: 2.1.1(ajv@8.11.0)
       better-opn: 3.0.2
@@ -9814,6 +9865,14 @@ snapshots:
       merge2: 1.4.1
       micromatch: 4.0.8
 
+  fast-glob@3.3.3:
+    dependencies:
+      '@nodelib/fs.stat': 2.0.5
+      '@nodelib/fs.walk': 1.2.8
+      glob-parent: 5.1.2
+      merge2: 1.4.1
+      micromatch: 4.0.8
+
   fast-json-stable-stringify@2.1.0: {}
 
   fast-levenshtein@2.0.6: {}
@@ -9846,7 +9905,7 @@ snapshots:
 
   filelist@1.0.6:
     dependencies:
-      minimatch: 5.1.2
+      minimatch: 5.1.9
 
   fill-range@7.1.1:
     dependencies:
@@ -9913,6 +9972,12 @@ snapshots:
       universalify: 2.0.1
 
   fs-extra@11.2.0:
+    dependencies:
+      graceful-fs: 4.2.11
+      jsonfile: 6.2.1
+      universalify: 2.0.1
+
+  fs-extra@11.4.0:
     dependencies:
       graceful-fs: 4.2.11
       jsonfile: 6.2.1
@@ -10037,7 +10102,7 @@ snapshots:
     dependencies:
       array-union: 2.1.0
       dir-glob: 3.0.1
-      fast-glob: 3.3.2
+      fast-glob: 3.3.3
       ignore: 5.3.2
       merge2: 1.4.1
       slash: 3.0.0
@@ -11454,6 +11519,10 @@ snapshots:
     dependencies:
       brace-expansion: 2.1.4
 
+  minimatch@5.1.9:
+    dependencies:
+      brace-expansion: 2.1.4
+
   minimatch@9.0.9:
     dependencies:
       brace-expansion: 2.1.4
@@ -11536,6 +11605,10 @@ snapshots:
       semver: 6.3.1
 
   node-fetch@2.6.7:
+    dependencies:
+      whatwg-url: 5.0.0
+
+  node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
 
