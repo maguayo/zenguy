@@ -6,6 +6,8 @@ packages:
 nodeLinker: hoisted
 shamefullyHoist: true
 allowBuilds:
+  # Optional bunyan/DTrace native telemetry pulled by eas-cli is not required.
+  dtrace-provider: false
   unrs-resolver: true
 verifyDepsBeforeRun: false
 overrides:

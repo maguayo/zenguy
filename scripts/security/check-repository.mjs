@@ -206,6 +206,25 @@ if (appManifest.devDependencies?.["eas-cli"] !== "22.0.0") {
   failures.push("apps/app/package.json: eas-cli must remain pinned exactly to 22.0.0");
 }
 const appLockfile = readFileSync("apps/app/pnpm-lock.yaml", "utf8");
+const appWorkspace = readFileSync("apps/app/pnpm-workspace.yaml", "utf8");
+const appAllowBuildsBody = /^allowBuilds:\n((?:  .*\n)*)/mu.exec(
+  appWorkspace,
+)?.[1];
+const appAllowBuildDecisions = [
+  ...(appAllowBuildsBody ?? "").matchAll(/^  ([A-Za-z0-9@/._-]+): (true|false)$/gmu),
+].map((match) => [match[1], match[2]]);
+if (
+  (appWorkspace.match(/^allowBuilds:/gmu) ?? []).length !== 1 ||
+  JSON.stringify(appAllowBuildDecisions) !==
+    JSON.stringify([
+      ["dtrace-provider", "false"],
+      ["unrs-resolver", "true"],
+    ])
+) {
+  failures.push(
+    "apps/app/pnpm-workspace.yaml: native dependency build policy must allow only unrs-resolver and explicitly deny optional dtrace-provider telemetry",
+  );
+}
 if (
   !/^ {6}eas-cli:\n {8}specifier: 22\.0\.0\n {8}version: 22\.0\.0(?:\(|$)/mu.test(
     appLockfile,
