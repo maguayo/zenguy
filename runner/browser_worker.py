@@ -275,6 +275,12 @@ RULES
 9. When failing, state concretely what you expected, what you observed, and on which URL. Distinguish website errors from instruction problems. Never invent a root cause.
 10. If a CAPTCHA or bot wall blocks the flow and the instructions give no way through it, finish FAILED and say exactly that.
 
+PAGE READINESS
+- If you see a skeleton, spinner, "Loading", "Cargando", or incomplete content, wait a few seconds and check the page again. Do not treat it as success or failure while it is still loading.
+- If a cookie banner or popup blocks the page, close it or reject non-essential cookies.
+- After each navigation or important click, confirm that the real content is visible before interacting with it or verifying the result.
+- Finish only when the page is stable and the requested condition has been verified using real content.
+
 OUTPUT
 - Let browser-use execute exactly one action per agent step.
 - Finish only with its done action and the required structured result.
