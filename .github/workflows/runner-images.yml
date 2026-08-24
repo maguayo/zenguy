@@ -129,7 +129,7 @@ jobs:
       # build and that the resulting local image passes the vulnerability gate.
       - name: Build validation image once
         # docker/build-push-action v6.18.0
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -241,7 +241,7 @@ jobs:
       - name: Build and publish immutable release image once
         id: release-build
         # docker/build-push-action v6.18.0
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
