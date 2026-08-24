@@ -22,8 +22,8 @@ describe("activity catalog", () => {
   });
 
   it("maps every audit action to an activity type", () => {
-    expect(Object.keys(AUDIT_TO_ACTIVITY)).toEqual(
-      expect.arrayContaining(Object.values(AUDIT_ACTIONS)),
+    expect(Object.keys(AUDIT_TO_ACTIVITY).sort()).toEqual(
+      Object.values(AUDIT_ACTIONS).sort(),
     );
     for (const type of Object.values(AUDIT_TO_ACTIVITY)) {
       expect(isActivityEventType(type)).toBe(true);

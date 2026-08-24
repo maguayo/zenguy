@@ -167,13 +167,8 @@ export const ACTIVITY_EVENT_SPECS: Record<ActivityEventType, ActivityEventSpec> 
   "push_device.registered": spec("user", "push_device"),
 };
 
-/**
- * Audited mutations are bridged into activity by `WriteAudit`. Exhaustive by
- * type over `AuditAction`; the string-keyed entries cover actions that exist
- * only in the in-flight security work, so the map compiles on either side.
- */
-export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> &
-  Record<string, ActivityEventType> = {
+/** Audited mutations are bridged into activity by `WriteAudit`; exhaustive by type. */
+export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> = {
   [AUDIT_ACTIONS.workspaceCreated]: ACTIVITY_EVENTS.workspaceCreated,
   [AUDIT_ACTIONS.workspaceUpdated]: ACTIVITY_EVENTS.workspaceUpdated,
   [AUDIT_ACTIONS.workspaceDeleted]: ACTIVITY_EVENTS.workspaceDeleted,
@@ -187,7 +182,7 @@ export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> &
   [AUDIT_ACTIONS.secretCreated]: ACTIVITY_EVENTS.secretCreated,
   [AUDIT_ACTIONS.secretUpdated]: ACTIVITY_EVENTS.secretUpdated,
   [AUDIT_ACTIONS.secretDeleted]: ACTIVITY_EVENTS.secretDeleted,
-  "security.encryption_rotated": ACTIVITY_EVENTS.encryptionRotated,
+  [AUDIT_ACTIONS.encryptionRotated]: ACTIVITY_EVENTS.encryptionRotated,
   [AUDIT_ACTIONS.channelCreated]: ACTIVITY_EVENTS.channelCreated,
   [AUDIT_ACTIONS.channelUpdated]: ACTIVITY_EVENTS.channelUpdated,
   [AUDIT_ACTIONS.channelDeleted]: ACTIVITY_EVENTS.channelDeleted,
@@ -205,7 +200,7 @@ export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> &
   [AUDIT_ACTIONS.billingGrantRedeemed]: ACTIVITY_EVENTS.billingGrantRedeemed,
   [AUDIT_ACTIONS.alertsSettingsUpdated]: ACTIVITY_EVENTS.alertsSettingsUpdated,
   [AUDIT_ACTIONS.alertsCreditTopup]: ACTIVITY_EVENTS.alertsCreditTopup,
-  "alerts.credit_adjusted": ACTIVITY_EVENTS.alertsCreditAdjusted,
+  [AUDIT_ACTIONS.alertsCreditAdjusted]: ACTIVITY_EVENTS.alertsCreditAdjusted,
   [AUDIT_ACTIONS.authPasswordReset]: ACTIVITY_EVENTS.userPasswordReset,
   [AUDIT_ACTIONS.apiKeyCreated]: ACTIVITY_EVENTS.apiKeyCreated,
   [AUDIT_ACTIONS.apiKeyRevoked]: ACTIVITY_EVENTS.apiKeyRevoked,
