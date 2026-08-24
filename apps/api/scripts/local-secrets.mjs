@@ -642,8 +642,10 @@ async function runDevWithPrivateFifo(payloadBuffer, forwarded) {
       );
     }
   });
-  writer.stdio[3].on("error", () => {
-    writer.kill("SIGKILL");
+  writer.stdio[3].on("error", (error) => {
+    if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
+      writer.kill("SIGKILL");
+    }
   });
   writer.stdio[3].end(payloadBuffer, () => payloadBuffer.fill(0));
   const status = await superviseChild(child, () => {

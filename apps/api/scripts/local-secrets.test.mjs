@@ -46,6 +46,19 @@ function validDevelopmentValues() {
   ]);
 }
 
+function captureChildStderr(child) {
+  const state = { bytes: 0, error: null };
+  child.stderr.on("data", (chunk) => {
+    state.bytes += chunk.byteLength;
+  });
+  child.stderr.on("error", (error) => {
+    if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
+      state.error = error;
+    }
+  });
+  return state;
+}
+
 test("the Keychain namespace and accepted names are fixed", () => {
   assert.equal(KEYCHAIN_SERVICE, "com.zenguy.api.local-development.v1");
   assert.equal(new Set(DEVELOPMENT_SECRET_NAMES).size, DEVELOPMENT_SECRET_NAMES.length);
@@ -282,9 +295,10 @@ test("the private FIFO serves repeat reads without persisting payload bytes", { 
       transport.path,
       String(process.pid),
     ],
-    { stdio: ["ignore", "ignore", "inherit", "pipe"] },
+    { stdio: ["ignore", "ignore", "pipe", "pipe"] },
   );
   const closePromise = once(writer, "close");
+  const stderr = captureChildStderr(writer);
   let descriptorError = null;
   writer.stdio[3].on("error", (error) => {
     if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
@@ -321,6 +335,8 @@ test("the private FIFO serves repeat reads without persisting payload bytes", { 
     rmSync(transport.directory, { recursive: true, force: true });
   }
   assert.ifError(descriptorError);
+  assert.ifError(stderr.error);
+  assert.equal(stderr.bytes, 0);
 });
 
 test("the FIFO writer exits if its supervisor disappears while no reader exists", { timeout: 5_000 }, async () => {
@@ -332,9 +348,10 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
       transport.path,
       "99999999",
     ],
-    { stdio: ["ignore", "ignore", "inherit", "pipe"] },
+    { stdio: ["ignore", "ignore", "pipe", "pipe"] },
   );
   const closePromise = once(writer, "close");
+  const stderr = captureChildStderr(writer);
   let descriptorError = null;
   writer.stdio[3].on("error", (error) => {
     if (error?.code !== "ECONNRESET" || error?.syscall !== "read") {
@@ -345,7 +362,7 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
 
   let timeout;
   try {
-    const [code] = await Promise.race([
+    const [code, signal] = await Promise.race([
       closePromise,
       new Promise((_, reject) => {
         timeout = setTimeout(
@@ -354,7 +371,8 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
         );
       }),
     ]);
-    assert.notEqual(code, 0);
+    assert.equal(code, 1);
+    assert.equal(signal, null);
   } finally {
     clearTimeout(timeout);
     if (writer.exitCode === null && writer.signalCode === null) {
@@ -364,6 +382,8 @@ test("the FIFO writer exits if its supervisor disappears while no reader exists"
     rmSync(transport.directory, { recursive: true, force: true });
   }
   assert.ifError(descriptorError);
+  assert.ifError(stderr.error);
+  assert.equal(stderr.bytes, 0);
 });
 
 test("Keychain probes use the fixed service and never request a value", () => {

@@ -299,6 +299,7 @@ for (const invariant of [
   '"--port must be one unique TCP port',
   'argument === "--remote"',
   'payloadBuffer.fill(0)',
+  'error?.code !== "ECONNRESET" || error?.syscall !== "read"',
 ]) {
   if (!localSecretLoader.includes(invariant)) {
     failures.push(`local-secrets.mjs: missing secure-loader invariant ${invariant}`);
@@ -328,7 +329,9 @@ const localSecretFifoWriter = readFileSync(
   "utf8",
 );
 for (const invariant of [
-  'descriptorPath = "/dev/fd/3"',
+  "descriptorFd = 3",
+  "readFileSync(descriptorFd)",
+  "closeSync(descriptorFd)",
   "fifoStat.isFIFO()",
   "openedStat.isFIFO()",
   "constants.O_NOFOLLOW",

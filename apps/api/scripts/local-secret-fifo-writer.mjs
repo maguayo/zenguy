@@ -1,4 +1,5 @@
 import {
+  closeSync,
   constants,
   lstatSync,
   readFileSync,
@@ -8,7 +9,7 @@ import { dirname, isAbsolute } from "node:path";
 
 const MAX_PAYLOAD_BYTES = 512 * 1024;
 const REOPEN_DELAY_MS = 10;
-const descriptorPath = "/dev/fd/3";
+const descriptorFd = 3;
 const fifoPath = process.argv[2];
 const supervisorPid = Number(process.argv[3]);
 
@@ -41,7 +42,14 @@ if (
   fail("The secret FIFO and its directory must be private and owned by this user");
 }
 
-const payload = readFileSync(descriptorPath);
+// Read the inherited descriptor itself. Reopening `/dev/fd/3` is not portable:
+// Linux rejects reopening an inherited pipe with ENXIO.
+let payload;
+try {
+  payload = readFileSync(descriptorFd);
+} finally {
+  closeSync(descriptorFd);
+}
 if (payload.byteLength === 0 || payload.byteLength > MAX_PAYLOAD_BYTES) {
   payload.fill(0);
   fail("The secret FIFO payload is empty or too large");
