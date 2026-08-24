@@ -31,9 +31,9 @@
     "seed": "node scripts/local-secrets.mjs run seed"
   },
   "dependencies": {
-    "@cloudflare/puppeteer": "^1.3.0",
+    "@cloudflare/puppeteer": "^1.4.0",
     "@hono/zod-validator": "^0.9.0",
-    "hono": "^4.13.2",
+    "hono": "^4.13.3",
     "jose": "^6.2.10",
     "ulid": "^3.0.2",
     "yaml": "^2.9.0",
