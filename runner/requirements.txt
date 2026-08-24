@@ -4,5 +4,5 @@ httpx==0.28.1
 # a browser-use resolver change cannot silently reintroduce the advisories.
 click>=8.3.3
 mcp>=1.28.1,<2
-pypdf>=6.15.0
+pypdf>=6.16.1
 pip>=26.2

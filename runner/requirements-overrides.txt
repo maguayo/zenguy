@@ -2,4 +2,4 @@
 # compatible security overrides until upstream relaxes its metadata.
 click>=8.3.3
 mcp>=1.28.1,<2
-pypdf>=6.15.0
+pypdf>=6.16.1
