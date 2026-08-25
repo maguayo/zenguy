@@ -75,6 +75,8 @@ RUNNER_VERSION = f"zenguy-local-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
 FALLBACK_RUNNER_VERSION = (
     f"zenguy-fallback-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
 )
+CF_RUNNER_VERSION = f"zenguy-cf-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
+CONTAINER_CHROMIUM = Path("/usr/bin/chromium")
 LOCAL_SECRETS_PATH = Path(__file__).resolve().with_name(
     ".browser_worker.local.json"
 )
@@ -480,6 +482,11 @@ class RunnerConfig:
     poll_seconds: float
     visibility_timeout_ms: int
     egress_proxy: str | None = None
+    # Only the Cloudflare Containers mode may run without the proxy sidecar:
+    # there is no host of ours behind the container, and the CDP per-job
+    # network policy remains the enforced boundary. Every other mode keeps
+    # refusing to launch without the mandatory egress proxy.
+    require_egress_proxy: bool = True
     # Empty means that every attempt uses model_reasoning_effort. The fallback
     # runner normally escalates through this tuple and caps at its last value.
     model_reasoning_effort_schedule: tuple[str, ...] = ()
@@ -742,6 +749,148 @@ class RunnerConfig:
             access_client_secret=access_client_secret,
         )
 
+    @classmethod
+    def for_cloudflare(
+        cls,
+        *,
+        environ: Mapping[str, str] | None = None,
+    ) -> "RunnerConfig":
+        """One-shot configuration inside a Cloudflare Containers instance.
+
+        Everything arrives through environment variables injected by the
+        RunnerContainer Durable Object; there is no secrets file and no
+        Wrangler. The egress proxy is optional ONLY here: no host of ours sits
+        behind the container and the per-job CDP network policy remains the
+        enforced boundary. The API origin is pinned to the environment so a
+        misconfigured dispatcher cannot point real credentials elsewhere.
+        """
+
+        env = os.environ if environ is None else environ
+        environment = (env.get("ZENGUY_RUNNER_ENVIRONMENT") or "").strip()
+        selected = ENVIRONMENTS.get(environment)
+        if selected is None:
+            raise ConfigError(f"Unknown runner environment: {environment}")
+        expected_worker_id = f"zenguy-{environment}-cf"
+        worker_id = (env.get("ZENGUY_WORKER_ID") or "").strip()
+        if worker_id != expected_worker_id:
+            raise ConfigError(
+                "The cloudflare runner requires the exact worker identity "
+                f"{expected_worker_id}"
+            )
+        runner_token = (env.get("ZENGUY_RUNNER_TOKEN") or "").strip()
+        model_api_key = (env.get("OPENAI_API_KEY") or "").strip()
+        access_client_id = (env.get("CF_ACCESS_CLIENT_ID") or "").strip()
+        access_client_secret = (env.get("CF_ACCESS_CLIENT_SECRET") or "").strip()
+        if len(runner_token) < 32:
+            raise ConfigError(
+                "The cloudflare runner needs a valid ZENGUY_RUNNER_TOKEN"
+            )
+        if not model_api_key:
+            raise ConfigError("The cloudflare runner needs OPENAI_API_KEY")
+        if len(access_client_id) < 16 or len(access_client_secret) < 32:
+            raise ConfigError(
+                "The cloudflare runner needs a dedicated Cloudflare Access "
+                "service token in CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET"
+            )
+        require_distinct_credentials(
+            {
+                "runner_api_token": runner_token,
+                "access_client_id": access_client_id,
+                "access_client_secret": access_client_secret,
+            }
+        )
+        api_url = validate_api_url(
+            (env.get("ZENGUY_API_URL") or selected["api_url"]).strip()
+        )
+        if api_url != selected["api_url"]:
+            raise ConfigError(
+                "ZENGUY_API_URL must match the configured runner environment"
+            )
+        base_url = (
+            env.get("ZENGUY_FALLBACK_MODEL_BASE_URL")
+            or DEFAULT_FALLBACK_MODEL_BASE_URL
+        ).strip().rstrip("/")
+        _local_model_url_allowed(base_url, True)
+        reasoning_effort_override = (
+            env.get("ZENGUY_FALLBACK_REASONING_EFFORT") or ""
+        ).strip()
+        proxy = (env.get("ZENGUY_EGRESS_PROXY") or "").strip()
+        chrome_override = (env.get("ZENGUY_FALLBACK_CHROME") or "").strip()
+        if chrome_override:
+            chrome_executable: Path | None = Path(chrome_override)
+            browser_channel: str | None = "chrome"
+        elif CONTAINER_CHROMIUM.is_file():
+            chrome_executable = CONTAINER_CHROMIUM
+            browser_channel = "chrome"
+        else:
+            chrome_executable = None
+            browser_channel = None
+        return cls(
+            environment=environment,
+            cloudflare_account_id="",
+            cloudflare_queue_id="",
+            cloudflare_queues_token="",
+            zenguy_api_url=api_url,
+            zenguy_runner_token=runner_token,
+            model_base_url=base_url,
+            model_name=(
+                env.get("ZENGUY_FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL_NAME
+            ).strip(),
+            model_api_key=model_api_key,
+            model_vision=True,
+            model_reasoning_effort=(
+                reasoning_effort_override or DEFAULT_FALLBACK_REASONING_EFFORT
+            ),
+            model_reasoning_effort_schedule=(
+                ()
+                if reasoning_effort_override
+                else DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE
+            ),
+            allow_remote_model=True,
+            headless=True,
+            browser_channel=browser_channel,
+            poll_seconds=DEFAULT_POLL_SECONDS,
+            visibility_timeout_ms=DEFAULT_VISIBILITY_TIMEOUT_MS,
+            egress_proxy=validate_proxy_url(proxy) if proxy else None,
+            require_egress_proxy=bool(proxy),
+            mode="cloudflare",
+            runner_kind="cf",
+            model_native_structured=True,
+            runner_version=CF_RUNNER_VERSION,
+            chrome_executable=chrome_executable,
+            worker_id=worker_id,
+            access_client_id=access_client_id,
+            access_client_secret=access_client_secret,
+        )
+
+
+def parse_cloudflare_attempt_message(
+    environ: Mapping[str, str],
+) -> tuple[dict[str, Any], str]:
+    """AttemptMessage y delivery id inyectados por el Durable Object.
+
+    La validación completa del mensaje la hace la API en el claim; aquí solo
+    se comprueba la forma mínima para fallar en configuración, no a mitad de
+    protocolo.
+    """
+
+    raw = (environ.get("ZENGUY_ATTEMPT_MESSAGE") or "").strip()
+    delivery_id = (environ.get("ZENGUY_DELIVERY_ID") or "").strip()
+    if not raw:
+        raise ConfigError("ZENGUY_ATTEMPT_MESSAGE is required in cloudflare mode")
+    if not delivery_id:
+        raise ConfigError("ZENGUY_DELIVERY_ID is required in cloudflare mode")
+    try:
+        message = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ConfigError("ZENGUY_ATTEMPT_MESSAGE is not valid JSON") from error
+    if not isinstance(message, dict):
+        raise ConfigError("ZENGUY_ATTEMPT_MESSAGE must be a JSON object")
+    attempt_id = message.get("attemptId")
+    if not isinstance(attempt_id, str) or not attempt_id:
+        raise ConfigError("ZENGUY_ATTEMPT_MESSAGE omitted attemptId")
+    return message, delivery_id
+
 
 def scrub_sensitive_runner_environment() -> None:
     """Keep global credentials out of Chromium and later child processes.
@@ -800,6 +949,42 @@ def assert_isolated_fallback_runtime(
             "Runner jobs require the signed isolated Compose container and "
             "per-attempt recycling"
         )
+
+
+def assert_cloudflare_runtime(
+    *,
+    environ: Mapping[str, str] | None = None,
+    platform: str | None = None,
+    uid: int | None = None,
+    effective_uid: int | None = None,
+) -> None:
+    """Refuse cloudflare-mode jobs outside a Cloudflare Containers instance.
+
+    El compartimento real lo garantiza Cloudflare (una VM por contenedor); este
+    gate impide que el modo se invoque por error en un host: exige el marcador
+    del dispatcher, la identidad de Durable Object que inyecta el runtime de
+    Containers, Linux y el uid sin privilegios fijado por la imagen. El gate
+    Compose (`assert_isolated_fallback_runtime`) sigue intacto para --fallback.
+    """
+
+    env = os.environ if environ is None else environ
+    current_platform = sys.platform if platform is None else platform
+    current_uid = os.getuid() if uid is None else uid
+    current_effective_uid = (
+        os.geteuid() if effective_uid is None else effective_uid
+    )
+    if env.get("ZENGUY_ISOLATED_RUNNER") != "cloudflare":
+        raise ConfigError(
+            "Cloudflare mode requires the RunnerContainer dispatcher"
+        )
+    if not (env.get("CLOUDFLARE_DURABLE_OBJECT_ID") or "").strip():
+        raise ConfigError(
+            "Cloudflare mode requires the Containers runtime identity"
+        )
+    if current_platform != "linux":
+        raise ConfigError("Cloudflare runner confinement requires Linux")
+    if current_uid != 10001 or current_effective_uid != 10001:
+        raise ConfigError("Cloudflare runner must execute as uid 10001")
 
 
 def assert_linux_process_confinement(
@@ -2558,7 +2743,7 @@ def create_browser_use_model(
         raise ConfigError("The browser-use model id is not configured")
     model_host = urllib.parse.urlsplit(config.model_base_url).hostname
     is_remote_model = model_host not in {"127.0.0.1", "::1", "localhost"}
-    if is_remote_model and not config.egress_proxy:
+    if is_remote_model and not config.egress_proxy and config.require_egress_proxy:
         raise ConfigError("Remote model access requires the egress proxy")
     http_client = httpx.AsyncClient(
         proxy=config.egress_proxy if is_remote_model else None,
@@ -2720,7 +2905,7 @@ def create_browser_use_profile(
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 "
         "Safari/537.36"
     )
-    if not config.egress_proxy:
+    if not config.egress_proxy and config.require_egress_proxy:
         raise ConfigError("Browser launch refused without the mandatory egress proxy")
     profile = runtime.BrowserProfile(
         executable_path=executable,
@@ -2740,7 +2925,11 @@ def create_browser_use_profile(
         # Chromium has an implicit localhost bypass even when a proxy is
         # configured.  Subtract it so a renderer cannot talk to other
         # processes in the same container outside the policy boundary.
-        proxy={"server": config.egress_proxy, "bypass": REQUIRED_PROXY_BYPASS},
+        proxy=(
+            {"server": config.egress_proxy, "bypass": REQUIRED_PROXY_BYPASS}
+            if config.egress_proxy
+            else None
+        ),
         args=[
             REQUIRED_CHROMIUM_SWITCH,
             "--disable-background-networking",
@@ -3889,7 +4078,72 @@ class FallbackWorker:
             await asyncio.wait_for(self.stopping.wait(), timeout=seconds)
 
 
-def install_signal_handlers(worker: "Worker | FallbackWorker") -> None:
+class CloudflareWorker:
+    """One-shot executor inside a Cloudflare Containers instance.
+
+    El Durable Object RunnerContainer entrega exactamente un AttemptMessage y
+    un delivery id por contenedor. El claim usa el protocolo de siempre: el
+    arbitraje atómico en D1 decide, un SKIP significa que otro ejecutor legítimo
+    lo posee (o que el attempt es terminal) y el proceso muere inofensivo. El
+    watchdog del DO cubre la recuperación si este proceso desaparece.
+    """
+
+    def __init__(
+        self,
+        config: RunnerConfig,
+        message: Mapping[str, Any],
+        delivery_id: str,
+    ) -> None:
+        self.config = config
+        self.message = dict(message)
+        self.delivery_id = delivery_id
+        self.app = AppClient(config)
+        self.executor = JobExecutor(config, self.app)
+        self.stopping = asyncio.Event()
+        self.heartbeat = Heartbeat(
+            self.app,
+            worker_id=config.worker_id,
+            mode="cf",
+            version=config.runner_version,
+            started_at=int(time.time() * 1000),
+        )
+
+    async def run(self) -> None:
+        log(
+            "cf_runner_started",
+            environment=self.config.environment,
+            api=self.config.zenguy_api_url,
+            model=self.config.model_name,
+            attemptId=self.message.get("attemptId"),
+            deliveryId=self.delivery_id,
+        )
+        self.heartbeat.start()
+        try:
+            await self._execute_once()
+        finally:
+            self.heartbeat.stop()
+
+    async def _execute_once(self) -> None:
+        job = await self.app.claim(self.delivery_id, self.message)
+        if job is None:
+            log(
+                "cf_run_skipped",
+                deliveryId=self.delivery_id,
+                attemptId=self.message.get("attemptId"),
+            )
+            return
+        reference = job.get("reference")
+        attempt_id = (
+            reference.get("attemptId") if isinstance(reference, dict) else None
+        )
+        log("cf_run_claimed", deliveryId=self.delivery_id, attemptId=attempt_id)
+        await self.executor.execute(job)
+        log("cf_run_completed", deliveryId=self.delivery_id, attemptId=attempt_id)
+
+
+def install_signal_handlers(
+    worker: "Worker | FallbackWorker | CloudflareWorker",
+) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError):
@@ -3995,10 +4249,18 @@ async def async_main(
     staging: bool,
     fallback: bool,
     recycle_after_attempt: bool,
+    cloudflare: bool = False,
 ) -> int:
     environment = resolve_runner_environment(staging)
-    worker: Worker | FallbackWorker
-    if fallback:
+    worker: Worker | FallbackWorker | CloudflareWorker
+    if cloudflare:
+        assert_cloudflare_runtime()
+        config = RunnerConfig.for_cloudflare()
+        message, delivery_id = parse_cloudflare_attempt_message(os.environ)
+        scrub_sensitive_runner_environment()
+        await ensure_fallback_model_ready(config)
+        worker = CloudflareWorker(config, message, delivery_id)
+    elif fallback:
         assert_isolated_fallback_runtime(recycle_after_attempt)
         assert_linux_process_confinement()
         config = RunnerConfig.for_fallback(environment)
@@ -4054,6 +4316,14 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--cloudflare",
+        action="store_true",
+        help=(
+            "Run exactly one attempt inside a Cloudflare Containers "
+            "instance dispatched by the RunnerContainer Durable Object"
+        ),
+    )
+    parser.add_argument(
         "--once",
         action="store_true",
         help=argparse.SUPPRESS,
@@ -4067,6 +4337,8 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.cloudflare and args.fallback:
+        parser.error("--cloudflare and --fallback are mutually exclusive")
     try:
         if args.verify_locked_runtime:
             verify_locked_runtime()
@@ -4090,6 +4362,7 @@ def main() -> int:
                 args.staging,
                 args.fallback,
                 args.recycle_after_attempt,
+                args.cloudflare,
             )
         )
     except (ConfigError, FatalRunnerError) as error:

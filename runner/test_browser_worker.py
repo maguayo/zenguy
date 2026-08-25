@@ -2817,5 +2817,208 @@ class HeartbeatTests(unittest.TestCase):
         self.assertEqual(len(calls), count)
 
 
+class CloudflareRuntimeTests(unittest.TestCase):
+    ENVIRON = {
+        "ZENGUY_ISOLATED_RUNNER": "cloudflare",
+        "CLOUDFLARE_DURABLE_OBJECT_ID": "do-123",
+        "ZENGUY_RUNNER_ENVIRONMENT": "staging",
+        "ZENGUY_WORKER_ID": "zenguy-staging-cf",
+        "ZENGUY_API_URL": "https://staging-app.zenguy.com",
+        "ZENGUY_ATTEMPT_MESSAGE": json.dumps(
+            {
+                "kind": "attempt",
+                "runId": "run_1",
+                "attemptId": "att_1",
+                "attemptIndex": 0,
+                "executionGeneration": 1_000,
+            }
+        ),
+        "ZENGUY_DELIVERY_ID": "cf-abc",
+        "ZENGUY_RUNNER_TOKEN": "r" * 64,
+        "OPENAI_API_KEY": "sk-test-key",
+        "CF_ACCESS_CLIENT_ID": "cf-client-id.access",
+        "CF_ACCESS_CLIENT_SECRET": "a" * 64,
+    }
+
+    def test_cloudflare_runtime_gate_requires_do_identity_and_uid(self):
+        worker.assert_cloudflare_runtime(
+            environ=self.ENVIRON, platform="linux", uid=10001, effective_uid=10001
+        )
+        for key, invalid in (
+            ("ZENGUY_ISOLATED_RUNNER", "1"),
+            ("ZENGUY_ISOLATED_RUNNER", ""),
+            ("CLOUDFLARE_DURABLE_OBJECT_ID", ""),
+        ):
+            with self.subTest(key=key, invalid=invalid):
+                with self.assertRaises(worker.ConfigError):
+                    worker.assert_cloudflare_runtime(
+                        environ={**self.ENVIRON, key: invalid},
+                        platform="linux",
+                        uid=10001,
+                        effective_uid=10001,
+                    )
+        with self.assertRaises(worker.ConfigError):
+            worker.assert_cloudflare_runtime(
+                environ=self.ENVIRON,
+                platform="darwin",
+                uid=10001,
+                effective_uid=10001,
+            )
+        with self.assertRaises(worker.ConfigError):
+            worker.assert_cloudflare_runtime(
+                environ=self.ENVIRON, platform="linux", uid=0, effective_uid=0
+            )
+
+    def test_cloudflare_config_defaults_without_proxy(self):
+        config = worker.RunnerConfig.for_cloudflare(environ=self.ENVIRON)
+
+        self.assertEqual(config.mode, "cloudflare")
+        self.assertEqual(config.runner_kind, "cf")
+        self.assertEqual(config.environment, "staging")
+        self.assertEqual(config.worker_id, "zenguy-staging-cf")
+        self.assertEqual(config.zenguy_api_url, "https://staging-app.zenguy.com")
+        self.assertEqual(config.zenguy_runner_token, "r" * 64)
+        self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
+        self.assertEqual(config.model_name, "gpt-5.6-luna")
+        self.assertEqual(config.model_reasoning_effort, "low")
+        self.assertEqual(
+            config.model_reasoning_effort_schedule, ("low", "medium", "high")
+        )
+        self.assertTrue(config.allow_remote_model)
+        self.assertTrue(config.model_native_structured)
+        self.assertTrue(config.headless)
+        self.assertIsNone(config.egress_proxy)
+        self.assertFalse(config.require_egress_proxy)
+        self.assertTrue(config.runner_version.startswith("zenguy-cf-runner/"))
+        self.assertEqual(config.cloudflare_queues_token, "")
+
+    def test_cloudflare_config_validates_optional_proxy(self):
+        config = worker.RunnerConfig.for_cloudflare(
+            environ={
+                **self.ENVIRON,
+                "ZENGUY_EGRESS_PROXY": "http://egress-proxy:3128",
+            }
+        )
+        self.assertEqual(config.egress_proxy, "http://egress-proxy:3128")
+        self.assertTrue(config.require_egress_proxy)
+        with self.assertRaises(worker.ConfigError):
+            worker.RunnerConfig.for_cloudflare(
+                environ={**self.ENVIRON, "ZENGUY_EGRESS_PROXY": "not-a-proxy"}
+            )
+
+    def test_cloudflare_config_rejects_wrong_identity_or_missing_credentials(self):
+        for key, invalid in (
+            ("ZENGUY_WORKER_ID", "zenguy-staging-fallback"),
+            ("ZENGUY_WORKER_ID", "zenguy-production-cf"),
+            ("ZENGUY_RUNNER_ENVIRONMENT", "invalid"),
+            ("ZENGUY_RUNNER_TOKEN", "short"),
+            ("OPENAI_API_KEY", ""),
+            ("CF_ACCESS_CLIENT_ID", "tiny"),
+            ("CF_ACCESS_CLIENT_SECRET", "tiny"),
+        ):
+            with self.subTest(key=key, invalid=invalid):
+                with self.assertRaises(worker.ConfigError):
+                    worker.RunnerConfig.for_cloudflare(
+                        environ={**self.ENVIRON, key: invalid}
+                    )
+
+    def test_cloudflare_attempt_message_parses_and_fails_closed(self):
+        message, delivery_id = worker.parse_cloudflare_attempt_message(
+            self.ENVIRON
+        )
+        self.assertEqual(message["attemptId"], "att_1")
+        self.assertEqual(delivery_id, "cf-abc")
+        for invalid in ("", "not json", "[]", json.dumps({"attemptId": ""})):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(worker.ConfigError):
+                    worker.parse_cloudflare_attempt_message(
+                        {**self.ENVIRON, "ZENGUY_ATTEMPT_MESSAGE": invalid}
+                    )
+        with self.assertRaises(worker.ConfigError):
+            worker.parse_cloudflare_attempt_message(
+                {**self.ENVIRON, "ZENGUY_DELIVERY_ID": ""}
+            )
+
+    def test_cloudflare_model_gate_allows_remote_openai_without_proxy(self):
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        runtime = worker.BrowserUseRuntime(
+            Agent=None,
+            BrowserProfile=None,
+            BrowserSession=None,
+            ChatOpenAI=FakeChatOpenAI,
+            Tools=None,
+            ActionResult=None,
+            NavigateAction=None,
+        )
+        config = worker.RunnerConfig.for_cloudflare(environ=self.ENVIRON)
+
+        model = worker.create_browser_use_model(config, runtime)
+
+        self.assertEqual(model.kwargs["base_url"], "https://api.openai.com/v1")
+        self.assertEqual(model.kwargs["model"], "gpt-5.6-luna")
+        http_client = model.kwargs["http_client"]
+        self.addCleanup(lambda: asyncio.run(http_client.aclose()))
+        self.assertFalse(http_client.follow_redirects)
+        self.assertFalse(http_client.trust_env)
+
+
+class CloudflareWorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_executes_exactly_the_dispatched_attempt(self):
+        message = {"kind": "attempt", "attemptId": "att_1"}
+
+        class FakeApp:
+            def __init__(self):
+                self.claims = []
+
+            async def claim(self, delivery_id, claim_message):
+                self.claims.append((delivery_id, claim_message))
+                return {"reference": {"attemptId": "att_1"}}
+
+        class FakeExecutor:
+            def __init__(self):
+                self.jobs = []
+
+            async def execute(self, job):
+                self.jobs.append(job)
+
+        instance = object.__new__(worker.CloudflareWorker)
+        instance.app = FakeApp()
+        instance.executor = FakeExecutor()
+        instance.message = message
+        instance.delivery_id = "cf-abc"
+
+        await instance._execute_once()
+
+        self.assertEqual(instance.app.claims, [("cf-abc", message)])
+        self.assertEqual(
+            instance.executor.jobs, [{"reference": {"attemptId": "att_1"}}]
+        )
+
+    async def test_skip_disposition_executes_nothing(self):
+        class FakeApp:
+            async def claim(self, delivery_id, claim_message):
+                return None
+
+        class FakeExecutor:
+            def __init__(self):
+                self.jobs = []
+
+            async def execute(self, job):
+                self.jobs.append(job)
+
+        instance = object.__new__(worker.CloudflareWorker)
+        instance.app = FakeApp()
+        instance.executor = FakeExecutor()
+        instance.message = {"attemptId": "att_1"}
+        instance.delivery_id = "cf-abc"
+
+        await instance._execute_once()
+
+        self.assertEqual(instance.executor.jobs, [])
+
+
 if __name__ == "__main__":
     unittest.main()
