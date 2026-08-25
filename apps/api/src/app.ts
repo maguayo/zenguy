@@ -554,6 +554,7 @@ export function buildApp(
       environment: config.environment,
       primaryToken: config.runnerApiToken,
       fallbackToken: config.runnerFallbackApiToken,
+      cfToken: config.runnerCfApiToken,
       capabilitySecret: config.runnerCapabilitySecret,
       runner: externalRunner,
       workers: runnerWorkers,

@@ -81,6 +81,9 @@ export interface AppConfig {
   artifactUrlSecret: string;
   runnerApiToken: string;
   runnerFallbackApiToken: string;
+  // Vacío cuando el runner de Cloudflare Containers no está desplegado en el
+  // entorno; las rutas lo tratan como modo cf deshabilitado (fail-closed).
+  runnerCfApiToken: string;
   runnerCapabilitySecret: string;
   emailFrom: string;
   llmModel: string;
@@ -149,6 +152,11 @@ const envSchema = z.object({
   ARTIFACT_URL_SECRET: z.string().min(32),
   RUNNER_API_TOKEN: z.string().min(32),
   RUNNER_FALLBACK_API_TOKEN: z.string().min(32),
+  RUNNER_CF_API_TOKEN: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
   RUNNER_CAPABILITY_SECRET: z.string().min(32),
   EMAIL_FROM: z.string().min(1),
   LLM_MODEL: z.string().min(1),
@@ -305,6 +313,14 @@ export function loadConfig(env: Bindings): AppConfig {
   ) {
     throw new Error("Runner capability signing secret must be independent");
   }
+  if (
+    parsed.RUNNER_CF_API_TOKEN !== undefined &&
+    (parsed.RUNNER_CF_API_TOKEN === parsed.RUNNER_API_TOKEN ||
+      parsed.RUNNER_CF_API_TOKEN === parsed.RUNNER_FALLBACK_API_TOKEN ||
+      parsed.RUNNER_CF_API_TOKEN === parsed.RUNNER_CAPABILITY_SECRET)
+  ) {
+    throw new Error("The cf runner token must be independent");
+  }
   const paddleEnabled = paddleSecretKeys.some((key) => {
     const value = env[key];
     return typeof value === "string" && value.trim().length > 0;
@@ -353,6 +369,7 @@ export function loadConfig(env: Bindings): AppConfig {
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
     runnerApiToken: parsed.RUNNER_API_TOKEN,
     runnerFallbackApiToken: parsed.RUNNER_FALLBACK_API_TOKEN,
+    runnerCfApiToken: parsed.RUNNER_CF_API_TOKEN ?? "",
     runnerCapabilitySecret: parsed.RUNNER_CAPABILITY_SECRET,
     emailFrom: parsed.EMAIL_FROM,
     llmModel: parsed.LLM_MODEL,

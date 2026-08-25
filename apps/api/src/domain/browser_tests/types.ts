@@ -171,7 +171,7 @@ export interface TestAttempt {
 }
 
 /** Which executor ran an attempt: the primary queue-driven worker or the plan-B fallback runner. */
-export type RunnerKind = "primary" | "fallback";
+export type RunnerKind = "primary" | "fallback" | "cf";
 
 export interface RunStep {
   id: string;

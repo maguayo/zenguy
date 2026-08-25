@@ -526,3 +526,152 @@ describe("runner heartbeat", () => {
     expect(runnerWorkers.workers.size).toBe(0);
   });
 });
+
+describe("cf runner identity", () => {
+  const CF_TOKEN = "cf-runner-test-secret".padEnd(32, "-");
+
+  function cfBindings() {
+    const bindings = fakeBindings();
+    bindings.RUNNER_CF_API_TOKEN = CF_TOKEN;
+    return bindings;
+  }
+
+  it("acepta el token cf solo con la identidad zenguy-<env>-cf", async () => {
+    const externalRunner = runner();
+    const bindings = cfBindings();
+    bindings.ENVIRONMENT = "production";
+    const app = buildApp(bindings, { externalRunner });
+
+    const accepted = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: headers(CF_TOKEN),
+      body: JSON.stringify({
+        deliveryId: "cf-delivery-1",
+        message: MESSAGE,
+        workerId: "zenguy-production-cf",
+      }),
+    });
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toMatchObject({
+      data: {
+        disposition: "EXECUTE",
+        job: { ...JOB, capability: expect.any(String) },
+      },
+    });
+    expect(externalRunner.claim).toHaveBeenCalledWith(
+      expect.objectContaining({ workerId: "zenguy-production-cf" }),
+    );
+  });
+
+  it("no acepta el token cf con otras identidades ni otros tokens con la cf", async () => {
+    const externalRunner = runner();
+    const bindings = cfBindings();
+    bindings.ENVIRONMENT = "production";
+    const app = buildApp(bindings, { externalRunner });
+
+    const cfTokenPrimaryIdentity = await app.request(
+      "/api/runner/attempts/claim",
+      {
+        method: "POST",
+        headers: headers(CF_TOKEN),
+        body: JSON.stringify({
+          deliveryId: "cf-delivery-2",
+          message: MESSAGE,
+          workerId: "zenguy-production-primary",
+        }),
+      },
+    );
+    const primaryTokenCfIdentity = await app.request(
+      "/api/runner/attempts/claim",
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          deliveryId: "cf-delivery-3",
+          message: MESSAGE,
+          workerId: "zenguy-production-cf",
+        }),
+      },
+    );
+    const fallbackTokenOnClaim = await app.request(
+      "/api/runner/attempts/claim",
+      {
+        method: "POST",
+        headers: headers(FALLBACK_TOKEN),
+        body: JSON.stringify({
+          deliveryId: "cf-delivery-4",
+          message: MESSAGE,
+          workerId: "zenguy-production-cf",
+        }),
+      },
+    );
+
+    expect(cfTokenPrimaryIdentity.status).toBe(401);
+    expect(primaryTokenCfIdentity.status).toBe(401);
+    expect(fallbackTokenOnClaim.status).toBe(401);
+    expect(externalRunner.claim).not.toHaveBeenCalled();
+  });
+
+  it("rechaza todo claim cf cuando el token no está configurado", async () => {
+    const externalRunner = runner();
+    const bindings = fakeBindings();
+    delete bindings.RUNNER_CF_API_TOKEN;
+    bindings.ENVIRONMENT = "production";
+    const app = buildApp(bindings, { externalRunner });
+
+    const withCfToken = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: headers(CF_TOKEN),
+      body: JSON.stringify({
+        deliveryId: "cf-delivery-5",
+        message: MESSAGE,
+        workerId: "zenguy-production-cf",
+      }),
+    });
+    const withEmptyBearer = await app.request("/api/runner/attempts/claim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deliveryId: "cf-delivery-6",
+        message: MESSAGE,
+        workerId: "zenguy-production-cf",
+      }),
+    });
+
+    expect(withCfToken.status).toBe(401);
+    expect(withEmptyBearer.status).toBe(401);
+    expect(externalRunner.claim).not.toHaveBeenCalled();
+  });
+
+  it("acepta heartbeats en modo cf solo con el token cf", async () => {
+    const runnerWorkers = new FakeRunnerWorkerRepo();
+    const clock = new FixedClock(50_000);
+    const bindings = cfBindings();
+    const app = buildApp(bindings, {
+      externalRunner: runner(),
+      runnerWorkers,
+      clock,
+    });
+    const body = JSON.stringify({
+      workerId: "cf-1",
+      mode: "cf",
+      version: "zenguy-cf-runner/2.2.0",
+      startedAt: 40_000,
+    });
+
+    const accepted = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: headers(CF_TOKEN),
+      body,
+    });
+    const wrongToken = await app.request("/api/runner/heartbeat", {
+      method: "POST",
+      headers: headers(FALLBACK_TOKEN),
+      body,
+    });
+
+    expect(accepted.status).toBe(200);
+    expect(wrongToken.status).toBe(401);
+    expect(runnerWorkers.workers.get("cf-1")).toMatchObject({ mode: "cf" });
+  });
+});

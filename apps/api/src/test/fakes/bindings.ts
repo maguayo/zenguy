@@ -24,6 +24,7 @@ export function fakeBindings(): Bindings {
     ARTIFACT_URL_SECRET: "artifact-test-secret".padEnd(32, "-"),
     RUNNER_API_TOKEN: "runner-test-secret".padEnd(32, "-"),
     RUNNER_FALLBACK_API_TOKEN: "fallback-runner-test-secret".padEnd(32, "-"),
+    RUNNER_CF_API_TOKEN: "cf-runner-test-secret".padEnd(32, "-"),
     RUNNER_CAPABILITY_SECRET: "runner-capability-test-secret".padEnd(32, "-"),
     EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
     LLM_MODEL: "gpt-5-mini",

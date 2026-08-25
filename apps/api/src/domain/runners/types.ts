@@ -1,4 +1,4 @@
-export type RunnerWorkerMode = "local" | "fallback";
+export type RunnerWorkerMode = "local" | "fallback" | "cf";
 
 export interface RunnerHeartbeat {
   workerId: string;

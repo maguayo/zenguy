@@ -24,6 +24,8 @@ export interface RunnerRoutesDependencies {
   environment: "development" | "staging" | "production";
   primaryToken: string;
   fallbackToken: string;
+  /** Vacío = runner de Cloudflare Containers deshabilitado (fail-closed). */
+  cfToken: string;
   capabilitySecret: string;
   runner: Pick<
     ExternalRunner,
@@ -57,9 +59,35 @@ export function runnerRoutes(
     provided: string,
     expected: string,
   ): Promise<void> {
-    if (!(await timingSafeEqualText(provided, expected))) {
+    // Un token esperado ausente o demasiado corto nunca autoriza: sin este
+    // guard, un modo sin token configurado aceptaría un bearer vacío.
+    if (
+      expected.length < 32 ||
+      !(await timingSafeEqualText(provided, expected))
+    ) {
       throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
     }
+  }
+
+  /**
+   * El modo se deriva exclusivamente del token presentado, nunca del payload.
+   * `/attempts/claim` lo usan el worker primario (cola) y el runner de
+   * Cloudflare Containers, cada uno con su token e identidad.
+   */
+  async function resolveClaimMode(provided: string): Promise<"local" | "cf"> {
+    if (
+      dependencies.primaryToken.length >= 32 &&
+      (await timingSafeEqualText(provided, dependencies.primaryToken))
+    ) {
+      return "local";
+    }
+    if (
+      dependencies.cfToken.length >= 32 &&
+      (await timingSafeEqualText(provided, dependencies.cfToken))
+    ) {
+      return "cf";
+    }
+    throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
   }
 
   async function requireCapability(
@@ -82,22 +110,19 @@ export function runnerRoutes(
 
   function requireWorkerIdentity(
     workerId: string,
-    mode: "local" | "fallback",
+    mode: "local" | "fallback" | "cf",
   ): void {
     if (dependencies.environment === "development") return;
-    const expected = `zenguy-${dependencies.environment}-${
-      mode === "local" ? "primary" : "fallback"
-    }`;
+    const suffix =
+      mode === "local" ? "primary" : mode === "fallback" ? "fallback" : "cf";
+    const expected = `zenguy-${dependencies.environment}-${suffix}`;
     if (workerId !== expected) {
       throw new AppError("UNAUTHORIZED", "Invalid runner identity");
     }
   }
 
   app.use("/attempts/claim", async (context, next) => {
-    await requireBootstrap(
-      bearerToken(context.req.header("Authorization")),
-      dependencies.primaryToken,
-    );
+    await resolveClaimMode(bearerToken(context.req.header("Authorization")));
     await next();
   });
 
@@ -115,7 +140,9 @@ export function runnerRoutes(
       bearerToken(context.req.header("Authorization")),
       heartbeat.mode === "local"
         ? dependencies.primaryToken
-        : dependencies.fallbackToken,
+        : heartbeat.mode === "cf"
+          ? dependencies.cfToken
+          : dependencies.fallbackToken,
     );
     requireWorkerIdentity(heartbeat.workerId, heartbeat.mode);
     await dependencies.workers.recordHeartbeat(heartbeat, dependencies.clock.now());
@@ -124,7 +151,10 @@ export function runnerRoutes(
 
   app.post("/attempts/claim", zjson(runnerClaimSchema), async (context) => {
     const input = context.req.valid("json");
-    requireWorkerIdentity(input.workerId, "local");
+    const mode = await resolveClaimMode(
+      bearerToken(context.req.header("Authorization")),
+    );
+    requireWorkerIdentity(input.workerId, mode);
     const job = await dependencies.runner.claim(input);
     const capability =
       job === null

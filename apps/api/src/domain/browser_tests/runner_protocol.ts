@@ -104,7 +104,7 @@ export const runnerOutcomeSchema = z
     outputTokens: z.number().int().nonnegative().max(10_000_000).optional(),
     modelName: z.string().min(1).max(200),
     runnerVersion: z.string().min(1).max(200),
-    runnerKind: z.enum(["primary", "fallback"]).optional(),
+    runnerKind: z.enum(["primary", "fallback", "cf"]).optional(),
     visitedUrls: z.array(z.string().max(4_096)).max(100),
     consoleErrors: z.array(consoleEntrySchema).max(50),
     networkErrors: z.array(networkEntrySchema).max(50),
@@ -142,6 +142,7 @@ export function runnerKindFromVersion(
 ): RunnerKind | null {
   if (runnerVersion.startsWith("zenguy-fallback-runner/")) return "fallback";
   if (runnerVersion.startsWith("zenguy-local-runner/")) return "primary";
+  if (runnerVersion.startsWith("zenguy-cf-runner/")) return "cf";
   return null;
 }
 
@@ -155,7 +156,7 @@ export const runnerCompleteSchema = z
 export const runnerHeartbeatSchema = z
   .object({
     workerId: runnerWorkerIdSchema,
-    mode: z.enum(["local", "fallback"]),
+    mode: z.enum(["local", "fallback", "cf"]),
     version: z.string().min(1).max(200),
     startedAt: z.number().int().nonnegative(),
   })
