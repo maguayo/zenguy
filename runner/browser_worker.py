@@ -87,8 +87,9 @@ DEFAULT_MODEL_BASE_URL = "http://127.0.0.1:1234/v1"
 DEFAULT_MODEL_NAME = "qwen/qwen3.8-27b"
 DEFAULT_MODEL_REASONING_EFFORT = "xhigh"
 DEFAULT_FALLBACK_MODEL_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_FALLBACK_MODEL_NAME = "gpt-5-mini"
+DEFAULT_FALLBACK_MODEL_NAME = "gpt-5.6-luna"
 DEFAULT_FALLBACK_REASONING_EFFORT = "low"
+DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE = ("low", "medium", "high")
 DEFAULT_POLL_SECONDS = 5.0
 HEARTBEAT_SECONDS = 5.0
 # Shorter than the interval on purpose: a stalled POST must never make the
@@ -479,6 +480,9 @@ class RunnerConfig:
     poll_seconds: float
     visibility_timeout_ms: int
     egress_proxy: str | None = None
+    # Empty means that every attempt uses model_reasoning_effort. The fallback
+    # runner normally escalates through this tuple and caps at its last value.
+    model_reasoning_effort_schedule: tuple[str, ...] = ()
     mode: str = "queue"
     model_native_structured: bool = False
     runner_version: str = RUNNER_VERSION
@@ -672,6 +676,9 @@ class RunnerConfig:
         ).strip().rstrip("/")
         _local_model_url_allowed(base_url, True)
         poll_raw = (env.get("ZENGUY_FALLBACK_POLL_SECONDS") or "").strip()
+        reasoning_effort_override = (
+            env.get("ZENGUY_FALLBACK_REASONING_EFFORT") or ""
+        ).strip()
         try:
             poll_seconds = float(poll_raw) if poll_raw else DEFAULT_POLL_SECONDS
         except ValueError as error:
@@ -706,9 +713,14 @@ class RunnerConfig:
             model_api_key=model_api_key,
             model_vision=True,
             model_reasoning_effort=(
-                env.get("ZENGUY_FALLBACK_REASONING_EFFORT")
+                reasoning_effort_override
                 or DEFAULT_FALLBACK_REASONING_EFFORT
-            ).strip(),
+            ),
+            model_reasoning_effort_schedule=(
+                ()
+                if reasoning_effort_override
+                else DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE
+            ),
             allow_remote_model=True,
             headless=(env.get("ZENGUY_FALLBACK_HEADLESS") or "true")
             .strip()
@@ -2513,11 +2525,34 @@ def browser_use_sensitive_data(
     return scoped
 
 
+def reasoning_effort_for_attempt(
+    config: RunnerConfig, attempt_index: Any
+) -> str:
+    schedule = config.model_reasoning_effort_schedule
+    if not schedule:
+        return config.model_reasoning_effort
+    if (
+        isinstance(attempt_index, bool)
+        or not isinstance(attempt_index, int)
+        or attempt_index < 0
+    ):
+        raise PoisonMessage("Runner job has an invalid attempt index")
+    return schedule[min(attempt_index, len(schedule) - 1)]
+
+
 def create_browser_use_model(
-    config: RunnerConfig, runtime: BrowserUseRuntime
+    config: RunnerConfig,
+    runtime: BrowserUseRuntime,
+    *,
+    reasoning_effort: str | None = None,
 ) -> Any:
     import httpx
 
+    selected_reasoning_effort = (
+        config.model_reasoning_effort
+        if reasoning_effort is None
+        else reasoning_effort
+    )
     _local_model_url_allowed(config.model_base_url, config.allow_remote_model)
     if not config.model_name:
         raise ConfigError("The browser-use model id is not configured")
@@ -2538,7 +2573,7 @@ def create_browser_use_model(
             model=config.model_name,
             base_url=config.model_base_url,
             api_key=config.model_api_key,
-            reasoning_effort=config.model_reasoning_effort,
+            reasoning_effort=selected_reasoning_effort,
             reasoning_models=[config.model_name],
             temperature=None,
             frequency_penalty=None,
@@ -2634,7 +2669,7 @@ def create_browser_use_model(
         model=config.model_name,
         base_url=config.model_base_url,
         api_key=config.model_api_key,
-        reasoning_effort=config.model_reasoning_effort,
+        reasoning_effort=selected_reasoning_effort,
         reasoning_models=[config.model_name],
         temperature=None,
         frequency_penalty=None,
@@ -3391,6 +3426,10 @@ class JobExecutor:
         if not isinstance(limits, dict):
             raise PoisonMessage("Runner job is missing limits")
         model_name = self.config.model_name or "unconfigured-local-model"
+        attempt_index = reference.get("attemptIndex")
+        reasoning_effort = reasoning_effort_for_attempt(
+            self.config, attempt_index
+        )
         raw_start_url = str(snapshot.get("startUrl", ""))
         await assert_public_network_url(raw_start_url)
         started = await self.app.start(reference)
@@ -3419,7 +3458,18 @@ class JobExecutor:
         outcome: dict[str, Any]
         try:
             runtime = load_browser_use_runtime()
-            model = create_browser_use_model(self.config, runtime)
+            log(
+                "browser_use_model_selected",
+                attemptId=reference.get("attemptId"),
+                attemptIndex=attempt_index,
+                model=model_name,
+                reasoningEffort=reasoning_effort,
+            )
+            model = create_browser_use_model(
+                self.config,
+                runtime,
+                reasoning_effort=reasoning_effort,
+            )
             profile = create_browser_use_profile(
                 self.config,
                 snapshot,
@@ -3934,6 +3984,9 @@ async def ensure_fallback_model_ready(config: RunnerConfig) -> None:
         model=config.model_name,
         modelBaseUrl=config.model_base_url,
         reasoningEffort=config.model_reasoning_effort,
+        reasoningEffortSchedule=list(
+            config.model_reasoning_effort_schedule
+        ),
     )
 
 

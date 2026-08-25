@@ -14,7 +14,7 @@
 - **Modo fallback del worker Python**, invocable únicamente por el contenedor Compose firmado con `--fallback --recycle-after-attempt`. Es el mismo ejecutor `browser-use` de siempre, pero:
   - no toca Cloudflare Queues (ni necesita Wrangler ni credenciales de Cloudflare);
   - sondea `claim-stale` cada 5 segundos;
-  - usa la **API de OpenAI** con `gpt-5-mini` por defecto, en headless.
+  - usa la **API de OpenAI** con `gpt-5.6-luna` por defecto, en headless.
 - Mientras el worker local esté sano, el fallback **no ejecuta nada** (todo se coge en <10 s). Si el local va lento, se queda sin internet o sin luz, el fallback empieza a coger trabajo solo, sin intervención.
 
 ## Decisiones que tomé (y por qué)
@@ -29,7 +29,7 @@
 
 5. **El fallback también cura zombis.** `claim-stale` además saca a la superficie attempts `STARTING/RUNNING` cuyo worker murió (started_at > timeout de 5 min + 2 min de gracia). Reclamarlos dispara exactamente la recuperación `WORKER_LOST` + infra-retry que ya disparaba una redelivery de la cola. Antes, si el local moría con el mensaje ya ACKeado o atascado, la recuperación dependía del cron horario; ahora el propio fallback la provoca en minutos. Con el local totalmente muerto, el sistema entero se auto-repara.
 
-6. **Modelo barato y configurable, `gpt-5-mini` por defecto.** Mencionaste "gpt 5.6 luna": no tengo confirmado ese identificador de API, así que en lugar de hardcodear un id que podría no existir, el modelo es `ZENGUY_FALLBACK_MODEL=<id>` sin tocar código (p. ej. `ZENGUY_FALLBACK_MODEL=gpt-5.6-luna` el día que confirmes el id; hay un test que cubre justo ese override). También puedes apuntar a otro proveedor OpenAI-compatible con `ZENGUY_FALLBACK_MODEL_BASE_URL` (HTTPS obligatorio). El `reasoning_effort` por defecto es `low` (coste/latencia; el objetivo del plan B es que el run se ejecute, no que sea la mejor ejecución posible) y se sube con `ZENGUY_FALLBACK_REASONING_EFFORT=medium` si ves fallos de calidad.
+6. **Modelo barato y configurable, `gpt-5.6-luna` por defecto.** El identificador está confirmado en la documentación oficial de OpenAI y Luna está orientado a cargas de gran volumen sensibles al coste. Puedes cambiarlo sin tocar código con `ZENGUY_FALLBACK_MODEL=<id>` o apuntar a otro proveedor OpenAI-compatible con `ZENGUY_FALLBACK_MODEL_BASE_URL` (HTTPS obligatorio). El `reasoning_effort` escala con los reintentos funcionales: `low` en el primer intento, `medium` en el segundo y `high` desde el tercero; si el test permite el cuarto intento, también queda limitado a `high`. Definir `ZENGUY_FALLBACK_REASONING_EFFORT=<nivel>` desactiva ese escalado y fija el mismo nivel para todos los intentos.
 
 7. **Adaptador nativo, no el de Bionic.** OpenAI sí compila el `json_schema` dinámico de browser-use, así que el fallback usa el `ChatOpenAI` de serie con structured output nativo. El adaptador de texto `BionicChatOpenAI` queda solo para el modo local.
 
@@ -39,7 +39,7 @@
 
 10. **Índice nuevo para el poll**: migración `0017_fallback_claim_index.sql` (`test_attempts(status, queued_at)`), porque `claim-stale` se consulta cada pocos segundos.
 
-11. **Trazabilidad**: los runs del fallback quedan registrados con `runnerVersion = zenguy-fallback-runner/2.0.0+browser-use-0.13.8`, `modelName = gpt-5-mini` y delivery ids `fallback-<host>-<uuid>`, así distingues en la UI/BD qué ejecutó cada camino. Desde el 23-08-2026 cada intento guarda además `runner_kind` (`primary` = worker local del Mac, `fallback` = VPS; la API lo infiere del prefijo de `runnerVersion` si un runner antiguo no lo manda) y el desglose de tokens `input_tokens` / `output_tokens` (de `usage.total_prompt_tokens` / `total_completion_tokens` de browser-use; `token_usage` sigue siendo el total), visibles en el detalle del intento, el run y el informe.
+11. **Trazabilidad**: los runs del fallback quedan registrados con `runnerVersion = zenguy-fallback-runner/2.0.0+browser-use-0.13.8`, `modelName = gpt-5.6-luna` y delivery ids `fallback-<host>-<uuid>`, así distingues en la UI/BD qué ejecutó cada camino. Desde el 23-08-2026 cada intento guarda además `runner_kind` (`primary` = worker local del Mac, `fallback` = VPS; la API lo infiere del prefijo de `runnerVersion` si un runner antiguo no lo manda) y el desglose de tokens `input_tokens` / `output_tokens` (de `usage.total_prompt_tokens` / `total_completion_tokens` de browser-use; `token_usage` sigue siendo el total), visibles en el detalle del intento, el run y el informe.
 
 ## Cómo se comporta en cada escenario
 
@@ -125,7 +125,7 @@ Los mismos tres pasos de staging, **después** de completar los gates de release
 
 ## Coste estimado del plan B
 
-Orientativo (precios de gpt-5-mini que conozco: ~0,25 $/M tokens de entrada, ~2 $/M de salida; verifica los vigentes): un attempt de browser-use ronda decenas de miles de tokens, mayormente entrada → **del orden de 0,01-0,10 $ por run**. Y solo se paga cuando el plan B actúa de verdad; en operación normal el coste es cero.
+Orientativo (precios publicados para `gpt-5.6-luna` el 24-08-2026: 0,20 $/M tokens de entrada, 0,02 $/M de entrada en caché y 1,20 $/M de salida): un attempt de browser-use ronda decenas de miles de tokens, mayormente entrada → **del orden de 0,01-0,10 $ por run**. Y solo se paga cuando el plan B actúa de verdad; en operación normal el coste es cero. Verifica los precios vigentes antes de proyectar gasto.
 
 ## Validación ejecutada
 

@@ -212,9 +212,10 @@ offline, or without power:
   that have been claimable for at least 10 seconds (server-side
   `FALLBACK_CLAIM_MIN_AGE_MS`) and are still unclaimed. While the local worker
   is healthy the fallback therefore stays idle.
-- Inference uses the OpenAI API (default model `gpt-5-mini`) through the stock
-  browser-use `ChatOpenAI` adapter with native structured output; the Bionic
-  text adapter is not involved.
+- Inference uses the OpenAI API (default model `gpt-5.6-luna`) through the stock
+  browser-use `ChatOpenAI` adapter with native structured output. Reasoning
+  escalates by functional attempt: `low` on attempt 1, `medium` on attempt 2,
+  and `high` on attempts 3 and 4. The Bionic text adapter is not involved.
 - Chrome runs headless by default. Steps, screenshots, secret scoping,
   redaction and SSRF rules are identical to the local mode.
 - The same stale-claim poll also surfaces attempts whose worker died mid-run,
@@ -227,7 +228,8 @@ and `--recycle-after-attempt` before it reads credentials. Use mocked unit tests
 for protocol debugging and the signed Compose stack for real end-to-end jobs.
 Optional container overrides:
 `ZENGUY_FALLBACK_MODEL`,
-`ZENGUY_FALLBACK_REASONING_EFFORT`, `ZENGUY_FALLBACK_MODEL_BASE_URL` (HTTPS
+`ZENGUY_FALLBACK_REASONING_EFFORT` (pins every attempt to one level),
+`ZENGUY_FALLBACK_MODEL_BASE_URL` (HTTPS
 required), `ZENGUY_FALLBACK_HEADLESS=false`, `ZENGUY_FALLBACK_CHROME`
 (browser executable path), `ZENGUY_FALLBACK_POLL_SECONDS`, `ZENGUY_API_URL`.
 

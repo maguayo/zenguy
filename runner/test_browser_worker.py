@@ -659,7 +659,7 @@ class BrowserUseIntegrationTests(unittest.TestCase):
             history,
             {"instructions": "Verify the heading"},
             worker.Redactor({}),
-            "gpt-5-mini",
+            "gpt-5.6-luna",
         )
 
         self.assertEqual(outcome["status"], "SYSTEM_ERROR")
@@ -679,7 +679,7 @@ class BrowserUseIntegrationTests(unittest.TestCase):
             history,
             {"instructions": "Verify the heading"},
             worker.Redactor({}),
-            "gpt-5-mini",
+            "gpt-5.6-luna",
         )
 
         self.assertEqual(outcome["status"], "FAILED")
@@ -2207,9 +2207,13 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertEqual(config.zenguy_api_url, "https://staging-app.zenguy.com")
         self.assertEqual(config.zenguy_runner_token, "r" * 64)
         self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
-        self.assertEqual(config.model_name, "gpt-5-mini")
+        self.assertEqual(config.model_name, "gpt-5.6-luna")
         self.assertEqual(config.model_api_key, "sk-test-key")
         self.assertEqual(config.model_reasoning_effort, "low")
+        self.assertEqual(
+            config.model_reasoning_effort_schedule,
+            ("low", "medium", "high"),
+        )
         self.assertTrue(config.allow_remote_model)
         self.assertTrue(config.model_native_structured)
         self.assertTrue(config.headless)
@@ -2222,7 +2226,7 @@ class FallbackConfigurationTests(unittest.TestCase):
             "production",
             environ={
                 **self.ENVIRON,
-                "ZENGUY_FALLBACK_MODEL": "gpt-5.6-luna",
+                "ZENGUY_FALLBACK_MODEL": "gpt-5.6-terra",
                 "ZENGUY_FALLBACK_REASONING_EFFORT": "medium",
                 "ZENGUY_FALLBACK_HEADLESS": "false",
                 "ZENGUY_FALLBACK_POLL_SECONDS": "3",
@@ -2231,10 +2235,56 @@ class FallbackConfigurationTests(unittest.TestCase):
         )
 
         self.assertEqual(config.zenguy_api_url, "https://app.zenguy.com")
-        self.assertEqual(config.model_name, "gpt-5.6-luna")
+        self.assertEqual(config.model_name, "gpt-5.6-terra")
         self.assertEqual(config.model_reasoning_effort, "medium")
+        self.assertEqual(config.model_reasoning_effort_schedule, ())
         self.assertFalse(config.headless)
         self.assertEqual(config.poll_seconds, 3.0)
+
+    def test_default_reasoning_escalates_and_caps_at_high(self):
+        config = worker.RunnerConfig.for_fallback(
+            "staging",
+            environ=self.ENVIRON,
+            secrets_path=Path("/nonexistent/runner-secrets.json"),
+        )
+
+        expected = ("low", "medium", "high", "high")
+        actual = tuple(
+            worker.reasoning_effort_for_attempt(config, attempt_index)
+            for attempt_index in range(4)
+        )
+
+        self.assertEqual(actual, expected)
+
+    def test_reasoning_override_pins_every_attempt(self):
+        config = worker.RunnerConfig.for_fallback(
+            "staging",
+            environ={
+                **self.ENVIRON,
+                "ZENGUY_FALLBACK_REASONING_EFFORT": "medium",
+            },
+            secrets_path=Path("/nonexistent/runner-secrets.json"),
+        )
+
+        self.assertEqual(
+            tuple(
+                worker.reasoning_effort_for_attempt(config, attempt_index)
+                for attempt_index in range(4)
+            ),
+            ("medium", "medium", "medium", "medium"),
+        )
+
+    def test_reasoning_schedule_rejects_an_invalid_attempt_index(self):
+        config = worker.RunnerConfig.for_fallback(
+            "staging",
+            environ=self.ENVIRON,
+            secrets_path=Path("/nonexistent/runner-secrets.json"),
+        )
+
+        for invalid in (None, True, -1, "1"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(worker.PoisonMessage):
+                    worker.reasoning_effort_for_attempt(config, invalid)
 
     def test_fallback_rejects_bootstrap_and_access_credential_reuse(self):
         with self.assertRaisesRegex(worker.ConfigError, "must be distinct"):
@@ -2333,7 +2383,7 @@ class FallbackModelTests(unittest.TestCase):
         model = worker.create_browser_use_model(config, runtime)
 
         self.assertIs(type(model), FakeChatOpenAI)
-        self.assertEqual(model.kwargs["model"], "gpt-5-mini")
+        self.assertEqual(model.kwargs["model"], "gpt-5.6-luna")
         self.assertEqual(model.kwargs["base_url"], "https://api.openai.com/v1")
         self.assertEqual(model.kwargs["api_key"], "sk-test-key")
         self.assertEqual(model.kwargs["reasoning_effort"], "low")
@@ -2342,6 +2392,36 @@ class FallbackModelTests(unittest.TestCase):
         self.assertFalse(http_client.follow_redirects)
         self.assertFalse(http_client.trust_env)
         self.assertTrue(http_client._mounts)
+
+    def test_uses_the_attempt_specific_reasoning_effort(self):
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        runtime = worker.BrowserUseRuntime(
+            Agent=None,
+            BrowserProfile=None,
+            BrowserSession=None,
+            ChatOpenAI=FakeChatOpenAI,
+            Tools=None,
+            ActionResult=None,
+            NavigateAction=None,
+        )
+        config = worker.RunnerConfig.for_fallback(
+            "staging",
+            environ=FallbackConfigurationTests.ENVIRON,
+            secrets_path=Path("/nonexistent/runner-secrets.json"),
+        )
+
+        model = worker.create_browser_use_model(
+            config,
+            runtime,
+            reasoning_effort="high",
+        )
+
+        self.assertEqual(model.kwargs["reasoning_effort"], "high")
+        http_client = model.kwargs["http_client"]
+        self.addCleanup(lambda: asyncio.run(http_client.aclose()))
 
     def test_outcome_reports_the_configured_runner_version(self):
         history = SimpleNamespace(
@@ -2360,7 +2440,7 @@ class FallbackModelTests(unittest.TestCase):
             history,
             {"instructions": "x"},
             worker.Redactor({}),
-            "gpt-5-mini",
+            "gpt-5.6-luna",
             runner_version="zenguy-fallback-runner/2.0.0",
             runner_kind="fallback",
         )
@@ -2432,7 +2512,7 @@ class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):
         instance.config = SimpleNamespace(
             environment="staging",
             zenguy_api_url="https://staging-app.zenguy.com",
-            model_name="gpt-5-mini",
+            model_name="gpt-5.6-luna",
             model_base_url="https://api.openai.com/v1",
             headless=True,
             poll_seconds=0,
@@ -2472,7 +2552,7 @@ class FallbackWorkerTests(unittest.IsolatedAsyncioTestCase):
         instance.config = SimpleNamespace(
             environment="staging",
             zenguy_api_url="https://staging-app.zenguy.com",
-            model_name="gpt-5-mini",
+            model_name="gpt-5.6-luna",
             model_base_url="https://api.openai.com/v1",
             headless=True,
             poll_seconds=0,

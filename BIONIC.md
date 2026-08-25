@@ -662,7 +662,7 @@ Este documento describe el camino principal histórico (worker local + Bionic).
 El único modo remoto habilitado es `./browser_worker.py --fallback`, pensado para un
 VPS: no usa Cloudflare Queues y reclama contra la API únicamente los attempts
 que el worker local no ha cogido en 10 segundos, ejecutándolos con la API de
-OpenAI (`gpt-5-mini` por defecto). El diseño completo, las decisiones y la
+OpenAI (`gpt-5.6-luna` por defecto). El diseño completo, las decisiones y la
 checklist de activación están en `BACKUP_RUNNER.md` en la raíz del
 repositorio. También ese modo debe ejecutarse exclusivamente dentro de la
 topología aislada; nunca directamente en el VPS.

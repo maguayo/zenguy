@@ -19,8 +19,9 @@
 #   ZENGUY_API_URL=https://app.zenguy.com
 #   ZENGUY_HOST_EGRESS_DENY_FILE=/etc/zenguy/host-egress-deny.conf
 # Optional overrides:
-#   ZENGUY_FALLBACK_MODEL=gpt-5-mini
-#   ZENGUY_FALLBACK_REASONING_EFFORT=low
+#   ZENGUY_FALLBACK_MODEL=gpt-5.6-luna
+#   ZENGUY_FALLBACK_REASONING_EFFORT=medium
+#     Pins all attempts; omit for low/medium/high escalation.
 #   ZENGUY_FALLBACK_POLL_SECONDS=5
 #
 # Configure staging in runner/deploy/compose.yml only on a separate host and
