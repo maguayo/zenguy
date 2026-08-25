@@ -4,6 +4,7 @@ import { Card } from "./Card";
 import { StatusBadge } from "./StatusBadge";
 
 const MODE_LABEL: Record<WorkerSummary["mode"], string> = {
+  cf: "Cloudflare (Containers)",
   fallback: "Fallback (VPS)",
   local: "Primary (Mac)",
 };

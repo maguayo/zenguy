@@ -44,7 +44,7 @@ export interface WorkerCurrentAttempt {
 
 export interface WorkerSummary {
   id: string;
-  mode: "local" | "fallback";
+  mode: "local" | "fallback" | "cf";
   version: string;
   startedAt: number;
   firstSeenAt: number;
