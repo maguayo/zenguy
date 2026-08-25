@@ -79,6 +79,10 @@ import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
 import { resolveAttemptDispatch } from "./application/execution/attempt_dispatch";
+
+// Clase de Durable Object del runner en Cloudflare Containers; wrangler exige
+// exportarla desde el entry. Solo staging la tiene enlazada (fase 1).
+export { RunnerContainer } from "./infrastructure/containers/runner_container";
 import { realIds } from "./shared/ids";
 import { logEvent, platformAlert } from "./shared/log";
 import {

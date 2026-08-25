@@ -32,6 +32,14 @@ interface EnvironmentConfig {
   services: { binding: string; service: string; entrypoint: string }[];
   queues: QueueConfig;
   vars: Record<string, string>;
+  containers?: {
+    class_name: string;
+    image: string;
+    image_build_context: string;
+    instance_type: string;
+    max_instances: number;
+  }[];
+  durable_objects?: { bindings: { name: string; class_name: string }[] };
 }
 
 interface WranglerConfig {
@@ -46,6 +54,7 @@ interface WranglerConfig {
   services: EnvironmentConfig["services"];
   queues: QueueConfig;
   triggers?: unknown;
+  migrations?: { tag: string; new_sqlite_classes: string[] }[];
   env: {
     staging: EnvironmentConfig;
     production: EnvironmentConfig;
@@ -251,7 +260,13 @@ describe("wrangler environments", () => {
     expect(inventory.groups.releaseFeatures).toEqual(releaseFeatureSecrets);
     expect(inventory.environments.staging).toEqual({
       requiredGroups: ["core", "releaseFeatures"],
-      additionalRequired: ["CF_ACCESS_AUD"],
+      additionalRequired: [
+        "CF_ACCESS_AUD",
+        "RUNNER_CF_API_TOKEN",
+        "OPENAI_API_KEY_CF",
+        "RUNNER_CF_ACCESS_CLIENT_ID",
+        "RUNNER_CF_ACCESS_CLIENT_SECRET",
+      ],
     });
     expect(inventory.environments.production).toEqual({
       requiredGroups: ["core", "releaseFeatures"],
@@ -265,6 +280,10 @@ describe("wrangler environments", () => {
       ...coreRequiredSecrets,
       ...releaseFeatureSecrets,
       "CF_ACCESS_AUD",
+      "RUNNER_CF_API_TOKEN",
+      "OPENAI_API_KEY_CF",
+      "RUNNER_CF_ACCESS_CLIENT_ID",
+      "RUNNER_CF_ACCESS_CLIENT_SECRET",
     ]);
     expect(config.env.production.secrets.required).toEqual([
       ...coreRequiredSecrets,
@@ -300,6 +319,9 @@ describe("wrangler environments", () => {
       PADDLE_ENVIRONMENT: "sandbox",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
+      RUNNER_DISPATCH: "container",
+      RUNNER_ENVIRONMENT: "staging",
+      PUBLIC_API_URL: "https://staging-app.zenguy.com",
     });
     expect(production.vars).toEqual({
       ENVIRONMENT: "production",
@@ -354,6 +376,28 @@ describe("wrangler environments", () => {
         service: "zenguy-kms-production",
         entrypoint: "KeyWrappingService",
       },
+    ]);
+
+    // Runner en Cloudflare Containers: fase 1 solo en staging
+    // (CLOUDFLARE_RUNNER.md). Producción no debe ganar el binding hasta F2.
+    expect(staging.containers).toEqual([
+      {
+        class_name: "RunnerContainer",
+        image: "../../runner/deploy/Dockerfile",
+        image_build_context: "../../runner",
+        instance_type: "standard-2",
+        max_instances: 5,
+      },
+    ]);
+    expect(staging.durable_objects).toEqual({
+      bindings: [{ name: "RUNNER_CONTAINER", class_name: "RunnerContainer" }],
+    });
+    expect(staging.vars.RUNNER_DISPATCH).toBe("container");
+    expect(production).not.toHaveProperty("containers");
+    expect(production).not.toHaveProperty("durable_objects");
+    expect(production.vars).not.toHaveProperty("RUNNER_DISPATCH");
+    expect(config.migrations).toEqual([
+      { tag: "v1", new_sqlite_classes: ["RunnerContainer"] },
     ]);
 
     expect(config.send_email).toEqual([

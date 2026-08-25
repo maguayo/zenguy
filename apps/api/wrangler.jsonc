@@ -8,6 +8,7 @@
   "preview_urls": false,
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RunnerContainer"] }],
   "secrets": {
     "required": [
       "JWT_SECRET",
@@ -136,7 +137,25 @@
           "PADDLE_ALERT_CREDIT_PRODUCT_ID",
           "PADDLE_ALERT_CREDIT_PRICE_ID",
           "EXPO_PUSH_ACCESS_TOKEN",
-          "CF_ACCESS_AUD"
+          "CF_ACCESS_AUD",
+          "RUNNER_CF_API_TOKEN",
+          "OPENAI_API_KEY_CF",
+          "RUNNER_CF_ACCESS_CLIENT_ID",
+          "RUNNER_CF_ACCESS_CLIENT_SECRET"
+        ]
+      },
+      "containers": [
+        {
+          "class_name": "RunnerContainer",
+          "image": "../../runner/deploy/Dockerfile",
+          "image_build_context": "../../runner",
+          "instance_type": "standard-2",
+          "max_instances": 5
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "RUNNER_CONTAINER", "class_name": "RunnerContainer" }
         ]
       },
       "send_email": [
@@ -222,7 +241,10 @@
         "LLM_MODEL": "qwen/qwen3.8-27b",
         "PADDLE_ENVIRONMENT": "sandbox",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
-        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
+        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
+        "RUNNER_DISPATCH": "container",
+        "RUNNER_ENVIRONMENT": "staging",
+        "PUBLIC_API_URL": "https://staging-app.zenguy.com"
       }
     },
     "production": {
