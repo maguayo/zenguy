@@ -1,7 +1,7 @@
 # Plan C definitivo: runner único en Cloudflare Containers
 
 **Fecha:** 25 de agosto de 2026
-**Estado:** spec para revisión. Nada desplegado, nada tocado en producción.
+**Estado (25-08, noche):** F1 **implementada y commiteada** (tareas 1-4 del plan: `5943e19`, `41a12d8`, `f008f90`, `1a5014b`, más admin `d41dbcb`); suites en verde (API 1034 unit + 366 integración con la migración 0046; runner 99; admin 71). Pendiente y bloqueado en manos de Marcos: el runbook de despliegue de staging y la parada de las unidades del VPS (el clasificador de permisos de la sesión bloquea mutaciones remotas). Ver "Runbook pendiente" al final.
 **Decisión (Marcos, 25-08):** el ejecutor de browser-tests pasa a ser **Cloudflare Containers + OpenAI `gpt-5.6-luna`** con la escalada de reasoning `low → medium → high` que ya implementa el modo fallback. El Mac y el VPS dejan de ser infraestructura de ejecución.
 
 ## Por qué
@@ -85,6 +85,40 @@ pnpm --filter @zenguy/api exec wrangler queues consumer http remove zenguy-stagi
 | 3.000 | ~$8.4 | ~$35-90 | **~$43-98** |
 
 Se elimina: VPS del runner (o su alternativa dedicada de 4-8 €/mes), la migración Compose pendiente, la dependencia del Mac encendido, y la ventana de 10 s de cada run del plan B.
+
+## Runbook pendiente (manos de Marcos; comandos listos para `!`)
+
+```bash
+# 0. Prerrequisito: Docker/OrbStack instalado y corriendo en este Mac
+#    (wrangler construye la imagen del contenedor en el deploy; hoy no hay docker CLI).
+
+# 1. Par de Access dedicado en Zero Trust (dashboard) para zenguy-staging-cf; después:
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_CF_API_TOKEN --env staging
+pnpm --filter @zenguy/api exec wrangler secret put OPENAI_API_KEY_CF --env staging
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_CF_ACCESS_CLIENT_ID --env staging
+pnpm --filter @zenguy/api exec wrangler secret put RUNNER_CF_ACCESS_CLIENT_SECRET --env staging
+
+# 2. Migración 0046 y deploy de staging (deploy directo, sin push):
+pnpm --filter @zenguy/api exec wrangler d1 migrations apply zenguy-staging-db --remote --env staging
+pnpm --filter @zenguy/api exec wrangler deploy --env staging
+
+# 3. Parar y retirar las unidades en cuarentena del VPS (el fallback deja de existir;
+#    hasta la F2, el único ejecutor de producción es el worker del Mac):
+ssh root@142.132.220.44 'systemctl disable --now zenguy-fallback zenguy-fallback-staging; rm -f /etc/systemd/system/zenguy-fallback.service /etc/systemd/system/zenguy-fallback-staging.service; systemctl daemon-reload; systemctl is-active zenguy-fallback zenguy-fallback-staging; pgrep -fl browser_worker || echo sin-procesos'
+#    /opt/projects/zenguy y /etc/zenguy se borran SOLO tras rotar credenciales (F3).
+
+# 4. Smoke E2E (plan, Tarea 5): con el worker del Mac APAGADO, crear un run de staging;
+#    verificar en `wrangler tail --env staging` y en el admin: claim de zenguy-staging-cf,
+#    runnerVersion zenguy-cf-runner/..., PASSED; medir cold start y coste; probar el
+#    watchdog matando el contenedor a mitad de un segundo run.
+
+# 5. Admin (deploy manual como siempre) para ver la etiqueta "Cloudflare (Containers)".
+```
+
+Nota de commits: el push de `main` despliega la API de producción. Es seguro
+antes de la F2 (el código nuevo solo AÑADE el modo cf y nada lo invoca sin el
+secret/var), pero la migración 0046 debe aplicarse a producción antes de
+activar allí el dispatch por contenedores.
 
 ## Límites conocidos
 
