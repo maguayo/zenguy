@@ -470,7 +470,13 @@ if (
     environments: {
       staging: {
         requiredGroups: ["core", "releaseFeatures"],
-        additionalRequired: ["CF_ACCESS_AUD"],
+        additionalRequired: [
+          "CF_ACCESS_AUD",
+          "RUNNER_CF_API_TOKEN",
+          "OPENAI_API_KEY_CF",
+          "RUNNER_CF_ACCESS_CLIENT_ID",
+          "RUNNER_CF_ACCESS_CLIENT_SECRET",
+        ],
       },
       production: {
         requiredGroups: ["core", "releaseFeatures"],
