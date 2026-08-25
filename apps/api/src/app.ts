@@ -157,6 +157,10 @@ import { GenerateReport } from "./application/reports/generate_report";
 import type { Clock } from "./shared/clock";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
+import {
+  resolveAttemptDispatch,
+  type AttemptDispatch,
+} from "./application/execution/attempt_dispatch";
 import type { IdGenerator } from "./shared/ids";
 import { realIds } from "./shared/ids";
 import { D1RateLimiter, type RateLimiter } from "./shared/ratelimit";
@@ -204,7 +208,7 @@ export interface AppOverrides {
     execution?: { idempotencyKey?: string },
   ) => Promise<CheckOutcome>;
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
-  runQueue?: Pick<Queue<AttemptMessage>, "send">;
+  runQueue?: AttemptDispatch;
   paddleClient?: PaddleClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
@@ -325,9 +329,7 @@ export function buildApp(
     overrides.ids ?? realIds,
   );
   const durableWorkflows = new D1DurableWorkflowRepo(env.DB);
-  const runQueue =
-    overrides.runQueue ??
-    (env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">);
+  const runQueue = overrides.runQueue ?? resolveAttemptDispatch(env);
   const outboxPublisher = new PublishQueueOutbox(
     durableWorkflows,
     {

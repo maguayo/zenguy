@@ -6,13 +6,14 @@ import type {
   NotifyMessage,
 } from "../../domain/queues";
 import type { Clock } from "../../shared/clock";
+import type { AttemptDispatch } from "../execution/attempt_dispatch";
 import { platformAlert } from "../../shared/log";
 import { validateOutboxPayload } from "../../domain/durability/schemas";
 
 const CLAIM_LEASE_MS = 5 * 60_000;
 
 export interface DurableQueueProducers {
-  RUN: Pick<Queue<AttemptMessage>, "send">;
+  RUN: AttemptDispatch;
   CHECK: Pick<Queue<CheckMessage>, "send">;
   NOTIFY: Pick<Queue<NotifyMessage>, "send">;
 }

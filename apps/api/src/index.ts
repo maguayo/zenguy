@@ -78,6 +78,7 @@ import { NoopBillingCanceller } from "./infrastructure/billing/noop";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
 import { loadConfig, type Bindings } from "./shared/config";
+import { resolveAttemptDispatch } from "./application/execution/attempt_dispatch";
 import { realIds } from "./shared/ids";
 import { logEvent, platformAlert } from "./shared/log";
 import {
@@ -368,7 +369,7 @@ export function buildAttemptLifecycle(env: Bindings): AttemptLifecycle {
   const outboxPublisher = new PublishQueueOutbox(
     durable,
     {
-      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      RUN: resolveAttemptDispatch(env),
       CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
       NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
     },
@@ -434,7 +435,7 @@ export function buildCheckConsumer(env: Bindings): HandleCheckMessage {
   const outboxPublisher = new PublishQueueOutbox(
     durableWorkflows,
     {
-      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      RUN: resolveAttemptDispatch(env),
       CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
       NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
     },
@@ -499,7 +500,7 @@ export function buildSchedulerJobs(
   const outboxPublisher = new PublishQueueOutbox(
     durableWorkflows,
     {
-      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      RUN: resolveAttemptDispatch(env),
       CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
       NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
     },
@@ -553,7 +554,7 @@ export function buildDurabilityJob(env: Bindings): DurableWorkflowMaintenance {
   const publisher = new PublishQueueOutbox(
     durable,
     {
-      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      RUN: resolveAttemptDispatch(env),
       CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
       NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
     },
@@ -595,7 +596,7 @@ export function buildDeadLetterConsumer(env: Bindings): RedriveDeadLetter {
   const publisher = new PublishQueueOutbox(
     durable,
     {
-      RUN: env.RUN_QUEUE as Pick<Queue<AttemptMessage>, "send">,
+      RUN: resolveAttemptDispatch(env),
       CHECK: env.CHECK_QUEUE as Pick<Queue<CheckMessage>, "send">,
       NOTIFY: env.NOTIFY_QUEUE as Pick<Queue<NotifyMessage>, "send">,
     },
