@@ -1,0 +1,105 @@
+{
+  "projectId": "80daffd5-3ead-410b-b4cf-7c0265e44d5d",
+  "shape": "package",
+  "pkg": "@zenguy/frontend",
+  "globalName": "Zenguy",
+  "buildCmd": "pnpm --filter @zenguy/frontend build && sh .design-sync/make-css.sh && sh .design-sync/make-dts.sh",
+  "tsconfig": "tsconfig.json",
+  "srcDir": "src/components",
+  "cssEntry": "dist/ds-entry.css",
+  "extraEntries": [
+    "../../.design-sync/ds-provider.tsx"
+  ],
+  "provider": {
+    "component": "DSProvider"
+  },
+  "dtsPropsFor": {
+    "AppLayout": "",
+    "ActivityTracker": ""
+  },
+  "docsMap": {
+    "Badge": "../../.design-sync/docs/Badge.md",
+    "Button": "../../.design-sync/docs/Button.md",
+    "Card": "../../.design-sync/docs/Card.md",
+    "CopyButton": "../../.design-sync/docs/CopyButton.md",
+    "Divider": "../../.design-sync/docs/Divider.md",
+    "IconButton": "../../.design-sync/docs/IconButton.md",
+    "Skeleton": "../../.design-sync/docs/Skeleton.md",
+    "Spinner": "../../.design-sync/docs/Spinner.md",
+    "TableSkeleton": "../../.design-sync/docs/TableSkeleton.md",
+    "Tooltip": "../../.design-sync/docs/Tooltip.md",
+    "Checkbox": "../../.design-sync/docs/Checkbox.md",
+    "ChannelPicker": "../../.design-sync/docs/ChannelPicker.md",
+    "DomainListInput": "../../.design-sync/docs/DomainListInput.md",
+    "EmailListInput": "../../.design-sync/docs/EmailListInput.md",
+    "Field": "../../.design-sync/docs/Field.md",
+    "Input": "../../.design-sync/docs/Input.md",
+    "KeyValueEditor": "../../.design-sync/docs/KeyValueEditor.md",
+    "PasswordInput": "../../.design-sync/docs/PasswordInput.md",
+    "RecoveryToggle": "../../.design-sync/docs/RecoveryToggle.md",
+    "Select": "../../.design-sync/docs/Select.md",
+    "Textarea": "../../.design-sync/docs/Textarea.md",
+    "Toggle": "../../.design-sync/docs/Toggle.md",
+    "ConfirmDialog": "../../.design-sync/docs/ConfirmDialog.md",
+    "Dropdown": "../../.design-sync/docs/Dropdown.md",
+    "Modal": "../../.design-sync/docs/Modal.md",
+    "DescriptionList": "../../.design-sync/docs/DescriptionList.md",
+    "EmptyState": "../../.design-sync/docs/EmptyState.md",
+    "ErrorState": "../../.design-sync/docs/ErrorState.md",
+    "LoadMore": "../../.design-sync/docs/LoadMore.md",
+    "PageHeader": "../../.design-sync/docs/PageHeader.md",
+    "RunSourceBadge": "../../.design-sync/docs/RunSourceBadge.md",
+    "StatusBadge": "../../.design-sync/docs/StatusBadge.md",
+    "Table": "../../.design-sync/docs/Table.md",
+    "Tabs": "../../.design-sync/docs/Tabs.md",
+    "UsageMeter": "../../.design-sync/docs/UsageMeter.md",
+    "AccessDenied": "../../.design-sync/docs/AccessDenied.md",
+    "ActivityTracker": "../../.design-sync/docs/ActivityTracker.md",
+    "AppLayout": "../../.design-sync/docs/AppLayout.md",
+    "AttemptDetail": "../../.design-sync/docs/AttemptDetail.md",
+    "AuthShell": "../../.design-sync/docs/AuthShell.md",
+    "IncidentTimeline": "../../.design-sync/docs/IncidentTimeline.md",
+    "RunStatusPanel": "../../.design-sync/docs/RunStatusPanel.md",
+    "ScreenshotFilmstrip": "../../.design-sync/docs/ScreenshotFilmstrip.md",
+    "ScreenshotViewer": "../../.design-sync/docs/ScreenshotViewer.md",
+    "Sidebar": "../../.design-sync/docs/Sidebar.md",
+    "WorkspaceSwitcher": "../../.design-sync/docs/WorkspaceSwitcher.md"
+  },
+  "overrides": {
+    "Modal": {
+      "cardMode": "single",
+      "viewport": "760x540"
+    },
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "viewport": "640x440"
+    },
+    "Dropdown": {
+      "cardMode": "single",
+      "viewport": "420x380"
+    },
+    "AttemptDetail": {
+      "cardMode": "column"
+    },
+    "AuthShell": {
+      "cardMode": "column"
+    },
+    "IncidentTimeline": {
+      "cardMode": "column"
+    },
+    "RunStatusPanel": {
+      "cardMode": "column"
+    },
+    "ScreenshotFilmstrip": {
+      "cardMode": "column"
+    },
+    "ScreenshotViewer": {
+      "cardMode": "single",
+      "primaryStory": "EvidenceViewer"
+    },
+    "ChannelPicker": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
