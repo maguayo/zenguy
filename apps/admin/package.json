@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.0",
-    "@tanstack/react-query": "^5.101.4",
-    "hono": "^4.13.2",
+    "@tanstack/react-query": "^5.102.0",
+    "hono": "^4.13.3",
     "jose": "^6.2.10",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
