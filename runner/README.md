@@ -7,6 +7,16 @@ one attempt so Docker clears its process tree and tmpfs. The legacy Queue-pull/l
 model implementation is retained only for protocol compatibility and cannot be
 started from the CLI; no staging or production job may execute directly on a host.
 
+`--cloudflare` is the newest mode (see `CLOUDFLARE_RUNNER.md` at the repo
+root): one attempt per ephemeral Cloudflare Containers instance, dispatched by
+the API's `RunnerContainer` Durable Object with the `AttemptMessage`, a
+delivery id and per-run credentials in the environment. It claims through the
+same runner protocol with the dedicated `zenguy-<env>-cf` identity, executes
+once and exits; the Durable Object watchdog re-claims to trigger the normal
+`WORKER_LOST` recovery if the container dies. The egress proxy is optional
+only in this mode (there is no host of ours behind the container); the CDP
+per-job network policy remains mandatory and unchanged.
+
 The queue message contains run identifiers, not test secrets. After claiming a
 message, the worker retrieves the immutable run snapshot and only the secrets
 referenced by that snapshot over the authenticated Zenguy runner API. Secret
