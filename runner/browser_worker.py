@@ -3759,6 +3759,7 @@ class JobExecutor:
                 "browser_use_execution_failed",
                 attemptId=reference.get("attemptId"),
                 error=type(error).__name__,
+                errorMessage=str(error)[:300],
                 systemErrorCode=code,
             )
             outcome = {
