@@ -1,17 +1,24 @@
 ---
+// The homepage retold as one conversation with a cold visitor (the former
+// /proposal2, promoted to home on 2026-08-26). Each section answers the next
+// question they would ask: what is it (Hero), why care (Night), is it real
+// (WatchItRun), what do I get (Evidence2), will I find out (Reaches), does it
+// cover the basics (Uptime2), can I trust it (Trust), what does it cost
+// (Pricing2), last doubts (Faq2), act (Cta2). Founder.astro exists but stays
+// unmounted while the founder is the only social proof available.
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import Hero from "../components/Hero.astro";
-import Production from "../components/Production.astro";
-import HowItWorks from "../components/HowItWorks.astro";
-import Evidence from "../components/Evidence.astro";
-import Alerts from "../components/Alerts.astro";
-import IosApp from "../components/IosApp.astro";
-import Uptime from "../components/Uptime.astro";
-import Pricing from "../components/Pricing.astro";
-import Faq from "../components/Faq.astro";
-import Cta from "../components/Cta.astro";
 import Footer from "../components/Footer.astro";
+import Night from "../components/proposal2/Night.astro";
+import WatchItRun from "../components/proposal2/WatchItRun.astro";
+import Evidence2 from "../components/proposal2/Evidence2.astro";
+import Reaches from "../components/proposal2/Reaches.astro";
+import Trust from "../components/proposal2/Trust.astro";
+import Uptime2 from "../components/proposal2/Uptime2.astro";
+import Pricing2 from "../components/proposal2/Pricing2.astro";
+import Faq2 from "../components/proposal2/Faq2.astro";
+import Cta2 from "../components/proposal2/Cta2.astro";
 ---
 
 <Base>
@@ -19,15 +26,15 @@ import Footer from "../components/Footer.astro";
     <Nav />
     <main>
       <Hero />
-      <Production />
-      <HowItWorks />
-      <Evidence />
-      <Alerts />
-      <IosApp />
-      <Uptime />
-      <Pricing />
-      <Faq />
-      <Cta />
+      <Night />
+      <WatchItRun />
+      <Evidence2 />
+      <Reaches />
+      <Uptime2 />
+      <Trust />
+      <Pricing2 />
+      <Faq2 />
+      <Cta2 />
     </main>
     <Footer />
   </div>
