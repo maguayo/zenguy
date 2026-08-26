@@ -3,6 +3,7 @@ import type {
   OverviewFinishedRun,
   OverviewIncidentEvent,
   OverviewRepo,
+  OverviewRunningRun,
   OverviewRunStatus,
   OverviewUptimeCounts,
 } from "../../domain/overview/repo";
@@ -15,6 +16,7 @@ import type {
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const ACTIVITY_LIMIT = 20;
 const RECENT_RUN_LIMIT = 15;
+const RUNNING_RUN_LIMIT = 3;
 
 export type OverviewActivityType =
   | "TEST_PASSED"
@@ -46,6 +48,7 @@ export interface Overview {
   usage: CycleUsage;
   browserTests: OverviewBrowserCounts;
   uptime: OverviewUptimeCounts;
+  running: OverviewRunningRun[];
   activity: OverviewActivityItem[];
 }
 
@@ -136,6 +139,7 @@ export class GetOverview {
       browserTests,
       uptime,
       finishedRuns,
+      running,
       resolvedIncidents,
       openedUptimeIncidents,
       failedDeliveries,
@@ -148,6 +152,7 @@ export class GetOverview {
         now,
         RECENT_RUN_LIMIT,
       ),
+      this.overview.listRunningRuns(input.workspaceId, RUNNING_RUN_LIMIT),
       this.overview.listResolvedIncidents(
         input.workspaceId,
         from24h,
@@ -189,6 +194,6 @@ export class GetOverview {
       )
       .slice(0, ACTIVITY_LIMIT);
 
-    return { usage, browserTests, uptime, activity };
+    return { usage, browserTests, uptime, running, activity };
   }
 }

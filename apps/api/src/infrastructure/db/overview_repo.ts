@@ -4,6 +4,7 @@ import type {
   OverviewFinishedRun,
   OverviewIncidentEvent,
   OverviewRepo,
+  OverviewRunningRun,
   OverviewRunStatus,
   OverviewUptimeCounts,
 } from "../../domain/overview/repo";
@@ -32,6 +33,14 @@ interface FinishedRunRow {
   snapshot_json: string;
   fallback_name: string;
   finished_at: number;
+}
+
+interface RunningRunRow {
+  id: string;
+  browser_test_id: string | null;
+  snapshot_json: string;
+  fallback_name: string;
+  started_at: number;
 }
 
 interface IncidentEventRow {
@@ -192,6 +201,32 @@ export class D1OverviewRepo implements OverviewRepo {
       status: row.status,
       testName: testName(row.snapshot_json, row.fallback_name),
       finishedAt: row.finished_at,
+    }));
+  }
+
+  async listRunningRuns(
+    workspaceId: string,
+    limit: number,
+  ): Promise<OverviewRunningRun[]> {
+    const rows = await all<RunningRunRow>(
+      this.database
+        .prepare(
+          `SELECT r.id, r.browser_test_id, r.snapshot_json,
+                  COALESCE(bt.name, 'Deleted browser test') AS fallback_name,
+                  COALESCE(r.started_at, r.created_at) AS started_at
+           FROM test_runs r
+           LEFT JOIN browser_tests bt
+             ON bt.id = r.browser_test_id AND bt.workspace_id = r.workspace_id
+           WHERE r.workspace_id = ? AND r.status = 'RUNNING'
+           ORDER BY started_at DESC, r.id DESC LIMIT ?`,
+        )
+        .bind(workspaceId, limit),
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      browserTestId: row.browser_test_id,
+      testName: testName(row.snapshot_json, row.fallback_name),
+      startedAt: row.started_at,
     }));
   }
 

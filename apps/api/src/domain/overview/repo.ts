@@ -29,6 +29,13 @@ export interface OverviewFinishedRun {
   finishedAt: number;
 }
 
+export interface OverviewRunningRun {
+  id: string;
+  browserTestId: string | null;
+  testName: string;
+  startedAt: number;
+}
+
 export interface OverviewIncidentEvent {
   id: string;
   resourceType: IncidentResourceType;
@@ -60,6 +67,10 @@ export interface OverviewRepo {
     toMs: number,
     limit: number,
   ): Promise<OverviewFinishedRun[]>;
+  listRunningRuns(
+    workspaceId: string,
+    limit: number,
+  ): Promise<OverviewRunningRun[]>;
   listResolvedIncidents(
     workspaceId: string,
     fromMs: number,

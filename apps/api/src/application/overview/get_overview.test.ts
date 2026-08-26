@@ -12,10 +12,17 @@ const HOUR_MS = 60 * 60 * 1_000;
 
 class RecordingOverviewRepo implements OverviewRepo {
   finishedRuns: OverviewFinishedRun[] = [];
+  runningRuns: Array<{
+    id: string;
+    browserTestId: string | null;
+    testName: string;
+    startedAt: number;
+  }> = [];
   resolvedIncidents: OverviewIncidentEvent[] = [];
   openedUptimeIncidents: OverviewIncidentEvent[] = [];
   failedDeliveries: OverviewFailedDelivery[] = [];
   requestedRunLimit: number | null = null;
+  requestedRunningLimit: number | null = null;
 
   async getBrowserCounts() {
     return {
@@ -43,6 +50,11 @@ class RecordingOverviewRepo implements OverviewRepo {
   ) {
     this.requestedRunLimit = limit;
     return this.finishedRuns;
+  }
+
+  async listRunningRuns(_workspaceId: string, limit: number) {
+    this.requestedRunningLimit = limit;
+    return this.runningRuns;
   }
 
   async listResolvedIncidents() {
@@ -135,6 +147,20 @@ describe("GetOverview", () => {
         occurredAt: NOW - HOUR_MS,
       },
     ];
+    repo.runningRuns = [
+      {
+        id: "run_running_checkout",
+        browserTestId: "bt_checkout",
+        testName: "Checkout",
+        startedAt: NOW - 30_000,
+      },
+      {
+        id: "run_running_validation",
+        browserTestId: null,
+        testName: "Draft validation",
+        startedAt: NOW - 10_000,
+      },
+    ];
     const service = new GetOverview(
       { execute: async () => usage },
       repo,
@@ -160,6 +186,21 @@ describe("GetOverview", () => {
       },
     });
     expect(repo.requestedRunLimit).toBe(15);
+    expect(repo.requestedRunningLimit).toBe(3);
+    expect(result.running).toEqual([
+      {
+        id: "run_running_checkout",
+        browserTestId: "bt_checkout",
+        testName: "Checkout",
+        startedAt: NOW - 30_000,
+      },
+      {
+        id: "run_running_validation",
+        browserTestId: null,
+        testName: "Draft validation",
+        startedAt: NOW - 10_000,
+      },
+    ]);
     expect(result.activity.map((item) => item.type)).toEqual([
       "CHANNEL_DELIVERY_FAILED",
       "MONITOR_DOWN",

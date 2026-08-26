@@ -495,6 +495,20 @@ describe("overview route", () => {
           openIncidents: 1,
           avgResponseTimeMs24h: 200,
         },
+        running: [
+          {
+            id: "run_overview_validation_running",
+            browserTestId: null,
+            testName: "Draft validation",
+            startedAt: "2026-08-19T11:59:30.000Z",
+          },
+          {
+            id: "run_overview_running",
+            browserTestId: TESTS.checkout.id,
+            testName: TESTS.checkout.name,
+            startedAt: "2026-08-19T11:59:30.000Z",
+          },
+        ],
       },
     });
     expect(body.data.activity.map(({ id }) => id)).toEqual([

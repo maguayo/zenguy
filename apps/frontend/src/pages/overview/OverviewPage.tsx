@@ -13,16 +13,17 @@ import {
 import clsx from "clsx";
 import { Link } from "react-router-dom";
 
+import { listIncidents } from "../../api/incidents";
 import { getOverview } from "../../api/overview";
-import type { ActivityItem, ActivityType } from "../../api/types";
+import type { ActivityItem, ActivityType, Incident } from "../../api/types";
 import { UsageMeter } from "../../components/UsageMeter";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
-import { PageHeader } from "../../components/ui/PageHeader";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { formatRelative } from "../../lib/format";
+import { OverviewHero } from "./OverviewHero";
 
 interface ActivityPresentation {
   className: string;
@@ -77,10 +78,14 @@ function StatRow({
   );
 }
 
+function heroIncident(page: { items: Incident[] } | undefined): Incident | null | undefined {
+  return page === undefined ? undefined : (page.items[0] ?? null);
+}
+
 function OverviewSkeleton() {
   return (
     <div aria-label="Loading overview" className="space-y-6" role="status">
-      <Skeleton className="h-7 w-28" />
+      <Skeleton className="h-48 rounded-lg" />
       <div className="grid gap-4 lg:grid-cols-3">
         {Array.from({ length: 3 }, (_, index) => (
           <Card key={index}>
@@ -113,6 +118,27 @@ export default function OverviewPage() {
     queryKey: ["ws", current.id, "overview"],
     refetchInterval: 30_000,
   });
+  const openIncidents = overview.data
+    ? overview.data.browserTests.openIncidents + overview.data.uptime.openIncidents
+    : 0;
+  const watchedChecks = overview.data
+    ? overview.data.browserTests.total +
+      overview.data.uptime.up +
+      overview.data.uptime.down +
+      overview.data.uptime.unknown
+    : 0;
+  const openIncidentQuery = useQuery({
+    enabled: overview.isSuccess && openIncidents > 0,
+    queryFn: () => listIncidents(current.id, { status: "open" }, null, 1),
+    queryKey: ["ws", current.id, "incidents", "hero", "open"],
+    refetchInterval: 30_000,
+  });
+  const lastIncidentQuery = useQuery({
+    enabled: overview.isSuccess && openIncidents === 0 && watchedChecks > 0,
+    queryFn: () => listIncidents(current.id, {}, null, 1),
+    queryKey: ["ws", current.id, "incidents", "hero", "last"],
+    refetchInterval: 30_000,
+  });
 
   if (overview.isPending) return <OverviewSkeleton />;
   if (overview.isError) return <ErrorState onRetry={() => void overview.refetch()} />;
@@ -121,7 +147,13 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Overview" />
+      <OverviewHero
+        canManageTests={can("tests.manage")}
+        lastIncident={heroIncident(lastIncidentQuery.data)}
+        openIncident={heroIncident(openIncidentQuery.data)}
+        overview={data}
+        workspaceId={current.id}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Usage this cycle">

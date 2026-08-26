@@ -490,6 +490,13 @@ export interface ActivityItem {
   type: ActivityType;
 }
 
+export interface OverviewRunningRun {
+  browserTestId: string | null;
+  id: string;
+  startedAt: string;
+  testName: string;
+}
+
 export interface Overview {
   activity: ActivityItem[];
   browserTests: {
@@ -498,6 +505,8 @@ export interface Overview {
     runningRuns: number;
     total: number;
   };
+  /** Optional so the UI tolerates an API deployed before this field existed. */
+  running?: OverviewRunningRun[];
   uptime: {
     avgResponseTimeMs24h: number | null;
     down: number;

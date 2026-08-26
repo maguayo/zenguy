@@ -12,6 +12,10 @@ export function presentOverview(overview: Overview) {
       periodStart: iso(overview.usage.periodStart),
       periodEnd: iso(overview.usage.periodEnd),
     },
+    running: overview.running.map((run) => ({
+      ...run,
+      startedAt: iso(run.startedAt),
+    })),
     activity: overview.activity.map((item) => ({
       ...item,
       occurredAt: iso(item.occurredAt),

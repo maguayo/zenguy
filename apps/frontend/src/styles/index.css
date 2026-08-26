@@ -81,6 +81,11 @@
     animation: auth-breathe 4s ease-in-out infinite;
   }
 
+  /* Overview hero: the live tick and chip dot "breathe" while a run is in flight. */
+  .hero-breathe {
+    animation: hero-breathe 1.6s cubic-bezier(0.32, 0.72, 0, 1) infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .auth-feed-item {
       animation: none;
@@ -90,5 +95,19 @@
     .auth-breathe {
       animation: none;
     }
+
+    .hero-breathe {
+      animation: none;
+    }
+  }
+}
+
+@keyframes hero-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
   }
 }
