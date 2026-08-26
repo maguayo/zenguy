@@ -33,12 +33,12 @@ describe("billing page", () => {
     });
   });
 
-  it("presents free launch access without payment controls", () => {
+  it("presents grandfathered access without payment controls", () => {
     expect(planPresentation("free", "ACTIVE")).toEqual({
       description:
-        "300 browser runs each month · extra runs are free during launch · Unlimited members",
-      label: "Free",
-      name: "Zenguy — Free",
+        "Grandfathered workspace access · 300 browser runs each month · Unlimited members",
+      label: "Legacy",
+      name: "Zenguy — legacy access",
       paid: false,
       tone: "ok",
     });

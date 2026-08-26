@@ -1,5 +1,4 @@
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
-import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { MemberRepo, WorkspaceRepo } from "../../domain/workspaces/repo";
 import { uniqueSlug } from "../../domain/workspaces/slug";
 import type { User } from "../../domain/users/types";
@@ -16,7 +15,6 @@ import { workspaceOutput, type WorkspaceOutput } from "./list_my_workspaces";
 export interface CreateWorkspaceDependencies {
   workspaces: WorkspaceRepo;
   members: MemberRepo;
-  subscriptions: SubscriptionRepo;
   defaultEmailChannel: Pick<EnsureDefaultEmailChannel, "execute">;
   defaultPushChannel: Pick<EnsureDefaultPushChannel, "execute">;
   audit: Pick<WriteAudit, "execute">;
@@ -68,22 +66,6 @@ export class CreateWorkspace {
       invitedBy: null,
       joinedAt: now,
     });
-    await this.dependencies.subscriptions.upsertByWorkspace({
-      id: this.dependencies.ids.newId("sub"),
-      workspaceId: workspace.id,
-      provider: "internal",
-      source: "free",
-      providerCustomerId: null,
-      providerSubscriptionId: null,
-      status: "ACTIVE",
-      periodStart: null,
-      periodEnd: null,
-      cancelAtPeriodEnd: false,
-      updatePaymentUrl: null,
-      cancelUrl: null,
-      createdAt: now,
-      updatedAt: now,
-    });
     // Every workspace starts with a free email channel to the owner so the
     // first test or monitor alerts someone. Failing here must not undo the
     // workspace; the hourly backfill retries.
@@ -115,6 +97,6 @@ export class CreateWorkspace {
       metadata: { name: workspace.name },
       ip: input.ip,
     });
-    return workspaceOutput(workspace, "OWNER", "ACTIVE");
+    return workspaceOutput(workspace, "OWNER", "NONE");
   }
 }

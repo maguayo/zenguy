@@ -19,7 +19,7 @@ interface WorkspaceJson {
   slug: string;
   timezone: string;
   role: "OWNER" | "ADMIN" | "MEMBER";
-  subscriptionStatus: "ACTIVE";
+  subscriptionStatus: "NONE";
   createdAt: string;
 }
 
@@ -116,21 +116,13 @@ describe("workspace routes", () => {
       slug: "acme-team",
       timezone: "Europe/Madrid",
       role: "OWNER",
-      subscriptionStatus: "ACTIVE",
+      subscriptionStatus: "NONE",
     });
     expect(Number.isNaN(Date.parse(created.createdAt))).toBe(false);
     await expect(members.find(created.id, USERS.owner.id)).resolves.toMatchObject(
       { role: "OWNER", invitedBy: null },
     );
-    await expect(subscriptions.findByWorkspace(created.id)).resolves.toMatchObject({
-      provider: "internal",
-      providerCustomerId: null,
-      providerSubscriptionId: null,
-      source: "free",
-      status: "ACTIVE",
-      periodStart: null,
-      periodEnd: null,
-    });
+    await expect(subscriptions.findByWorkspace(created.id)).resolves.toBeNull();
 
     const listResponse = await app.request("/api/workspaces", {
       headers: { Authorization: tokens.owner },

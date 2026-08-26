@@ -9,8 +9,6 @@ import { listWorkspaces } from "@/api/workspaces";
 import { AuthShell } from "@/components/AuthShell";
 import { webAppHost } from "@/components/more/billing";
 import {
-  freeAccessDescription,
-  freeActivationTimeoutMessage,
   stripeActivationTimeoutMessage,
   pollUntilActive,
   workspaceStatus,
@@ -112,33 +110,6 @@ export default function BillingSetupScreen() {
       <Screen safe={["top", "bottom"]} scroll={false}>
         <ErrorState style={styles.fill} onRetry={() => void billingConfig.refetch()} />
       </Screen>
-    );
-  }
-
-  if (billingConfig.data.mode === "free") {
-    return (
-      <AuthShell description={freeAccessDescription} title="Free access">
-        <Card elevated padding="lg">
-          <PlanDetails />
-        </Card>
-        <View style={styles.actions}>
-          <ActivationStatus
-            checking="Activating…"
-            phase={phase}
-            timeoutMessage={freeActivationTimeoutMessage}
-            onCheck={() => void checkActivation()}
-          />
-          {phase === "idle" ? (
-            <Button
-              fullWidth
-              size="lg"
-              title="Activate free access"
-              variant="accent"
-              onPress={() => void checkActivation()}
-            />
-          ) : null}
-        </View>
-      </AuthShell>
     );
   }
 

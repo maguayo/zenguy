@@ -75,7 +75,7 @@ export default function SignUp() {
 
   return (
     <AuthShell
-      description="Start free with the complete Zenguy plan. No card required."
+      description="Create your account, then activate each workspace securely with Stripe."
       footer={
         <>
           Already have an account?{" "}

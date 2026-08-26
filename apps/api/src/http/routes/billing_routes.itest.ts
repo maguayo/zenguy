@@ -100,7 +100,24 @@ describe("billing routes", () => {
 
   beforeEach(async () => {
     await freshDb();
-    const bindings = testEnv();
+    const bindings = {
+      ...testEnv(),
+      PADDLE_API_KEY: undefined,
+      PADDLE_WEBHOOK_SECRET: undefined,
+      PADDLE_CLIENT_TOKEN: undefined,
+      PADDLE_ENVIRONMENT: undefined,
+      PADDLE_PRODUCT_ID: undefined,
+      PADDLE_PRICE_ID: undefined,
+      PADDLE_OVERAGE_PRICE_ID: undefined,
+      PADDLE_ALERT_CREDIT_PRODUCT_ID: undefined,
+      PADDLE_ALERT_CREDIT_PRICE_ID: undefined,
+      STRIPE_SECRET_KEY: "sk_test_billingroutes123",
+      STRIPE_WEBHOOK_SECRET: "whsec_billingroutes123",
+      STRIPE_ENVIRONMENT: "test" as const,
+      STRIPE_PRODUCT_ID: "prod_billingroutes123",
+      STRIPE_PRICE_ID: "price_billingroutes123",
+      STRIPE_OVERAGE_PRICE_ID: "price_overagebillingroutes123",
+    };
     const users = new D1UserRepo(bindings.DB);
     const workspaces = new D1WorkspaceRepo(bindings.DB);
     const members = new D1MemberRepo(bindings.DB);
@@ -149,7 +166,7 @@ describe("billing routes", () => {
     return { Authorization: tokens[actor] };
   }
 
-  it("serves authenticated Paddle client config and real workspace status", async () => {
+  it("serves authenticated Stripe config and real workspace status", async () => {
     const unauthorized = await app.request("/api/billing/config");
     expect(unauthorized.status).toBe(401);
 
@@ -159,10 +176,8 @@ describe("billing routes", () => {
     expect(config.status).toBe(200);
     await expect(config.json()).resolves.toEqual({
       data: {
-        mode: "paddle",
-        environment: "sandbox",
-        clientToken: "test-paddle-client-token",
-        priceId: "pri_test_monthly",
+        mode: "stripe",
+        environment: "test",
         canIssueComplimentaryGrants: false,
       },
     });
@@ -252,7 +267,7 @@ describe("billing routes", () => {
     expect(paddle.managementUrlRequests).toEqual(["sub_provider_billing"]);
   });
 
-  it("serves free launch config without Paddle credentials", async () => {
+  it("fails closed when Stripe billing is not configured", async () => {
     const bindings = {
       ...testEnv(),
       PADDLE_API_KEY: undefined,
@@ -263,16 +278,16 @@ describe("billing routes", () => {
       PADDLE_PRICE_ID: undefined,
       PADDLE_OVERAGE_PRICE_ID: undefined,
     };
-    const freeApp = buildApp(bindings);
-    const response = await freeApp.request("/api/billing/config", {
+    const unconfiguredApp = buildApp(bindings);
+    const response = await unconfiguredApp.request("/api/billing/config", {
       headers: headers("owner"),
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      data: {
-        mode: "free",
-        canIssueComplimentaryGrants: false,
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "Stripe billing is not configured",
       },
     });
   });

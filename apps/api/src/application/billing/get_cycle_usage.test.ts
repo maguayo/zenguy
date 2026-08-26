@@ -118,7 +118,7 @@ describe("GetCycleUsage", () => {
     });
   });
 
-  it("uses a monthly cycle and never bills the free launch plan", async () => {
+  it("uses a monthly cycle and never bills grandfathered internal access", async () => {
     const subscriptions = new FakeSubscriptionRepo();
     await subscriptions.upsertByWorkspace({
       ...SUBSCRIPTION,

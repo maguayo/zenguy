@@ -51,18 +51,12 @@ interface BillingConfigBase {
   canIssueComplimentaryGrants?: boolean;
 }
 
-export interface FreeBillingConfig extends BillingConfigBase {
-  mode: "free";
-}
-
 export interface StripeBillingConfig extends BillingConfigBase {
   mode: "stripe";
   environment: "test" | "live";
 }
 
-export type BillingConfig =
-  | FreeBillingConfig
-  | StripeBillingConfig;
+export type BillingConfig = StripeBillingConfig;
 
 export interface Usage {
   billableRuns: number;

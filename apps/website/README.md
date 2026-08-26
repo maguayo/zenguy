@@ -45,7 +45,6 @@ custom domains with SSL enabled.
   you have it.
 - The original was a fixed 1180px desktop mock; responsive stacking (`max-lg`/`max-md`) was
   added without touching the desktop rendering.
-- Primary CTAs ("Start free", "Sign in") point to `https://app.zenguy.com`; in the mock they
+- Primary CTAs ("Get started", "Sign in") point to `https://app.zenguy.com`; in the mock they
   pointed to `#pricing`. Footer "Resources"/"Company" links are placeholders (`#`) until those
-  pages exist. Copy says "Start free · Ten runs to try it" — confirm the free-trial offer with
-  billing before launch (V1 spec had no trial).
+  pages exist. Workspace activation uses the paid Stripe Checkout; there is no public free trial.

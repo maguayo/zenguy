@@ -46,11 +46,12 @@ describe("email templates", () => {
     expect(welcome.subject).toBe("Welcome to Zenguy — verify your email");
     expect(welcome.html).toContain("<!doctype html>");
     expect(welcome.html).toContain("Welcome, Ana &amp; &lt;Team&gt;.");
-    expect(welcome.html).toContain("YOUR LAUNCH PLAN");
+    expect(welcome.html).toContain("YOUR ZENGUY PLAN");
+    expect(welcome.html).toContain("39 € per month, per workspace");
     expect(welcome.html).toContain("300 browser-test runs every month");
     expect(welcome.html).toContain("Unlimited uptime checks");
     expect(welcome.html).toContain("Unlimited team members");
-    expect(welcome.html).toContain("No card required.");
+    expect(welcome.html).toContain("activate it securely with Stripe");
     expect(welcome.html).toContain("role=\"presentation\"");
     expect(welcome.html).not.toContain("<Team>");
     expect(welcome.text).toContain("Welcome to Zenguy, Ana & <Team>.");

@@ -131,12 +131,7 @@ export default function BillingSetup() {
   const startCheckout = async () => {
     setPhase("opening");
     try {
-      const config = await getBillingConfig();
-      if (config.mode === "free") {
-        toast.error("Free access should activate automatically. Please try again.");
-        setPhase("idle");
-        return;
-      }
+      await getBillingConfig();
       const checkout = await startSubscriptionCheckout(wsId);
       const url = trustedBillingUrl(checkout.url);
       if (url === null) {
@@ -182,20 +177,6 @@ export default function BillingSetup() {
       <main className="mx-auto max-w-xl px-4 py-12">
         <ErrorState onRetry={() => void billingConfigQuery.refetch()} />
       </main>
-    );
-  }
-  if (billingConfigQuery.data.mode === "free") {
-    return (
-      <AuthShell
-        description="Every workspace receives the complete Zenguy plan for free during launch. No card is required."
-        title="Free access"
-      >
-        <ErrorState
-          message="This workspace was not activated automatically. Check again; if it persists, contact privacy@zenguy.com."
-          onRetry={() => void workspaceQuery.refetch()}
-          retryLabel="Check again"
-        />
-      </AuthShell>
     );
   }
   if (!isOwner && membersQuery.isPending) {

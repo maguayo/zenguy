@@ -48,9 +48,9 @@ export function planPresentation(
   if (source === "free") {
     return {
       description:
-        "300 browser runs each month · extra runs are free during launch · Unlimited members",
-      label: "Free",
-      name: "Zenguy — Free",
+        "Grandfathered workspace access · 300 browser runs each month · Unlimited members",
+      label: "Legacy",
+      name: "Zenguy — legacy access",
       paid: false,
       tone: "ok",
     };
@@ -82,7 +82,7 @@ export const paymentWebNote = `Manage payment methods and cancellation from the 
 export const paymentOwnerOnlyNote = "Only the owner can manage the subscription.";
 
 export function planPrice(plan: PlanPresentation, pricePerMonthCents: number): string {
-  return plan.paid ? `${formatEuros(pricePerMonthCents)} / month` : "Free";
+  return plan.paid ? `${formatEuros(pricePerMonthCents)} / month` : "Included";
 }
 
 export interface BillingPeriod {
@@ -91,7 +91,7 @@ export interface BillingPeriod {
 }
 
 /**
- * Paid subscriptions carry a provider period; free and complimentary ones
+ * Paid subscriptions carry a provider period; legacy and complimentary ones
  * reset on the usage cycle instead.
  */
 export function subscriptionPeriod(billing: Billing): BillingPeriod {

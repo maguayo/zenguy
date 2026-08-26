@@ -72,7 +72,7 @@ function CreateWorkspaceForm({ user }: { user: User }) {
       // The workspace exists now; a Keychain hiccup must not make it look failed.
       await rememberWorkspace(workspace.id).catch(() => undefined);
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      router.replace(`/w/${workspace.id}/overview`);
+      router.replace(`/w/${workspace.id}/setup/billing`);
     } catch (error) {
       if (error instanceof ApiError && error.details?.length) {
         let handled = false;
@@ -90,7 +90,7 @@ function CreateWorkspaceForm({ user }: { user: User }) {
 
   return (
     <AuthShell
-      description="Set the name and timezone your team will use. Free access starts immediately — no card required."
+      description="Set the name and timezone your team will use. You'll set up billing securely with Stripe next."
       footer={
         back ? (
           <Pressable

@@ -12,12 +12,6 @@ export const planPriceLabel = "39 €";
 export const planPriceSuffix = "/ month per workspace";
 export const planRetriesNote = "Retries don't consume runs.";
 
-export const freeAccessDescription =
-  "Every workspace receives the complete Zenguy plan for free during launch. No card is required.";
-
-export const freeActivationTimeoutMessage =
-  "This workspace was not activated automatically. Check again; if it persists, contact privacy@zenguy.com.";
-
 export const stripeActivationTimeoutMessage =
   "Activation is taking longer than usual. Check again once the payment is confirmed on the web.";
 
