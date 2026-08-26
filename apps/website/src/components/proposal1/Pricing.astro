@@ -1,0 +1,65 @@
+---
+import Icon from "../Icon.astro";
+import Logo from "../Logo.astro";
+
+const noCost = ["Retries inside a run cost nothing", "Uptime checks cost nothing", "Extra members cost nothing"];
+const included = [
+  "300 browser test runs a month — about ten walks a day",
+  "0,20 € per run after that",
+  "Unlimited uptime monitors",
+  "Unlimited members and invitations",
+  "Desktop and mobile viewports",
+  "30 days of screenshots, reports and logs",
+  "Email, Slack, Discord and push included",
+  "SMS and phone calls from prepaid credit",
+];
+---
+
+<section id="pricing" class="border-y border-line bg-surface px-10 py-24 max-md:px-5 max-md:py-16">
+  <div
+    class="container-site grid grid-cols-[minmax(0,1fr)_420px] items-center gap-16 max-lg:grid-cols-1 max-lg:gap-12"
+  >
+    <div class="flex flex-col gap-5">
+      <span class="eyebrow">Pricing</span>
+      <h2 class="m-0 text-[44px] font-semibold leading-[1.12] tracking-[-0.025em] [text-wrap:balance] max-md:text-[34px]">
+        One plan. Priced by runs, not by people.
+      </h2>
+      <p class="m-0 max-w-[480px] text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+        A run is one walk of a flow: scheduled, manual, or from Test it. Retries inside it are free,
+        and uptime checks never count. Invite the whole team at no extra cost.
+      </p>
+      <div class="flex flex-col gap-2.5 pt-1.5">
+        {noCost.map((t) => (
+          <div class="flex items-center gap-2.5">
+            <Icon name="x" size={15} color="#B5AC9D" />
+            <span class="text-sm text-body">{t}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-[22px] rounded-2xl bg-ink p-8 max-lg:max-w-[480px]">
+      <div class="flex items-center">
+        <Logo iconSize={26} textSize={15} dark />
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span class="text-[46px] font-semibold leading-none tracking-[-0.03em] text-surface">39 €</span>
+        <span class="text-sm text-parch">per month, per workspace</span>
+      </div>
+      <div class="h-px bg-white/8"></div>
+      <div class="flex flex-col gap-[11px]">
+        {included.map((t) => (
+          <div class="flex items-start gap-[11px]">
+            <Icon name="check" size={15} color="#FAF8F4" class="mt-[3px] opacity-75" />
+            <span class="text-sm leading-normal text-parch">{t}</span>
+          </div>
+        ))}
+      </div>
+      <a
+        href="https://app.zenguy.com"
+        class="btn btn-violet rounded-[10px] py-[13px] text-center text-[15px] font-medium">Start with Zenguy</a
+      >
+      <span class="text-center text-[12.5px] text-dusk">Billed monthly through Stripe. Cancel anytime.</span>
+    </div>
+  </div>
+</section>

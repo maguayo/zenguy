@@ -1,42 +1,19 @@
 ---
+import { footerGroups } from "../lib/site";
 import Logo from "./Logo.astro";
 
-// Product links point at the page's real sections; Resources/Company pages
-// don't exist yet (kept as designed — wire them up when those pages ship).
-const groups = [
-  {
-    label: "Product",
-    links: [
-      { label: "Browser tests", href: "#how" },
-      { label: "Uptime monitors", href: "#uptime" },
-      { label: "Alerts", href: "#alerts" },
-      { label: "iOS app", href: "#app" },
-      { label: "Pricing", href: "#pricing" },
-    ],
-  },
-  {
-    label: "Resources",
-    links: [
-      { label: "Documentation", href: "#" },
-      { label: "Changelog", href: "#" },
-      { label: "Status", href: "#" },
-    ],
-  },
-  {
-    label: "Company",
-    links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
-      { label: "Contact", href: "#" },
-    ],
-  },
-];
+interface Props {
+  homeHref?: string;
+  groups?: { label: string; links: { label: string; href: string }[] }[];
+}
+
+const { homeHref = "/", groups = footerGroups } = Astro.props;
 ---
 
 <footer class="border-t border-line bg-surface px-10 py-12 max-md:px-5">
   <div class="container-site flex items-start gap-16 max-md:flex-col max-md:gap-10">
     <div class="flex flex-col gap-3">
-      <a href="/" class="btn inline-flex" aria-label="Zenguy home"><Logo iconSize={18} /></a>
+      <a href={homeHref} class="btn inline-flex" aria-label="Zenguy home"><Logo iconSize={18} /></a>
       <span class="text-[12.5px] text-muted">Browser tests in plain English.</span>
     </div>
     <div class="flex-1 max-md:hidden"></div>

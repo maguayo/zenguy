@@ -1,0 +1,61 @@
+---
+import Icon from "../Icon.astro";
+
+const beats = [
+  {
+    verb: "Write",
+    title: "Like you would tell a colleague",
+    body: "One or two sentences. The flow, and what has to be true at the end. Mention stored credentials by name.",
+  },
+  {
+    verb: "Test it",
+    title: "Once, before you save",
+    body: "A clean browser, a clean session. You see what the agent saw. If it's wrong, you change the English — not a selector.",
+  },
+  {
+    verb: "Leave it",
+    title: "On a schedule",
+    body: "Every 1 to 24 hours. Up to three retries, free. One alert per incident, then one when it passes again.",
+  },
+];
+---
+
+<section id="start" class="px-10 py-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-12 flex max-w-[640px] flex-col gap-3.5">
+      <span class="eyebrow">From here</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] [text-wrap:balance] max-md:text-[32px]">
+        Write it once. Then stop thinking about it.
+      </h2>
+    </div>
+
+    <div class="grid grid-cols-3 gap-0 max-lg:grid-cols-1 max-lg:gap-8">
+      {beats.map((b, i) => (
+        <div class:list={["flex flex-col gap-3 pr-10 max-lg:pr-0", i < beats.length - 1 && "max-lg:border-b max-lg:border-line max-lg:pb-8"]}>
+          <div class="flex items-center gap-3">
+            <span class="font-mono text-[13px] font-medium text-violet">{b.verb}</span>
+            {i < beats.length - 1 ? (
+              <span class="h-px flex-1 bg-line max-lg:hidden" aria-hidden="true"></span>
+            ) : null}
+          </div>
+          <h3 class="m-0 text-[21px] font-semibold leading-[1.28] tracking-[-0.015em]">{b.title}</h3>
+          <p class="m-0 text-[14.5px] leading-[1.62] text-body [text-wrap:pretty]">{b.body}</p>
+        </div>
+      ))}
+    </div>
+
+    <div
+      class="mt-14 flex items-start gap-4 rounded-[14px] border border-line bg-surface px-6 py-5 max-md:px-4"
+    >
+      <Icon name="key" size={18} class="mt-0.5" />
+      <div class="flex flex-col gap-1">
+        <span class="text-[15px] font-semibold">Staging passwords stay secrets.</span>
+        <p class="m-0 max-w-[720px] text-[14px] leading-[1.6] text-body [text-wrap:pretty]">
+          Save a value once and nobody sees it again — not in the app, a screenshot, a report, or a
+          log. Zenguy only types it while the live domain matches the list you pinned, checked again
+          after every redirect.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

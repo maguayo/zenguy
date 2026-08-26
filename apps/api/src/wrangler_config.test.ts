@@ -269,7 +269,14 @@ describe("wrangler environments", () => {
     });
     expect(inventory.environments.production).toEqual({
       requiredGroups: ["core", "releaseFeatures"],
-      additionalRequired: ["CF_RUNNER_ACCESS_AUD"],
+      additionalRequired: [
+        "CF_RUNNER_ACCESS_AUD",
+        "RUNNER_CF_API_TOKEN",
+        "OPENAI_API_KEY_CF",
+        "RUNNER_CF_ACCESS_CLIENT_ID",
+        "RUNNER_CF_ACCESS_CLIENT_SECRET",
+        "RUNNER_CF_ACCESS_COMMON_NAME",
+      ],
     });
     expect(config.secrets.required).toEqual([
       ...coreRequiredSecrets,
@@ -288,6 +295,11 @@ describe("wrangler environments", () => {
       ...coreRequiredSecrets,
       ...releaseFeatureSecrets,
       "CF_RUNNER_ACCESS_AUD",
+      "RUNNER_CF_API_TOKEN",
+      "OPENAI_API_KEY_CF",
+      "RUNNER_CF_ACCESS_CLIENT_ID",
+      "RUNNER_CF_ACCESS_CLIENT_SECRET",
+      "RUNNER_CF_ACCESS_COMMON_NAME",
     ]);
   });
 
@@ -332,6 +344,9 @@ describe("wrangler environments", () => {
       STRIPE_ENVIRONMENT: "live",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
+      RUNNER_DISPATCH: "container",
+      RUNNER_ENVIRONMENT: "production",
+      PUBLIC_API_URL: "https://app.zenguy.com",
     });
 
     expect(staging.d1_databases).toEqual([
@@ -377,24 +392,23 @@ describe("wrangler environments", () => {
       },
     ]);
 
-    // Runner en Cloudflare Containers: fase 1 solo en staging
-    // (CLOUDFLARE_RUNNER.md). Producción no debe ganar el binding hasta F2.
-    expect(staging.containers).toEqual([
-      {
-        class_name: "RunnerContainer",
-        image: "../../runner/deploy/Dockerfile",
-        image_build_context: "../../runner",
-        instance_type: "standard-2",
-        max_instances: 5,
-      },
-    ]);
-    expect(staging.durable_objects).toEqual({
-      bindings: [{ name: "RUNNER_CONTAINER", class_name: "RunnerContainer" }],
-    });
-    expect(staging.vars.RUNNER_DISPATCH).toBe("container");
-    expect(production).not.toHaveProperty("containers");
-    expect(production).not.toHaveProperty("durable_objects");
-    expect(production.vars).not.toHaveProperty("RUNNER_DISPATCH");
+    // Runner en Cloudflare Containers: F2 (CLOUDFLARE_RUNNER.md) — staging y
+    // producción despachan por RunnerContainer con la misma imagen.
+    for (const environment of [staging, production]) {
+      expect(environment.containers).toEqual([
+        {
+          class_name: "RunnerContainer",
+          image: "../../runner/deploy/Dockerfile",
+          image_build_context: "../../runner",
+          instance_type: "standard-2",
+          max_instances: 5,
+        },
+      ]);
+      expect(environment.durable_objects).toEqual({
+        bindings: [{ name: "RUNNER_CONTAINER", class_name: "RunnerContainer" }],
+      });
+      expect(environment.vars.RUNNER_DISPATCH).toBe("container");
+    }
     expect(config.migrations).toEqual([
       { tag: "v1", new_sqlite_classes: ["RunnerContainer"] },
     ]);

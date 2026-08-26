@@ -1,0 +1,46 @@
+---
+const faqs = [
+  {
+    q: "Is this Playwright or Cypress?",
+    a: "No. You don't write a script, pick a framework, or maintain selectors. You describe the flow in English and a real browser walks it on a schedule.",
+  },
+  {
+    q: "Can it log in to a private site?",
+    a: "Yes. Store the credentials as workspace secrets and mention them by name. They are write-only: nobody sees them again, not in the app, a screenshot, or a log. Use a staging account, never a personal one.",
+  },
+  {
+    q: "Will it place an order?",
+    a: "Only if you tell it to. Zenguy follows the instructions you write, so you decide exactly where the test must stop. For purchases, most people stop on the checkout page.",
+  },
+  {
+    q: "What if my test is flaky?",
+    a: "Give it retries. The first starts immediately, the next after a minute, the third after two. An alert only goes out once all of them have failed — one per incident, not per failure.",
+  },
+  {
+    q: "What exactly counts as a run?",
+    a: "One requested walk: a scheduled run, a manual run, or Test it in the editor. Pass, fail or timeout, it is one run. Retries inside it are free. Uptime checks never count. 300 runs is about ten walks a day.",
+  },
+  {
+    q: "How long do you keep the evidence?",
+    a: "30 days of runs, screenshots, reports and delivery logs. Long enough to explain last week, short enough not to become a liability.",
+  },
+];
+---
+
+<section class="px-10 py-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site grid grid-cols-[300px_minmax(0,1fr)] gap-16 max-lg:grid-cols-1 max-lg:gap-8">
+    <h2 class="m-0 text-[34px] font-semibold leading-[1.16] tracking-[-0.025em] max-md:text-[28px]">
+      Questions people ask first.
+    </h2>
+    <div class="flex flex-col">
+      {faqs.map((f) => (
+        <div
+          class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-10 border-t border-line py-[22px] max-md:grid-cols-1 max-md:gap-2"
+        >
+          <span class="text-[15.5px] font-semibold leading-[1.4]">{f.q}</span>
+          <span class="text-[14.5px] leading-[1.62] text-body">{f.a}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

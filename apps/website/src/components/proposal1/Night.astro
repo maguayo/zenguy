@@ -1,0 +1,169 @@
+---
+import Icon from "../Icon.astro";
+import Logo from "../Logo.astro";
+
+// Chapter 4 — the 03:21 package. One scene: the alert, then the run you open.
+
+const steps = [
+  { n: 1, t: "00:02", action: "Opened acme-shop.com", note: "Landing page rendered, 200", failed: false },
+  { n: 2, t: "00:09", action: 'Clicked "Wireless headphones"', note: "Product page rendered", failed: false },
+  { n: 3, t: "00:14", action: 'Clicked "Add to cart"', note: "Cart drawer opened, 1 item", failed: false },
+  { n: 4, t: "00:21", action: "Read cart total", note: "Cart shows 149,00 €", failed: false },
+  { n: 5, t: "00:27", action: 'Clicked "Go to checkout"', note: "Navigated to checkout.acme-shop.com", failed: false },
+  { n: 6, t: "00:44", action: "Read order summary", note: "Order total shows 0,00 €", failed: false },
+  { n: 7, t: "01:19", action: "Reloaded and re-read total", note: "Order total still 0,00 €", failed: true },
+];
+
+const thumbs = [
+  { label: "step 1", src: "/hero/step-home.png", alt: "Store home page" },
+  { label: "step 2", src: "/hero/step-collection.png", alt: "Product listing" },
+  { label: "step 3", src: "/hero/step-product.png", alt: "Product page" },
+  { label: "step 5", src: "/hero/step-cart.png", alt: "Cart with one item" },
+  { label: "final", src: "/hero/step-checkout.png", alt: "Checkout order summary" },
+];
+
+const channels = [
+  { name: "Email", note: "free" },
+  { name: "Push", note: "free" },
+  { name: "Slack", note: "free" },
+  { name: "Discord", note: "free" },
+  { name: "SMS", note: "pay as you go" },
+  { name: "Call", note: "pay as you go" },
+];
+---
+
+<section id="night" class="bg-ink px-10 py-[88px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-12 flex max-w-[640px] flex-col gap-3.5">
+      <span class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-dusk">03:21 · Evidence</span>
+      <h2
+        class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] text-surface [text-wrap:balance] max-md:text-[32px]"
+      >
+        When it fails, this is what lands. Once.
+      </h2>
+      <p class="m-0 text-[16px] leading-[1.62] text-parch [text-wrap:pretty]">
+        Nothing goes out until every retry has failed. You get the screenshots, the step that broke,
+        and a report you can hand to a developer — or paste into a coding agent.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] items-stretch gap-5 max-lg:grid-cols-1">
+      <!-- The message -->
+      <div class="flex flex-col gap-5">
+        <div class="rounded-[14px] border border-white/8 bg-inkcard p-5">
+          <div class="flex items-center justify-between gap-3">
+            <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-dusk">Slack · #incidents</span>
+            <span class="font-mono text-[11px] text-dusk">03:21</span>
+          </div>
+          <div class="mt-4 flex items-start gap-3">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-surface">
+              <Logo iconOnly iconSize={32} />
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline gap-2">
+                <span class="text-[14px] font-semibold text-surface">Zenguy</span>
+                <span class="font-mono text-[11px] text-dusk">now</span>
+              </div>
+              <p class="m-0 mt-1.5 text-[15px] font-semibold leading-[1.35] text-surface">
+                Checkout — production failed
+              </p>
+              <p class="m-0 mt-1.5 text-[13.5px] leading-[1.6] text-parch">
+                Acme Commerce · Desktop · 21 Aug 03:21<br />
+                Failed after 3 retries in 6 min 41 s.<br />
+                Order total showed 0,00 € instead of 149,00 €.
+              </p>
+              <span class="mt-3 inline-block text-[13px] text-violet-soft">Open run in Zenguy →</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-[14px] border border-white/8 bg-inkcard p-[18px]">
+          <div class="flex items-start gap-3">
+            <Icon name="bell" size={16} color="#C9C2B3" class="mt-0.5" />
+            <p class="m-0 text-[13.5px] leading-[1.55] text-parch [text-wrap:pretty]">
+              Same story on push, if you're on your phone. One notification when the incident
+              opens, one when it passes again. Later failures join this thread — they don't start a
+              new one.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-auto flex flex-wrap items-center gap-2 max-lg:mt-0">
+          {channels.map((ch) => (
+            <span
+              class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-inkcard px-3 py-[6px] text-[12.5px] text-surface"
+            >
+              {ch.name}
+              <span class="font-mono text-[10.5px] text-dusk">{ch.note}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <!-- The run you open -->
+      <div class="overflow-hidden rounded-[14px] border border-white/8 bg-surface">
+        <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-[13px]">
+          <span
+            class="inline-flex items-center gap-[7px] rounded-full bg-red/12 px-[9px] py-[3px] text-[11.5px] font-medium"
+          >
+            <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>Failed
+          </span>
+          <span class="font-mono text-xs text-muted">run 8f2c1a · 4 attempts · 6 min 41 s</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5 px-[18px] pt-4 max-md:grid-cols-1">
+          <div class="flex flex-col gap-1 rounded-[9px] border border-line px-[13px] py-[11px]">
+            <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Expected</span>
+            <span class="text-[12.5px] leading-normal">Cart and checkout totals match</span>
+          </div>
+          <div class="flex flex-col gap-1 rounded-[9px] border border-red bg-red/5 px-[13px] py-[11px]">
+            <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Observed</span>
+            <span class="text-[12.5px] leading-normal">Checkout shows 0,00 €</span>
+          </div>
+        </div>
+        <div class="flex gap-2 px-[18px] pt-3">
+          {thumbs.map((t) => (
+            <div class="relative aspect-[16/10] flex-1 overflow-hidden rounded-[7px] border border-sand bg-ink">
+              <img src={t.src} alt={t.alt} width="600" height="375" decoding="async" class="h-full w-full object-cover object-top" />
+              <span
+                class="absolute bottom-1 left-1 rounded-[4px] bg-ink/85 px-[5px] py-[2px] font-mono text-[9px] leading-none text-dusk"
+                >{t.label}</span
+              >
+            </div>
+          ))}
+        </div>
+        <div class="mt-3 border-t border-cream">
+          {steps.map((s) => (
+            <div class="flex items-center gap-3 border-b border-cream px-[18px] py-[9px]">
+              <span
+                class="flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-md bg-cream font-mono text-[11px] font-medium"
+                >{s.n}</span
+              >
+              <span class="w-[38px] shrink-0 font-mono text-[11.5px] text-muted">{s.t}</span>
+              <span class="min-w-0 truncate text-[13px] font-medium">{s.action}</span>
+              {s.failed ? (
+                <span
+                  class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red/12 px-2 py-[3px] text-[11px] font-medium"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>check failed
+                </span>
+              ) : (
+                <Icon name="camera" size={14} class="ml-auto opacity-45" />
+              )}
+            </div>
+          ))}
+        </div>
+        <div class="flex items-center gap-2.5 px-[18px] py-3.5">
+          <Icon name="file" size={15} />
+          <span class="truncate font-mono text-xs text-body">checkout-production_8f2c1a_failure-report.md</span>
+          <span class="ml-auto shrink-0 text-xs font-medium text-violet">Download</span>
+        </div>
+        <div class="flex items-center gap-[11px] bg-cream px-[18px] py-3">
+          <Icon name="shield" size={15} />
+          <span class="text-xs leading-normal text-body"
+            >Secret values are redacted in every screenshot, report and log.</span
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

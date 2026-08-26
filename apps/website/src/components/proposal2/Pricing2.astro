@@ -1,12 +1,24 @@
 ---
-// Proposal 2 — Pricing with three conversion fixes: the "costs nothing" list
-// reads as 0 € instead of X icons (an X scans as "not included"), an honest
-// anchor line, and explicit risk-reversal under the button. CTA labels name
-// the outcome. No trial is promised — the checkout charges from day one.
+// Proposal 2 — one plan, with the three practical benefits surfaced beside
+// the detailed allowance. No trial is promised — checkout charges from day
+// one.
 import Icon from "./../Icon.astro";
 import Logo from "./../Logo.astro";
 
-const noCost = ["Retries inside a run", "Uptime checks", "Extra members"];
+const benefits = [
+  {
+    title: "Up to 3 automatic retries",
+    body: "Confirm a failure before Zenguy opens an incident or alerts the team.",
+  },
+  {
+    title: "Unlimited uptime monitors",
+    body: "Check every endpoint without spending a browser-test run.",
+  },
+  {
+    title: "Unlimited teammates",
+    body: "Bring engineering, support and operations into one workspace.",
+  },
+];
 const included = [
   "300 browser test runs a month",
   "0,20 € per run after that",
@@ -31,11 +43,16 @@ const included = [
         A run is one requested execution: a scheduled run, a manual run, or a validation from the
         editor. Invite the whole team at no extra cost.
       </p>
-      <div class="flex flex-col gap-2.5 pt-1.5">
-        {noCost.map((t) => (
-          <div class="flex items-center gap-2.5">
-            <span class="rounded-md border border-line bg-cream px-[7px] py-[2px] font-mono text-[11.5px] font-medium text-stone">0 €</span>
-            <span class="text-sm text-body">{t}</span>
+      <div class="grid gap-3 pt-1.5">
+        {benefits.map((benefit, index) => (
+          <div class="flex items-start gap-3.5 rounded-xl border border-line bg-cream/55 px-4 py-3.5">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-bg font-mono text-[11px] font-medium text-violet-deep">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[14px] font-semibold text-ink">{benefit.title}</span>
+              <span class="text-[13px] leading-[1.5] text-body">{benefit.body}</span>
+            </div>
           </div>
         ))}
       </div>

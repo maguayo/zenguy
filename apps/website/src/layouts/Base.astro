@@ -4,14 +4,19 @@ import "../styles/global.css";
 interface Props {
   title?: string;
   description?: string;
+  ogType?: "website" | "article";
+  publishedTime?: Date;
 }
 
 const {
   title = "Zenguy — Browser tests in plain English",
   description = "Describe a flow once. Zenguy walks it on a schedule and, when it stops working, sends you the screenshots, the steps and the reason before a customer finds it.",
+  ogType = "website",
+  publishedTime,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://zenguy.com").href;
+const publishedIso = publishedTime?.toISOString();
 ---
 
 <!doctype html>
@@ -23,13 +28,17 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://zenguy.com"
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="application/rss+xml" title="Zenguy articles" href="/articles/rss.xml" />
 
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content="Zenguy" />
+    {publishedIso && <meta property="article:published_time" content={publishedIso} />}
     <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
     <meta name="theme-color" content="#F2EEE6" />
     <slot name="head" />
 

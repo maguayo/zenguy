@@ -7,28 +7,37 @@
 // scene is simply there.
 const moments = [
   {
-    time: "14:02 · merge",
+    time: "14:02",
+    label: "CI",
+    title: "Merge approved",
     tone: "text-green",
     dot: "bg-green",
-    align: "",
+    panel: "border-green/25 bg-green/[0.045]",
     step: "n-s1",
-    body: "214 tests pass, the build ships, everyone goes home. This part already works.",
+    delta: "",
+    body: "214 tests pass. The build ships and everyone goes home.",
   },
   {
-    time: "03:14 · production",
+    time: "03:14",
+    label: "Live site",
+    title: "Checkout breaks",
     tone: "text-red",
     dot: "bg-red zg-pulse",
-    align: "text-center max-lg:text-left",
+    panel: "border-red/35 bg-red/[0.06]",
     step: "n-s2",
+    delta: "+13 h 12 m",
     body: "A third-party price feed goes quiet. Checkout totals become 0,00 € — with a 200 on every request.",
   },
   {
-    time: "09:40 · a customer emails",
+    time: "09:40",
+    label: "Support",
+    title: "A customer finds it",
     tone: "text-surface/50",
     dot: "bg-surface/50",
-    align: "text-right max-lg:text-left",
+    panel: "border-white/12 bg-white/[0.035]",
     step: "n-s3",
-    body: "“Is the sale meant to be everything for free?” Support asks who changed what. Nobody changed anything.",
+    delta: "+6 h 26 m",
+    body: "A customer asks whether the sale is meant to be free. Support starts tracing a change nobody made.",
   },
 ];
 ---
@@ -37,24 +46,32 @@ const moments = [
   <div class="container-site flex flex-col gap-10">
     <span class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-dusk">Production</span>
 
-    <div class="flex flex-col gap-4">
-      <!-- Track: merge ╌╌╌ outage ─── discovery (desktop only; the list below carries the dots on small screens) -->
-      <div class="flex items-center max-lg:hidden" aria-hidden="true">
-        <span class="n-s1 h-[13px] w-[13px] shrink-0 rounded-full bg-green"></span>
-        <span class="n-seg1 track-dashed h-0.5 flex-1"></span>
-        <span class="n-s2 zg-pulse h-[13px] w-[13px] shrink-0 rounded-full bg-red"></span>
-        <span class="n-seg2 h-0.5 flex-1 bg-white/14"></span>
-        <span class="n-s3 h-[13px] w-[13px] shrink-0 rounded-full bg-surface/50"></span>
+    <div class="relative">
+      <div class="absolute left-[16.666%] right-[16.666%] top-5 h-px bg-white/14 max-lg:hidden" aria-hidden="true">
+        <span class="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-ink px-2 font-mono text-[10px] text-dusk">
+          13 h 12 m
+        </span>
+        <span class="absolute left-3/4 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-ink px-2 font-mono text-[10px] text-dusk">
+          6 h 26 m
+        </span>
       </div>
+      <div class="absolute bottom-6 left-[19px] top-5 hidden w-px bg-white/14 max-lg:block" aria-hidden="true"></div>
 
-      <ol class="m-0 grid list-none grid-cols-3 gap-7 p-0 max-lg:grid-cols-1 max-lg:gap-6">
+      <ol class="relative m-0 grid list-none grid-cols-3 gap-5 p-0 max-lg:grid-cols-1 max-lg:gap-5">
         {moments.map((m) => (
-          <li class:list={["flex flex-col gap-[7px]", m.align, m.step]}>
-            <span class:list={["inline-flex items-center gap-2.5 font-mono text-[13px]", m.tone]}>
-              <span class:list={["hidden h-[9px] w-[9px] shrink-0 rounded-full max-lg:inline-block", m.dot]} aria-hidden="true"></span>
-              {m.time}
+          <li class:list={["flex flex-col gap-3 max-lg:grid max-lg:grid-cols-[40px_minmax(0,1fr)] max-lg:gap-4", m.step]}>
+            <span class="relative z-[1] mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/14 bg-ink max-lg:mx-0" aria-hidden="true">
+              <span class:list={["h-2.5 w-2.5 rounded-full", m.dot]}></span>
             </span>
-            <span class="text-[16px] leading-[1.5] text-parch [text-wrap:pretty]">{m.body}</span>
+            <div class:list={["flex min-h-[178px] flex-col rounded-[14px] border p-5", m.panel]}>
+              <div class="flex items-center gap-3">
+                <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-dusk">{m.label}</span>
+                {m.delta && <span class="hidden font-mono text-[10.5px] text-dusk max-lg:inline">{m.delta}</span>}
+                <span class:list={["ml-auto font-mono text-[12.5px]", m.tone]}>{m.time}</span>
+              </div>
+              <h3 class="m-0 mt-5 text-[18px] font-semibold leading-[1.3] text-surface">{m.title}</h3>
+              <p class="m-0 mt-2 text-[14.5px] leading-[1.55] text-parch [text-wrap:pretty]">{m.body}</p>
+            </div>
           </li>
         ))}
       </ol>
@@ -75,16 +92,8 @@ const moments = [
 </section>
 
 <style>
-  /* Dashed segment of the track — verbatim from the design */
-  .track-dashed {
-    background: repeating-linear-gradient(to right, rgba(255, 255, 255, 0.22) 0 6px, transparent 6px 12px);
-  }
-
-  /* The play sequence exists only once JS arms it (motion allowed). Hidden
-     states live under .night-armed so no-JS and reduced-motion readers get
-     the finished scene immediately. visibility joins each transition because
-     the zg-pulse dots animate opacity — an animation would override the
-     opacity transition, but never visibility. */
+  /* Hidden states live under .night-armed so no-JS and reduced-motion readers
+     get the finished scene immediately. */
   .night-armed .n-s1,
   .night-armed .n-s2,
   .night-armed .n-s3,
@@ -98,28 +107,12 @@ const moments = [
       transform 0.55s cubic-bezier(0.32, 0.72, 0, 1),
       visibility 0s linear;
   }
-  .night-armed span.n-s1,
-  .night-armed span.n-s2,
-  .night-armed span.n-s3 {
-    transform: scale(0.4);
-    transition:
-      opacity 0.35s ease,
-      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-      visibility 0s linear;
-  }
-  .night-armed .n-seg1,
-  .night-armed .n-seg2 {
-    clip-path: inset(0 100% 0 0);
-    transition: clip-path 0.5s cubic-bezier(0.65, 0, 0.35, 1);
-  }
 
   .night-play .n-s1 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.05s; }
-  .night-play .n-seg1 { clip-path: inset(0 0 0 0); transition-delay: 0.3s; }
-  .night-play .n-s2 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.85s; }
-  .night-play .n-seg2 { clip-path: inset(0 0 0 0); transition-delay: 1.15s; transition-duration: 0.7s; }
-  .night-play .n-s3 { opacity: 1; visibility: visible; transform: none; transition-delay: 1.9s; }
-  .night-play .n-alt { opacity: 1; visibility: visible; transform: none; transition-delay: 2.2s; }
-  .night-play .n-closer { opacity: 1; visibility: visible; transform: none; transition-delay: 2.45s; }
+  .night-play .n-s2 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.4s; }
+  .night-play .n-s3 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.75s; }
+  .night-play .n-alt { opacity: 1; visibility: visible; transform: none; transition-delay: 1.05s; }
+  .night-play .n-closer { opacity: 1; visibility: visible; transform: none; transition-delay: 1.3s; }
 </style>
 
 <script>

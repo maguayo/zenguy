@@ -1,0 +1,23 @@
+---
+import { APP_URL } from "../lib/site";
+---
+
+<aside class="card-shadow-sm flex items-center gap-10 rounded-2xl border border-line bg-surface px-10 py-10 max-md:flex-col max-md:items-start max-md:gap-6 max-md:px-6 max-md:py-8">
+  <div class="flex max-w-[560px] flex-col gap-2.5">
+    <h2 class="m-0 text-[26px] font-semibold leading-[1.18] tracking-[-0.025em]">
+      Start with the flow you'd hate to find broken.
+    </h2>
+    <p class="m-0 text-[15px] leading-[1.6] text-body">
+      Write it in a sentence, run it once, and see the screenshots come back.
+    </p>
+    <div class="flex flex-wrap items-center gap-x-[22px] gap-y-1.5 pt-1 font-mono text-sm text-stone">
+      <span>39 € a month</span>
+      <span>300 runs</span>
+      <span>uptime free</span>
+    </div>
+  </div>
+  <div class="flex-1 max-md:hidden"></div>
+  <a href={APP_URL} class="btn btn-violet shrink-0 rounded-[10px] px-6 py-3.5 text-[15px] font-medium">
+    Run your first test
+  </a>
+</aside>

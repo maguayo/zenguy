@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Overview · Aguayo Staging — Health and plan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cream: #F2EEE6;
+      --surface: #FAF8F4;
+      --line: #E8E2D6;
+      --sand: #D8D1C2;
+      --ink: #13110D;
+      --body: #4A453E;
+      --muted: #877F71;
+      --stone: #6B655B;
+      --inkcard: #2A2722;
+      --parch: #C9C2B3;
+      --dusk: #7C766B;
+      --violet: #625ED7;
+      --violet-deep: #4F4BC4;
+      --violet-bg: #EEEDFB;
+      --green: #46A758;
+      --green-bg: #E7F3EA;
+      --red: #E5484D;
+      --red-bg: #FCEBEC;
+      --amber: #C7791F;
+      --amber-bg: #FBF0E0;
+      --sidebar: 232px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14.5px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+    :focus-visible {
+      outline: 2px solid var(--violet);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      left: 12px;
+      top: -40px;
+      z-index: 20;
+      background: var(--ink);
+      color: var(--surface);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .skip:focus { top: 12px; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 22px 16px 16px;
+      border-right: 1px solid var(--line);
+      background: var(--cream);
+    }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 8px;
+      margin-left: 2px;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      width: fit-content;
+    }
+    .wordmark .dot { color: var(--violet); }
+
+    .ws {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 22px 0 18px;
+      padding: 8px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 10px;
+      color: var(--ink);
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+    .ws:hover { border-color: var(--sand); }
+    .ws-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--parch);
+      display: grid;
+      place-items: center;
+      font: 600 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .ws-name { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    .ws-meta { display: block; font-size: 11px; color: var(--muted); }
+
+    nav { flex: 1; }
+    .nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: var(--body);
+      font-size: 13.5px;
+    }
+    .nav-list a:hover { background: rgba(19, 17, 13, 0.04); color: var(--ink); }
+    .nav-list a[aria-current="page"] {
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 500;
+    }
+    .nav-list svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
+    .nav-list a[aria-current="page"] svg { opacity: 1; }
+    .nav-count {
+      margin-left: auto;
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.06em;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--red);
+      color: #fff;
+    }
+    .nav-list a[aria-current="page"] .nav-count { background: var(--red); color: #fff; }
+
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 8px 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      color: inherit;
+    }
+    .who-av {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: var(--violet-bg);
+      color: var(--violet-deep);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .who strong { display: block; font-size: 13px; font-weight: 600; }
+    .who span { display: block; font-size: 11.5px; color: var(--muted); }
+
+    .main {
+      min-width: 0;
+      padding: 36px 48px 72px;
+    }
+    .main-inner { max-width: 1080px; }
+
+    .eyebrow {
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .page-head { margin-top: 14px; }
+    .page-head h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.038em;
+      line-height: 1.15;
+    }
+    .lede {
+      margin: 8px 0 0;
+      color: var(--body);
+      font-size: 14.5px;
+    }
+    .lede strong { font-weight: 600; color: var(--ink); }
+
+    .layout {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.72fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .banner {
+      display: block;
+      background: var(--red-bg);
+      border: 1px solid #f5bdbf;
+      border-radius: 14px;
+      padding: 16px 18px 15px;
+      animation: rise 0.7s var(--ease) both;
+    }
+    .banner-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .banner h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #c1363b;
+    }
+    .banner .when {
+      font: 500 11.5px/1 Geist Mono, ui-monospace, monospace;
+      color: #c1363b;
+      white-space: nowrap;
+    }
+    .banner p {
+      margin: 8px 0 0;
+      font-size: 13.5px;
+      color: #8f2f33;
+    }
+    .banner p strong { color: #c1363b; font-weight: 600; }
+    .banner-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: #c1363b;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .banner-link:hover { text-decoration: underline; }
+
+    .sec { margin-top: 22px; }
+    .sec-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .sec-head a {
+      color: var(--violet-deep);
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .sec-head a:hover { color: var(--violet); }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .rows { list-style: none; margin: 0; padding: 0; }
+    .rows a {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 16px;
+      min-height: 48px;
+    }
+    .rows li + li { border-top: 1px solid var(--line); }
+    .rows a:hover { background: rgba(19, 17, 13, 0.03); }
+    .name {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 550;
+      letter-spacing: -0.01em;
+    }
+    .sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .when {
+      font: 500 11.5px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .pill.ok { background: var(--green-bg); color: #2f7f3f; }
+    .pill.fail { background: var(--red-bg); color: #c1363b; }
+    .pill.warn { background: var(--amber-bg); color: var(--amber); }
+    .pill.run { background: var(--violet-bg); color: var(--violet-deep); }
+
+    .rail { position: sticky; top: 28px; }
+    .rail-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 16px;
+    }
+    .rail-card h2 { margin: 0; }
+    .meter-label {
+      margin: 16px 0 0;
+      font-size: 13px;
+      color: var(--stone);
+    }
+    .meter-nums {
+      margin: 6px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .meter-nums strong {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+    .meter-nums strong em {
+      font-style: normal;
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .meter-nums span {
+      font: 500 12px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+    }
+    .bar {
+      margin-top: 10px;
+      height: 6px;
+      background: #eae4d9;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      width: 61.333%;
+      height: 100%;
+      background: var(--violet);
+      border-radius: 99px;
+    }
+    .remain {
+      margin: 10px 0 0;
+      font-size: 13px;
+      color: var(--body);
+    }
+    .fine {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .rail-dl {
+      margin: 16px 0 0;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .rail-dl div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      padding: 7px 0;
+    }
+    .rail-dl dt {
+      margin: 0;
+      font-size: 13px;
+      color: var(--stone);
+    }
+    .rail-dl dd {
+      margin: 0;
+      font: 500 13px/1.3 Geist Mono, ui-monospace, monospace;
+      color: var(--ink);
+      text-align: right;
+    }
+    .rail-dl .amount {
+      font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .rail-link {
+      display: block;
+      margin-top: 14px;
+      color: var(--violet-deep);
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .rail-link:hover { color: var(--violet); }
+
+    .badge {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 30;
+      background: var(--ink);
+      color: var(--parch);
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px 10px;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .banner { animation: none; }
+    }
+
+    @media (max-width: 1080px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { position: static; }
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        min-height: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+      }
+      .nav-list { flex-direction: row; flex-wrap: wrap; }
+      .nav-list a { height: 32px; font-size: 12.5px; }
+      .who, .ws { display: none; }
+      .main { padding: 24px 20px 80px; }
+      .page-head h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to overview</a>
+  <div class="app">
+    <aside class="sidebar">
+      <a class="wordmark" href="#main">
+        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="#13110D" />
+          <path d="M9 10.5 Q 12 9.5 16 10.5 T 23 10.5 L 9 21.5 Q 12 22.5 16 21.5 T 23 21.5" stroke="#FAF8F4" stroke-width="2" stroke-linecap="round" fill="none" />
+          <circle cx="23" cy="21.5" r="1.6" fill="#625ED7" />
+        </svg>
+        zenguy<span class="dot">.</span>
+      </a>
+
+      <button class="ws" type="button">
+        <span class="ws-mark">AS</span>
+        <span>
+          <span class="ws-name">Aguayo Staging</span>
+          <span class="ws-meta">Workspace</span>
+        </span>
+      </button>
+
+      <nav aria-label="Workspace">
+        <ul class="nav-list">
+          <li>
+            <a href="#main" aria-current="page">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg>
+              Overview
+            </a>
+          </li>
+          <li>
+            <a href="#tests">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.6" ry="9"/><path d="M3 12h18"/></svg>
+              Browser Tests
+            </a>
+          </li>
+          <li>
+            <a href="#uptime">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3.2l2.4-6.2 4.1 12.4 2.3-6.2H21"/></svg>
+              Uptime
+            </a>
+          </li>
+          <li>
+            <a href="#banner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.2" r="0.8" fill="currentColor" stroke="none"/></svg>
+              Incidents
+              <span class="nav-count">2</span>
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 11H3c0-4 3-4 3-11"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              Alerts
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg>
+              Secrets
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Members
+            </a>
+          </li>
+          <li>
+            <a href="#usage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 14h4v6H4zM10 9h4v11h-4zM16 4h4v16h-4z"/></svg>
+              Plan &amp; Usage
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              Workspace Settings
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <a class="who" href="#">
+        <span class="who-av">MA</span>
+        <span>
+          <strong>Marcos Aguayo</strong>
+          <span>marcos@aguayo.es</span>
+        </span>
+      </a>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="main-inner">
+        <p class="eyebrow">Aguayo Staging</p>
+        <header class="page-head">
+          <h1>1 incident open.</h1>
+          <p class="lede">12 tests · 10 monitors · <strong>Add to cart</strong> running step 3/6</p>
+        </header>
+
+        <div class="layout">
+          <div class="col">
+            <a class="banner" id="banner" href="#">
+              <div class="banner-top">
+                <h2>Checkout flow failed</h2>
+                <span class="when">12m</span>
+              </div>
+              <p>Open incident · expected totals match · observed <strong>0,00 €</strong>. Checkout API has been returning 502 for 22 minutes.</p>
+              <span class="banner-link">Open incident →</span>
+            </a>
+
+            <section class="sec" id="tests" aria-labelledby="tests-h">
+              <div class="sec-head">
+                <h2 class="eyebrow" id="tests-h">Browser tests</h2>
+                <a href="#">All tests →</a>
+              </div>
+              <div class="panel">
+                <ul class="rows">
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Add to cart</span>
+                        <span class="sub">Step 3/6 · Clicked Add to cart</span>
+                      </span>
+                      <span class="pill run">Running</span>
+                      <time class="when">2m</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Checkout flow</span>
+                        <span class="sub">Expected totals match · observed 0,00 €</span>
+                      </span>
+                      <span class="pill fail">Failed</span>
+                      <time class="when">12m</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Homepage smoke</span>
+                        <span class="sub">example.com · desktop · every 24h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">18m</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Login form</span>
+                        <span class="sub">every 8h · Chrome desktop</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">41m</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Product search</span>
+                        <span class="sub">every 12h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">1h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Pricing page</span>
+                        <span class="sub">every 12h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">3h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Signup flow</span>
+                        <span class="sub">No incident opened · one missed interval</span>
+                      </span>
+                      <span class="pill warn">Timeout</span>
+                      <time class="when">5h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Account settings</span>
+                        <span class="sub">every 24h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">6h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Password reset</span>
+                        <span class="sub">every 24h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">8h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Mobile navigation</span>
+                        <span class="sub">every 24h · mobile</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">9h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Contact form</span>
+                        <span class="sub">every 24h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">11h</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Blog listing</span>
+                        <span class="sub">every 24h</span>
+                      </span>
+                      <span class="pill ok">Passed</span>
+                      <time class="when">14h</time>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="sec" id="uptime" aria-labelledby="uptime-h">
+              <div class="sec-head">
+                <h2 class="eyebrow" id="uptime-h">Uptime</h2>
+                <a href="#">All monitors →</a>
+              </div>
+              <div class="panel">
+                <ul class="rows">
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Checkout API</span>
+                        <span class="sub">Open incident · 502 · 22 minutes</span>
+                      </span>
+                      <span class="pill fail">Down</span>
+                      <time class="when">22m</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Homepage beat</span>
+                        <span class="sub">48 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">48 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">API beat</span>
+                        <span class="sub">112 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">112 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Auth service</span>
+                        <span class="sub">89 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">89 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">CDN</span>
+                        <span class="sub">24 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">24 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Status page</span>
+                        <span class="sub">67 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">67 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Docs site</span>
+                        <span class="sub">91 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">91 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Assets</span>
+                        <span class="sub">18 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">18 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Webhooks</span>
+                        <span class="sub">134 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">134 ms</time>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#">
+                      <span>
+                        <span class="name">Billing</span>
+                        <span class="sub">156 ms · every 1 min</span>
+                      </span>
+                      <span class="pill ok">Up</span>
+                      <time class="when">156 ms</time>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </section>
+          </div>
+
+          <aside class="rail" id="usage" aria-labelledby="plan-h">
+            <div class="rail-card">
+              <h2 class="eyebrow" id="plan-h">Plan &amp; usage</h2>
+              <p class="meter-label">Browser test runs this cycle</p>
+              <div class="meter-nums">
+                <strong>184 <em>/ 300</em></strong>
+                <span>61%</span>
+              </div>
+              <div class="bar" aria-hidden="true"><span></span></div>
+              <p class="remain">116 remaining</p>
+              <p class="fine">included 300 · 0,20 € extra</p>
+              <dl class="rail-dl">
+                <div>
+                  <dt>Resets</dt>
+                  <dd>1 Sep 2026</dd>
+                </div>
+                <div>
+                  <dt>Projected</dt>
+                  <dd class="amount">39,00 €</dd>
+                </div>
+                <div>
+                  <dt>Overage</dt>
+                  <dd>0,00 €</dd>
+                </div>
+              </dl>
+              <a class="rail-link" href="#">Manage plan →</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="badge">Proposal 15 — Health and plan</div>
+</body>
+</html>

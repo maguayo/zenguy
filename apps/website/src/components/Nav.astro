@@ -1,18 +1,18 @@
 ---
+import { homeNavLinks } from "../lib/site";
 import Logo from "./Logo.astro";
 
-const links = [
-  { href: "#how", label: "How it works" },
-  { href: "#evidence", label: "Evidence" },
-  { href: "#uptime", label: "Uptime" },
-  { href: "#app", label: "iOS app" },
-  { href: "#pricing", label: "Pricing" },
-];
+interface Props {
+  homeHref?: string;
+  links?: { href: string; label: string }[];
+}
+
+const { homeHref = "/", links = homeNavLinks } = Astro.props;
 ---
 
-<header class="sticky top-0 z-20 bg-surface border-b border-line">
-  <div class="container-site flex h-[66px] items-center gap-9 px-10 max-md:px-5 max-md:gap-5">
-    <a href="/" class="btn flex items-center" aria-label="Zenguy home">
+<header class="sticky top-0 z-20 border-b border-line bg-surface px-10 max-md:px-5">
+  <div class="container-site flex min-w-0 h-[66px] items-center gap-9 max-md:gap-5">
+    <a href={homeHref} class="btn flex items-center" aria-label="Zenguy home">
       <Logo iconSize={24} />
     </a>
     <nav class="flex items-center gap-[26px] max-md:hidden" aria-label="Main">

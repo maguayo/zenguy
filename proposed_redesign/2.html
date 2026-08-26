@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Overview · Aguayo Staging — Incident first</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cream: #F2EEE6;
+      --surface: #FAF8F4;
+      --line: #E8E2D6;
+      --sand: #D8D1C2;
+      --ink: #13110D;
+      --body: #4A453E;
+      --muted: #877F71;
+      --stone: #6B655B;
+      --inkcard: #2A2722;
+      --parch: #C9C2B3;
+      --dusk: #7C766B;
+      --violet: #625ED7;
+      --violet-deep: #4F4BC4;
+      --violet-bg: #EEEDFB;
+      --green: #46A758;
+      --green-bg: #E7F3EA;
+      --red: #E5484D;
+      --red-bg: #FCEBEC;
+      --amber: #C7791F;
+      --amber-bg: #FBF0E0;
+      --sidebar: 232px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14.5px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+    :focus-visible {
+      outline: 2px solid var(--violet);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      left: 12px;
+      top: -40px;
+      z-index: 20;
+      background: var(--ink);
+      color: var(--surface);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .skip:focus { top: 12px; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 22px 16px 16px;
+      border-right: 1px solid var(--line);
+      background: var(--cream);
+    }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 8px;
+      margin-left: 2px;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      width: fit-content;
+    }
+    .wordmark .dot {
+      color: var(--violet);
+      width: 6px;
+      height: 6px;
+      border-radius: 99px;
+      background: currentColor;
+      display: inline-block;
+      font-size: 0;
+    }
+
+    .ws {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 22px 0 18px;
+      padding: 8px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 10px;
+      color: var(--ink);
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+    .ws:hover { border-color: var(--sand); }
+    .ws-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--parch);
+      display: grid;
+      place-items: center;
+      font: 600 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .ws-name { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    .ws-meta { display: block; font-size: 11px; color: var(--muted); }
+
+    nav { flex: 1; }
+    .nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: var(--body);
+      font-size: 13.5px;
+    }
+    .nav-list a:hover { background: rgba(19, 17, 13, 0.04); color: var(--ink); }
+    .nav-list a[aria-current="page"] {
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 500;
+    }
+    .nav-list svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
+    .nav-list a[aria-current="page"] svg { opacity: 1; }
+    .nav-count {
+      margin-left: auto;
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.06em;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--red);
+      color: #fff;
+    }
+    .nav-list a[aria-current="page"] .nav-count { background: var(--red); color: #fff; }
+
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 8px 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      color: inherit;
+    }
+    .who-av {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: var(--violet-bg);
+      color: var(--violet-deep);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .who strong { display: block; font-size: 13px; font-weight: 600; }
+    .who span { display: block; font-size: 11.5px; color: var(--muted); }
+
+    .main {
+      min-width: 0;
+      padding: 36px 48px 72px;
+    }
+    .main-inner { max-width: 920px; }
+
+    .eyebrow {
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .pagehead h1 {
+      margin: 10px 0 0;
+      font-size: 28px;
+      font-weight: 650;
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+    }
+
+    .issue {
+      margin-top: 18px;
+      background: var(--surface);
+      border: 1px solid #f5bdbf;
+      border-radius: 16px;
+      padding: 20px 22px 18px;
+      animation: rise 0.55s var(--ease) both;
+    }
+    .issue-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .pill.fail { background: var(--red-bg); color: #c1363b; }
+    .pill.ink {
+      background: var(--ink);
+      color: var(--surface);
+    }
+    .issue-time {
+      margin-left: auto;
+      font: 500 12px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+    }
+    .issue h2 {
+      margin: 12px 0 0;
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+    }
+    .issue-copy {
+      margin: 8px 0 0;
+      color: var(--body);
+      font-size: 14px;
+      max-width: 640px;
+    }
+    .issue-copy strong { color: var(--ink); font-weight: 600; }
+    .issue-meta {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+    .issue-meta span + span::before {
+      content: "·";
+      margin: 0 7px;
+      color: var(--sand);
+    }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .cmp {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--cream);
+    }
+    .cmp.obs {
+      background: var(--red-bg);
+      border-color: #f5bdbf;
+    }
+    .cmp .k {
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .cmp.obs .k { color: #c1363b; }
+    .cmp .v {
+      margin: 8px 0 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .cmp .hint { margin: 4px 0 0; font-size: 12.5px; color: var(--stone); }
+    .cmp.obs .hint { color: #c1363b; }
+
+    .thumbs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .thumb {
+      margin: 0;
+    }
+    .shot {
+      height: 88px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--cream);
+      padding: 8px;
+      overflow: hidden;
+    }
+    .shot.fail {
+      border-color: #f5bdbf;
+      background: #fdf2f3;
+    }
+    .chrome {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .chrome i {
+      width: 5px;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--sand);
+      display: block;
+    }
+    .shot .bar {
+      display: block;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--line);
+      margin-bottom: 6px;
+    }
+    .shot .bar.w60 { width: 60%; }
+    .shot .bar.w80 { width: 80%; }
+    .shot .bar.w40 { width: 40%; }
+    .shot .bar.w30 { width: 30%; }
+    .shot .hero-block {
+      display: block;
+      height: 22px;
+      border-radius: 4px;
+      background: var(--line);
+      margin-bottom: 6px;
+    }
+    .shot .grid3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+    }
+    .shot .grid3 b {
+      height: 22px;
+      border-radius: 3px;
+      background: var(--sand);
+      display: block;
+    }
+    .shot .price {
+      display: block;
+      width: 42%;
+      height: 10px;
+      border-radius: 3px;
+      background: var(--ink);
+      margin-top: 8px;
+      opacity: 0.35;
+    }
+    .shot.fail .price { background: var(--red); opacity: 0.7; width: 28%; }
+    .shot .form {
+      display: grid;
+      gap: 4px;
+    }
+    .shot .form b {
+      height: 8px;
+      border-radius: 3px;
+      background: var(--line);
+      display: block;
+    }
+    .thumb figcaption {
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: var(--stone);
+      text-align: center;
+    }
+    .thumb figcaption em {
+      font-style: normal;
+      color: #c1363b;
+      font-weight: 500;
+    }
+
+    .issue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+    }
+    .btn:hover { border-color: var(--sand); background: #fff; }
+    .btn-ink {
+      background: var(--ink);
+      color: var(--surface);
+      border-color: var(--ink);
+    }
+    .btn-ink:hover { background: #000; border-color: #000; }
+
+    .runbar {
+      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px 8px 12px;
+      background: var(--violet-bg);
+      border: 1px solid #cfcdf4;
+      border-radius: 999px;
+      color: var(--violet-deep);
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .runbar i {
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--violet);
+      display: block;
+      flex-shrink: 0;
+      animation: breathe 1.4s var(--ease) infinite;
+    }
+    .runbar .sep { color: #9b98dc; font-weight: 400; }
+    .runbar time {
+      margin-left: auto;
+      font: 500 12px/1 Geist Mono, ui-monospace, monospace;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 8px 8px;
+      min-width: 0;
+    }
+    .card-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 0 10px 8px;
+    }
+    .card-head a {
+      color: var(--violet-deep);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .card-head a:hover { color: var(--violet); }
+    .quiet { list-style: none; margin: 0; padding: 0; }
+    .quiet a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
+    .quiet a:hover { background: rgba(19, 17, 13, 0.03); }
+    .qname { font-size: 13.5px; font-weight: 550; letter-spacing: -0.01em; }
+    .qmeta {
+      margin-left: auto;
+      font: 500 11.5px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .mark {
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+    .mark.fail { background: var(--red); }
+    .mark.run { background: var(--violet); animation: breathe 1.4s var(--ease) infinite; }
+    .mark.warn { background: var(--amber); }
+    .foot-note {
+      padding: 6px 10px 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .usage {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+    .usage-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px 24px;
+      align-items: baseline;
+    }
+    .usage-top .label { font-size: 13px; color: var(--stone); }
+    .usage-top .nums {
+      font: 500 12px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--body);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .bar-track {
+      height: 6px;
+      background: #eae4d9;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar-track > span {
+      display: block;
+      width: 61.333%;
+      height: 100%;
+      background: var(--violet);
+      border-radius: 99px;
+    }
+
+    .sec { margin-top: 28px; }
+    .sec-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .activity { list-style: none; margin: 0; padding: 0; }
+    .activity li + li { border-top: 1px solid var(--line); }
+    .activity a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 4px;
+      border-radius: 8px;
+    }
+    .activity a:hover { background: rgba(19, 17, 13, 0.03); }
+    .st {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .st svg { width: 16px; height: 16px; }
+    .st.ok { background: var(--green-bg); color: #2f7f3f; }
+    .st.fail { background: var(--red-bg); color: #c1363b; }
+    .st.warn { background: var(--amber-bg); color: var(--amber); }
+    .st.run { background: var(--violet-bg); color: var(--violet-deep); }
+    .act-title { display: block; font-size: 13.5px; font-weight: 550; letter-spacing: -0.01em; }
+    .act-sub { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .act-time {
+      margin-left: auto;
+      font: 500 11.5px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .badge {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 30;
+      background: var(--ink);
+      color: var(--parch);
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px 10px;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .issue { animation: none; }
+      .runbar i, .mark.run { animation: none; }
+    }
+
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        min-height: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+      }
+      .nav-list { flex-direction: row; flex-wrap: wrap; }
+      .nav-list a { height: 32px; font-size: 12.5px; }
+      .who, .ws { display: none; }
+      .main { padding: 24px 20px 80px; }
+      .split, .compare { grid-template-columns: 1fr; }
+      .thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .issue-time { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to overview</a>
+  <div class="app">
+    <aside class="sidebar">
+      <a class="wordmark" href="#main">
+        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="#13110D" />
+          <path d="M9 10.5 Q 12 9.5 16 10.5 T 23 10.5 L 9 21.5 Q 12 22.5 16 21.5 T 23 21.5" stroke="#FAF8F4" stroke-width="2" stroke-linecap="round" fill="none" />
+          <circle cx="23" cy="21.5" r="1.6" fill="#625ED7" />
+        </svg>
+        zenguy<span class="dot">.</span>
+      </a>
+
+      <button class="ws" type="button">
+        <span class="ws-mark">AS</span>
+        <span>
+          <span class="ws-name">Aguayo Staging</span>
+          <span class="ws-meta">Workspace</span>
+        </span>
+      </button>
+
+      <nav aria-label="Workspace">
+        <ul class="nav-list">
+          <li>
+            <a href="#main" aria-current="page">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg>
+              Overview
+            </a>
+          </li>
+          <li>
+            <a href="#tests">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.6" ry="9"/><path d="M3 12h18"/></svg>
+              Browser Tests
+            </a>
+          </li>
+          <li>
+            <a href="#uptime">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3.2l2.4-6.2 4.1 12.4 2.3-6.2H21"/></svg>
+              Uptime
+            </a>
+          </li>
+          <li>
+            <a href="#activity">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.2" r="0.8" fill="currentColor" stroke="none"/></svg>
+              Incidents
+              <span class="nav-count">2</span>
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 11H3c0-4 3-4 3-11"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              Alerts
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg>
+              Secrets
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Members
+            </a>
+          </li>
+          <li>
+            <a href="#usage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 14h4v6H4zM10 9h4v11h-4zM16 4h4v16h-4z"/></svg>
+              Plan &amp; Usage
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              Workspace Settings
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <a class="who" href="#">
+        <span class="who-av">MA</span>
+        <span>
+          <strong>Marcos Aguayo</strong>
+          <span>marcos@aguayo.es</span>
+        </span>
+      </a>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="main-inner">
+        <header class="pagehead">
+          <p class="eyebrow">Aguayo Staging</p>
+          <h1>Overview</h1>
+        </header>
+
+        <section class="issue" aria-labelledby="issue-title">
+          <div class="issue-top">
+            <span class="pill ink">Open incident</span>
+            <span class="pill fail">Failed</span>
+            <span class="issue-time">12m ago</span>
+          </div>
+          <h2 id="issue-title">Checkout flow</h2>
+          <p class="issue-copy">
+            The agent walked home → product → cart (<strong>149,00 €</strong>) → checkout (<strong>0,00 €</strong>).
+            Checkout API has been returning 502 for 3 minutes.
+          </p>
+          <p class="issue-meta">
+            <span>Browser test</span>
+            <span>Chrome · desktop</span>
+            <span>every 1h</span>
+            <span>shop.example.com</span>
+          </p>
+
+          <div class="compare">
+            <div class="cmp">
+              <div class="k">Expected</div>
+              <div class="v">Totals match</div>
+              <div class="hint">Cart still showed 149,00 €</div>
+            </div>
+            <div class="cmp obs">
+              <div class="k">Observed</div>
+              <div class="v">Checkout 0,00 €</div>
+              <div class="hint">API 502 · related monitor down</div>
+            </div>
+          </div>
+
+          <div class="thumbs" role="list">
+            <figure class="thumb" role="listitem">
+              <div class="shot" aria-hidden="true">
+                <span class="chrome"><i></i><i></i><i></i></span>
+                <span class="bar w60"></span>
+                <span class="hero-block"></span>
+                <span class="grid3"><b></b><b></b><b></b></span>
+              </div>
+              <figcaption>Home</figcaption>
+            </figure>
+            <figure class="thumb" role="listitem">
+              <div class="shot" aria-hidden="true">
+                <span class="chrome"><i></i><i></i><i></i></span>
+                <span class="bar w40"></span>
+                <span class="hero-block"></span>
+                <span class="price"></span>
+              </div>
+              <figcaption>Product</figcaption>
+            </figure>
+            <figure class="thumb" role="listitem">
+              <div class="shot" aria-hidden="true">
+                <span class="chrome"><i></i><i></i><i></i></span>
+                <span class="bar w80"></span>
+                <span class="bar w60"></span>
+                <span class="bar w40"></span>
+                <span class="price"></span>
+              </div>
+              <figcaption>Cart · 149,00 €</figcaption>
+            </figure>
+            <figure class="thumb" role="listitem">
+              <div class="shot fail" aria-hidden="true">
+                <span class="chrome"><i></i><i></i><i></i></span>
+                <span class="form"><b></b><b></b><b></b></span>
+                <span class="price"></span>
+              </div>
+              <figcaption><em>Checkout · 0,00 €</em></figcaption>
+            </figure>
+            <figure class="thumb" role="listitem">
+              <div class="shot" aria-hidden="true">
+                <span class="chrome"><i></i><i></i><i></i></span>
+                <span class="bar w30"></span>
+                <span class="bar w80"></span>
+                <span class="bar w40"></span>
+                <span class="bar w60"></span>
+              </div>
+              <figcaption>Totals · not reached</figcaption>
+            </figure>
+          </div>
+
+          <div class="issue-actions">
+            <button class="btn" type="button">Rerun</button>
+            <a class="btn btn-ink" href="#activity">Open incident</a>
+            <button class="btn" type="button">Download report</button>
+          </div>
+        </section>
+
+        <a class="runbar" href="#tests">
+          <i></i>
+          <span>Add to cart is running <span class="sep">·</span> step 3/6 <span class="sep">·</span> Clicked Add to cart</span>
+          <time>2m</time>
+        </a>
+
+        <div class="split">
+          <section class="card" id="tests" aria-labelledby="tests-h">
+            <div class="card-head">
+              <h2 class="eyebrow" id="tests-h">Browser tests</h2>
+              <a href="#">All 12 →</a>
+            </div>
+            <ul class="quiet">
+              <li>
+                <a href="#">
+                  <span class="mark fail"></span>
+                  <span class="qname">Checkout flow</span>
+                  <span class="qmeta">Failed · 12m</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark run"></span>
+                  <span class="qname">Add to cart</span>
+                  <span class="qmeta">Step 3/6</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark warn"></span>
+                  <span class="qname">Signup flow</span>
+                  <span class="qmeta">Timeout · 5h</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark"></span>
+                  <span class="qname">Homepage smoke</span>
+                  <span class="qmeta">Passed · 18m</span>
+                </a>
+              </li>
+            </ul>
+            <p class="foot-note">2 failures in 24h · 9 passing</p>
+          </section>
+
+          <section class="card" id="uptime" aria-labelledby="uptime-h">
+            <div class="card-head">
+              <h2 class="eyebrow" id="uptime-h">Uptime</h2>
+              <a href="#">All 10 →</a>
+            </div>
+            <ul class="quiet">
+              <li>
+                <a href="#">
+                  <span class="mark fail"></span>
+                  <span class="qname">Checkout API</span>
+                  <span class="qmeta">502 · 3 min</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark"></span>
+                  <span class="qname">Homepage</span>
+                  <span class="qmeta">48 ms</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark"></span>
+                  <span class="qname">API</span>
+                  <span class="qmeta">112 ms</span>
+                </a>
+              </li>
+              <li>
+                <a href="#">
+                  <span class="mark"></span>
+                  <span class="qname">Auth</span>
+                  <span class="qmeta">89 ms</span>
+                </a>
+              </li>
+            </ul>
+            <p class="foot-note">9 up · 0 unknown · avg 412 ms</p>
+          </section>
+        </div>
+
+        <section class="usage" id="usage" aria-labelledby="usage-h">
+          <div class="usage-top">
+            <span class="label" id="usage-h">184 of 300 runs this cycle</span>
+            <span class="nums">
+              <span>116 remaining</span>
+              <span>resets 1 Sep 2026</span>
+              <span>projected 39,00 €</span>
+              <span>0 overage</span>
+            </span>
+          </div>
+          <div class="bar-track" aria-hidden="true"><span></span></div>
+        </section>
+
+        <section class="sec" id="activity" aria-labelledby="act-h">
+          <div class="sec-head">
+            <h2 class="eyebrow" id="act-h">Recent activity</h2>
+          </div>
+          <ul class="activity">
+            <li>
+              <a href="#">
+                <span class="st run" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Add to cart started</span>
+                  <span class="act-sub">Step 3/6 · Clicked Add to cart · shop.example.com</span>
+                </span>
+                <time class="act-time">2m</time>
+              </a>
+            </li>
+            <li>
+              <a href="#">
+                <span class="st fail" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15 9 9 15M9 9l6 6"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Checkout flow failed</span>
+                  <span class="act-sub">Open incident · expected totals match · observed 0,00 €</span>
+                </span>
+                <time class="act-time">12m</time>
+              </a>
+            </li>
+            <li>
+              <a href="#">
+                <span class="st ok" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Homepage smoke passed</span>
+                  <span class="act-sub">example.com · desktop · every 24h</span>
+                </span>
+                <time class="act-time">18m</time>
+              </a>
+            </li>
+            <li>
+              <a href="#">
+                <span class="st fail" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v5"/><circle cx="12" cy="16.2" r="0.8" fill="currentColor" stroke="none"/><path d="M10.2 4.8 2.8 18a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.8 4.8a2 2 0 0 0-3.6 0z"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Checkout API is down</span>
+                  <span class="act-sub">Open incident · 502 · 3 minutes</span>
+                </span>
+                <time class="act-time">22m</time>
+              </a>
+            </li>
+            <li>
+              <a href="#">
+                <span class="st ok" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Login form passed</span>
+                  <span class="act-sub">every 8h</span>
+                </span>
+                <time class="act-time">41m</time>
+              </a>
+            </li>
+            <li>
+              <a href="#">
+                <span class="st warn" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+                <span>
+                  <span class="act-title">Signup flow timed out</span>
+                  <span class="act-sub">No incident opened · one missed interval</span>
+                </span>
+                <time class="act-time">5h</time>
+              </a>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="badge">Proposal 2 — Incident first</div>
+</body>
+</html>

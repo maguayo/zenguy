@@ -1,14 +1,14 @@
 {
-	"pid": 66938,
-	"port": 4400,
-	"url": "http://127.0.0.1:4400",
+	"pid": 35279,
+	"port": 4410,
+	"url": "http://localhost:4410",
 	"urls": {
 		"local": [
-			"http://127.0.0.1:4400/"
+			"http://localhost:4410/"
 		],
 		"network": [],
 		"networkInterfaceNames": []
 	},
-	"background": true,
-	"startedAt": "2026-08-19T16:05:40.861Z"
+	"background": false,
+	"startedAt": "2026-08-26T22:13:43.813Z"
 }

@@ -1,0 +1,46 @@
+---
+const monitors = [
+  { name: "Storefront", ok: true, bars: "gggggggggggggggggggg" },
+  { name: "Checkout API", ok: true, bars: "gggggggggrgggggggggg" },
+  { name: "Health", ok: false, bars: "gggggggggggggggrrrrr" },
+];
+---
+
+<section id="uptime" class="border-y border-line bg-surface px-10 py-16 max-md:px-5 max-md:py-12">
+  <div
+    class="container-site grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] items-center gap-12 max-lg:grid-cols-1 max-lg:gap-8"
+  >
+    <div class="flex flex-col gap-3.5">
+      <span class="eyebrow">Uptime</span>
+      <h2 class="m-0 text-[32px] font-semibold leading-[1.18] tracking-[-0.025em] [text-wrap:balance] max-md:text-[26px]">
+        The site being down is the easy case.
+      </h2>
+      <p class="m-0 max-w-[520px] text-[15.5px] leading-[1.6] text-body [text-wrap:pretty]">
+        Point Zenguy at an endpoint and it checks every five minutes. Unlimited monitors, never
+        counted as a run. The browser is for the flow that can fail while everything still says 200.
+      </p>
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-[14px] border border-line bg-cream px-5 py-4">
+      {monitors.map((m) => (
+        <div class="flex items-center gap-3">
+          <span
+            class:list={[
+              "inline-flex w-[52px] shrink-0 items-center gap-1.5 text-[12px] font-medium",
+              m.ok ? "text-green" : "text-red",
+            ]}
+          >
+            <span class:list={["h-1.5 w-1.5 rounded-full", m.ok ? "bg-green" : "bg-red"]}></span>
+            {m.ok ? "Up" : "Down"}
+          </span>
+          <span class="min-w-0 flex-1 truncate text-[13.5px] font-medium">{m.name}</span>
+          <div class="flex h-3.5 w-[120px] shrink-0 items-stretch gap-0.5" role="img" aria-label={`Last checks for ${m.name}`}>
+            {m.bars.split("").map((b) => (
+              <span class:list={["flex-1 rounded-[1px]", b === "g" ? "bg-green" : "bg-red"]}></span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

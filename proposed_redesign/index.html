@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zenguy overview — 20 proposals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cream: #F2EEE6;
+      --surface: #FAF8F4;
+      --line: #E8E2D6;
+      --ink: #13110D;
+      --body: #4A453E;
+      --muted: #877F71;
+      --violet: #625ED7;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: Geist, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--violet); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    :focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+    header {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 48px 24px 28px;
+    }
+    .wordmark {
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      font-size: 20px;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .wordmark span { color: var(--violet); }
+    h1 {
+      margin: 18px 0 10px;
+      font-size: 34px;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+    }
+    .lede {
+      max-width: 62ch;
+      color: var(--body);
+      margin: 0;
+    }
+    .meta {
+      margin-top: 14px;
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+    }
+    article {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .num {
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+    p { margin: 0; color: var(--body); font-size: 14px; }
+    .open {
+      margin-top: auto;
+      padding-top: 10px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="wordmark" href="1.html">zenguy<span>.</span></a>
+    <h1>20 overview proposals</h1>
+    <p class="lede">
+      1 is the original Paper &amp; Pulse. 2–20 are SaaS layouts in the same family
+      (cream, ink, violet, app chrome). Same snapshot: Checkout 0,00&nbsp;€, API 502,
+      Add to cart running, 184/300. The app was not touched.
+    </p>
+    <p class="meta">proposed_redesign/1.html … 20.html · open any file directly</p>
+  </header>
+  <main>
+    <article>
+      <span class="num">01 — Paper &amp; Pulse</span>
+      <h2>Ink hero, verdict, pulse strip</h2>
+      <p>Kept as-is. Brand overview: “1 incident open.” Usage is a thin bar.</p>
+      <a class="open" href="1.html">Open 1.html →</a>
+    </article>
+    <article>
+      <span class="num">02 — Incident first</span>
+      <h2>Failure panel at the top</h2>
+      <p>Expected vs observed, screenshots, rerun. Then the rest of the dashboard.</p>
+      <a class="open" href="2.html">Open 2.html →</a>
+    </article>
+    <article>
+      <span class="num">03 — Tests and uptime</span>
+      <h2>Two list columns</h2>
+      <p>Browser tests left, monitors right. Failed rows highlighted.</p>
+      <a class="open" href="3.html">Open 3.html →</a>
+    </article>
+    <article>
+      <span class="num">04 — Tables</span>
+      <h2>Status chips, then tables</h2>
+      <p>Tests table and monitors table. Vercel/GitHub density.</p>
+      <a class="open" href="4.html">Open 4.html →</a>
+    </article>
+    <article>
+      <span class="num">05 — Needs attention</span>
+      <h2>Inbox of things that need a human</h2>
+      <p>Left: failures. Right: the rest. Empty left means the store is fine.</p>
+      <a class="open" href="5.html">Open 5.html →</a>
+    </article>
+    <article>
+      <span class="num">06 — Running now</span>
+      <h2>Live-run banner</h2>
+      <p>Add to cart in progress at the top, then the Checkout incident, then lists.</p>
+      <a class="open" href="6.html">Open 6.html →</a>
+    </article>
+    <article>
+      <span class="num">07 — Sections</span>
+      <h2>Alert, then full lists</h2>
+      <p>Incident banner, every test, every monitor, activity. No KPI tiles.</p>
+      <a class="open" href="7.html">Open 7.html →</a>
+    </article>
+    <article>
+      <span class="num">08 — History on every row</span>
+      <h2>Pulse ticks per watch</h2>
+      <p>Checkly-style rows: last 12 results on each test and monitor.</p>
+      <a class="open" href="8.html">Open 8.html →</a>
+    </article>
+    <article>
+      <span class="num">09 — Inspector</span>
+      <h2>List + detail pane</h2>
+      <p>Checkout selected. Expected vs observed, screenshots, actions on the right.</p>
+      <a class="open" href="9.html">Open 9.html →</a>
+    </article>
+    <article>
+      <span class="num">10 — Quiet header</span>
+      <h2>Light banner, no dark hero</h2>
+      <p>Same job as 1, quieter. Incident banner, chips, activity.</p>
+      <a class="open" href="10.html">Open 10.html →</a>
+    </article>
+    <article>
+      <span class="num">11 — Top nav</span>
+      <h2>Horizontal chrome</h2>
+      <p>Same app, top bar instead of sidebar. Stripe-like structure, Zenguy colors.</p>
+      <a class="open" href="11.html">Open 11.html →</a>
+    </article>
+    <article>
+      <span class="num">12 — Test grid</span>
+      <h2>A card per browser test</h2>
+      <p>Vercel-style project cards. Monitors stay a compact list.</p>
+      <a class="open" href="12.html">Open 12.html →</a>
+    </article>
+    <article>
+      <span class="num">13 — Filter bar</span>
+      <h2>Sticky status + tabs</h2>
+      <p>All / Tests / Uptime / Incidents. Dense rows with pulse ticks.</p>
+      <a class="open" href="13.html">Open 13.html →</a>
+    </article>
+    <article>
+      <span class="num">14 — Alerts then rest</span>
+      <h2>What needs you, then healthy</h2>
+      <p>Incident cards first. Passed tests and up monitors after.</p>
+      <a class="open" href="14.html">Open 14.html →</a>
+    </article>
+    <article>
+      <span class="num">15 — Health and plan</span>
+      <h2>Main column + usage rail</h2>
+      <p>Health is the page. Plan &amp; usage sits in a right rail, like Stripe.</p>
+      <a class="open" href="15.html">Open 15.html →</a>
+    </article>
+    <article>
+      <span class="num">16 — Everything listed</span>
+      <h2>The overview is the lists</h2>
+      <p>All 12 tests, all 10 monitors. No KPI tiles.</p>
+      <a class="open" href="16.html">Open 16.html →</a>
+    </article>
+    <article>
+      <span class="num">17 — Recent runs</span>
+      <h2>A runs table</h2>
+      <p>What happened: time, test, result, duration. Not a count of tests.</p>
+      <a class="open" href="17.html">Open 17.html →</a>
+    </article>
+    <article>
+      <span class="num">18 — Checkout path</span>
+      <h2>Stepper on a dashboard</h2>
+      <p>Home → … → Checkout as a widget. Checkout is the red step. Lists below.</p>
+      <a class="open" href="18.html">Open 18.html →</a>
+    </article>
+    <article>
+      <span class="num">19 — Compact</span>
+      <h2>Power-user density</h2>
+      <p>More metadata per row. Same tokens, no hero.</p>
+      <a class="open" href="19.html">Open 19.html →</a>
+    </article>
+    <article>
+      <span class="num">20 — Catch up</span>
+      <h2>Since you last opened</h2>
+      <p>One summary card, then the lists. Not a letter.</p>
+      <a class="open" href="20.html">Open 20.html →</a>
+    </article>
+  </main>
+</body>
+</html>

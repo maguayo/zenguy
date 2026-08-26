@@ -1,0 +1,270 @@
+---
+import Icon from "../Icon.astro";
+
+// Chapter 3 — "show me." The English becomes a browser walking the store.
+// Same checkout as the hero; here it happens in time.
+
+const steps = [
+  {
+    label: "step 1",
+    url: "example.com",
+    src: "/hero/step-home.png",
+    alt: "Store home page",
+    line: "Go to example.com. Check that the home page shows more than four products.",
+  },
+  {
+    label: "step 2",
+    url: "example.com/audio",
+    src: "/hero/step-collection.png",
+    alt: "Product listing",
+    line: "Open the catalog and pick a product.",
+  },
+  {
+    label: "step 3",
+    url: "example.com/products/a77",
+    src: "/hero/step-product.png",
+    alt: "Product page",
+    line: "Open it and make sure the product page works. Remember the crossed-out and current prices.",
+  },
+  {
+    label: "step 5",
+    url: "example.com/cart",
+    src: "/hero/step-cart.png",
+    alt: "Cart with one item",
+    line: "Add it to the cart, and check that the prices and totals are correct.",
+  },
+  {
+    label: "final",
+    url: "example.com/checkout",
+    src: "/hero/step-checkout.png",
+    alt: "Checkout order summary",
+    line: "Continue to checkout and check them again. Don't place the order.",
+  },
+];
+---
+
+<section id="walk" class="border-y border-line bg-surface px-10 py-[92px] max-md:px-5 max-md:py-16" data-walk>
+  <div class="container-site">
+    <div class="mb-12 flex max-w-[640px] flex-col gap-3.5">
+      <span class="eyebrow">How it works</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] [text-wrap:balance] max-md:text-[32px]">
+        You write English. This is what the browser does.
+      </h2>
+      <p class="m-0 text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+        One flow, in a real browser, on a schedule. No selectors, no script, no framework to learn.
+      </p>
+    </div>
+
+    <div class="card-shadow overflow-hidden rounded-[16px] border border-line bg-cream">
+      <div
+        class="grid grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] max-lg:grid-cols-1"
+      >
+        <!-- The test, as you'd write it. On small screens the browser comes first. -->
+        <div class="flex flex-col border-r border-line max-lg:order-3 max-lg:border-r-0 max-lg:border-t">
+          <div class="flex items-center gap-2.5 border-b border-line bg-surface px-[18px] py-3.5">
+            <Icon name="monitor" size={16} />
+            <span class="text-[13.5px] font-semibold">Checkout — production</span>
+            <span class="rounded-full bg-cream px-[9px] py-[3px] font-mono text-[11.5px] text-body"
+              >Every 1 hour</span
+            >
+          </div>
+          <div class="flex min-h-0 flex-1 flex-col gap-1 p-[14px]" role="list" aria-label="Test instructions">
+            {steps.map((s, i) => (
+              <button
+                type="button"
+                role="listitem"
+                data-walk-line
+                data-step={i}
+                data-active={i === 0 ? "true" : "false"}
+                class="walk-line flex flex-1 items-center rounded-[10px] px-[14px] py-2.5 text-left text-[14.5px] leading-[1.45] [text-wrap:pretty] max-lg:flex-none"
+              >
+                {s.line}
+              </button>
+            ))}
+          </div>
+          <div class="flex items-center gap-2.5 border-t border-line px-[18px] py-3.5">
+            <span class="text-xs text-muted">No selectors. No code.</span>
+            <div class="flex-1"></div>
+            <span class="font-mono text-[11px] text-muted" data-walk-status>Walking step 1</span>
+          </div>
+        </div>
+
+        <!-- The browser walking it -->
+        <div class="flex flex-col bg-ink max-lg:order-1">
+          <div class="flex items-center gap-3 px-[14px] py-[11px]">
+            <span class="flex gap-[6px]" aria-hidden="true">
+              <span class="h-[9px] w-[9px] rounded-full bg-white/18"></span>
+              <span class="h-[9px] w-[9px] rounded-full bg-white/18"></span>
+              <span class="h-[9px] w-[9px] rounded-full bg-white/18"></span>
+            </span>
+            <div
+              class="flex min-w-0 flex-1 items-center rounded-md bg-white/8 px-3 py-[5px] font-mono text-[11.5px] text-parch"
+            >
+              <span class="truncate" data-walk-url>{steps[0].url}</span>
+            </div>
+          </div>
+          <div class="relative mx-3 mb-3 aspect-[16/10] overflow-hidden rounded-[10px] bg-[#2A2722]">
+            {steps.map((s, i) => (
+              <img
+                src={s.src}
+                alt={s.alt}
+                width="960"
+                height="600"
+                decoding="async"
+                data-walk-frame
+                data-step={i}
+                data-active={i === 0 ? "true" : "false"}
+                class="walk-frame absolute inset-0 h-full w-full object-cover object-top"
+              />
+            ))}
+            <div
+              data-walk-fail
+              data-active="false"
+              class="walk-fail absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-ink/92 px-4 py-3"
+            >
+              <span class="inline-flex w-fit items-center gap-[7px] rounded-full bg-red/20 px-[9px] py-[3px] text-[11.5px] font-medium text-surface">
+                <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>Failed
+              </span>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded-md border border-white/10 px-3 py-2">
+                  <span class="block text-[10px] uppercase tracking-[0.04em] text-dusk">Expected</span>
+                  <span class="text-[12.5px] leading-normal text-surface">Cart and checkout totals match</span>
+                </div>
+                <div class="rounded-md border border-red bg-red/15 px-3 py-2">
+                  <span class="block text-[10px] uppercase tracking-[0.04em] text-dusk">Observed</span>
+                  <span class="text-[12.5px] leading-normal text-surface">Checkout shows 0,00 €</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="col-span-full flex items-stretch gap-2 border-t border-line bg-surface p-3 max-lg:order-2 max-md:gap-1.5"
+          role="tablist"
+          aria-label="Walk steps"
+        >
+          {steps.map((s, i) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={i === 0 ? "true" : "false"}
+              data-walk-thumb
+              data-step={i}
+              data-active={i === 0 ? "true" : "false"}
+              class="walk-thumb relative min-w-0 flex-1 overflow-hidden rounded-[8px] border border-line"
+            >
+              <img src={s.src} alt="" width="320" height="200" decoding="async" class="aspect-[16/10] w-full object-cover object-top" />
+              <span
+                class="absolute bottom-1.5 left-1.5 rounded-[4px] bg-ink/85 px-[5px] py-[2px] font-mono text-[9px] leading-none text-dusk"
+                >{s.label}</span
+              >
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .walk-line {
+    color: var(--color-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    transition:
+      color 180ms ease,
+      background 180ms ease;
+  }
+  .walk-line[data-active="true"] {
+    color: var(--color-ink);
+    background: var(--color-violet-bg);
+  }
+  .walk-frame {
+    opacity: 0;
+    transition: opacity 220ms ease;
+  }
+  .walk-frame[data-active="true"] {
+    opacity: 1;
+  }
+  .walk-fail {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+  .walk-fail[data-active="true"] {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+  .walk-thumb {
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+      opacity 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .walk-thumb[data-active="true"] {
+    opacity: 1;
+    box-shadow: inset 0 0 0 2px var(--color-violet);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .walk-line,
+    .walk-fail,
+    .walk-thumb {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-walk]");
+  if (root) {
+    const total = root.querySelectorAll("[data-walk-thumb]").length;
+    const urls = ["example.com", "example.com/audio", "example.com/products/a77", "example.com/cart", "example.com/checkout"];
+    const failsAt = total - 1;
+    let current = 0;
+    let timer: number | undefined;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const setStep = (index: number) => {
+      current = (index + total) % total;
+      root.querySelectorAll<HTMLElement>("[data-step]").forEach((el) => {
+        const active = Number(el.dataset.step) === current;
+        el.dataset.active = active ? "true" : "false";
+        if (el.getAttribute("role") === "tab") el.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      const url = root.querySelector("[data-walk-url]");
+      if (url) url.textContent = urls[current] ?? "";
+      const status = root.querySelector("[data-walk-status]");
+      if (status) {
+        status.textContent = current === failsAt ? "Check failed" : `Walking step ${current + 1}`;
+      }
+      const fail = root.querySelector<HTMLElement>("[data-walk-fail]");
+      if (fail) fail.dataset.active = current === failsAt ? "true" : "false";
+    };
+
+    const play = () => {
+      if (reduce) return;
+      window.clearInterval(timer);
+      timer = window.setInterval(() => setStep(current + 1), 3200);
+    };
+
+    const pauseOn = (index: number) => {
+      window.clearInterval(timer);
+      timer = undefined;
+      setStep(index);
+    };
+
+    root.querySelectorAll<HTMLElement>("[data-walk-line], [data-walk-thumb]").forEach((el) => {
+      el.addEventListener("click", () => pauseOn(Number(el.dataset.step)));
+    });
+
+    setStep(0);
+    play();
+  }
+</script>

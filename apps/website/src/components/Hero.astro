@@ -1,13 +1,11 @@
 ---
 import Icon from "./Icon.astro";
 
-const thumbs = [
-  { label: "step 1", src: "/hero/step-home.png", alt: "Store home page", bg: "#2A2722" },
-  { label: "step 2", src: "/hero/step-collection.png", alt: "Product listing", bg: "#3D3933" },
-  { label: "step 3", src: "/hero/step-product.png", alt: "Product page", bg: "#2A2722" },
-  { label: "step 5", src: "/hero/step-cart.png", alt: "Cart with one item", bg: "#3D3933" },
-  { label: "final", src: "/hero/step-checkout.png", alt: "Checkout order summary", bg: "#13110D" },
-];
+interface Props {
+  failureHref?: string;
+}
+
+const { failureHref = "#evidence" } = Astro.props;
 ---
 
 <section class="px-10 pt-[92px] pb-[100px] max-md:px-5 max-md:pt-16 max-md:pb-16">
@@ -30,7 +28,7 @@ const thumbs = [
         <a href="https://app.zenguy.com" class="btn btn-violet rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
           Get started
         </a>
-        <a href="#evidence" class="btn btn-outline rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
+        <a href={failureHref} class="btn btn-outline rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
           See a real failure
         </a>
       </div>
@@ -42,7 +40,7 @@ const thumbs = [
       </div>
     </div>
 
-    <div class="relative pb-[34px]">
+    <div class="relative">
       <!-- Test card -->
       <div class="card-shadow overflow-hidden rounded-[14px] border border-line bg-surface">
         <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-3.5">
@@ -63,44 +61,6 @@ const thumbs = [
             <span class="text-xs text-muted">No selectors. No code. No framework to learn.</span>
             <div class="flex-1"></div>
             <span class="whitespace-nowrap rounded-lg bg-ink px-[13px] py-[7px] text-[12.5px] font-medium text-surface">Test it</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Failed run card -->
-      <div class="card-shadow -mt-3 ml-11 overflow-hidden rounded-[14px] border border-line bg-surface max-md:ml-4">
-        <div class="flex items-center gap-2.5 border-b border-line px-[17px] py-[13px]">
-          <span class="inline-flex items-center gap-[7px] rounded-full bg-red/12 px-[9px] py-[3px] text-[11.5px] font-medium">
-            <span class="h-1.5 w-1.5 rounded-full bg-red" aria-hidden="true"></span>Failed
-          </span>
-          <span class="font-mono text-xs text-muted">run 8f2c1a · 4 attempts · 6 min 41 s</span>
-        </div>
-        <div class="flex flex-col gap-3 px-[17px] py-4">
-          <div class="grid grid-cols-2 gap-2.5 max-md:grid-cols-1">
-            <div class="flex flex-col gap-1 rounded-[9px] border border-line px-[13px] py-[11px]">
-              <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Expected</span>
-              <span class="text-[12.5px] leading-normal">Cart and checkout totals match</span>
-            </div>
-            <div class="flex flex-col gap-1 rounded-[9px] border border-red bg-red/5 px-[13px] py-[11px]">
-              <span class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Observed</span>
-              <span class="text-[12.5px] leading-normal">Checkout shows 0,00 €</span>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            {thumbs.map((t) => (
-              <div
-                class="relative aspect-[16/10] flex-1 overflow-hidden rounded-[7px] border border-sand"
-                style={`background:${t.bg}`}
-              >
-                <img src={t.src} alt={t.alt} width="600" height="375" decoding="async" class="h-full w-full object-cover" />
-                <span class="absolute bottom-1.5 left-1.5 rounded-[4px] bg-ink/85 px-[5px] py-[2px] font-mono text-[9px] leading-none text-dusk">{t.label}</span>
-              </div>
-            ))}
-          </div>
-          <div class="flex items-center gap-2.5">
-            <Icon name="file" size={15} />
-            <span class="truncate font-mono text-xs text-body">checkout-production_8f2c1a_failure-report.md</span>
-            <span class="ml-auto shrink-0 text-xs font-medium text-violet">Download</span>
           </div>
         </div>
       </div>

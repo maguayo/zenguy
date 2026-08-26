@@ -1,0 +1,74 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Hero from "../components/Hero.astro";
+import Gap from "../components/proposal1/Gap.astro";
+import Walk from "../components/proposal1/Walk.astro";
+import Night from "../components/proposal1/Night.astro";
+import Start from "../components/proposal1/Start.astro";
+import UptimeBand from "../components/proposal1/UptimeBand.astro";
+import Pricing from "../components/proposal1/Pricing.astro";
+import Faq from "../components/proposal1/Faq.astro";
+import Cta from "../components/Cta.astro";
+import Footer from "../components/Footer.astro";
+
+const navLinks = [
+  { href: "#walk", label: "How it works" },
+  { href: "#night", label: "Evidence" },
+  { href: "#uptime", label: "Uptime" },
+  { href: "#pricing", label: "Pricing" },
+];
+
+const footerGroups = [
+  {
+    label: "Product",
+    links: [
+      { label: "Browser tests", href: "#walk" },
+      { label: "Uptime monitors", href: "#uptime" },
+      { label: "Alerts", href: "#night" },
+      { label: "Pricing", href: "#pricing" },
+    ],
+  },
+  {
+    label: "Resources",
+    links: [
+      { label: "Articles", href: "/articles/" },
+      { label: "Documentation", href: "#" },
+      { label: "Changelog", href: "#" },
+      { label: "Status", href: "#" },
+    ],
+  },
+  {
+    label: "Company",
+    links: [
+      { label: "Privacy", href: "#" },
+      { label: "Terms", href: "#" },
+      { label: "Contact", href: "#" },
+    ],
+  },
+];
+---
+
+<Base
+  title="Zenguy — Browser tests in plain English"
+  description="Describe a flow once. Zenguy walks it on a schedule and, when it stops working, sends you the screenshots, the steps and the reason before a customer finds it."
+>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+  <div class="min-h-screen bg-cream">
+    <Nav homeHref="/proposal1" links={navLinks} />
+    <main>
+      <Hero failureHref="#night" />
+      <Gap />
+      <Walk />
+      <Night />
+      <Start />
+      <UptimeBand />
+      <Pricing />
+      <Faq />
+      <Cta />
+    </main>
+    <Footer homeHref="/proposal1" groups={footerGroups} />
+  </div>
+</Base>

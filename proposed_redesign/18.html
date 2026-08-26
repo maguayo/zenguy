@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Overview · Aguayo Staging — Checkout path</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cream: #F2EEE6;
+      --surface: #FAF8F4;
+      --line: #E8E2D6;
+      --sand: #D8D1C2;
+      --ink: #13110D;
+      --body: #4A453E;
+      --muted: #877F71;
+      --stone: #6B655B;
+      --inkcard: #2A2722;
+      --parch: #C9C2B3;
+      --dusk: #7C766B;
+      --violet: #625ED7;
+      --violet-deep: #4F4BC4;
+      --violet-bg: #EEEDFB;
+      --green: #46A758;
+      --green-bg: #E7F3EA;
+      --red: #E5484D;
+      --red-bg: #FCEBEC;
+      --amber: #C7791F;
+      --amber-bg: #FBF0E0;
+      --sidebar: 232px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14.5px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+    :focus-visible {
+      outline: 2px solid var(--violet);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      left: 12px;
+      top: -40px;
+      z-index: 20;
+      background: var(--ink);
+      color: var(--surface);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .skip:focus { top: 12px; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 22px 16px 16px;
+      border-right: 1px solid var(--line);
+      background: var(--cream);
+    }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 8px;
+      margin-left: 2px;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      width: fit-content;
+    }
+    .wordmark .dot { color: var(--violet); }
+
+    .ws {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 22px 0 18px;
+      padding: 8px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 10px;
+      color: var(--ink);
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+    .ws:hover { border-color: var(--sand); }
+    .ws-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--parch);
+      display: grid;
+      place-items: center;
+      font: 600 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .ws-name { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    .ws-meta { display: block; font-size: 11px; color: var(--muted); }
+
+    nav { flex: 1; }
+    .nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: var(--body);
+      font-size: 13.5px;
+    }
+    .nav-list a:hover { background: rgba(19, 17, 13, 0.04); color: var(--ink); }
+    .nav-list a[aria-current="page"] {
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 500;
+    }
+    .nav-list svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
+    .nav-list a[aria-current="page"] svg { opacity: 1; }
+    .nav-count {
+      margin-left: auto;
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.06em;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--red);
+      color: #fff;
+    }
+    .nav-list a[aria-current="page"] .nav-count { background: var(--red); color: #fff; }
+
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 8px 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      color: inherit;
+    }
+    .who-av {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: var(--violet-bg);
+      color: var(--violet-deep);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .who strong { display: block; font-size: 13px; font-weight: 600; }
+    .who span { display: block; font-size: 11.5px; color: var(--muted); }
+
+    .main {
+      min-width: 0;
+      padding: 36px 48px 72px;
+    }
+    .main-inner { max-width: 1040px; }
+
+    .eyebrow {
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .page-head { margin-top: 14px; }
+    .page-head h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.038em;
+      line-height: 1.15;
+    }
+    .lede {
+      margin: 8px 0 0;
+      color: var(--body);
+      font-size: 14.5px;
+    }
+
+    .sec { margin-top: 26px; }
+    .sec-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .sec-head a {
+      color: var(--violet-deep);
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .sec-head a:hover { color: var(--violet); }
+
+    .path {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 108px;
+    }
+    .step:hover { border-color: var(--sand); }
+    .step-k {
+      font: 500 11px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .step h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .step .meta {
+      margin-top: auto;
+      font-size: 12px;
+      color: var(--stone);
+    }
+    .step.live {
+      background: var(--violet-bg);
+      border-color: #cfcdf4;
+    }
+    .step.live .step-k, .step.live h3 { color: var(--violet-deep); }
+    .step.fail {
+      background: var(--red-bg);
+      border-color: #f5bdbf;
+    }
+    .step.fail .step-k, .step.fail h3, .step.fail .meta { color: #c1363b; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font: 500 10.5px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok { background: var(--green-bg); color: #2f7f3f; }
+    .pill.fail { background: #f4c9cb; color: #c1363b; }
+    .pill.run { background: #dcdbf6; color: var(--violet-deep); }
+
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .rows { list-style: none; margin: 0; padding: 0; }
+    .rows a {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 14px;
+      min-height: 44px;
+    }
+    .rows li + li { border-top: 1px solid var(--line); }
+    .rows a:hover { background: rgba(19, 17, 13, 0.03); }
+    .name {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 550;
+      letter-spacing: -0.01em;
+    }
+    .sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .when {
+      font: 500 11.5px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font: 500 10.5px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .status.ok { background: var(--green-bg); color: #2f7f3f; }
+    .status.fail { background: var(--red-bg); color: #c1363b; }
+    .status.warn { background: var(--amber-bg); color: var(--amber); }
+
+    .usage {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+    .usage-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px 24px;
+      align-items: baseline;
+    }
+    .usage-top .label { font-size: 13px; color: var(--stone); }
+    .usage-top .nums {
+      font: 500 12px/1 Geist Mono, ui-monospace, monospace;
+      color: var(--body);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .bar {
+      height: 6px;
+      background: #eae4d9;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      width: 61.333%;
+      height: 100%;
+      background: var(--violet);
+      border-radius: 99px;
+    }
+
+    .badge {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 30;
+      background: var(--ink);
+      color: var(--parch);
+      font: 500 10px/1 Geist Mono, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px 10px;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .step { transition: none; }
+    }
+
+    @media (max-width: 1080px) {
+      .path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cols { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        min-height: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+      }
+      .nav-list { flex-direction: row; flex-wrap: wrap; }
+      .nav-list a { height: 32px; font-size: 12.5px; }
+      .who, .ws { display: none; }
+      .main { padding: 24px 20px 80px; }
+      .page-head h1 { font-size: 24px; }
+      .path { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to overview</a>
+  <div class="app">
+    <aside class="sidebar">
+      <a class="wordmark" href="#main">
+        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="#13110D" />
+          <path d="M9 10.5 Q 12 9.5 16 10.5 T 23 10.5 L 9 21.5 Q 12 22.5 16 21.5 T 23 21.5" stroke="#FAF8F4" stroke-width="2" stroke-linecap="round" fill="none" />
+          <circle cx="23" cy="21.5" r="1.6" fill="#625ED7" />
+        </svg>
+        zenguy<span class="dot">.</span>
+      </a>
+
+      <button class="ws" type="button">
+        <span class="ws-mark">AS</span>
+        <span>
+          <span class="ws-name">Aguayo Staging</span>
+          <span class="ws-meta">Workspace</span>
+        </span>
+      </button>
+
+      <nav aria-label="Workspace">
+        <ul class="nav-list">
+          <li>
+            <a href="#main" aria-current="page">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg>
+              Overview
+            </a>
+          </li>
+          <li>
+            <a href="#tests">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.6" ry="9"/><path d="M3 12h18"/></svg>
+              Browser Tests
+            </a>
+          </li>
+          <li>
+            <a href="#uptime">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3.2l2.4-6.2 4.1 12.4 2.3-6.2H21"/></svg>
+              Uptime
+            </a>
+          </li>
+          <li>
+            <a href="#path">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.2" r="0.8" fill="currentColor" stroke="none"/></svg>
+              Incidents
+              <span class="nav-count">2</span>
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 11H3c0-4 3-4 3-11"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              Alerts
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg>
+              Secrets
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Members
+            </a>
+          </li>
+          <li>
+            <a href="#usage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 14h4v6H4zM10 9h4v11h-4zM16 4h4v16h-4z"/></svg>
+              Plan &amp; Usage
+            </a>
+          </li>
+          <li>
+            <a href="#">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              Workspace Settings
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <a class="who" href="#">
+        <span class="who-av">MA</span>
+        <span>
+          <strong>Marcos Aguayo</strong>
+          <span>marcos@aguayo.es</span>
+        </span>
+      </a>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="main-inner">
+        <p class="eyebrow">Aguayo Staging</p>
+        <header class="page-head">
+          <h1>Overview</h1>
+          <p class="lede">1 incident open · Checkout failed at payment · Add to cart running</p>
+        </header>
+
+        <section class="sec" id="path" aria-labelledby="path-h">
+          <div class="sec-head">
+            <h2 class="eyebrow" id="path-h">Checkout path</h2>
+            <a href="#">Open incident →</a>
+          </div>
+          <div class="path">
+            <a class="step" href="#">
+              <span class="step-k">1 · Home</span>
+              <h3>Homepage smoke</h3>
+              <span class="pill ok">Passed</span>
+              <span class="meta">18m</span>
+            </a>
+            <a class="step" href="#">
+              <span class="step-k">2 · Search</span>
+              <h3>Product search</h3>
+              <span class="pill ok">Passed</span>
+              <span class="meta">1h</span>
+            </a>
+            <a class="step" href="#">
+              <span class="step-k">3 · Product</span>
+              <h3>Checkout flow</h3>
+              <span class="pill ok">Passed</span>
+              <span class="meta">Reached · 12m</span>
+            </a>
+            <a class="step live" href="#">
+              <span class="step-k">4 · Cart</span>
+              <h3>Add to cart</h3>
+              <span class="pill run">Live</span>
+              <span class="meta">Step 3/6 · 2m</span>
+            </a>
+            <a class="step fail" href="#">
+              <span class="step-k">5 · Checkout</span>
+              <h3>Checkout flow</h3>
+              <span class="pill fail">Failed</span>
+              <span class="meta">Observed 0,00 €</span>
+            </a>
+          </div>
+        </section>
+
+        <div class="cols">
+          <section class="sec" id="uptime" aria-labelledby="uptime-h">
+            <div class="sec-head">
+              <h2 class="eyebrow" id="uptime-h">Uptime</h2>
+              <a href="#">All monitors →</a>
+            </div>
+            <div class="panel">
+              <ul class="rows">
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Checkout API</span>
+                      <span class="sub">502 · 22 minutes</span>
+                    </span>
+                    <span class="status fail">Down</span>
+                    <time class="when">22m</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Homepage beat</span>
+                      <span class="sub">every 1 min</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">48 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">API beat</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">112 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Auth service</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">89 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">CDN</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">24 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Status page</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">67 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Docs site</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">91 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Assets</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">18 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Webhooks</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">134 ms</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Billing</span>
+                    </span>
+                    <span class="status ok">Up</span>
+                    <time class="when">156 ms</time>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="sec" id="tests" aria-labelledby="tests-h">
+            <div class="sec-head">
+              <h2 class="eyebrow" id="tests-h">Other tests</h2>
+              <a href="#">All tests →</a>
+            </div>
+            <div class="panel">
+              <ul class="rows">
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Login form</span>
+                      <span class="sub">every 8h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">41m</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Pricing page</span>
+                      <span class="sub">every 12h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">3h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Signup flow</span>
+                      <span class="sub">No incident opened</span>
+                    </span>
+                    <span class="status warn">Timeout</span>
+                    <time class="when">5h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Account settings</span>
+                      <span class="sub">every 24h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">6h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Password reset</span>
+                      <span class="sub">every 24h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">8h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Mobile navigation</span>
+                      <span class="sub">every 24h · mobile</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">9h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Contact form</span>
+                      <span class="sub">every 24h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">11h</time>
+                  </a>
+                </li>
+                <li>
+                  <a href="#">
+                    <span>
+                      <span class="name">Blog listing</span>
+                      <span class="sub">every 24h</span>
+                    </span>
+                    <span class="status ok">Passed</span>
+                    <time class="when">14h</time>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </section>
+        </div>
+
+        <section class="usage" id="usage" aria-labelledby="usage-h">
+          <div class="usage-top">
+            <span class="label" id="usage-h">184 of 300 runs this cycle</span>
+            <span class="nums">
+              <span>116 remaining</span>
+              <span>resets 1 Sep 2026</span>
+              <span>projected 39,00 €</span>
+            </span>
+          </div>
+          <div class="bar" aria-hidden="true"><span></span></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="badge">Proposal 18 — Checkout path</div>
+</body>
+</html>

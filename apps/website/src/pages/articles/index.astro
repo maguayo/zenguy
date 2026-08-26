@@ -1,0 +1,102 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import Nav from "../../components/Nav.astro";
+import Footer from "../../components/Footer.astro";
+import {
+  SITE_URL,
+  articleCategories,
+  articleHref,
+  formatArticleDate,
+  innerNavLinks,
+} from "../../lib/site";
+
+const articles = (await getCollection("articles")).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const grouped = (["guide", "comparison", "roundup"] as const).map((category) => ({
+  category,
+  label: articleCategories[category],
+  items: articles.filter((article) => article.data.category === category),
+}));
+
+const title = "Articles — Zenguy";
+const description =
+  "Guides and comparisons on production browser tests, uptime monitoring, and why a 200 is not enough. Written by Zenguy.";
+const canonical = `${SITE_URL}/articles/`;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: "Zenguy articles",
+  description,
+  url: canonical,
+  isPartOf: { "@type": "WebSite", name: "Zenguy", url: SITE_URL },
+  mainEntity: {
+    "@type": "ItemList",
+    itemListElement: articles.map((article, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: `${SITE_URL}${articleHref(article.id)}`,
+      name: article.data.title,
+    })),
+  },
+};
+---
+
+<Base title={title} description={description}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+  <div class="flex min-h-screen min-w-0 flex-col overflow-x-clip bg-cream">
+    <Nav links={innerNavLinks} />
+    <main class="min-w-0 flex-1 px-10 py-[88px] max-md:px-5 max-md:py-16">
+      <div class="container-site min-w-0">
+        <header class="mb-16 max-w-[640px]">
+          <span class="eyebrow">Articles</span>
+          <h1 class="m-0 mt-3 text-[44px] font-semibold leading-[1.12] tracking-[-0.03em] max-md:text-[34px]">
+            What still works after the merge.
+          </h1>
+          <p class="m-0 mt-4 text-[17px] leading-[1.6] text-body">
+            Comparisons, roundups and guides on watching a live site the way a
+            customer uses it. Written by Zenguy — we sell the product we describe.
+          </p>
+        </header>
+
+        <div class="flex flex-col gap-16">
+          {grouped.filter((group) => group.items.length > 0).map((group) => (
+              <section>
+                <h2 class="m-0 mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+                  {group.label}
+                </h2>
+                <ul class="m-0 list-none p-0">
+                  {group.items.map((article) => (
+                    <li class="border-t border-line">
+                      <a
+                        href={articleHref(article.id)}
+                        class="link-quiet group grid grid-cols-[148px_minmax(0,1fr)] items-baseline gap-8 py-[22px] max-md:grid-cols-1 max-md:gap-2"
+                      >
+                        <span class="font-mono text-[12px] text-muted">
+                          {formatArticleDate(article.data.pubDate)}
+                        </span>
+                        <span class="min-w-0 max-w-full">
+                          <span class="block wrap-break-word text-[17.5px] font-semibold leading-[1.3] text-ink group-hover:text-violet-deep">
+                            {article.data.title}
+                          </span>
+                          <span class="mt-1.5 block wrap-break-word text-[14.5px] leading-[1.55] text-body">
+                            {article.data.description}
+                          </span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+          ))}
+        </div>
+      </div>
+    </main>
+    <Footer />
+  </div>
+</Base>
