@@ -1,0 +1,345 @@
+---
+// Proposal 2 — Alerts and the iOS app told as one moment: the 03:21 incident
+// reaching you. A Slack message that looks like Slack, the push landing on the
+// drawn iPhone (markup faithful to apps/app/src/theme, as in IosApp.astro),
+// and every channel listed with its price. One dark section instead of two
+// sections repeating the same incident.
+import Icon from "./../Icon.astro";
+import Logo from "./../Logo.astro";
+
+const channels = [
+  { name: "Email", price: "free" },
+  { name: "Push", price: "free, with the iOS app" },
+  { name: "Slack", price: "free" },
+  { name: "Discord", price: "free" },
+  { name: "SMS", price: "pay as you go" },
+  { name: "Voice call", price: "pay as you go" },
+];
+
+const appFeatures = [
+  {
+    icon: "bell" as const,
+    title: "Push notifications, free",
+    body: "A channel like email or Slack, preselected for every test and monitor.",
+  },
+  {
+    icon: "activity" as const,
+    title: "The whole story one tap away",
+    body: "Same steps, screenshots and reason as on the web. If it can't wait until morning, re-run from the phone.",
+  },
+  {
+    icon: "scanface" as const,
+    title: "Locked with Face ID",
+    body: "App Lock asks when you come back, and the app switcher never shows your workspace.",
+  },
+];
+
+// ── Phone mock data, faithful to the app's Overview (see IosApp.astro) ──────
+const tones = {
+  neutral: { tile: "border-line bg-surface", label: "text-muted", value: "text-ink", dot: "" },
+  info: { tile: "border-[#cfcdf4] bg-violet-bg", label: "text-violet-deep", value: "text-violet-deep", dot: "bg-violet" },
+  danger: { tile: "border-[#f5bdbf] bg-[#fcebec]", label: "text-[#c1363b]", value: "text-[#c1363b]", dot: "bg-red" },
+  ok: { tile: "border-[#b9dfc2] bg-[#e7f3ea]", label: "text-[#2f7f3f]", value: "text-[#2f7f3f]", dot: "bg-green" },
+} as const;
+type ToneName = keyof typeof tones;
+
+interface Tile {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: ToneName;
+}
+
+const groups: { title: string; action: string; tiles: Tile[] }[] = [
+  {
+    title: "Browser tests",
+    action: "All tests →",
+    tiles: [
+      { label: "Tests", value: "12", tone: "neutral" },
+      { label: "Running", value: "1", tone: "info" },
+      { label: "Failed", value: "1", hint: "last 24 h", tone: "danger" },
+    ],
+  },
+  {
+    title: "Uptime",
+    action: "All monitors →",
+    tiles: [
+      { label: "Up", value: "5", tone: "ok" },
+      { label: "Down", value: "0", tone: "neutral" },
+      { label: "Response", value: "212 ms", hint: "avg · 24 h", tone: "neutral" },
+    ],
+  },
+];
+
+const STRIP_SLOTS = 24;
+const results = "gggggagggggggggggr".split("");
+const tickColor: Record<string, string> = { g: "bg-green", a: "bg-amber", r: "bg-red" };
+
+const tabs = [
+  {
+    label: "Overview",
+    active: true,
+    icon: '<rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="currentColor" stroke="none"/>',
+  },
+  { label: "Tests", active: false, icon: '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.8" ry="9"/><path d="M3 12h18"/>' },
+  { label: "Uptime", active: false, icon: '<path d="M2.5 12h3.5l2.5-6.5 4 13 2.5-6.5h6.5"/>' },
+  {
+    label: "Incidents",
+    active: false,
+    icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.3" r="1" fill="currentColor" stroke="none"/>',
+  },
+  {
+    label: "More",
+    active: false,
+    icon: '<circle cx="12" cy="12" r="9"/><circle cx="7.8" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.2" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
+  },
+];
+---
+
+<section id="alerts" class="bg-ink px-10 py-[88px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="grid grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-center gap-16 max-lg:grid-cols-1 max-lg:gap-14">
+      <div class="flex flex-col gap-7">
+        <div class="flex flex-col gap-4">
+          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-dusk">Alerts</span>
+          <h2
+            class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] text-surface [text-wrap:balance] max-md:text-[32px]"
+          >
+            One alert when it breaks. One when it recovers.
+          </h2>
+          <p class="m-0 text-[16px] leading-[1.62] text-parch [text-wrap:pretty]">
+            Nothing goes out until every retry has failed, so a slow page doesn't wake anyone. While
+            an incident stays open, later failures join its timeline instead of starting a new
+            thread.
+          </p>
+        </div>
+        <!-- Slack, at 03:21 -->
+        <div class="card-shadow overflow-hidden rounded-[13px] border border-white/8 bg-surface">
+          <div class="flex items-center gap-2 border-b border-line px-4 py-2.5">
+            <span class="text-[13px] font-semibold text-body"># storefront-alerts</span>
+            <div class="flex-1"></div>
+            <span class="text-[11.5px] text-muted">Slack</span>
+          </div>
+          <div class="flex items-start gap-3 px-4 py-3.5">
+            <Logo iconOnly iconSize={36} />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline gap-2">
+                <span class="text-[14px] font-bold leading-[18px]">Zenguy</span>
+                <span class="rounded-[3px] bg-cream px-1 py-px text-[9.5px] font-medium uppercase tracking-[0.03em] text-muted">app</span>
+                <span class="text-[11.5px] text-muted">03:21</span>
+              </div>
+              <span class="mt-[3px] block text-[14px] font-semibold leading-[19px]">Checkout — production failed</span>
+              <div class="mt-2 flex flex-col gap-[3px] border-l-[3px] border-red pl-3">
+                <span class="text-[13px] leading-[1.5] text-body">Failed after 3 retries in 6 min 41 s.</span>
+                <span class="text-[13px] leading-[1.5] text-body">Order total showed 0,00 € instead of 149,00 €.</span>
+                <span class="pt-[3px] text-[13px] font-medium text-violet">Open run in Zenguy →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Every channel -->
+        <div class="flex flex-col gap-3.5 rounded-[13px] border border-white/8 bg-inkcard p-5">
+          <span class="font-mono text-[10.5px] font-medium uppercase tracking-[0.07em] text-dusk">Every channel</span>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-[9px] max-md:grid-cols-1">
+            {channels.map((ch) => (
+              <div class="flex items-baseline gap-2.5">
+                <span class="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-green" aria-hidden="true"></span>
+                <span class="text-[13.5px] text-surface">{ch.name}</span>
+                <span class="text-[12px] text-dusk">{ch.price}</span>
+              </div>
+            ))}
+          </div>
+          <span class="text-xs leading-normal text-dusk">
+            Recovery notices included, and a delivery log for every message sent. Calls read the
+            alert type and resource name — never a URL, never a secret.
+          </span>
+        </div>
+      </div>
+
+      <p class="sr-only">
+        Mock of the iPhone app's Overview screen at 03:21: the push notification for the failed
+        checkout test landing on top, one incident open, tiles for tests and uptime.
+      </p>
+
+      <div id="app" class="phone relative mx-auto max-md:mt-8" aria-hidden="true">
+        <div class="phone__frame rounded-[54px] bg-ink p-3">
+          <div class="phone__screen relative overflow-hidden rounded-[42px] bg-cream">
+            <div class="phone__canvas relative font-sans text-ink">
+              <!-- Dynamic Island + status bar -->
+              <div class="absolute left-1/2 top-[11px] h-[37px] w-[126px] -translate-x-1/2 rounded-full bg-black"></div>
+              <div class="absolute inset-x-0 top-[18px] flex h-[22px] items-center justify-between pl-[50px] pr-[36px]">
+                <span class="text-[17px] font-semibold leading-none tracking-[-0.2px]">03:21</span>
+                <span class="flex items-center gap-[7px]">
+                  <svg width="19" height="12" viewBox="0 0 19 12" fill="currentColor"><rect x="0" y="8" width="3.4" height="4" rx="1"/><rect x="5.2" y="5.5" width="3.4" height="6.5" rx="1"/><rect x="10.4" y="3" width="3.4" height="9" rx="1"/><rect x="15.6" y="0" width="3.4" height="12" rx="1"/></svg>
+                  <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M1.2 4.2a10.6 10.6 0 0 1 14.6 0"/><path d="M4.1 7.1a6.4 6.4 0 0 1 8.8 0"/><path d="M7 10a2.2 2.2 0 0 1 3 0"/></svg>
+                  <svg width="27" height="13" viewBox="0 0 27 13" fill="none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="currentColor" stroke-opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2" fill="currentColor"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" fill="currentColor" fill-opacity=".4"/></svg>
+                </span>
+              </div>
+
+              <!-- Overview (clipped by the tab bar, like the real scroll view) -->
+              <div class="absolute inset-x-0 top-[116px] bottom-[83px] overflow-hidden px-[20px]">
+                <span class="block text-[34px] font-bold leading-[40px] tracking-[-0.8px]">Overview</span>
+
+                <div class="card-shadow mt-[20px] rounded-[20px] bg-ink p-[24px]">
+                  <span class="block font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px] text-dusk">Acme Commerce</span>
+                  <span class="mt-[12px] block text-[34px] font-bold leading-[40px] tracking-[-0.8px] text-surface">1 incident open.</span>
+                  <span class="mt-[8px] block text-[14px] leading-[19px] text-parch">12 tests · 5 monitors · 1 running</span>
+                  <div class="mt-[16px] flex items-center gap-[3px]">
+                    {Array.from({ length: STRIP_SLOTS - results.length }, () => (
+                      <span class="h-[18px] min-w-[4px] max-w-[10px] flex-1 rounded-[3px] bg-inkcard"></span>
+                    ))}
+                    {results.map((r, i) => (
+                      <span
+                        class:list={[
+                          "h-[18px] min-w-[4px] max-w-[10px] flex-1 rounded-[3px]",
+                          tickColor[r],
+                          i === results.length - 1 && "zg-pulse",
+                        ]}
+                      ></span>
+                    ))}
+                  </div>
+                  <div class="mt-[12px] flex items-center justify-between">
+                    <span class="font-mono text-[11px] leading-[14px] text-dusk">Last 18 results</span>
+                    <span class="text-[14px] font-medium leading-[19px] text-surface">Open incidents →</span>
+                  </div>
+                </div>
+
+                {groups.map((g) => (
+                  <div class="mt-[24px]">
+                    <div class="flex items-center justify-between py-[8px]">
+                      <span class="font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px] text-muted">{g.title}</span>
+                      <span class="text-[14px] font-medium leading-[19px] text-violet-deep">{g.action}</span>
+                    </div>
+                    <div class="mt-[4px] flex gap-[8px]">
+                      {g.tiles.map((t) => {
+                        const tone = tones[t.tone];
+                        return (
+                          <div class:list={["flex min-h-[84px] min-w-0 flex-1 flex-col gap-[4px] rounded-[14px] border p-[14px]", tone.tile]}>
+                            <div class="flex items-center gap-[6px]">
+                              {tone.dot ? <span class:list={["h-[6px] w-[6px] shrink-0 rounded-full", tone.dot]}></span> : null}
+                              <span class:list={["truncate font-mono text-[11px] font-medium uppercase leading-[14px] tracking-[0.9px]", tone.label]}>{t.label}</span>
+                            </div>
+                            <span class:list={["text-[26px] font-semibold leading-[32px] tracking-[-0.6px]", tone.value]}>{t.value}</span>
+                            {t.hint ? <span class:list={["text-[12px] font-medium leading-[16px]", tone.label]}>{t.hint}</span> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <div class="mt-[12px] rounded-[14px] border border-line bg-surface p-[16px]">
+                  <span class="block text-[17px] font-semibold leading-[22px] tracking-[-0.2px]">Usage this cycle</span>
+                  <div class="mt-[10px] flex items-baseline justify-between">
+                    <span class="font-mono text-[13px] leading-[18px] text-body">148 of 300 runs</span>
+                    <span class="font-mono text-[11px] leading-[14px] text-muted">renews 1 Sep</span>
+                  </div>
+                  <div class="mt-[8px] h-[6px] overflow-hidden rounded-full bg-[#eae4d9]">
+                    <div class="h-full w-[49%] rounded-full bg-violet"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab bar + home indicator -->
+              <div class="absolute inset-x-0 bottom-0 h-[83px] border-t border-line bg-surface">
+                <div class="flex h-[50px] items-start px-[6px] pt-[7px]">
+                  {tabs.map((t) => (
+                    <div class:list={["flex flex-1 flex-col items-center gap-[4px]", t.active ? "text-ink" : "text-muted"]}>
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="25"
+                        height="25"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        set:html={t.icon}
+                      />
+                      <span class="text-[11px] font-medium leading-[13px]">{t.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div class="absolute bottom-[8px] left-1/2 h-[5px] w-[139px] -translate-x-1/2 rounded-full bg-ink"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- The push, as it lands -->
+        <div
+          class="card-shadow absolute -top-[10px] right-[-88px] w-[322px] rounded-[22px] border border-line bg-surface p-[13px] max-lg:right-0 max-md:-top-[56px] max-md:w-[min(322px,calc(100vw-40px))]"
+        >
+          <div class="flex items-start gap-[11px]">
+            <Logo iconOnly iconSize={38} />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="truncate text-[14px] font-semibold leading-[18px]">Checkout — production failed</span>
+                <span class="shrink-0 text-[11.5px] text-muted">now</span>
+              </div>
+              <p class="m-0 mt-[2px] text-[13.5px] leading-[18px] text-body">
+                Failed after 3 retries in 6 min 41 s. Order total showed 0,00 € instead of 149,00 €.
+              </p>
+            </div>
+          </div>
+        </div>
+        <span
+          class="font-hand absolute right-[-52px] top-[98px] rotate-[3deg] text-[26px] leading-none font-bold text-violet max-lg:right-1 max-md:top-[52px]"
+          >triage from bed</span
+        >
+      </div>
+    </div>
+
+    <div class="mt-[64px] grid grid-cols-3 gap-8 border-t border-white/8 pt-[26px] max-lg:grid-cols-1">
+      {appFeatures.map((f) => (
+        <div class="flex items-start gap-[13px]">
+          <Icon name={f.icon} size={17} color="#C9C2B3" class="mt-0.5" />
+          <div class="flex flex-col gap-[3px]">
+            <span class="text-[14.5px] font-semibold text-surface">{f.title}</span>
+            <span class="text-[13.5px] leading-[1.55] text-parch">{f.body}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+    <div class="mt-6 flex flex-wrap items-center gap-x-[22px] gap-y-1.5 font-mono text-sm text-dusk">
+      <span>iPhone</span>
+      <span>free with every workspace</span>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* The screen is authored at the app's logical size and scaled as a whole,
+     so every value inside matches apps/app/src/theme 1:1 (see IosApp.astro). */
+  .phone {
+    --ps: 0.76;
+    width: calc(402px * var(--ps) + 24px);
+  }
+  @media (max-width: 48rem) {
+    .phone {
+      --ps: 0.68;
+    }
+  }
+  @media (max-width: 22.4rem) {
+    .phone {
+      --ps: 0.6;
+    }
+  }
+  .phone__frame {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      rgba(19, 17, 13, 0.05) 0px 2px 4px,
+      rgba(19, 17, 13, 0.18) 0px 24px 48px;
+  }
+  .phone__screen {
+    width: calc(402px * var(--ps));
+    height: calc(874px * var(--ps));
+  }
+  .phone__canvas {
+    width: 402px;
+    height: 874px;
+    transform: scale(var(--ps));
+    transform-origin: 0 0;
+  }
+</style>

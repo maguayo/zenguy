@@ -1,0 +1,44 @@
+---
+// Proposal 2 — the homepage retold as one conversation with a cold visitor.
+// Each section answers the next question they would ask: what is it (Hero),
+// why care (Night), is it real (WatchItRun), what do I get (Evidence2), will
+// I find out (Reaches), does it cover the basics (Uptime2), can I trust it
+// (Trust), what does it cost (Pricing2), last doubts (Faq2), act (Cta2).
+// Founder.astro exists but is not mounted — Marcos prefers no founder note
+// while it is the only social proof available. Nav, Hero and Footer are the live components.
+// Not linked from anywhere and noindexed — it exists to be judged at
+// /proposal2 next to the live home.
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Hero from "../components/Hero.astro";
+import Footer from "../components/Footer.astro";
+import Night from "../components/proposal2/Night.astro";
+import WatchItRun from "../components/proposal2/WatchItRun.astro";
+import Evidence2 from "../components/proposal2/Evidence2.astro";
+import Reaches from "../components/proposal2/Reaches.astro";
+import Trust from "../components/proposal2/Trust.astro";
+import Uptime2 from "../components/proposal2/Uptime2.astro";
+import Pricing2 from "../components/proposal2/Pricing2.astro";
+import Faq2 from "../components/proposal2/Faq2.astro";
+import Cta2 from "../components/proposal2/Cta2.astro";
+---
+
+<Base title="Zenguy — Browser tests in plain English (proposal 2)">
+  <meta name="robots" content="noindex" slot="head" />
+  <div class="min-h-screen bg-cream">
+    <Nav />
+    <main>
+      <Hero />
+      <Night />
+      <WatchItRun />
+      <Evidence2 />
+      <Reaches />
+      <Uptime2 />
+      <Trust />
+      <Pricing2 />
+      <Faq2 />
+      <Cta2 />
+    </main>
+    <Footer />
+  </div>
+</Base>

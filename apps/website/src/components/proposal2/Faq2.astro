@@ -1,0 +1,62 @@
+---
+// Proposal 2 — the live FAQ plus the three questions a cold visitor actually
+// arrives with: how this differs from the tools they know, whether we can see
+// their passwords, and whether anything needs installing. The comparison
+// question goes first because it is the first thing asked.
+const faqs = [
+  {
+    q: "How is this different from Playwright or Cypress?",
+    a: "Those test your code before it ships, in CI, on your infrastructure. Zenguy watches the deployed product afterwards, from the outside — DNS, third parties, payments, the parts CI can't see. Most teams keep both.",
+  },
+  {
+    q: "Do I need to install anything?",
+    a: "No. Zenguy runs its own browsers on its own machines. You write instructions in the web app; results, screenshots and alerts come to you. No agent on your servers, no code in your repo.",
+  },
+  {
+    q: "What exactly counts as a run?",
+    a: "One requested execution: a scheduled run, a manual run, or a validation from the editor. Whether it passes, fails or times out, it is one run. Retries inside it are free.",
+  },
+  {
+    q: "What if my test is flaky?",
+    a: "Give it retries. The first starts immediately, the next after a minute, the third after two. An alert only goes out once all of them have failed.",
+  },
+  {
+    q: "Can it log in to a private site?",
+    a: "Yes. Store the credentials as workspace secrets and reference them by name in the instructions. Use staging accounts, never personal ones.",
+  },
+  {
+    q: "Do you see my passwords?",
+    a: "No. Secrets are write-only: saved once, encrypted, never shown again in the app, typed only on domains you allow-list, and redacted from every screenshot, report and log.",
+  },
+  {
+    q: "Who is responsible for what a test does?",
+    a: "You are. Zenguy follows the instructions you provide, so you must configure and validate each test before scheduling it. For purchases and other irreversible actions, state exactly what is allowed and where the test must stop.",
+  },
+  {
+    q: "How long do you keep the evidence?",
+    a: "30 days of runs, screenshots, reports and delivery logs. Long enough to explain last week, short enough not to become a liability.",
+  },
+  {
+    q: "What happens if a payment fails?",
+    a: "Scheduled runs stop and manual runs are disabled. Your existing results stay readable for the rest of the retention window.",
+  },
+];
+---
+
+<section class="px-10 py-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site grid grid-cols-[300px_minmax(0,1fr)] gap-16 max-lg:grid-cols-1 max-lg:gap-8">
+    <h2 class="m-0 text-[34px] font-semibold leading-[1.16] tracking-[-0.025em] max-md:text-[28px]">
+      Questions people ask first.
+    </h2>
+    <div class="flex flex-col">
+      {faqs.map((f) => (
+        <div
+          class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-10 border-t border-line py-[22px] max-md:grid-cols-1 max-md:gap-2"
+        >
+          <span class="text-[15.5px] font-semibold leading-[1.4]">{f.q}</span>
+          <span class="text-[14.5px] leading-[1.62] text-body">{f.a}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

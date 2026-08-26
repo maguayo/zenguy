@@ -1,0 +1,143 @@
+---
+// Proposal 2 — the Production band retold as a scene. "Thirteen hours." is
+// the section's headline and is ALWAYS visible — the message never hides
+// behind JS; only the timeline above it draws itself in (~2 s) when the
+// section enters the viewport. The CI comparison is the quiet closing line
+// instead of the headline. With reduced motion or without JS the finished
+// scene is simply there.
+const moments = [
+  {
+    time: "14:02 · merge",
+    tone: "text-green",
+    dot: "bg-green",
+    align: "",
+    step: "n-s1",
+    body: "214 tests pass, the build ships, everyone goes home. This part already works.",
+  },
+  {
+    time: "03:14 · production",
+    tone: "text-red",
+    dot: "bg-red zg-pulse",
+    align: "text-center max-lg:text-left",
+    step: "n-s2",
+    body: "A third-party price feed goes quiet. Checkout totals become 0,00 € — with a 200 on every request.",
+  },
+  {
+    time: "09:40 · a customer emails",
+    tone: "text-surface/50",
+    dot: "bg-surface/50",
+    align: "text-right max-lg:text-left",
+    step: "n-s3",
+    body: "“Is the sale meant to be everything for free?” Support asks who changed what. Nobody changed anything.",
+  },
+];
+---
+
+<section id="production" class="night bg-ink px-10 pt-[84px] pb-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site flex flex-col gap-10">
+    <span class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-dusk">Production</span>
+
+    <div class="flex flex-col gap-4">
+      <!-- Track: merge ╌╌╌ outage ─── discovery (desktop only; the list below carries the dots on small screens) -->
+      <div class="flex items-center max-lg:hidden" aria-hidden="true">
+        <span class="n-s1 h-[13px] w-[13px] shrink-0 rounded-full bg-green"></span>
+        <span class="n-seg1 track-dashed h-0.5 flex-1"></span>
+        <span class="n-s2 zg-pulse h-[13px] w-[13px] shrink-0 rounded-full bg-red"></span>
+        <span class="n-seg2 h-0.5 flex-1 bg-white/14"></span>
+        <span class="n-s3 h-[13px] w-[13px] shrink-0 rounded-full bg-surface/50"></span>
+      </div>
+
+      <ol class="m-0 grid list-none grid-cols-3 gap-7 p-0 max-lg:grid-cols-1 max-lg:gap-6">
+        {moments.map((m) => (
+          <li class:list={["flex flex-col gap-[7px]", m.align, m.step]}>
+            <span class:list={["inline-flex items-center gap-2.5 font-mono text-[13px]", m.tone]}>
+              <span class:list={["hidden h-[9px] w-[9px] shrink-0 rounded-full max-lg:inline-block", m.dot]} aria-hidden="true"></span>
+              {m.time}
+            </span>
+            <span class="text-[16px] leading-[1.5] text-parch [text-wrap:pretty]">{m.body}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+
+    <div class="flex flex-col gap-4 border-t border-white/8 pt-10">
+      <h2 class="m-0 text-[clamp(54px,8.5vw,104px)] font-bold leading-[0.98] tracking-[-0.045em] text-surface">
+        Thirteen hours.
+      </h2>
+      <p class="n-alt m-0 max-w-[720px] text-[clamp(21px,2.6vw,30px)] font-semibold leading-[1.25] tracking-[-0.02em] text-violet-soft [text-wrap:pretty]">
+        Or seven minutes, if something walks the checkout all night.
+      </p>
+      <p class="n-closer m-0 text-[15px] leading-[1.6] text-parch">
+        Your tests prove the merge was fine. This proves production still is.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Dashed segment of the track — verbatim from the design */
+  .track-dashed {
+    background: repeating-linear-gradient(to right, rgba(255, 255, 255, 0.22) 0 6px, transparent 6px 12px);
+  }
+
+  /* The play sequence exists only once JS arms it (motion allowed). Hidden
+     states live under .night-armed so no-JS and reduced-motion readers get
+     the finished scene immediately. visibility joins each transition because
+     the zg-pulse dots animate opacity — an animation would override the
+     opacity transition, but never visibility. */
+  .night-armed .n-s1,
+  .night-armed .n-s2,
+  .night-armed .n-s3,
+  .night-armed .n-alt,
+  .night-armed .n-closer {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition:
+      opacity 0.55s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.55s cubic-bezier(0.32, 0.72, 0, 1),
+      visibility 0s linear;
+  }
+  .night-armed span.n-s1,
+  .night-armed span.n-s2,
+  .night-armed span.n-s3 {
+    transform: scale(0.4);
+    transition:
+      opacity 0.35s ease,
+      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      visibility 0s linear;
+  }
+  .night-armed .n-seg1,
+  .night-armed .n-seg2 {
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  .night-play .n-s1 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.05s; }
+  .night-play .n-seg1 { clip-path: inset(0 0 0 0); transition-delay: 0.3s; }
+  .night-play .n-s2 { opacity: 1; visibility: visible; transform: none; transition-delay: 0.85s; }
+  .night-play .n-seg2 { clip-path: inset(0 0 0 0); transition-delay: 1.15s; transition-duration: 0.7s; }
+  .night-play .n-s3 { opacity: 1; visibility: visible; transform: none; transition-delay: 1.9s; }
+  .night-play .n-alt { opacity: 1; visibility: visible; transform: none; transition-delay: 2.2s; }
+  .night-play .n-closer { opacity: 1; visibility: visible; transform: none; transition-delay: 2.45s; }
+</style>
+
+<script>
+  const night = document.querySelector<HTMLElement>(".night");
+  const motionOk =
+    typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (night && motionOk && "IntersectionObserver" in window) {
+    night.classList.add("night-armed");
+    new IntersectionObserver(
+      (entries, observer) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            night.classList.add("night-play");
+            observer.disconnect();
+          }
+        }
+      },
+      { threshold: 0.2 },
+    ).observe(night);
+  }
+</script>

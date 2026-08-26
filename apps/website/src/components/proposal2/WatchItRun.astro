@@ -1,0 +1,250 @@
+---
+// Proposal 2 — "How it works" shown instead of told. The instruction types
+// itself, the run's steps land one by one and the verdict closes the loop;
+// the old three setup columns compress into the facts row underneath. With
+// reduced motion or without JS the finished run is simply visible.
+import Icon from "./../Icon.astro";
+
+const steps = [
+  { n: 1, t: "00:02", action: "Opened acme-shop.com", note: "Landing page rendered, 200", last: false },
+  { n: 2, t: "00:08", action: "Searched “headphones”", note: "24 results", last: false },
+  { n: 3, t: "00:13", action: "Opened “Wireless headphones”", note: "Product page rendered", last: false },
+  { n: 4, t: "00:19", action: "Clicked “Add to cart”", note: "Cart drawer opened, 1 item", last: false },
+  { n: 5, t: "00:24", action: "Read cart total", note: "149,00 € — greater than 0 €", last: true },
+];
+
+const facts = [
+  {
+    icon: "file" as const,
+    title: "A sentence, not a script",
+    body: "No selectors, no code, no framework to learn. Reference stored credentials by name.",
+  },
+  {
+    icon: "monitor" as const,
+    title: "A real browser, on schedule",
+    body: "Every 1 to 24 hours. Each attempt gets a clean browser, desktop or mobile viewport.",
+  },
+  {
+    icon: "bell" as const,
+    title: "Alerts only when it's real",
+    body: "Up to 3 free retries first. One alert when an incident opens, one when it recovers.",
+  },
+];
+
+const instruction =
+  "Open acme-shop.com and search for “headphones”. Open the first result and add it to the cart. Check the cart shows 1 item and a total greater than 0 €.";
+---
+
+<section id="how" class="wir border-y border-line bg-surface px-10 py-[92px] max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-[52px] flex max-w-[640px] flex-col gap-3.5">
+      <span class="eyebrow">How it works</span>
+      <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] max-md:text-[32px]">
+        One sentence is the whole setup.
+      </h2>
+      <p class="m-0 text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+        Write it like you'd brief a colleague, run it once to see it walk, then let the schedule
+        take over. This one is running now.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] items-start gap-9 max-lg:grid-cols-1 max-lg:gap-12">
+      <!-- The instruction -->
+      <div class="relative">
+        <div class="card-shadow overflow-hidden rounded-[14px] border border-line bg-surface">
+          <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-3.5">
+            <Icon name="monitor" size={16} />
+            <span class="text-[13.5px] font-semibold">Search &amp; cart — production</span>
+            <span class="rounded-full bg-cream px-[9px] py-[3px] font-mono text-[11.5px] text-body">Every 1 hour</span>
+            <div class="flex-1"></div>
+            <span class="text-[11.5px] text-muted max-md:hidden">Desktop · 1440 × 900</span>
+          </div>
+          <div class="p-[18px]">
+            <div class="min-h-[118px] rounded-[10px] border border-line bg-surface px-[17px] py-4 text-[14.5px] leading-[1.68]">
+              <span class="wir-text" data-full={instruction}>{instruction}</span><span class="wir-caret" aria-hidden="true"></span>
+            </div>
+            <div class="flex items-center gap-2.5 pt-3.5">
+              <span class="text-xs text-muted">No selectors. No code.</span>
+              <div class="flex-1"></div>
+              <span class="whitespace-nowrap rounded-lg bg-ink px-[13px] py-[7px] text-[12.5px] font-medium text-surface">Test it</span>
+            </div>
+          </div>
+        </div>
+        <span
+          class="font-hand absolute -bottom-[34px] left-2 -rotate-3 text-[25px] leading-none font-bold text-violet"
+          aria-hidden="true">this one would have caught 03:14</span
+        >
+      </div>
+
+      <!-- The run -->
+      <div class="card-shadow relative overflow-hidden rounded-[14px] border border-line bg-surface">
+        <div class="wir-pending absolute inset-x-0 bottom-0 top-[48px] items-center justify-center" aria-hidden="true">
+          <span class="font-mono text-xs text-muted">starting browser…</span>
+        </div>
+        <div class="flex items-center gap-2.5 border-b border-line px-[18px] py-[13px]">
+          <span class="zg-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-green" aria-hidden="true"></span>
+          <span class="text-[13.5px] font-semibold">Run 3ab7f2</span>
+          <span class="font-mono text-xs text-muted">attempt 1 · desktop</span>
+          <div class="flex-1"></div>
+          <button
+            type="button"
+            class="wir-replay cursor-pointer rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-body hover:bg-cream"
+            >Replay ↻</button
+          >
+        </div>
+        {steps.map((s) => (
+          <div class="wir-row flex items-center gap-3 border-b border-cream px-[18px] py-[11px]">
+            <span class="flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-md bg-cream font-mono text-[11px] font-medium">
+              {s.n}
+            </span>
+            <span class="w-[38px] shrink-0 font-mono text-[11.5px] text-muted">{s.t}</span>
+            <span class="whitespace-nowrap text-[13px] font-medium max-md:whitespace-normal">{s.action}</span>
+            <span class="truncate text-xs text-muted max-md:hidden">{s.note}</span>
+            {s.last ? (
+              <span class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-green/12 px-2 py-[3px] text-[11px] font-medium">
+                <span class="h-1.5 w-1.5 rounded-full bg-green" aria-hidden="true"></span>check passed
+              </span>
+            ) : (
+              <Icon name="camera" size={14} class="ml-auto opacity-45" />
+            )}
+          </div>
+        ))}
+        <div class="wir-verdict flex items-center gap-[11px] bg-cream px-[18px] py-3.5">
+          <span class="inline-flex items-center gap-[7px] rounded-full bg-green/12 px-[9px] py-[3px] text-[11.5px] font-medium">
+            <span class="h-1.5 w-1.5 rounded-full bg-green" aria-hidden="true"></span>Passed
+          </span>
+          <span class="font-mono text-xs text-body">5 steps · 4 screenshots · 26 s</span>
+          <div class="flex-1"></div>
+          <span class="font-mono text-xs text-muted">next run in 1 h</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-[72px] grid grid-cols-3 gap-8 border-t border-line pt-[26px] max-lg:grid-cols-1">
+      {facts.map((f) => (
+        <div class="flex items-start gap-[13px]">
+          <Icon name={f.icon} size={17} class="mt-0.5" />
+          <div class="flex flex-col gap-[3px]">
+            <span class="text-[14.5px] font-semibold">{f.title}</span>
+            <span class="text-[13.5px] leading-[1.55] text-body">{f.body}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Hidden states exist only once JS arms the section (motion allowed), so
+     no-JS and reduced-motion readers see the finished run. */
+  .wir-armed .wir-row,
+  .wir-armed .wir-verdict {
+    opacity: 0;
+    transform: translateY(6px);
+    transition:
+      opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .wir-armed .wir-row.wir-in,
+  .wir-armed .wir-verdict.wir-in {
+    opacity: 1;
+    transform: none;
+  }
+  .wir-caret {
+    display: none;
+  }
+  .wir-caret.wir-caret-on {
+    display: inline-block;
+    width: 2px;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: var(--color-violet);
+    animation: wir-blink 0.9s steps(1) infinite;
+  }
+  @keyframes wir-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  .wir-replay {
+    visibility: hidden;
+  }
+  .wir-replay.wir-show {
+    visibility: visible;
+  }
+  .wir-pending {
+    display: none;
+  }
+  .wir-wait .wir-pending {
+    display: flex;
+  }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>(".wir");
+  const motionOk =
+    typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (root && motionOk && "IntersectionObserver" in window) {
+    const text = root.querySelector<HTMLElement>(".wir-text")!;
+    const caret = root.querySelector<HTMLElement>(".wir-caret")!;
+    const rows = Array.from(root.querySelectorAll<HTMLElement>(".wir-row"));
+    const verdict = root.querySelector<HTMLElement>(".wir-verdict")!;
+    const replay = root.querySelector<HTMLElement>(".wir-replay")!;
+    const full = text.dataset.full ?? text.textContent ?? "";
+    let timer = 0;
+
+    root.classList.add("wir-armed");
+    text.textContent = "";
+
+    // Everything is scheduled against wall-clock time, not chained timeouts,
+    // so a throttled background tab still completes the run promptly.
+    const CPS = 75;
+    const typeDur = (full.length / CPS) * 1000;
+    const rowAt = (n: number) => typeDur + 350 + n * 360;
+    const verdictAt = typeDur + 350 + rows.length * 360 + 180;
+
+    const play = () => {
+      clearTimeout(timer);
+      const start = performance.now();
+      root.classList.add("wir-wait");
+      rows.forEach((r) => r.classList.remove("wir-in"));
+      verdict.classList.remove("wir-in");
+      replay.classList.remove("wir-show");
+      caret.classList.add("wir-caret-on");
+
+      const tick = () => {
+        const t = performance.now() - start;
+        const chars = Math.min(full.length, Math.floor((t / 1000) * CPS));
+        text.textContent = full.slice(0, chars);
+        caret.classList.toggle("wir-caret-on", chars < full.length);
+        rows.forEach((r, n) => {
+          if (t >= rowAt(n)) {
+            r.classList.add("wir-in");
+            root.classList.remove("wir-wait");
+          }
+        });
+        if (t >= verdictAt) {
+          verdict.classList.add("wir-in");
+          replay.classList.add("wir-show");
+          return;
+        }
+        timer = window.setTimeout(tick, 40);
+      };
+      tick();
+    };
+
+    new IntersectionObserver(
+      (entries, observer) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            play();
+            observer.disconnect();
+          }
+        }
+      },
+      { threshold: 0.3 },
+    ).observe(root);
+    replay.addEventListener("click", play);
+  }
+</script>

@@ -1,0 +1,72 @@
+---
+// Proposal 2 — Uptime with the benefit as the headline ("The cheap check,
+// for free." read as a downside to a cold visitor) and a concrete button
+// label. The table is the live section's, unchanged.
+const monitors = [
+  { up: false, name: "Health endpoint", url: "api.acme.com/health", every: "5 min", resp: "503", bars: "gggggggggggggggrrrrr" },
+  { up: true, name: "Storefront home", url: "acme-shop.com", every: "5 min", resp: "184 ms", bars: "gggggggggggggggggggg" },
+  { up: true, name: "Checkout API", url: "checkout.acme.com/api/status", every: "10 min", resp: "212 ms", bars: "gggggggggrgggggggggg" },
+  { up: true, name: "Search service", url: "search.acme.com/ping", every: "15 min", resp: "96 ms", bars: "gggggggggggggggggggg" },
+  { up: true, name: "Webhooks receiver", url: "hooks.acme.com/health", every: "30 min", resp: "341 ms", bars: "gggggggggggggggggggg" },
+];
+const gridCols = "grid-cols-[96px_minmax(0,1fr)_88px_116px_168px]";
+---
+
+<section id="uptime" class="border-y border-line bg-surface px-10 py-24 max-md:px-5 max-md:py-16">
+  <div class="container-site">
+    <div class="mb-11 flex items-end gap-12 max-lg:flex-col max-lg:items-start max-lg:gap-8">
+      <div class="flex max-w-[600px] flex-col gap-4">
+        <span class="eyebrow">Uptime</span>
+        <h2 class="m-0 text-[40px] font-semibold leading-[1.14] tracking-[-0.025em] [text-wrap:balance] max-md:text-[32px]">
+          Uptime monitoring included. Unlimited. Free.
+        </h2>
+        <p class="m-0 text-[16px] leading-[1.62] text-body [text-wrap:pretty]">
+          Not every question needs a browser. Point Zenguy at an endpoint, say what a healthy
+          response looks like, and it checks every five minutes — without ever touching your run
+          allowance.
+        </p>
+      </div>
+      <div class="flex-1 max-lg:hidden"></div>
+      <a
+        href="https://app.zenguy.com"
+        class="btn btn-ink shrink-0 rounded-[10px] px-5 py-3 text-[14.5px] font-medium">Add your first monitor</a
+      >
+    </div>
+
+    <div class="card-shadow-sm overflow-hidden rounded-[14px] border border-line bg-surface">
+      <div class="overflow-x-auto">
+        <div class="min-w-[860px]">
+          <div
+            class={`grid ${gridCols} items-center gap-3.5 border-b border-line bg-cream px-5 py-[11px] font-mono text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted`}
+          >
+            <span>Status</span><span>Monitor</span><span>Every</span><span>Response</span><span>Last 20 checks</span>
+          </div>
+          {monitors.map((m) => (
+            <div class={`grid ${gridCols} items-center gap-3.5 border-b border-cream px-5 py-3.5`}>
+              <span
+                class:list={[
+                  "inline-flex items-center gap-1.5 justify-self-start rounded-full px-[9px] py-[3px] text-[11.5px] font-medium",
+                  m.up ? "bg-green/12" : "bg-red/12",
+                ]}
+              >
+                <span class:list={["h-1.5 w-1.5 rounded-full", m.up ? "bg-green" : "bg-red"]} aria-hidden="true"></span>
+                {m.up ? "Up" : "Down"}
+              </span>
+              <div class="flex min-w-0 items-center gap-2.5">
+                <span class="shrink-0 text-[13.5px] font-medium">{m.name}</span>
+                <span class="truncate font-mono text-[11.5px] text-muted">{m.url}</span>
+              </div>
+              <span class="font-mono text-[12.5px] text-body">{m.every}</span>
+              <span class="font-mono text-[12.5px] text-body">{m.resp}</span>
+              <div class="flex h-[18px] items-stretch gap-0.5" role="img" aria-label={`Last 20 checks for ${m.name}`}>
+                {m.bars.split("").map((b) => (
+                  <span class:list={["flex-1 rounded-[1px]", b === "g" ? "bg-green" : "bg-red"]}></span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
