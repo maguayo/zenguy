@@ -20,6 +20,29 @@ const RUNNER_IDENTITIES = {
   "zenguy-production-primary": "zenguy-production-primary-runner",
   "zenguy-production-fallback": "zenguy-production-fallback-runner",
 } as const;
+const CF_WORKER_ID = "zenguy-production-cf";
+const MIN_COMMON_NAME_LENGTH = 8;
+const MAX_COMMON_NAME_LENGTH = 256;
+
+/**
+ * The cf runner's expected common name is deploy-time configuration
+ * (RUNNER_CF_ACCESS_COMMON_NAME): Access derives it from the service token,
+ * so it is only known after the token exists. Fail closed when absent.
+ */
+function expectedRunnerCommonName(
+  workerId: string,
+  env: Bindings,
+): string | undefined {
+  if (workerId === CF_WORKER_ID) {
+    const raw = env.RUNNER_CF_ACCESS_COMMON_NAME;
+    if (typeof raw !== "string" || raw !== raw.trim()) return undefined;
+    return raw.length >= MIN_COMMON_NAME_LENGTH &&
+      raw.length <= MAX_COMMON_NAME_LENGTH
+      ? raw
+      : undefined;
+  }
+  return RUNNER_IDENTITIES[workerId as keyof typeof RUNNER_IDENTITIES];
+}
 
 interface RunnerAccessConfig {
   issuer: string;
@@ -172,9 +195,7 @@ export async function enforceProductionRunnerAccess(
 
   const workerId = request.headers.get("X-Zenguy-Worker-Id");
   const expectedCommonName =
-    workerId === null
-      ? undefined
-      : RUNNER_IDENTITIES[workerId as keyof typeof RUNNER_IDENTITIES];
+    workerId === null ? undefined : expectedRunnerCommonName(workerId, env);
   const assertion = request.headers.get(ACCESS_ASSERTION_HEADER);
   if (
     expectedCommonName === undefined ||

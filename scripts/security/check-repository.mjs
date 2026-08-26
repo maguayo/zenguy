@@ -479,7 +479,14 @@ if (
       },
       production: {
         requiredGroups: ["core", "releaseFeatures"],
-        additionalRequired: ["CF_RUNNER_ACCESS_AUD"],
+        additionalRequired: [
+          "CF_RUNNER_ACCESS_AUD",
+          "RUNNER_CF_API_TOKEN",
+          "OPENAI_API_KEY_CF",
+          "RUNNER_CF_ACCESS_CLIENT_ID",
+          "RUNNER_CF_ACCESS_CLIENT_SECRET",
+          "RUNNER_CF_ACCESS_COMMON_NAME",
+        ],
       },
     },
   })
@@ -523,6 +530,12 @@ for (const [environment, hostnames] of [
         serviceTokenName: `zenguy-${environment}-fallback-runner`,
         workerId: `zenguy-${environment}-fallback`,
         bootstrapBinding: "RUNNER_FALLBACK_API_TOKEN",
+      },
+      cf: {
+        serviceTokenName: `zenguy-${environment}-cf-runner`,
+        workerId: `zenguy-${environment}-cf`,
+        bootstrapBinding: "RUNNER_CF_API_TOKEN",
+        commonNameBinding: "RUNNER_CF_ACCESS_COMMON_NAME",
       },
     },
   };

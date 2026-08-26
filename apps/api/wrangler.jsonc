@@ -277,7 +277,26 @@
           "STRIPE_ALERT_CREDIT_PRODUCT_ID",
           "STRIPE_ALERT_CREDIT_PRICE_ID",
           "EXPO_PUSH_ACCESS_TOKEN",
-          "CF_RUNNER_ACCESS_AUD"
+          "CF_RUNNER_ACCESS_AUD",
+          "RUNNER_CF_API_TOKEN",
+          "OPENAI_API_KEY_CF",
+          "RUNNER_CF_ACCESS_CLIENT_ID",
+          "RUNNER_CF_ACCESS_CLIENT_SECRET",
+          "RUNNER_CF_ACCESS_COMMON_NAME"
+        ]
+      },
+      "containers": [
+        {
+          "class_name": "RunnerContainer",
+          "image": "../../runner/deploy/Dockerfile",
+          "image_build_context": "../../runner",
+          "instance_type": "standard-2",
+          "max_instances": 5
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "RUNNER_CONTAINER", "class_name": "RunnerContainer" }
         ]
       },
       "send_email": [
@@ -360,7 +379,10 @@
         "LLM_MODEL": "qwen/qwen3.8-27b",
         "STRIPE_ENVIRONMENT": "live",
         "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
-        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
+        "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
+        "RUNNER_DISPATCH": "container",
+        "RUNNER_ENVIRONMENT": "production",
+        "PUBLIC_API_URL": "https://app.zenguy.com"
       }
     }
   }

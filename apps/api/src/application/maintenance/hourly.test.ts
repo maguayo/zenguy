@@ -198,6 +198,7 @@ describe("HourlyMaintenance", () => {
 
     await expect(hourly.execute()).resolves.toEqual({
       zombieAttempts: 1,
+      unclaimedAttempts: 0,
       zombieCycles: 1,
     });
     expect(overageCalls).toBe(1);
@@ -221,6 +222,124 @@ describe("HourlyMaintenance", () => {
     expect(alerts.map((alert) => alert.event)).toEqual([
       "zombie_attempt",
       "zombie_cycle",
+    ]);
+  });
+
+  it("rescues attempts still QUEUED long after dispatch and leaves fresh ones", async () => {
+    const clock = new FixedClock(NOW);
+    const runs = new FakeRunRepo();
+    const attempts = new FakeAttemptRepo(runs);
+    const usage = new FakeUsageEventRepo();
+    const monitors = new FakeMonitorRepo();
+    const UNCLAIMED_AT = NOW - 1_800_001;
+    await runs.insert({
+      ...RUN,
+      id: "run_unclaimed",
+      browserTestId: "bt_unclaimed",
+      usageEventId: "use_unclaimed",
+    });
+    await attempts.insert({
+      ...ATTEMPT,
+      id: "att_unclaimed",
+      testRunId: "run_unclaimed",
+      status: "QUEUED",
+      startedAt: null,
+      queuedAt: UNCLAIMED_AT,
+      createdAt: UNCLAIMED_AT,
+    });
+    await runs.insert({
+      ...RUN,
+      id: "run_fresh",
+      browserTestId: "bt_fresh",
+      usageEventId: "use_fresh",
+    });
+    await attempts.insert({
+      ...ATTEMPT,
+      id: "att_fresh",
+      testRunId: "run_fresh",
+      status: "QUEUED",
+      startedAt: null,
+      queuedAt: NOW - 60_000,
+      createdAt: NOW - 60_000,
+    });
+    await usage.insertIfAbsent({
+      id: "use_unclaimed",
+      workspaceId: RUN.workspaceId,
+      testRunId: "run_unclaimed",
+      type: "BROWSER_RUN",
+      quantity: 1,
+      billable: true,
+      idempotencyKey: "usage.unclaimed",
+      occurredAt: UNCLAIMED_AT,
+      reversedAt: null,
+      createdAt: UNCLAIMED_AT,
+    });
+    const steps = new FakeStepRepo();
+    const artifacts = new FakeArtifactRepo();
+    const durable = new FakeDurableWorkflowRepo({
+      runs,
+      attempts,
+      steps,
+      artifacts,
+    });
+    const queue = new NoopQueue();
+    const outboxPublisher = new PublishQueueOutbox(
+      durable,
+      { RUN: queue, CHECK: queue, NOTIFY: queue },
+      clock,
+    );
+    const lifecycle = new AttemptLifecycle({
+      runs,
+      attempts,
+      steps,
+      artifacts,
+      tests: new FakeBrowserTestRepo(),
+      workspaces: new FakeWorkspaceRepo(),
+      storage: { delete: async () => undefined },
+      recordUsage: {
+        buildEvent: () => {
+          throw new Error("unused");
+        },
+      },
+      reverseUsage: new ReverseRunUsage(usage, clock),
+      durable,
+      outboxPublisher,
+      clock,
+      ids: new FakeIds(),
+      runFinalizedHandler: new NoopRunFinalizedHandler(),
+    });
+    const alerts: { event: string; fields?: LogFields }[] = [];
+    const hourly = new HourlyMaintenance(
+      { execute: async () => {} },
+      attempts,
+      runs,
+      lifecycle,
+      monitors,
+      clock,
+      (event, fields) => alerts.push({ event, ...(fields === undefined ? {} : { fields }) }),
+    );
+
+    await expect(hourly.execute()).resolves.toEqual({
+      zombieAttempts: 0,
+      unclaimedAttempts: 1,
+      zombieCycles: 0,
+    });
+    await expect(attempts.findById("att_unclaimed")).resolves.toMatchObject({
+      status: "SYSTEM_ERROR",
+      systemErrorCode: "WORKER_LOST",
+      failureReason: "Attempt was never claimed by a runner",
+    });
+    await expect(
+      runs.findByIdForExecution("run_unclaimed"),
+    ).resolves.toMatchObject({ status: "SYSTEM_ERROR", billable: false });
+    await expect(attempts.findById("att_fresh")).resolves.toMatchObject({
+      status: "QUEUED",
+    });
+    await expect(
+      runs.findByIdForExecution("run_fresh"),
+    ).resolves.toMatchObject({ status: "QUEUED" });
+    expect(alerts.map((alert) => alert.event)).toEqual([
+      "zombie_unclaimed_attempt",
     ]);
   });
 });

@@ -24,6 +24,12 @@
           "serviceTokenName": "zenguy-production-fallback-runner",
           "workerId": "zenguy-production-fallback",
           "bootstrapBinding": "RUNNER_FALLBACK_API_TOKEN"
+        },
+        "cf": {
+          "serviceTokenName": "zenguy-production-cf-runner",
+          "workerId": "zenguy-production-cf",
+          "bootstrapBinding": "RUNNER_CF_API_TOKEN",
+          "commonNameBinding": "RUNNER_CF_ACCESS_COMMON_NAME"
         }
       }
     }

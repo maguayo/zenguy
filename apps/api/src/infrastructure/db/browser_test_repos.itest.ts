@@ -567,6 +567,12 @@ describe("D1 browser test repositories", () => {
       "att_old",
       "att_fresh",
     ]);
+
+    const unclaimed = async (queuedBefore: number) =>
+      (await attempts.listUnclaimed(queuedBefore)).map((entry) => entry.id);
+    await expect(unclaimed(600)).resolves.toEqual(["att_old", "att_fresh"]);
+    await expect(unclaimed(101)).resolves.toEqual(["att_old"]);
+    await expect(unclaimed(100)).resolves.toEqual([]);
   });
 
   it("resets attempts and round-trips ordered steps and artifacts", async () => {

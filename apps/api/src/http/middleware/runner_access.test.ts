@@ -97,6 +97,50 @@ describe("production runner Access guard", () => {
     }
   });
 
+  it("accepts the cf worker only when its common name matches the configured secret", async () => {
+    const CF_COMMON_NAME = "cf-runner-client-id-0123456789abcdef.access";
+    const env = productionEnv({
+      RUNNER_CF_ACCESS_COMMON_NAME: CF_COMMON_NAME,
+    });
+    await expect(
+      guard(
+        await assertion({ commonName: CF_COMMON_NAME }),
+        "zenguy-production-cf",
+        "https://app.zenguy.com/api/runner/attempts/claim",
+        env,
+      ),
+    ).resolves.toBeNull();
+
+    expect(
+      (
+        await guard(
+          await assertion({ commonName: "someone-else.access" }),
+          "zenguy-production-cf",
+          "https://api.zenguy.com/api/runner/attempts/claim",
+          env,
+        )
+      )?.status,
+    ).toBe(403);
+    expect(
+      (
+        await guard(
+          await assertion({ commonName: CF_COMMON_NAME }),
+          "zenguy-production-cf",
+        )
+      )?.status,
+    ).toBe(403);
+    expect(
+      (
+        await guard(
+          await assertion({ commonName: CF_COMMON_NAME }),
+          PRIMARY,
+          "https://api.zenguy.com/api/runner/attempts/claim",
+          env,
+        )
+      )?.status,
+    ).toBe(403);
+  });
+
   it("rejects human, wrong-application and expired assertions", async () => {
     const invalid = [
       await assertion({ subject: "human-user-id" }),

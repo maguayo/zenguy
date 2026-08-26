@@ -630,6 +630,26 @@ export class FakeAttemptRepo implements AttemptRepo {
     }
   }
 
+  async listUnclaimed(queuedBefore: number): Promise<TestAttempt[]> {
+    const runs = this.runs;
+    if (runs === undefined) return [];
+    return [...this.attempts.values()]
+      .filter((attempt) => {
+        const run = runs.runs.get(attempt.testRunId);
+        if (
+          run === undefined ||
+          (run.status !== "QUEUED" && run.status !== "RUNNING")
+        ) {
+          return false;
+        }
+        return attempt.status === "QUEUED" && attempt.queuedAt < queuedBefore;
+      })
+      .sort(
+        (left, right) =>
+          left.queuedAt - right.queuedAt || (left.id < right.id ? -1 : 1),
+      );
+  }
+
   async listStale(before: number): Promise<TestAttempt[]> {
     return [...this.attempts.values()]
       .filter(

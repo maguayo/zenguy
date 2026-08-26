@@ -17,6 +17,7 @@ interface OptionalBindings {
   CF_ACCESS_AUD?: string;
   /** Required in production; audience of the service-only runner Access app. */
   CF_RUNNER_ACCESS_AUD?: string;
+  RUNNER_CF_ACCESS_COMMON_NAME?: string;
   ENCRYPTION_PREVIOUS_KEYS?: string;
   /** Required in named environments; private RPC capability, not a URL/token. */
   KEY_WRAPPING?: KeyWrappingServiceBinding;

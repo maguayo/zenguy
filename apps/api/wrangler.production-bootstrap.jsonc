@@ -51,6 +51,9 @@
     "LLM_MODEL": "qwen/qwen3.8-27b",
     "STRIPE_ENVIRONMENT": "live",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
-    "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
+    "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
+    "RUNNER_DISPATCH": "container",
+    "RUNNER_ENVIRONMENT": "production",
+    "PUBLIC_API_URL": "https://app.zenguy.com"
   }
 }

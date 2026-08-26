@@ -168,6 +168,8 @@ export interface AttemptRepo {
   update(id: string, fields: AttemptUpdate): Promise<void>;
   resetForInfraRetry(id: string, queuedAt: number): Promise<void>;
   listStale(before: number): Promise<TestAttempt[]>;
+  /** Attempts still QUEUED whose dispatch is old enough to be presumed lost. */
+  listUnclaimed(queuedBefore: number): Promise<TestAttempt[]>;
   listExternallyClaimable(
     queuedBefore: number,
     abandonedBefore: number,

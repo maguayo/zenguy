@@ -458,6 +458,23 @@ export class D1AttemptRepo implements AttemptRepo {
     );
   }
 
+  async listUnclaimed(queuedBefore: number): Promise<TestAttempt[]> {
+    return (
+      await all<AttemptRow>(
+        this.database
+          .prepare(
+            `SELECT attempts.* FROM test_attempts AS attempts
+             JOIN test_runs AS runs ON runs.id = attempts.test_run_id
+             WHERE runs.status IN ('QUEUED', 'RUNNING')
+               AND attempts.status = 'QUEUED'
+               AND attempts.queued_at < ?
+             ORDER BY attempts.queued_at ASC, attempts.id ASC`,
+          )
+          .bind(queuedBefore),
+      )
+    ).map(toAttempt);
+  }
+
   async listStale(before: number): Promise<TestAttempt[]> {
     return (
       await all<AttemptRow>(

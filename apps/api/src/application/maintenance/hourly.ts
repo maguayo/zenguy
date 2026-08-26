@@ -11,9 +11,13 @@ import type { AttemptOutcome } from "../execution/attempt_lifecycle";
 
 const ZOMBIE_ATTEMPT_GRACE_MS = 600_000;
 const ZOMBIE_CYCLE_MS = 900_000;
+// Past the RunnerContainer watchdog window (8 min + 3 rechecks of 4 min), so
+// this backstop can never race a dispatch that is still being recovered.
+const ZOMBIE_UNCLAIMED_ATTEMPT_MS = 1_800_000;
 
 export interface HourlyMaintenanceResult {
   zombieAttempts: number;
+  unclaimedAttempts: number;
   zombieCycles: number;
 }
 
@@ -34,7 +38,7 @@ type PlatformAlerter = (event: string, fields?: LogFields) => void;
 export class HourlyMaintenance {
   constructor(
     private readonly overages: OverageSweeper,
-    private readonly attempts: Pick<AttemptRepo, "listStale">,
+    private readonly attempts: Pick<AttemptRepo, "listStale" | "listUnclaimed">,
     private readonly runs: Pick<RunRepo, "findByIdForExecution">,
     private readonly lifecycle: AttemptFinisher,
     private readonly monitors: Pick<
@@ -86,6 +90,28 @@ export class HourlyMaintenance {
       zombieAttempts += 1;
     }
 
+    const unclaimedAttempts = await this.attempts.listUnclaimed(
+      now - ZOMBIE_UNCLAIMED_ATTEMPT_MS,
+    );
+    let rescuedUnclaimed = 0;
+    for (const attempt of unclaimedAttempts) {
+      this.alert("zombie_unclaimed_attempt", {
+        runId: attempt.testRunId,
+        attemptId: attempt.id,
+      });
+      const run = await this.runs.findByIdForExecution(attempt.testRunId);
+      if (run === null) continue;
+      await this.lifecycle.onAttemptFinished(run, attempt, {
+        status: "SYSTEM_ERROR",
+        systemErrorCode: "WORKER_LOST",
+        failureReason: "Attempt was never claimed by a runner",
+        visitedUrls: [],
+        consoleErrors: [],
+        networkErrors: [],
+      });
+      rescuedUnclaimed += 1;
+    }
+
     const staleCycles = await this.monitors.listZombieCycles(
       now - ZOMBIE_CYCLE_MS,
     );
@@ -104,6 +130,6 @@ export class HourlyMaintenance {
         cycleId: monitor.currentCycleId,
       });
     }
-    return { zombieAttempts, zombieCycles };
+    return { zombieAttempts, unclaimedAttempts: rescuedUnclaimed, zombieCycles };
   }
 }
