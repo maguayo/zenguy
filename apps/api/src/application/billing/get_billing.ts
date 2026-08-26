@@ -8,9 +8,9 @@ import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type {
   BilledTransaction,
-  PaddleClient,
+  BillingProviderClient,
   SubscriptionManagementUrls,
-} from "../../infrastructure/paddle/client";
+} from "../../infrastructure/billing/provider";
 import {
   INCLUDED_RUNS,
   OVERAGE_CENTS_PER_RUN,
@@ -44,7 +44,7 @@ export class GetBilling {
   constructor(
     private readonly subscriptions: SubscriptionRepo,
     private readonly getCycleUsage: Pick<GetCycleUsage, "execute">,
-    private readonly paddle: PaddleClient,
+    private readonly billingProvider: BillingProviderClient,
   ) {}
 
   async execute(input: {
@@ -66,7 +66,7 @@ export class GetBilling {
       providerSubscriptionId !== undefined
     ) {
       try {
-        invoices = await this.paddle.listBilledTransactions(
+        invoices = await this.billingProvider.listBilledTransactions(
           providerSubscriptionId,
         );
       } catch {
@@ -84,7 +84,7 @@ export class GetBilling {
     ) {
       try {
         managementUrls =
-          await this.paddle.getSubscriptionManagementUrls(
+          await this.billingProvider.getSubscriptionManagementUrls(
             providerSubscriptionId,
           );
       } catch {
@@ -104,7 +104,9 @@ export class GetBilling {
         status: subscription?.status ?? "NONE",
         source:
           subscription?.source ??
-          (subscription?.provider === "internal" ? "free" : "paddle"),
+          (subscription?.provider === "internal"
+            ? "free"
+            : subscription?.provider ?? "stripe"),
         periodStart: subscription?.periodStart ?? null,
         periodEnd: subscription?.periodEnd ?? null,
         cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,

@@ -71,7 +71,7 @@ export default function IssueGrants() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <PageHeader
-        description="Create a one-time link that activates a workspace without Paddle checkout."
+        description="Create a one-time link that activates a workspace without Stripe checkout."
         title="Complimentary links"
       />
       <div className="mt-6 grid gap-4">

@@ -58,6 +58,26 @@ function completeBindings(): Bindings {
   };
 }
 
+function stripeBindings(): Bindings {
+  const env = completeBindings();
+  delete env.PADDLE_API_KEY;
+  delete env.PADDLE_WEBHOOK_SECRET;
+  delete env.PADDLE_CLIENT_TOKEN;
+  delete env.PADDLE_PRODUCT_ID;
+  delete env.PADDLE_PRICE_ID;
+  delete env.PADDLE_OVERAGE_PRICE_ID;
+  delete env.PADDLE_ENVIRONMENT;
+  env.STRIPE_SECRET_KEY = "sk_test_example123";
+  env.STRIPE_WEBHOOK_SECRET = "whsec_example123";
+  env.STRIPE_ENVIRONMENT = "test";
+  env.STRIPE_PRODUCT_ID = "prod_monthly123";
+  env.STRIPE_PRICE_ID = "price_monthly123";
+  env.STRIPE_OVERAGE_PRICE_ID = "price_overage123";
+  env.STRIPE_ALERT_CREDIT_PRODUCT_ID = "prod_alert123";
+  env.STRIPE_ALERT_CREDIT_PRICE_ID = "price_alert123";
+  return env;
+}
+
 describe("loadConfig", () => {
   it("names every missing environment variable in one error", () => {
     let message = "";
@@ -117,6 +137,54 @@ describe("loadConfig", () => {
       overagePriceId: "pri_overage",
     });
     expect(config.complimentaryIssuerEmails).toEqual([]);
+  });
+
+  it("parses Stripe as the exclusive billing provider", () => {
+    const config = loadConfig(stripeBindings());
+
+    expect(config.paddle).toBeNull();
+    expect(config.stripe).toMatchObject({
+      environment: "test",
+      apiBase: "https://api.stripe.com",
+      productId: "prod_monthly123",
+      priceId: "price_monthly123",
+      overagePriceId: "price_overage123",
+      alertCreditProductId: "prod_alert123",
+      alertCreditPriceId: "price_alert123",
+    });
+  });
+
+  it("accepts a least-privilege Stripe restricted key", () => {
+    const env = stripeBindings();
+    env.STRIPE_SECRET_KEY = "rk_test_restricted123";
+
+    expect(loadConfig(env).stripe?.secretKey).toBe("rk_test_restricted123");
+  });
+
+  it("rejects a Stripe key from the wrong environment", () => {
+    const env = stripeBindings();
+    env.STRIPE_ENVIRONMENT = "live";
+
+    expect(() => loadConfig(env)).toThrow(
+      "STRIPE_SECRET_KEY does not match STRIPE_ENVIRONMENT",
+    );
+  });
+
+  it("rejects alert-credit IDs without the Stripe core group", () => {
+    const env = completeBindings();
+    delete env.PADDLE_API_KEY;
+    delete env.PADDLE_WEBHOOK_SECRET;
+    delete env.PADDLE_CLIENT_TOKEN;
+    delete env.PADDLE_PRODUCT_ID;
+    delete env.PADDLE_PRICE_ID;
+    delete env.PADDLE_OVERAGE_PRICE_ID;
+    delete env.PADDLE_ENVIRONMENT;
+    env.STRIPE_ALERT_CREDIT_PRODUCT_ID = "prod_alert123";
+    env.STRIPE_ALERT_CREDIT_PRICE_ID = "price_alert123";
+
+    expect(() => loadConfig(env)).toThrow(
+      "Missing Stripe env: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRODUCT_ID, STRIPE_PRICE_ID, STRIPE_OVERAGE_PRICE_ID, STRIPE_ENVIRONMENT",
+    );
   });
 
   it("starts safely with Paddle and WhatsApp disabled", () => {

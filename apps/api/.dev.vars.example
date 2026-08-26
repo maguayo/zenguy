@@ -12,7 +12,7 @@
 # defaults remain in `wrangler.jsonc`.
 #
 # Keep `ENCRYPTION_PREVIOUS_KEYS` only while retained ciphertext or an approved
-# backup still depends on an old key. The Paddle core group is all-or-none, and
+# backup still depends on an old key. The Stripe core group is all-or-none, and
 # its optional alert-credit product/price IDs are a pair. See README.md for the
 # complete inventory and migration procedure.
 #

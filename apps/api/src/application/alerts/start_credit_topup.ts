@@ -2,23 +2,28 @@ import { ACTIVITY_EVENTS } from "../../domain/activity/catalog";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
 import type { TrackEvent } from "../activity/track_event";
-import type {
-  IssuePaddleCheckoutIntent,
-  PaddleCheckout,
-} from "../billing/paddle_checkout_intent";
+import type { CheckoutPurpose } from "../../domain/billing/types";
 
 export const ALERT_CREDIT_PURPOSE = "alert_credit";
 
-export type CreditTopUpCheckout = PaddleCheckout;
+interface CheckoutIssuer<TCheckout extends { amountCents: number }> {
+  execute(input: {
+    workspaceId: string;
+    actor: User;
+    actorRole: Role;
+    purpose: CheckoutPurpose;
+    quantity?: number;
+  }): Promise<TCheckout>;
+}
 
 /**
  * Validates a top-up request and returns what the browser needs to open the
- * Paddle checkout. Credit is only added when the signed
- * `transaction.completed` webhook arrives.
+ * hosted checkout. Credit is only added when a signed provider webhook
+ * confirms that payment completed.
  */
-export class StartCreditTopUp {
+export class StartCreditTopUp<TCheckout extends { amountCents: number }> {
   constructor(
-    private readonly intents: IssuePaddleCheckoutIntent,
+    private readonly intents: CheckoutIssuer<TCheckout>,
     private readonly track?: Pick<TrackEvent, "execute">,
   ) {}
 
@@ -27,7 +32,7 @@ export class StartCreditTopUp {
     actor: User;
     actorRole: Role;
     packs: number;
-  }): Promise<CreditTopUpCheckout> {
+  }): Promise<TCheckout> {
     const checkout = await this.intents.execute({
       workspaceId: input.workspaceId,
       actor: input.actor,

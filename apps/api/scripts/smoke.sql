@@ -59,11 +59,12 @@ INSERT INTO workspace_members (
 INSERT INTO subscriptions (
   id, workspace_id, provider, provider_customer_id,
   provider_subscription_id, status, period_start, period_end,
-  cancel_at_period_end, update_payment_url, cancel_url, created_at, updated_at
+  cancel_at_period_end, update_payment_url, cancel_url, created_at, updated_at,
+  source
 ) VALUES (
   'sub_backend_smoke',
   'ws_backend_smoke',
-  'paddle',
+  'internal',
   NULL,
   NULL,
   'ACTIVE',
@@ -73,7 +74,8 @@ INSERT INTO subscriptions (
   NULL,
   NULL,
   1800000000000,
-  1800000000000
+  1800000000000,
+  'grant'
 ) ON CONFLICT(id) DO UPDATE SET
   workspace_id = excluded.workspace_id,
   status = excluded.status,

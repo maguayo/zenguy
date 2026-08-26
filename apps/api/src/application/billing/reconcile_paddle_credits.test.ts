@@ -67,6 +67,43 @@ describe("ReconcilePaddleCredits", () => {
     expect(await alerts.getBalanceCents("ws_one")).toBe(600);
   });
 
+  it("shares Stripe refund idempotency with the webhook path", async () => {
+    const alerts = new FakeAlertRepo();
+    await topup(alerts);
+    await alerts.adjust({
+      id: "ace_webhook_refund",
+      workspaceId: "ws_one",
+      amountCents: -300,
+      idempotencyKey: "stripe_refund:re_shared:succeeded",
+      description: "Stripe refund (re_shared)",
+      providerTransactionId: "txn_topup",
+      at: NOW - 500,
+    });
+    const stripe = new RecordingPaddleClient();
+    stripe.adjustments = [{
+      id: "re_shared",
+      action: "refund",
+      transactionId: "txn_topup",
+      customerId: "ctm_one",
+      amountCents: 300,
+      currency: "EUR",
+    }];
+    const reconciler = new ReconcilePaddleCredits(
+      alerts,
+      stripe,
+      { execute: async () => undefined },
+      new FixedClock(NOW),
+      new FakeIds(),
+      "stripe",
+    );
+
+    await expect(reconciler.execute()).resolves.toEqual({
+      checked: 1,
+      adjustments: 0,
+    });
+    expect(await alerts.getBalanceCents("ws_one")).toBe(700);
+  });
+
   it("does not mark a top-up reconciled when provider accounting is invalid", async () => {
     const alerts = new FakeAlertRepo();
     await topup(alerts);

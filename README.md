@@ -27,11 +27,11 @@ experiences them, and alerts the team when something breaks.
   invitations, an audit log of sensitive actions, and encrypted workspace
   secrets that runs may use against allow-listed domains while the plaintext
   is never shown again.
-- **Usage-based billing.** Paddle subscription at EUR 39 per month with 300
+- **Usage-based billing.** Stripe subscription at EUR 39 per month with 300
   browser runs included and EUR 0.20 per additional run, with per-cycle
   usage tracking and durable, replay-safe overage reporting. Allow-listed
   issuer accounts can also mint single-use complimentary subscription
-  grants that activate a workspace without Paddle.
+  grants that activate a workspace without a payment checkout.
 - **Read-only public API.** Per-workspace API keys expose workspace,
   uptime-monitor, browser-test, and run data over a rate-limited read-only
   REST API.
@@ -67,17 +67,14 @@ Worker does not serve frontend assets and does not own either full hostname.
 | Environment | Git branch | Pages project | Pages root | Application URL | API Worker route | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Staging | `staging` | `zenguy-frontend-staging` | `apps/frontend` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` → `zenguy-api-staging` | Operational |
-| Production | `main` | `zenguy-frontend` | `apps/frontend` | `https://app.zenguy.com` | Target: `app.zenguy.com/api/*` → `zenguy-api-production` | Isolated bootstrap; activation pending |
+| Production | `main` | `zenguy-frontend` | `apps/frontend` | `https://app.zenguy.com` | `app.zenguy.com/api/*` → `zenguy-api-production` | Operational |
 
 The environments use independent D1, KV, R2, Queue, secret, and provider
-configuration. Staging is deployed with Paddle Sandbox. Production resources,
-migrations, and an unreachable bootstrap Worker are prepared; that Worker has
-no public route, cron trigger, or Queue consumer. Production remains inactive
-until Paddle Live credentials and catalog, Twilio production
-credentials/senders, the signed Paddle Live webhook, and the final Worker
-activation are complete. Deployed environments send transactional email
-through Cloudflare Email Service on `zenguy.com`; browser-model inference runs
-only in the separately operated local Python worker.
+configuration. Staging uses Stripe test mode and production uses the isolated
+Stripe live account and signed live webhook. Deployed environments send
+transactional email through Cloudflare Email Service on `zenguy.com`;
+browser-model inference runs only in the separately operated local Python
+worker.
 
 ## Local development
 
@@ -148,10 +145,10 @@ These credentials are a **local-only** fixture. Remote seeding is disabled and
 these values must never be used in staging or production. If the local
 workspace unexpectedly redirects to billing onboarding, rerun migrate + seed.
 
-## Paddle sandbox checkout
+## Stripe test checkout
 
-Use only Paddle's published test cards in the sandbox checkout. Never enter a
-real card number in the sandbox.
+Use only Stripe's published test cards while `STRIPE_ENVIRONMENT=test`. Never
+enter a real card number in test mode.
 
 ### Successful payment without 3DS
 
@@ -159,7 +156,7 @@ real card number in the sandbox.
 | --- | --- |
 | Card number | `4242 4242 4242 4242` |
 | Expiration | Any future date, for example `12/30` |
-| Security code | `100` |
+| Security code | Any three digits |
 | Name on card | Any test name |
 | Country and postal code | Any valid supported values |
 
@@ -167,66 +164,60 @@ Additional scenarios:
 
 | Scenario | Card number |
 | --- | --- |
-| Successful Visa debit | `4000 0566 5566 5556` |
-| Successful payment with 3DS | `4000 0038 0000 0446` |
+| Successful payment with 3DS | `4000 0025 0000 3155` |
 | Declined payment | `4000 0000 0000 0002` |
-| Initial success, subsequent decline | `4000 0027 6000 3184` |
 
-See Paddle's official
-[sandbox card documentation](https://developer.paddle.com/concepts/payment-methods/card/)
-for the current list. Sandbox and live credentials, price IDs, customers, and
+See Stripe's official
+[test card documentation](https://docs.stripe.com/testing#cards)
+for the current list. Test and live credentials, price IDs, customers, and
 transactions are separate.
 
 ### Local checkout activation
 
-Completing the Paddle overlay does not activate a workspace directly from the
+Completing Stripe Checkout does not activate a workspace directly from the
 browser. Zenguy provisions the subscription only after its API receives a
-signed Paddle webhook at `POST /api/webhooks/paddle`.
+signed Stripe webhook at `POST /api/webhooks/stripe`.
 
-Paddle cannot deliver webhooks to `localhost`. For a full local checkout test,
-expose the local API through a public HTTPS tunnel and create a Paddle sandbox
-notification destination for:
+Stripe cannot deliver webhooks to `localhost` without forwarding. For a full
+local checkout test, use `stripe listen --forward-to` or expose the local API
+through a public HTTPS tunnel and create a test-mode webhook destination for:
 
 ```text
-https://<public-api-host>/api/webhooks/paddle
+https://<public-api-host>/api/webhooks/stripe
 ```
 
-Subscribe that destination to exactly these seven events:
-`subscription.created`, `subscription.updated`, `subscription.canceled`,
-`subscription.past_due`, `transaction.completed`, `adjustment.created`, and
-`adjustment.updated`. Put that destination's endpoint secret in
-`PADDLE_WEBHOOK_SECRET`, then restart the API before testing checkout.
+Subscribe it to `checkout.session.completed`,
+`checkout.session.async_payment_succeeded`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`,
+`customer.subscription.paused`, `customer.subscription.resumed`,
+`refund.created`, `refund.updated`, `charge.dispute.created`, and
+`charge.dispute.closed`. Put its `whsec_…` secret in
+`STRIPE_WEBHOOK_SECRET`, then restart the API before testing checkout.
 
 If the UI remains on `Activating…` after a successful sandbox payment, do not
-pay again. First confirm the subscription in Paddle Sandbox, make the webhook
-destination reachable, and replay its `subscription.created` notification.
+pay again. First confirm the subscription in Stripe test mode, make the webhook
+destination reachable, and replay its `customer.subscription.created` event.
 The UI polls for up to two minutes and then presents `Check again`; once the
 signed notification has been processed, that action completes onboarding.
 
-`transaction.completed` credits only a server-issued, signed alert-credit
-checkout. An approved adjustment is applied only when both its transaction and
-customer match that credited checkout. `adjustment.created` may arrive already
-approved (for example, a credit or chargeback) or as `pending_approval`; pending
-and rejected records do not change credit. Keep `adjustment.updated` subscribed
-so a later approval is applied. A six-hour reconciliation pass lists approved
-adjustments and uses the same customer check and ledger idempotency key,
-covering missed or delayed webhooks without applying an adjustment twice.
+Only a paid, server-issued Checkout Session can credit alert packs. Succeeded
+refunds debit that exact PaymentIntent's credit, while disputes debit once and
+restore the amount only when Stripe reports them won. Ledger idempotency makes
+webhook retries and the six-hour refund reconciliation safe to race.
 
 ### Overage billing safety
 
-The server-side Paddle API key must include `price.read`, `subscription.write`,
-`transaction.read`, and `adjustment.read`; the last permission is required by
-top-up reconciliation. Zenguy validates
-that `PADDLE_OVERAGE_PRICE_ID` is exactly EUR 0.20 with no country-specific
-overrides before requesting a charge.
+Use a restricted Stripe key with Checkout Session, Billing Portal,
+subscription, invoice, invoice-item, price, PaymentIntent and refund access.
+Zenguy validates that `STRIPE_OVERAGE_PRICE_ID` is a one-time EUR 0.20 price
+before requesting a charge.
 
 An ended billing period is not settled until one hour after its actual
 `period_end`. The pending period and its durable overage report both pin the
-original Paddle subscription ID, so a later subscription replacement cannot
+original Stripe subscription ID, so a later subscription replacement cannot
 redirect the charge. Before its single permitted charge request, the report is
-persisted as `AMBIGUOUS`; if the request outcome cannot be proved, subsequent
-runs only reconcile the deterministic marker against Paddle and emit a
-sanitized operator log. They never repeat the charge request.
+persisted as `AMBIGUOUS`; Stripe receives the deterministic marker as an
+idempotency key and subsequent runs reconcile that marker before completing.
 
 ## Provider configuration for testing
 
@@ -234,7 +225,7 @@ sanitized operator log. They never repeat the charge request.
   staging and production. A personal Wrangler OAuth session must not be used
   by runners, services or CI and must be revoked after the dedicated tokens
   are provisioned.
-- Keep `PADDLE_ENVIRONMENT=sandbox` locally.
+- Keep `STRIPE_ENVIRONMENT=test` locally and in staging.
 - Transactional email uses Cloudflare Email Service through the Worker's
   `EMAIL` binding. Local Wrangler uses a remote binding, so signup, password
   reset, invitation, and email-channel messages are delivered to real inboxes.
@@ -284,7 +275,7 @@ because the existing Workers Builds token lacks required permissions. Until a
 correctly scoped token is installed, an API push does not deploy the Worker
 automatically; use the explicit migration and deploy commands below only in the
 approved change window described above. Production automation must remain disabled
-until its Paddle Live, Twilio, webhook, and secret release gates are satisfied.
+until its Stripe live, Twilio, webhook, and secret release gates are satisfied.
 
 Apply the matching D1 migrations before deploying an API environment:
 
@@ -316,7 +307,7 @@ Cloudflare resources are deliberately isolated:
 | Check Queue / DLQ | `zenguy-staging-checks` / `zenguy-staging-checks-dlq` | `zenguy-checks` / `zenguy-checks-dlq` |
 | Notification Queue / DLQ | `zenguy-staging-notify` / `zenguy-staging-notify-dlq` | `zenguy-notify` / `zenguy-notify-dlq` |
 
-Do not point a production binding at a staging resource, copy sandbox Paddle
+Do not point a production binding at a staging resource, copy Stripe test
 IDs into production, or commit any secret. The full secret, migration, route,
 and webhook procedure is in `apps/api/README.md`; the exact Pages settings are
 in `apps/frontend/README.md`.
@@ -410,9 +401,9 @@ Provider and UI smoke record from 2026-08-19:
 
 - If sign-in shows `Request failed`, check `/api/health` and stop any stale
   Wrangler process occupying port 8787 before restarting the API.
-- Paddle invoice retrieval is provider-backed. If Billing shows no invoices,
+- Stripe invoice retrieval is provider-backed. If Billing shows no invoices,
   inspect Wrangler logs for `billing_invoice_list_failed` before concluding
-  that the workspace has no Paddle invoices.
+  that the workspace has no Stripe invoices.
 - Wrangler local mode does not expose the deployed Queue HTTP pull endpoint.
   Follow `runner/README.md` to run the Python worker against the staging run
   queue for an end-to-end browser run.

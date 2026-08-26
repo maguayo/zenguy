@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "../lib/api";
-import type { Billing, BillingConfig, PaddleCheckoutIntent } from "./types";
+import type { Billing, BillingCheckoutIntent, BillingConfig } from "./types";
 
 export function getBillingConfig(): Promise<BillingConfig> {
   return apiGet("/api/billing/config");
@@ -11,7 +11,7 @@ export function getBilling(workspaceId: string): Promise<Billing> {
 
 export function startSubscriptionCheckout(
   workspaceId: string,
-): Promise<PaddleCheckoutIntent> {
+): Promise<BillingCheckoutIntent> {
   return apiPost(
     `/api/workspaces/${encodeURIComponent(workspaceId)}/billing/checkout`,
     {},

@@ -20,14 +20,13 @@ export const DEVELOPMENT_SECRET_NAMES = Object.freeze([
   "TWILIO_FROM_SMS",
   "TWILIO_FROM_WHATSAPP",
   "TWILIO_FROM_CALL",
-  "PADDLE_API_KEY",
-  "PADDLE_WEBHOOK_SECRET",
-  "PADDLE_CLIENT_TOKEN",
-  "PADDLE_PRODUCT_ID",
-  "PADDLE_PRICE_ID",
-  "PADDLE_OVERAGE_PRICE_ID",
-  "PADDLE_ALERT_CREDIT_PRODUCT_ID",
-  "PADDLE_ALERT_CREDIT_PRICE_ID",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRODUCT_ID",
+  "STRIPE_PRICE_ID",
+  "STRIPE_OVERAGE_PRICE_ID",
+  "STRIPE_ALERT_CREDIT_PRODUCT_ID",
+  "STRIPE_ALERT_CREDIT_PRICE_ID",
   "EXPO_PUSH_ACCESS_TOKEN",
 ]);
 
@@ -52,13 +51,12 @@ const SEED_SECRET_NAMES = Object.freeze([
   "ENCRYPTION_KEY",
   "ENCRYPTION_KEY_ID",
 ]);
-const PADDLE_REQUIRED_NAMES = Object.freeze([
-  "PADDLE_API_KEY",
-  "PADDLE_WEBHOOK_SECRET",
-  "PADDLE_CLIENT_TOKEN",
-  "PADDLE_PRODUCT_ID",
-  "PADDLE_PRICE_ID",
-  "PADDLE_OVERAGE_PRICE_ID",
+const STRIPE_REQUIRED_NAMES = Object.freeze([
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRODUCT_ID",
+  "STRIPE_PRICE_ID",
+  "STRIPE_OVERAGE_PRICE_ID",
 ]);
 const INDEPENDENT_SECRET_NAMES = Object.freeze([
   "JWT_SECRET",
@@ -90,6 +88,7 @@ export const LOCAL_SENSITIVE_FILES = Object.freeze([
     resolve(REPOSITORY_DIRECTORY, "runner/.browser_worker.local.json"),
   ],
   ["TWILIO_TOKENS.md", resolve(REPOSITORY_DIRECTORY, "TWILIO_TOKENS.md")],
+  ["STRIPE_TOKENS.md", resolve(REPOSITORY_DIRECTORY, "STRIPE_TOKENS.md")],
 ]);
 const WRANGLER_ENTRYPOINT = resolve(
   API_DIRECTORY,
@@ -409,21 +408,21 @@ export function validateSecretSet(values, target = "dev") {
       seen.set(value, name);
     }
 
-    const configuredPaddleNames = PADDLE_REQUIRED_NAMES.filter((name) =>
+    const configuredStripeNames = STRIPE_REQUIRED_NAMES.filter((name) =>
       values.has(name)
     );
     if (
-      configuredPaddleNames.length > 0 &&
-      configuredPaddleNames.length !== PADDLE_REQUIRED_NAMES.length
+      configuredStripeNames.length > 0 &&
+      configuredStripeNames.length !== STRIPE_REQUIRED_NAMES.length
     ) {
-      const absent = PADDLE_REQUIRED_NAMES.filter((name) => !values.has(name));
-      throw new Error(`Incomplete Paddle Keychain group; missing: ${absent.join(", ")}`);
+      const absent = STRIPE_REQUIRED_NAMES.filter((name) => !values.has(name));
+      throw new Error(`Incomplete Stripe Keychain group; missing: ${absent.join(", ")}`);
     }
-    const alertProduct = values.has("PADDLE_ALERT_CREDIT_PRODUCT_ID");
-    const alertPrice = values.has("PADDLE_ALERT_CREDIT_PRICE_ID");
+    const alertProduct = values.has("STRIPE_ALERT_CREDIT_PRODUCT_ID");
+    const alertPrice = values.has("STRIPE_ALERT_CREDIT_PRICE_ID");
     if (alertProduct !== alertPrice) {
       throw new Error(
-        "PADDLE_ALERT_CREDIT_PRODUCT_ID and PADDLE_ALERT_CREDIT_PRICE_ID must be configured together",
+        "STRIPE_ALERT_CREDIT_PRODUCT_ID and STRIPE_ALERT_CREDIT_PRICE_ID must be configured together",
       );
     }
   }
@@ -712,7 +711,7 @@ function printInventory() {
   for (const name of REQUIRED_DEVELOPMENT_SECRET_NAMES) {
     process.stdout.write(`  ${name}\n`);
   }
-  process.stdout.write("Optional (Paddle core is all-or-none):\n");
+  process.stdout.write("Optional (Stripe core is all-or-none):\n");
   for (const name of OPTIONAL_DEVELOPMENT_SECRET_NAMES) {
     process.stdout.write(`  ${name}\n`);
   }

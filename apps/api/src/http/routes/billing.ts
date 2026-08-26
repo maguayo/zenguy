@@ -14,9 +14,11 @@ import type {
   WorkspaceRepo,
 } from "../../domain/workspaces/repo";
 import type { PaddleClient } from "../../infrastructure/paddle/client";
+import type { HttpStripeClient } from "../../infrastructure/stripe/client";
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
 import { IssuePaddleCheckoutIntent } from "../../application/billing/paddle_checkout_intent";
+import { IssueStripeCheckoutIntent } from "../../application/billing/stripe_checkout_intent";
 import type { AppConfig } from "../../shared/config";
 import { unavailable } from "../../shared/errors";
 import type { AppEnv } from "../env";
@@ -32,10 +34,14 @@ export interface BillingRoutesDependencies {
   usageEvents: UsageEventRepo;
   checkoutIntents: PaddleCheckoutIntentRepo;
   paddle: PaddleClient;
+  stripeCheckout?: Pick<HttpStripeClient, "createCheckoutSession">;
   track?: Pick<TrackEvent, "execute">;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret" | "paddle" | "complimentaryIssuerEmails">;
+  config: Pick<
+    AppConfig,
+    "appUrl" | "jwtSecret" | "paddle" | "stripe" | "complimentaryIssuerEmails"
+  >;
 }
 
 export function billingRoutes(
@@ -58,28 +64,53 @@ export function billingRoutes(
     dependencies.subscriptions,
     dependencies.paddle,
   );
-  const issueCheckout = new IssuePaddleCheckoutIntent(
-    dependencies.checkoutIntents,
-    dependencies.config.paddle,
-    dependencies.clock,
-    dependencies.ids,
-    dependencies.subscriptions,
-    dependencies.track,
-  );
+  const issueCheckout =
+    dependencies.config.stripe !== null && dependencies.stripeCheckout !== undefined
+      ? new IssueStripeCheckoutIntent(
+          dependencies.checkoutIntents,
+          dependencies.config.stripe,
+          dependencies.stripeCheckout,
+          dependencies.config.appUrl,
+          dependencies.clock,
+          dependencies.ids,
+          dependencies.subscriptions,
+          dependencies.track,
+        )
+      : new IssuePaddleCheckoutIntent(
+          dependencies.checkoutIntents,
+          dependencies.config.paddle,
+          dependencies.clock,
+          dependencies.ids,
+          dependencies.subscriptions,
+          dependencies.track,
+        );
 
   app.get("/billing/config", auth, (context) => {
+    const stripe = dependencies.config.stripe;
     const paddle = dependencies.config.paddle;
     const canIssueComplimentaryGrants =
       dependencies.config.complimentaryIssuerEmails.includes(
         context.get("user").email.trim().toLowerCase(),
       );
-    if (paddle === null) {
+    if (stripe === null && paddle === null) {
       return context.json({
         data: {
           mode: "free" as const,
           canIssueComplimentaryGrants,
         },
       });
+    }
+    if (stripe !== null) {
+      return context.json({
+        data: {
+          mode: "stripe" as const,
+          environment: stripe.environment,
+          canIssueComplimentaryGrants,
+        },
+      });
+    }
+    if (paddle === null) {
+      throw new Error("Billing provider selection is inconsistent");
     }
     return context.json({
       data: {
@@ -131,7 +162,10 @@ export function billingRoutes(
     workspace,
     requireAction("billing.view"),
     async (context) => {
-      if (dependencies.config.paddle === null) {
+      if (
+        dependencies.config.stripe === null &&
+        dependencies.config.paddle === null
+      ) {
         throw unavailable("Billing is not configured");
       }
       const result = await getInvoiceUrl.execute({

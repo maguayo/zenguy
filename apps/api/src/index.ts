@@ -74,6 +74,7 @@ import { buildEmailSender } from "./infrastructure/email";
 import { buildChannelSender } from "./infrastructure/notify";
 import { HttpPaddleClient } from "./infrastructure/paddle/client";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
+import { HttpStripeClient } from "./infrastructure/stripe/client";
 import { NoopBillingCanceller } from "./infrastructure/billing/noop";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { systemClock } from "./shared/clock";
@@ -579,12 +580,19 @@ export function buildWorkspaceDeletionJob(
 ): WorkspaceDeletionSaga {
   const config = loadConfig(env);
   const subscriptions = new D1SubscriptionRepo(env.DB);
+  const providerConfig = config.stripe ?? config.paddle;
+  const billingClient =
+    config.stripe !== null
+      ? new HttpStripeClient(config.stripe, config.appUrl)
+      : config.paddle !== null
+        ? new HttpPaddleClient(config.paddle)
+        : null;
   const billing =
-    config.paddle === null
+    providerConfig === null || billingClient === null
       ? new NoopBillingCanceller()
       : new PaddleBillingCanceller(
           subscriptions,
-          new HttpPaddleClient(config.paddle),
+          billingClient,
           systemClock,
         );
   return new WorkspaceDeletionSaga(
@@ -651,8 +659,15 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
   const reports = new D1OverageReportRepo(env.DB);
   const pendingPeriods = new D1PendingOveragePeriodRepo(env.DB);
   const usageEvents = new D1UsageEventRepo(env.DB);
+  const providerConfig = config.stripe ?? config.paddle;
+  const billingClient =
+    config.stripe !== null
+      ? new HttpStripeClient(config.stripe, config.appUrl)
+      : config.paddle !== null
+        ? new HttpPaddleClient(config.paddle)
+        : null;
   const overages =
-    config.paddle === null
+    providerConfig === null || billingClient === null
       ? { execute: async () => undefined }
       : new SweepOverages(
           subscriptions,
@@ -661,20 +676,20 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
           new ReportOverageForPeriod(
             usageEvents,
             reports,
-            new HttpPaddleClient(config.paddle),
-            config.paddle.overagePriceId,
+            billingClient,
+            providerConfig.overagePriceId,
             systemClock,
             realIds,
           ),
           systemClock,
         );
   const alerts = new D1AlertRepo(env.DB);
-  const paddleCredits =
-    config.paddle === null
+  const billingCredits =
+    providerConfig === null || billingClient === null
       ? null
       : new ReconcilePaddleCredits(
           alerts,
-          new HttpPaddleClient(config.paddle),
+          billingClient,
           new WriteAudit({
             audits: new D1AuditRepo(env.DB),
             activity: buildTracker(env),
@@ -683,6 +698,7 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
           }),
           systemClock,
           realIds,
+          config.stripe === null ? "paddle" : "stripe",
         );
   return new HourlyMaintenance(
     overages,
@@ -693,7 +709,7 @@ export function buildHourlyJob(env: Bindings): HourlyMaintenance {
     systemClock,
     platformAlert,
     buildDefaultChannelBackfill(env, config, alerts),
-    paddleCredits,
+    billingCredits,
   );
 }
 

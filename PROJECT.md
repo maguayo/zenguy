@@ -15,7 +15,7 @@ For the frontend we will use React with Vite, and Tailwindcss for styles.
 
 For the public landing (marketing site) we will use Astro, for now a Coming Soon page with a button to the app, nothing else.
 
-For payments we will use Paddle, even if in the description of the prioject we mention Stripe, the reality will be that Paddle is better for us, we made a deal and Paddle should be the payment processor used.
+For payments we use Stripe Billing with hosted Checkout, Customer Portal, invoices and signed webhooks. Paddle is retained only as historical migration compatibility and must not be configured in active environments.
 
 ## 1. Mandato para el agente de implementación
 

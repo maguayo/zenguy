@@ -4,8 +4,8 @@ export type SubscriptionStatus =
   | "PAST_DUE"
   | "CANCELED";
 
-export type SubscriptionProvider = "internal" | "paddle";
-export type SubscriptionSource = "free" | "grant" | "paddle";
+export type SubscriptionProvider = "internal" | "paddle" | "stripe";
+export type SubscriptionSource = "free" | "grant" | "paddle" | "stripe";
 
 export interface Subscription {
   id: string;
@@ -24,7 +24,7 @@ export interface Subscription {
   updatedAt: number;
   /** First transition into the current PAST_DUE state; never extended by later webhooks. */
   pastDueSince?: number | null;
-  /** Provider event time used to reject stale/out-of-order Paddle webhooks. */
+  /** Provider event time used to reject stale/out-of-order billing webhooks. */
   lastProviderEventAt?: number | null;
 }
 
@@ -54,7 +54,7 @@ export interface OverageReport {
   providerMarker: string | null;
   attemptStartedAt: number | null;
   completedAt: number | null;
-  /** Paddle subscription pinned before the first external charge attempt. */
+  /** Provider subscription pinned before the first external charge attempt. */
   providerSubscriptionId: string | null;
 }
 
@@ -63,7 +63,7 @@ export interface PendingOveragePeriod {
   periodStart: number;
   periodEnd: number;
   createdAt: number;
-  /** Paddle subscription that owned this billing period at rollover time. */
+  /** Provider subscription that owned this billing period at rollover time. */
   providerSubscriptionId: string | null;
   nextAttemptAt: number;
   attemptCount: number;
@@ -80,13 +80,13 @@ export interface SubscriptionGrant {
   createdAt: number;
 }
 
-export type PaddleCheckoutPurpose = "subscription" | "alert_credit";
+export type CheckoutPurpose = "subscription" | "alert_credit";
 
-export interface PaddleCheckoutIntent {
+export interface CheckoutIntent {
   id: string;
   workspaceId: string;
   actorUserId: string;
-  purpose: PaddleCheckoutPurpose;
+  purpose: CheckoutPurpose;
   productId: string;
   priceId: string;
   quantity: number;
@@ -97,6 +97,11 @@ export interface PaddleCheckoutIntent {
   consumedAt: number | null;
   providerReference: string | null;
 }
+
+/** @deprecated Kept for historical Paddle rows and tests. */
+export type PaddleCheckoutPurpose = CheckoutPurpose;
+/** @deprecated Kept for historical Paddle rows and tests. */
+export type PaddleCheckoutIntent = CheckoutIntent;
 
 export function isComplimentarySubscription(
   subscription: Pick<Subscription, "source" | "providerSubscriptionId"> | null,

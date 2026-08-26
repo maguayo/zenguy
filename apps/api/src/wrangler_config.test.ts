@@ -201,14 +201,13 @@ describe("wrangler environments", () => {
   ];
   const releaseFeatureSecrets = [
     "TWILIO_FROM_WHATSAPP",
-    "PADDLE_API_KEY",
-    "PADDLE_WEBHOOK_SECRET",
-    "PADDLE_CLIENT_TOKEN",
-    "PADDLE_PRODUCT_ID",
-    "PADDLE_PRICE_ID",
-    "PADDLE_OVERAGE_PRICE_ID",
-    "PADDLE_ALERT_CREDIT_PRODUCT_ID",
-    "PADDLE_ALERT_CREDIT_PRICE_ID",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRODUCT_ID",
+    "STRIPE_PRICE_ID",
+    "STRIPE_OVERAGE_PRICE_ID",
+    "STRIPE_ALERT_CREDIT_PRODUCT_ID",
+    "STRIPE_ALERT_CREDIT_PRICE_ID",
     "EXPO_PUSH_ACCESS_TOKEN",
   ];
 
@@ -316,7 +315,7 @@ describe("wrangler environments", () => {
       ENCRYPTION_KEY_ID: "primary",
       KEY_WRAPPING_KEY_ID: "primary",
       LLM_MODEL: "qwen/qwen3.8-27b",
-      PADDLE_ENVIRONMENT: "sandbox",
+      STRIPE_ENVIRONMENT: "test",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
       RUNNER_DISPATCH: "container",
@@ -330,7 +329,7 @@ describe("wrangler environments", () => {
       ENCRYPTION_KEY_ID: "primary",
       KEY_WRAPPING_KEY_ID: "primary",
       LLM_MODEL: "qwen/qwen3.8-27b",
-      PADDLE_ENVIRONMENT: "production",
+      STRIPE_ENVIRONMENT: "live",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
     });
@@ -481,13 +480,12 @@ describe("production bootstrap", () => {
       "TWILIO_FROM_SMS",
       "TWILIO_FROM_WHATSAPP",
       "TWILIO_FROM_CALL",
-      "PADDLE_API_KEY",
-      "PADDLE_WEBHOOK_SECRET",
-      "PADDLE_CLIENT_TOKEN",
-      "PADDLE_PRODUCT_ID",
-      "PADDLE_PRICE_ID",
-      "PADDLE_OVERAGE_PRICE_ID",
-      "PADDLE_ALERT_CREDIT_PRODUCT_ID",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PRODUCT_ID",
+      "STRIPE_PRICE_ID",
+      "STRIPE_OVERAGE_PRICE_ID",
+      "STRIPE_ALERT_CREDIT_PRODUCT_ID",
     ]) {
       expect(bootstrap.vars).not.toHaveProperty(secret);
     }

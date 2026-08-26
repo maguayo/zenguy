@@ -182,13 +182,13 @@ describe("staging Cloudflare Access guard", () => {
     }
   });
 
-  it("exempts only Paddle's exact signed POST callback for route-level HMAC verification", async () => {
-    const signature = "ts=1787472000;h1=invalid-but-present";
+  it("exempts only Stripe's exact signed POST callback for route-level HMAC verification", async () => {
+    const signature = "t=1787472000,v1=invalid-but-present";
     await expect(
       enforceStagingAccess(
-        new Request("https://staging-app.zenguy.com/api/webhooks/paddle", {
+        new Request("https://staging-app.zenguy.com/api/webhooks/stripe", {
           method: "POST",
-          headers: { "Paddle-Signature": signature },
+          headers: { "Stripe-Signature": signature },
         }),
         stagingEnv(),
         { keyResolver, currentDate: CURRENT_DATE },
@@ -196,21 +196,21 @@ describe("staging Cloudflare Access guard", () => {
     ).resolves.toBeNull();
 
     const guarded = [
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle"),
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe"),
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe", {
         method: "POST",
       }),
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle/", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe/", {
         method: "POST",
-        headers: { "Paddle-Signature": signature },
+        headers: { "Stripe-Signature": signature },
       }),
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle?retry=1", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe?retry=1", {
         method: "POST",
-        headers: { "Paddle-Signature": signature },
+        headers: { "Stripe-Signature": signature },
       }),
-      new Request("https://api-staging.zenguy.com/api/webhooks/paddle", {
+      new Request("https://api-staging.zenguy.com/api/webhooks/stripe", {
         method: "POST",
-        headers: { "Paddle-Signature": signature },
+        headers: { "Stripe-Signature": signature },
       }),
     ];
     for (const request of guarded) {

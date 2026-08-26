@@ -9,10 +9,7 @@ import { toPaddleLedgerAdjustmentAmount } from "./paddle_adjustment";
 
 const RECONCILIATION_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 const RECONCILIATION_BATCH = 50;
-/**
- * Repairs missed/delayed webhook accounting from Paddle's immutable adjustment
- * list. Ledger idempotency makes webhook and poller safe to race.
- */
+/** Repairs missed/delayed provider adjustments without racing webhooks. */
 export class ReconcilePaddleCredits {
   constructor(
     private readonly alerts: Pick<
@@ -25,6 +22,7 @@ export class ReconcilePaddleCredits {
     private readonly audit: Pick<WriteAudit, "execute">,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly provider: "paddle" | "stripe" = "paddle",
   ) {}
 
   private async reconcileTopup(
@@ -32,10 +30,10 @@ export class ReconcilePaddleCredits {
     now: number,
   ): Promise<number> {
     if (topup.providerCustomerId === null) {
-      throw new Error("Paddle reconciliation customer identity missing");
+      throw new Error("Billing reconciliation customer identity missing");
     }
-    // The client requests Paddle's immutable IDs in ascending order so each
-    // debit is replayed before its later reversal, including repeated cycles.
+    // Provider IDs are immutable; shared ledger keys make webhook and poller
+    // delivery safe to race.
     const adjustments = await this.paddle.listApprovedAdjustments(
       topup.providerTransactionId,
     );
@@ -50,22 +48,26 @@ export class ReconcilePaddleCredits {
         adjustment.currency !== "EUR" ||
         !Number.isSafeInteger(adjustment.amountCents)
       ) {
-        throw new Error("Paddle reconciliation amount or currency mismatch");
+        throw new Error("Billing reconciliation amount or currency mismatch");
       }
       if (adjustment.customerId !== topup.providerCustomerId) {
-        throw new Error("Paddle reconciliation customer mismatch");
+        throw new Error("Billing reconciliation customer mismatch");
       }
+      const idempotencyKey =
+        this.provider === "stripe"
+          ? `stripe_refund:${adjustment.id}:succeeded`
+          : `paddle_adjustment:${adjustment.id}:approved`;
       const written = await this.alerts.adjust({
         id: this.ids.newId("ace"),
         workspaceId: topup.workspaceId,
         amountCents,
-        idempotencyKey: `paddle_adjustment:${adjustment.id}:approved`,
-        description: `Paddle ${adjustment.action} (${adjustment.id})`,
+        idempotencyKey,
+        description: `${this.provider === "stripe" ? "Stripe" : "Paddle"} ${adjustment.action} (${adjustment.id})`,
         providerTransactionId: topup.providerTransactionId,
         at: now,
       });
       if (written === null) {
-        throw new Error("Paddle adjustment exceeds credited transaction");
+        throw new Error("Billing adjustment exceeds credited transaction");
       }
       if (written.created) {
         adjustmentsWritten += 1;
@@ -114,7 +116,7 @@ export class ReconcilePaddleCredits {
     if (failures.length > 1) {
       throw new AggregateError(
         failures,
-        `Paddle credit reconciliation failed for ${failures.length} top-up(s)`,
+        `Billing credit reconciliation failed for ${failures.length} top-up(s)`,
       );
     }
     return { checked, adjustments: adjustmentsWritten };

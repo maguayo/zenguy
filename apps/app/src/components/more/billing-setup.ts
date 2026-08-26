@@ -18,7 +18,7 @@ export const freeAccessDescription =
 export const freeActivationTimeoutMessage =
   "This workspace was not activated automatically. Check again; if it persists, contact privacy@zenguy.com.";
 
-export const paddleActivationTimeoutMessage =
+export const stripeActivationTimeoutMessage =
   "Activation is taking longer than usual. Check again once the payment is confirmed on the web.";
 
 export function workspaceStatus(

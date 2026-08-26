@@ -31,6 +31,7 @@ export const WORKSPACE_DELETION_TAXONOMY = {
     "notification_channels",
     "notification_deliveries",
     "paddle_checkout_intents",
+    "stripe_checkout_intents",
     "pending_overage_periods",
     "run_artifacts",
     "test_runs",
@@ -64,7 +65,7 @@ export const WORKSPACE_DELETION_TAXONOMY = {
   ],
   anonymizeIndirect: ["subscription_grants"],
   externalPurge: ["R2 objects referenced by run_artifacts.storage_key"],
-  externalCancellation: ["Paddle subscription"],
+  externalCancellation: ["billing-provider subscription"],
 } as const;
 
 export interface WorkspaceDeletionRepo {

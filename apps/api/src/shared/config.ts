@@ -32,6 +32,14 @@ interface OptionalBindings {
   PADDLE_OVERAGE_PRICE_ID?: string;
   PADDLE_ALERT_CREDIT_PRODUCT_ID?: string;
   PADDLE_ALERT_CREDIT_PRICE_ID?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_ENVIRONMENT?: string;
+  STRIPE_PRODUCT_ID?: string;
+  STRIPE_PRICE_ID?: string;
+  STRIPE_OVERAGE_PRICE_ID?: string;
+  STRIPE_ALERT_CREDIT_PRODUCT_ID?: string;
+  STRIPE_ALERT_CREDIT_PRICE_ID?: string;
   COMPLIMENTARY_ISSUER_EMAILS?: string;
   IOS_APP_STORE_URL?: string;
   EXPO_PUSH_ACCESS_TOKEN?: string;
@@ -73,6 +81,20 @@ export interface PaddleConfig {
   apiBase: "https://sandbox-api.paddle.com" | "https://api.paddle.com";
 }
 
+export interface StripeConfig {
+  secretKey: string;
+  webhookSecret: string;
+  environment: "test" | "live";
+  productId: string;
+  priceId: string;
+  overagePriceId: string;
+  /** One-time price for a €10 alert-credit pack; null disables top-ups. */
+  alertCreditPriceId: string | null;
+  /** Product owning the alert-credit price; null disables top-ups. */
+  alertCreditProductId: string | null;
+  apiBase: "https://api.stripe.com";
+}
+
 export interface AppConfig {
   appUrl: string;
   environment: "development" | "staging" | "production";
@@ -95,6 +117,7 @@ export interface AppConfig {
     fromCall: string;
   };
   paddle: PaddleConfig | null;
+  stripe: StripeConfig | null;
   complimentaryIssuerEmails: string[];
   iosAppStoreUrl: string | null;
   /** Expo push "enhanced security" token; null sends without one. */
@@ -131,6 +154,25 @@ const paddleSecretKeys = [
 const paddleRequiredKeys = [
   ...paddleSecretKeys,
   "PADDLE_ENVIRONMENT",
+] as const satisfies readonly (keyof Bindings)[];
+
+const stripeSecretKeys = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRODUCT_ID",
+  "STRIPE_PRICE_ID",
+  "STRIPE_OVERAGE_PRICE_ID",
+] as const satisfies readonly (keyof Bindings)[];
+
+const stripeConfiguredKeys = [
+  ...stripeSecretKeys,
+  "STRIPE_ALERT_CREDIT_PRODUCT_ID",
+  "STRIPE_ALERT_CREDIT_PRICE_ID",
+] as const satisfies readonly (keyof Bindings)[];
+
+const stripeRequiredKeys = [
+  ...stripeSecretKeys,
+  "STRIPE_ENVIRONMENT",
 ] as const satisfies readonly (keyof Bindings)[];
 
 function optionalNonEmptyString() {
@@ -178,6 +220,19 @@ const paddleEnvSchema = z.object({
   PADDLE_OVERAGE_PRICE_ID: z.string().min(1),
   PADDLE_ALERT_CREDIT_PRODUCT_ID: optionalNonEmptyString(),
   PADDLE_ALERT_CREDIT_PRICE_ID: optionalNonEmptyString(),
+});
+
+const stripeEnvSchema = z.object({
+  STRIPE_SECRET_KEY: z
+    .string()
+    .regex(/^(?:sk|rk)_(?:test|live)_[A-Za-z0-9]+$/u),
+  STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9]+$/u),
+  STRIPE_ENVIRONMENT: z.enum(["test", "live"]),
+  STRIPE_PRODUCT_ID: z.string().regex(/^prod_[A-Za-z0-9]+$/u),
+  STRIPE_PRICE_ID: z.string().regex(/^price_[A-Za-z0-9]+$/u),
+  STRIPE_OVERAGE_PRICE_ID: z.string().regex(/^price_[A-Za-z0-9]+$/u),
+  STRIPE_ALERT_CREDIT_PRODUCT_ID: optionalNonEmptyString(),
+  STRIPE_ALERT_CREDIT_PRICE_ID: optionalNonEmptyString(),
 });
 
 export function parseComplimentaryIssuerEmails(value: unknown): string[] {
@@ -361,6 +416,49 @@ export function loadConfig(env: Bindings): AppConfig {
     };
   }
 
+  const stripeEnabled = stripeConfiguredKeys.some((key) => {
+    const value = env[key];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+  let stripe: StripeConfig | null = null;
+  if (stripeEnabled) {
+    const missingStripe = stripeRequiredKeys.filter((key) => {
+      const value = env[key];
+      return typeof value !== "string" || value.trim().length === 0;
+    });
+    if (missingStripe.length > 0) {
+      throw new Error(`Missing Stripe env: ${missingStripe.join(", ")}`);
+    }
+    const parsedStripe = stripeEnvSchema.parse(env);
+    const keyEnvironment = parsedStripe.STRIPE_SECRET_KEY.split("_")[1];
+    if (keyEnvironment !== parsedStripe.STRIPE_ENVIRONMENT) {
+      throw new Error("STRIPE_SECRET_KEY does not match STRIPE_ENVIRONMENT");
+    }
+    const alertCreditPriceId =
+      parsedStripe.STRIPE_ALERT_CREDIT_PRICE_ID ?? null;
+    const alertCreditProductId =
+      parsedStripe.STRIPE_ALERT_CREDIT_PRODUCT_ID ?? null;
+    if ((alertCreditPriceId === null) !== (alertCreditProductId === null)) {
+      throw new Error(
+        "STRIPE_ALERT_CREDIT_PRODUCT_ID and STRIPE_ALERT_CREDIT_PRICE_ID must be configured together",
+      );
+    }
+    stripe = {
+      secretKey: parsedStripe.STRIPE_SECRET_KEY,
+      webhookSecret: parsedStripe.STRIPE_WEBHOOK_SECRET,
+      environment: parsedStripe.STRIPE_ENVIRONMENT,
+      productId: parsedStripe.STRIPE_PRODUCT_ID,
+      priceId: parsedStripe.STRIPE_PRICE_ID,
+      overagePriceId: parsedStripe.STRIPE_OVERAGE_PRICE_ID,
+      alertCreditPriceId,
+      alertCreditProductId,
+      apiBase: "https://api.stripe.com",
+    };
+  }
+  if (stripe !== null && paddle !== null) {
+    throw new Error("Configure Stripe or Paddle, not both");
+  }
+
   return {
     appUrl: parsed.APP_URL,
     environment: parsed.ENVIRONMENT,
@@ -381,6 +479,7 @@ export function loadConfig(env: Bindings): AppConfig {
       fromCall: parsed.TWILIO_FROM_CALL,
     },
     paddle,
+    stripe,
     expoPushAccessToken: parsed.EXPO_PUSH_ACCESS_TOKEN ?? null,
     complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
       env.COMPLIMENTARY_ISSUER_EMAILS,

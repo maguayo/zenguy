@@ -40,7 +40,11 @@ describe("alerts API client", () => {
       .mockResolvedValueOnce(response({ settings: { paidChannelsEnabled: false } }))
       .mockResolvedValueOnce(response({ paidChannelsEnabled: true }))
       .mockResolvedValueOnce(response([{ id: "ace_1" }], "next"))
-      .mockResolvedValueOnce(response({ priceId: "pri_1", quantity: 2 }));
+      .mockResolvedValueOnce(response({
+        amountCents: 2_000,
+        currencyCode: "EUR",
+        url: "https://checkout.stripe.com/c/pay/cs_test_topup",
+      }));
 
     await expect(getAlertsOverview("ws_1")).resolves.toEqual({
       settings: { paidChannelsEnabled: false },
@@ -53,8 +57,9 @@ describe("alerts API client", () => {
       nextCursor: "next",
     });
     await expect(startCreditTopUp("ws_1", 2)).resolves.toEqual({
-      priceId: "pri_1",
-      quantity: 2,
+      amountCents: 2_000,
+      currencyCode: "EUR",
+      url: "https://checkout.stripe.com/c/pay/cs_test_topup",
     });
 
     const calls = fetchMock.mock.calls.map(([url, init]) => [

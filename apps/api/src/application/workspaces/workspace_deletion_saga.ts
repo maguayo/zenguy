@@ -81,7 +81,7 @@ export class WorkspaceDeletionSaga {
   private async process(claim: WorkspaceDeletionClaim): Promise<boolean> {
     if (claim.stage === "CANCELLATION_PENDING") {
       try {
-        // Paddle DELETE is retried with the same provider subscription id;
+        // Provider cancellation is retried with the same subscription id;
         // local cancellation is written only after the provider confirms it.
         await this.billing.cancelForWorkspace(claim.workspaceId);
         await this.deletions.markCancellationSucceeded(

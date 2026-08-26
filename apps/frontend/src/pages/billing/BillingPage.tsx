@@ -315,7 +315,7 @@ function PaymentCard({ billing }: { billing: Billing }) {
       toast.error("The billing provider returned an untrusted link.");
       return;
     }
-    toast.info("Finish cancelling in the Paddle page we just opened.");
+    toast.info("Finish cancelling in the secure billing page we just opened.");
   };
 
   return (

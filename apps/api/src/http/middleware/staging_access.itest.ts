@@ -6,7 +6,7 @@ import {
 } from "jose";
 import { handleHttpRequest } from "../../index";
 import type { Bindings } from "../../shared/config";
-import { MAX_PADDLE_WEBHOOK_BODY_BYTES } from "../../shared/constants";
+import { MAX_STRIPE_WEBHOOK_BODY_BYTES } from "../../shared/constants";
 import { testEnv } from "../../test/helpers";
 
 const TEAM_DOMAIN = "https://zenguy-integration.cloudflareaccess.com";
@@ -48,13 +48,29 @@ async function accessFixture(
 }
 
 function stagingEnv(): Bindings {
-  return {
+  const env: Bindings = {
     ...testEnv(),
     ENVIRONMENT: "staging",
     APP_URL: "https://staging-app.zenguy.com",
     CF_ACCESS_TEAM_DOMAIN: TEAM_DOMAIN,
     CF_ACCESS_AUD: AUDIENCE,
   };
+  delete env.PADDLE_API_KEY;
+  delete env.PADDLE_WEBHOOK_SECRET;
+  delete env.PADDLE_CLIENT_TOKEN;
+  delete env.PADDLE_ENVIRONMENT;
+  delete env.PADDLE_PRODUCT_ID;
+  delete env.PADDLE_PRICE_ID;
+  delete env.PADDLE_OVERAGE_PRICE_ID;
+  delete env.PADDLE_ALERT_CREDIT_PRODUCT_ID;
+  delete env.PADDLE_ALERT_CREDIT_PRICE_ID;
+  env.STRIPE_SECRET_KEY = "sk_test_integration123";
+  env.STRIPE_WEBHOOK_SECRET = "whsec_integration123";
+  env.STRIPE_ENVIRONMENT = "test";
+  env.STRIPE_PRODUCT_ID = "prod_integration123";
+  env.STRIPE_PRICE_ID = "price_integration123";
+  env.STRIPE_OVERAGE_PRICE_ID = "price_overageintegration123";
+  return env;
 }
 
 describe("staging Access Worker boundary", () => {
@@ -64,7 +80,7 @@ describe("staging Access Worker boundary", () => {
       new Request("https://staging-app.zenguy.com/api/auth/login", {
         method: "POST",
       }),
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe", {
         method: "POST",
       }),
       new Request("https://api-staging.zenguy.com/api/runner/claim", {
@@ -133,12 +149,12 @@ describe("staging Access Worker boundary", () => {
     });
   });
 
-  it("lets only the exact Paddle POST reach its HMAC and strict body-limit checks", async () => {
-    const invalidSignature = "ts=1787472000;h1=invalid";
+  it("lets only the exact Stripe POST reach its HMAC and strict body-limit checks", async () => {
+    const invalidSignature = "t=1787472000,v1=invalid";
     const rejected = await handleHttpRequest(
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe", {
         method: "POST",
-        headers: { "Paddle-Signature": invalidSignature },
+        headers: { "Stripe-Signature": invalidSignature },
         body: "{}",
       }),
       stagingEnv(),
@@ -146,14 +162,14 @@ describe("staging Access Worker boundary", () => {
     );
     expect(rejected.status).toBe(401);
     await expect(rejected.json()).resolves.toEqual({
-      error: { code: "UNAUTHORIZED", message: "Invalid Paddle signature" },
+      error: { code: "UNAUTHORIZED", message: "Invalid Stripe signature" },
     });
 
     const oversized = await handleHttpRequest(
-      new Request("https://staging-app.zenguy.com/api/webhooks/paddle", {
+      new Request("https://staging-app.zenguy.com/api/webhooks/stripe", {
         method: "POST",
-        headers: { "Paddle-Signature": invalidSignature },
-        body: "x".repeat(MAX_PADDLE_WEBHOOK_BODY_BYTES + 1),
+        headers: { "Stripe-Signature": invalidSignature },
+        body: "x".repeat(MAX_STRIPE_WEBHOOK_BODY_BYTES + 1),
       }),
       stagingEnv(),
       CONTEXT,

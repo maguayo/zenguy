@@ -91,7 +91,7 @@ export interface BillingPeriod {
 }
 
 /**
- * Paddle subscriptions carry a provider period; free and complimentary ones
+ * Paid subscriptions carry a provider period; free and complimentary ones
  * reset on the usage cycle instead.
  */
 export function subscriptionPeriod(billing: Billing): BillingPeriod {

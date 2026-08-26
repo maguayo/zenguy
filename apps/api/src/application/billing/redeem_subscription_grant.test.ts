@@ -73,7 +73,7 @@ async function setup() {
 }
 
 describe("RedeemSubscriptionGrant", () => {
-  it("activates the workspace without a Paddle customer", async () => {
+  it("activates the workspace without a billing-provider customer", async () => {
     const { grants, subscriptions, token, usecase } = await setup();
 
     await expect(

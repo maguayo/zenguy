@@ -158,6 +158,9 @@ export class D1WorkspaceDeletionRepo implements WorkspaceDeletionRepo {
         .prepare("DELETE FROM paddle_checkout_intents WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database
+        .prepare("DELETE FROM stripe_checkout_intents WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
         .prepare(
           `DELETE FROM check_execution_claims
            WHERE cycle_id IN (
@@ -422,6 +425,9 @@ export class D1WorkspaceDeletionRepo implements WorkspaceDeletionRepo {
         .bind(workspaceId),
       this.database
         .prepare("DELETE FROM paddle_checkout_intents WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
+        .prepare("DELETE FROM stripe_checkout_intents WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database
         .prepare("DELETE FROM pending_overage_periods WHERE workspace_id = ?")

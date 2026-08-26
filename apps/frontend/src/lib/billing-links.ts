@@ -1,13 +1,11 @@
 const BILLING_HOSTS = new Set([
-  "customer-portal.paddle.com",
-  "invoicedata.paddle.com",
-  "sandbox-customer-portal.paddle.com",
-  "sandbox-invoicedata.paddle.com",
-  "sandbox-vendors.paddle.com",
-  "vendors.paddle.com",
+  "billing.stripe.com",
+  "checkout.stripe.com",
+  "invoice.stripe.com",
+  "pay.stripe.com",
 ]);
 
-/** Accept only HTTPS documents and management pages controlled by Paddle. */
+/** Accept only HTTPS checkout, invoice and management pages controlled by a provider. */
 export function trustedBillingUrl(value: string): string | null {
   try {
     const url = new URL(value);

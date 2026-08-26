@@ -58,7 +58,7 @@ const REQUIRED_POLICY_CONTRACT = {
         "Block abusive runner, webhook and expensive workspace traffic (v1)",
       action: "block",
       expression:
-        '(http.request.uri.path eq "/api/webhooks/paddle") or starts_with(http.request.uri.path, "/api/runner/") or (starts_with(http.request.uri.path, "/api/workspaces/") and ((http.request.uri.path contains "/browser-tests/") or (http.request.uri.path contains "/runs") or (http.request.uri.path contains "/channels")))',
+        '(http.request.uri.path eq "/api/webhooks/stripe") or starts_with(http.request.uri.path, "/api/runner/") or (starts_with(http.request.uri.path, "/api/workspaces/") and ((http.request.uri.path contains "/browser-tests/") or (http.request.uri.path contains "/runs") or (http.request.uri.path contains "/channels")))',
       ratelimit: {
         characteristics: ["cf.colo.id", "ip.src"],
         period: 10,

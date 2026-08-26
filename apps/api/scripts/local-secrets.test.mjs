@@ -63,7 +63,7 @@ test("the Keychain namespace and accepted names are fixed", () => {
   assert.equal(KEYCHAIN_SERVICE, "com.zenguy.api.local-development.v1");
   assert.equal(new Set(DEVELOPMENT_SECRET_NAMES).size, DEVELOPMENT_SECRET_NAMES.length);
   assert.ok(DEVELOPMENT_SECRET_NAMES.includes("ENCRYPTION_PREVIOUS_KEYS"));
-  assert.ok(DEVELOPMENT_SECRET_NAMES.includes("PADDLE_WEBHOOK_SECRET"));
+  assert.ok(DEVELOPMENT_SECRET_NAMES.includes("STRIPE_WEBHOOK_SECRET"));
 });
 
 test("audits local secret files using metadata only and rejects unsafe nodes", () => {
@@ -189,9 +189,9 @@ test("rejects placeholders, duplicate independent secrets, and NUL bytes", () =>
 });
 
 test("rejects incomplete provider and previous-key groups", () => {
-  const paddle = validDevelopmentValues();
-  paddle.set("PADDLE_API_KEY", "paddle-api");
-  assert.throws(() => validateSecretSet(paddle), /Incomplete Paddle/u);
+  const stripe = validDevelopmentValues();
+  stripe.set("STRIPE_SECRET_KEY", "sk_test_example");
+  assert.throws(() => validateSecretSet(stripe), /Incomplete Stripe/u);
 
   const previous = validDevelopmentValues();
   previous.set(

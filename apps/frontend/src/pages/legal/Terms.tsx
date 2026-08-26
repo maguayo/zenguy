@@ -61,19 +61,18 @@ export default function Terms() {
 
       <LegalSection title="5. Fees and third-party services">
         <p>
-          During Zenguy's free launch, no payment method is required and no
-          subscription or usage fee is charged. The product limits shown in the
-          application still apply. SMS, phone-call, and WhatsApp alerts are an
-          optional pay-as-you-go add-on: they are charged per alert, at the
+          Zenguy may offer paid subscriptions and prepaid alert credit. Prices,
+          included usage, taxes, billing cycle, renewal, and cancellation terms
+          are shown before purchase and require your express agreement. SMS,
+          phone-call, and WhatsApp alerts are charged per alert, at the
           destination prices shown in the application, from prepaid alert credit
           that you buy in advance. Credit is only spent on alerts you configure,
-          never goes negative, and is refunded to the balance when a carrier
-          rejects a message. If paid plans are introduced later, their
-          price, usage charges, taxes, billing cycle, and cancellation terms will
-          be shown before purchase and will require your express agreement.
-          Third-party services such as Cloudflare, Twilio, OpenAI, and Paddle may
-          have their own terms and availability. Zenguy is not responsible for
-          third-party systems outside our reasonable control.
+          never goes negative, and is returned to the balance when a carrier
+          rejects a message. Subscriptions renew until canceled; cancellation
+          takes effect as shown in the billing portal. Third-party services such
+          as Cloudflare, Twilio, OpenAI, and Stripe may have their own terms and
+          availability. Zenguy is not responsible for third-party systems outside
+          our reasonable control.
         </p>
       </LegalSection>
 

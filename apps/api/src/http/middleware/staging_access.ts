@@ -7,8 +7,8 @@ import type { Bindings } from "../../shared/config";
 
 const ACCESS_ASSERTION_HEADER = "Cf-Access-Jwt-Assertion";
 const ACCESS_TOKEN_TYPE = "app";
-const STAGING_PADDLE_WEBHOOK_ORIGIN = "https://staging-app.zenguy.com";
-const PADDLE_WEBHOOK_PATH = "/api/webhooks/paddle";
+const STAGING_WEBHOOK_ORIGIN = "https://staging-app.zenguy.com";
+const STRIPE_WEBHOOK_PATH = "/api/webhooks/stripe";
 const CLOCK_TOLERANCE_SECONDS = 30;
 const MAX_ASSERTION_LENGTH = 16_384;
 const MAX_AUDIENCE_LENGTH = 256;
@@ -168,14 +168,14 @@ function accessDenied(): Response {
   );
 }
 
-function isPaddleWebhookCallback(request: Request): boolean {
+function isBillingWebhookCallback(request: Request): boolean {
   const url = new URL(request.url);
-  const signature = request.headers.get("Paddle-Signature");
+  const signature = request.headers.get("Stripe-Signature");
   return (
     request.method === "POST" &&
-    url.origin === STAGING_PADDLE_WEBHOOK_ORIGIN &&
-    url.pathname === PADDLE_WEBHOOK_PATH &&
+    url.origin === STAGING_WEBHOOK_ORIGIN &&
     url.search === "" &&
+    url.pathname === STRIPE_WEBHOOK_PATH &&
     typeof signature === "string" &&
     signature.trim().length > 0
   );
@@ -193,9 +193,9 @@ export async function enforceStagingAccess(
 ): Promise<Response | null> {
   if (env.ENVIRONMENT !== "staging") return null;
 
-  // Paddle cannot present an Access token. Only its exact documented callback
+  // Billing providers cannot present an Access token. Only an exact signed callback
   // may reach the route-level body cap and timestamped HMAC verification.
-  if (isPaddleWebhookCallback(request)) return null;
+  if (isBillingWebhookCallback(request)) return null;
 
   let config: StagingAccessConfig;
   try {

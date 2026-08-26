@@ -1,7 +1,7 @@
 import type {
   OverageReport,
   PendingOveragePeriod,
-  PaddleCheckoutIntent,
+  CheckoutIntent,
   Subscription,
   SubscriptionGrant,
   UsageEvent,
@@ -25,9 +25,9 @@ export type ConsumeCheckoutIntentResult =
   | "replayed"
   | "unavailable";
 
-export interface PaddleCheckoutIntentRepo {
-  insert(intent: PaddleCheckoutIntent): Promise<void>;
-  findById(id: string): Promise<PaddleCheckoutIntent | null>;
+export interface CheckoutIntentRepo {
+  insert(intent: CheckoutIntent): Promise<void>;
+  findById(id: string): Promise<CheckoutIntent | null>;
   consume(
     id: string,
     providerReference: string,
@@ -35,6 +35,9 @@ export interface PaddleCheckoutIntentRepo {
   ): Promise<ConsumeCheckoutIntentResult>;
   purgeExpired(before: number): Promise<number>;
 }
+
+/** @deprecated Kept for the legacy Paddle adapter. */
+export type PaddleCheckoutIntentRepo = CheckoutIntentRepo;
 
 export interface UsageEventRepo {
   insertIfAbsent(event: UsageEvent): Promise<InsertResult>;

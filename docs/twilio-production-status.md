@@ -1,16 +1,16 @@
 # Twilio production status
 
-Last updated: 2026-08-21
+Last updated: 2026-08-26
 
 This document contains resource identifiers and operational state only. It must
 never contain the Twilio Auth Token or other secret values.
 
 ## Release scope
 
-The current release scope is outbound SMS and outbound voice notifications.
-WhatsApp and Paddle are intentionally disabled for now. The API treats both as
-optional integrations and fails closed if a disabled channel or billing route is
-used.
+The current notification release scope is outbound SMS and outbound voice.
+WhatsApp remains intentionally disabled. Stripe billing is implemented but
+remains fail-closed until its complete environment-specific secret and catalog
+group is installed.
 
 Inbound SMS and voice webhooks are not configured because Zenguy currently has
 no inbound SMS or voice product routes.
@@ -41,8 +41,9 @@ transfer to 1Password. It must not be committed.
 The four required SMS/voice secrets were installed in the production Worker on
 2026-08-21. The production encryption key was also replaced with a valid
 32-byte key after a read-only audit confirmed that the production D1 database
-contained no encrypted records. `TWILIO_FROM_WHATSAPP` and every Paddle secret
-remain unset.
+contained no encrypted records. `TWILIO_FROM_WHATSAPP` remains unset. The
+Stripe production secret and catalog group is tracked separately and must be
+installed atomically before paid checkout is enabled.
 
 ## Production deployment
 
@@ -119,7 +120,7 @@ derived from Twilio's rates for this US number (×2 markup, €0.05/€0.20
 minimums, flat rest-of-world rate). Calls carry `TimeLimit=55` so one alert is
 always a single billed minute, and SMS bodies are trimmed to one segment. See
 `docs/alerts-paid-channels.md` for the table, the refresh procedure, and the
-Paddle price needed to open top-ups.
+Stripe price needed to open top-ups.
 
 ## Voice status
 

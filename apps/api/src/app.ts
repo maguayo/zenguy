@@ -32,8 +32,8 @@ import { ResolveSecrets } from "./application/secrets/resolve_secrets";
 import type { SecretRepo } from "./domain/secrets/repo";
 import type { EncryptionRotationRepo } from "./domain/security/encryption";
 import type {
+  CheckoutIntentRepo,
   OverageReportRepo,
-  PaddleCheckoutIntentRepo,
   PendingOveragePeriodRepo,
   SubscriptionGrantRepo,
   SubscriptionRepo,
@@ -78,6 +78,7 @@ import { D1WorkspaceDeletionRepo } from "./infrastructure/db/workspace_deletion_
 import { D1InvitationRepo } from "./infrastructure/db/invitation_repo";
 import { D1SubscriptionRepo } from "./infrastructure/db/subscription_repo";
 import { D1PaddleCheckoutIntentRepo } from "./infrastructure/db/paddle_checkout_intent_repo";
+import { D1StripeCheckoutIntentRepo } from "./infrastructure/db/stripe_checkout_intent_repo";
 import { D1SubscriptionGrantRepo } from "./infrastructure/db/subscription_grant_repo";
 import { D1UsageEventRepo } from "./infrastructure/db/usage_event_repo";
 import { D1OverageReportRepo } from "./infrastructure/db/overage_report_repo";
@@ -107,8 +108,10 @@ import {
   type PaddleClient,
 } from "./infrastructure/paddle/client";
 import { UnavailablePaddleClient } from "./infrastructure/paddle/unavailable";
+import { HttpStripeClient } from "./infrastructure/stripe/client";
+import type { BillingProviderClient } from "./infrastructure/billing/provider";
 import { buildEmailSender } from "./infrastructure/email";
-import { webhookRoutes } from "./http/routes/webhooks";
+import { stripeWebhookRoutes, webhookRoutes } from "./http/routes/webhooks";
 import { billingRoutes } from "./http/routes/billing";
 import { subscriptionGrantRoutes } from "./http/routes/subscription_grants";
 import { secretRoutes } from "./http/routes/secrets";
@@ -139,6 +142,7 @@ import {
   MAX_API_REQUEST_BODY_BYTES,
   MAX_BROWSER_TEST_IMPORT_BODY_BYTES,
   MAX_PADDLE_WEBHOOK_BODY_BYTES,
+  MAX_STRIPE_WEBHOOK_BODY_BYTES,
   MAX_STANDARD_API_REQUEST_BODY_BYTES,
 } from "./shared/constants";
 import { strictBodyLimit } from "./http/middleware/strict_body_limit";
@@ -181,7 +185,7 @@ export interface AppOverrides {
   activityEvents?: ActivityEventRepo;
   invitations?: InvitationRepo;
   subscriptions?: SubscriptionRepo;
-  checkoutIntents?: PaddleCheckoutIntentRepo;
+  checkoutIntents?: CheckoutIntentRepo;
   subscriptionGrants?: SubscriptionGrantRepo;
   usageEvents?: UsageEventRepo;
   overageReports?: OverageReportRepo;
@@ -210,6 +214,8 @@ export interface AppOverrides {
   incidentCloserOnTestDelete?: IncidentCloserOnDelete;
   runQueue?: AttemptDispatch;
   paddleClient?: PaddleClient;
+  billingClient?: BillingProviderClient;
+  stripeClient?: HttpStripeClient;
   overageReporter?: PeriodOverageReporter;
   billingCanceller?: BillingCanceller;
   workspaceDeletion?: WorkspaceDeletionCoordinator;
@@ -261,7 +267,10 @@ export function buildApp(
   const subscriptions =
     overrides.subscriptions ?? new D1SubscriptionRepo(env.DB);
   const checkoutIntents =
-    overrides.checkoutIntents ?? new D1PaddleCheckoutIntentRepo(env.DB);
+    overrides.checkoutIntents ??
+    (config.stripe === null
+      ? new D1PaddleCheckoutIntentRepo(env.DB)
+      : new D1StripeCheckoutIntentRepo(env.DB));
   const subscriptionGrants =
     overrides.subscriptionGrants ?? new D1SubscriptionGrantRepo(env.DB);
   const usageEvents = overrides.usageEvents ?? new D1UsageEventRepo(env.DB);
@@ -363,28 +372,36 @@ export function buildApp(
       incidentEvents,
       overrides.ids ?? realIds,
     );
-  const paddleClient =
+  const stripeClient =
+    overrides.stripeClient ??
+    (config.stripe === null
+      ? null
+      : new HttpStripeClient(config.stripe, config.appUrl));
+  const billingClient =
+    overrides.billingClient ??
     overrides.paddleClient ??
+    stripeClient ??
     (config.paddle === null
       ? new UnavailablePaddleClient()
       : new HttpPaddleClient(config.paddle));
+  const providerConfig = config.stripe ?? config.paddle;
   const overageReporter =
     overrides.overageReporter ??
-    (config.paddle === null
+    (providerConfig === null
       ? null
       : new ReportOverageForPeriod(
           usageEvents,
           overageReports,
-          paddleClient,
-          config.paddle.overagePriceId,
+          billingClient,
+          providerConfig.overagePriceId,
           clock,
           overrides.ids ?? realIds,
         ));
   const billingCanceller =
     overrides.billingCanceller ??
-    (config.paddle === null
+    (providerConfig === null
       ? new NoopBillingCanceller()
-      : new PaddleBillingCanceller(subscriptions, paddleClient, clock));
+      : new PaddleBillingCanceller(subscriptions, billingClient, clock));
   const workspaceDeletion =
     overrides.workspaceDeletion ??
     new WorkspaceDeletionSaga(
@@ -468,7 +485,7 @@ export function buildApp(
   // materialize. Count every stream before any JSON/raw-body parser runs;
   // Content-Length is only an early-rejection hint, never the enforcement.
   // Route selection is deterministic and fail-closed: ordinary JSON and the
-  // unauthenticated Paddle webhook receive 256 KiB, imports receive their
+  // unauthenticated billing webhooks receive 256 KiB, imports receive their
   // domain limit, and only a runner step carrying one bounded JPEG receives
   // the absolute 3.2 MB allowance.
   app.use(
@@ -478,6 +495,9 @@ export function buildApp(
         const path = context.req.path;
         if (path === "/api/webhooks/paddle") {
           return MAX_PADDLE_WEBHOOK_BODY_BYTES;
+        }
+        if (path === "/api/webhooks/stripe") {
+          return MAX_STRIPE_WEBHOOK_BODY_BYTES;
         }
         if (
           /^\/api\/workspaces\/[^/]+\/browser-tests\/import$/u.test(path)
@@ -652,6 +672,7 @@ export function buildApp(
       channels,
       alerts,
       checkoutIntents,
+      ...(stripeClient === null ? {} : { stripeCheckout: stripeClient }),
       audit,
       track,
       clock,
@@ -668,7 +689,8 @@ export function buildApp(
       subscriptions,
       usageEvents,
       checkoutIntents,
-      paddle: paddleClient,
+      paddle: billingClient,
+      ...(stripeClient === null ? {} : { stripeCheckout: stripeClient }),
       track,
       clock,
       ids: overrides.ids ?? realIds,
@@ -854,6 +876,28 @@ export function buildApp(
         alertCreditPriceId: config.paddle.alertCreditPriceId,
         subscriptionProductId: config.paddle.productId,
         subscriptionPriceId: config.paddle.priceId,
+      }),
+    );
+  }
+  if (config.stripe !== null && overageReporter !== null) {
+    app.route(
+      "/api/webhooks",
+      stripeWebhookRoutes({
+        webhookSecret: config.stripe.webhookSecret,
+        kv: env.KV,
+        subscriptions,
+        checkoutIntents,
+        workspaces,
+        pendingOveragePeriods,
+        overageReporter,
+        audit,
+        clock,
+        ids: overrides.ids ?? realIds,
+        alerts,
+        alertCreditProductId: config.stripe.alertCreditProductId,
+        alertCreditPriceId: config.stripe.alertCreditPriceId,
+        subscriptionProductId: config.stripe.productId,
+        subscriptionPriceId: config.stripe.priceId,
       }),
     );
   }

@@ -46,7 +46,7 @@ JWT_SECRET, ENCRYPTION_KEY (canonical base64 for exactly 32 bytes),
 ARTIFACT_URL_SECRET, RUNNER_API_TOKEN, RUNNER_FALLBACK_API_TOKEN and
 RUNNER_CAPABILITY_SECRET. The five non-encryption values need at least 32
 characters. Use a unique `ENCRYPTION_KEY_ID`, local-only Twilio credentials and
-senders, and never reuse any value in staging or production. Paddle's six core
+senders, and never reuse any value in staging or production. Stripe's five core
 items are optional but all-or-none; the alert-credit product/price IDs are also
 a pair.
 
@@ -122,7 +122,7 @@ The seed command recreates an idempotent fixture in local D1:
 
 - Login: `marcos@aguayo.es` / `abc123456`
 - Workspace: Aguayo Staging, with admin and member teammates
-- Complimentary (non-Paddle) active subscription
+- Complimentary active subscription with no billing-provider customer
 - Browser tests, completed runs, and uptime monitors ("beats")
 - DEMO_TOKEN secret restricted to example.com
 
@@ -222,7 +222,7 @@ Strict application rate limits use `rate_limit_windows`, created by migration
 statement conditionally consumes every workspace/actor/IP/destination scope
 for a rule, so concurrent isolates admit at most the configured limit and a
 blocked request does not partially charge sibling scopes. The remaining KV use
-in Paddle handling is only a best-effort replay cache layered over D1
+in billing-webhook handling is only a best-effort replay cache layered over D1
 idempotency constraints. The versioned Cloudflare edge rate-limit policy in
 `security/cloudflare-edge-policy.json` remains a separate pre-limit and must be
 deployed and verified remotely before public production traffic.
@@ -249,69 +249,53 @@ limited to 200 entries and imports retain the 2 MB request/body ceiling.
 
 ## Provider setup
 
-### Paddle Billing
+### Stripe Billing
 
-**Deferred during the free launch.** New workspaces receive an active internal
-free subscription with the same product capabilities and limits as the planned
-paid plan. Signup requires no checkout or payment card. See
-[`docs/free-launch-plan.md`](../../docs/free-launch-plan.md) for the active
-contract and future activation checklist.
+Use Stripe test mode until the complete Checkout, webhook, portal, invoice,
+refund and dispute smoke test passes. Stripe-hosted Checkout collects billing
+addresses, tax IDs and automatic tax; no publishable or secret Stripe key is
+sent to the browser.
 
-When paid plans are resumed, use the Paddle sandbox until the entire checkout
-and webhook smoke test passes.
-The official catalog workflow is documented in
-https://developer.paddle.com/build/products/create-products-prices/.
+1. Create product **Zenguy** and a recurring monthly EUR 39.00 price. Use
+   inclusive tax behavior so the advertised amount, credit/refund accounting,
+   and Stripe total remain aligned. Set its IDs as `STRIPE_PRODUCT_ID` and
+   `STRIPE_PRICE_ID`.
+2. Create product **Zenguy extra runs** and a one-time EUR 0.20 price with the
+   same inclusive tax behavior. Set its price ID as `STRIPE_OVERAGE_PRICE_ID`.
+3. Create product **Zenguy alert credit pack** and a one-time EUR 10.00 price
+   with inclusive tax behavior.
+   Set `STRIPE_ALERT_CREDIT_PRODUCT_ID` and
+   `STRIPE_ALERT_CREDIT_PRICE_ID`; the pair is required together.
+4. Create a restricted server key with the minimum Checkout Session, Billing
+   Portal, subscription, invoice, invoice-item, price, PaymentIntent and refund
+   permissions required by these flows. Store it only as
+   `STRIPE_SECRET_KEY`; there is no client-side token.
+5. Create test and live webhook destinations at
+   `https://staging-app.zenguy.com/api/webhooks/stripe` and
+   `https://app.zenguy.com/api/webhooks/stripe`. Subscribe to
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `customer.subscription.paused`,
+   `customer.subscription.resumed`, `refund.created`, `refund.updated`,
+   `charge.dispute.created`, and `charge.dispute.closed`. Store each `whsec_…`
+   value only in its matching `STRIPE_WEBHOOK_SECRET`.
+6. Keep `STRIPE_ENVIRONMENT=test` locally and in staging and use
+   `STRIPE_ENVIRONMENT=live` only with live keys, prices and webhook secret in
+   production. `loadConfig` rejects a key whose prefix does not match the
+   selected environment and rejects simultaneous Paddle and Stripe groups.
 
-1. Create product **Zenguy** and a recurring monthly price of **EUR 39.00**.
-   Copy its product ID to PADDLE_PRODUCT_ID and its price ID to
-   PADDLE_PRICE_ID. Both are pinned into server-issued checkout intents and
-   verified against every subscription webhook item.
-2. Create product **Zenguy extra runs** and a one-time price of **EUR 0.20**.
-   Copy its price ID to PADDLE_OVERAGE_PRICE_ID.
-3. Create a sandbox client-side token for PADDLE_CLIENT_TOKEN and an API key
-   for PADDLE_API_KEY. The API key must include `price.read`,
-   `subscription.write`, `transaction.read`, and `adjustment.read`; the last
-   permission is required to list approved top-up adjustments during
-   reconciliation. It also needs subscription read access and Customer portal
-   session write access so owners receive fresh, short-lived payment and
-   cancellation links; those links are never persisted from webhooks. Paddle's
-   current permission contract is documented at
-   https://developer.paddle.com/api-reference/about/permissions/.
-4. Under Developer tools > Notifications, create the sandbox destination at
-   https://staging-app.zenguy.com/api/webhooks/paddle. Select exactly
-   `subscription.created`, `subscription.updated`, `subscription.canceled`,
-   `subscription.past_due`, `transaction.completed`, `adjustment.created`, and
-   `adjustment.updated`. Copy that destination's secret to the staging
-   PADDLE_WEBHOOK_SECRET. Paddle's destination guide is
-   https://developer.paddle.com/webhooks/about/notification-destinations/.
-5. Keep PADDLE_ENVIRONMENT=sandbox locally and in staging. Recreate the catalog,
-   client token, API key, prices, and notification destination in Paddle Live
-   for production. The production webhook URL is
-   https://app.zenguy.com/api/webhooks/paddle. Sandbox and live IDs and secrets
-   are not interchangeable.
+The webhook consumes a durable, one-use checkout intent before binding a
+subscription or crediting a top-up. A top-up is idempotent on its PaymentIntent;
+succeeded refunds debit only that transaction, and disputes debit once and
+restore funds only when won. The periodic reconciliation lists succeeded
+refunds with the same ledger idempotency keys as the webhook path.
 
-`transaction.completed` is required for one-time alert-credit top-ups. The
-handler persists Paddle's transaction and customer IDs only after the signed
-custom-data reference resolves to the matching server-issued checkout intent.
-For adjustments, `pending_approval`, `rejected`, and unrelated records do not
-move credit. `adjustment.created` covers records that are approved immediately
-and the initial pending notification; `adjustment.updated` covers a later
-approval. Every six hours, reconciliation lists approved adjustments using
-`adjustment.read`, checks both the pinned transaction and customer, and applies
-the same idempotency key as the webhook path. Debit/restoration direction comes
-from Paddle's action (`refund`/`chargeback`/`chargeback_warning` versus their
-reverse actions), while the ledger limits every restoration to prior debits on
-the same provider transaction. Unknown actions, missing or mismatched customer
-identity fail closed and the top-up remains unreconciled for operator review.
-
-The overage price is checked immediately before charging and must remain
-exactly EUR 0.20 with no country-specific overrides. Overage settlement starts
-only at `period_end + 1 hour`; until then it creates neither a report nor a
-Paddle side effect. The pending period and report pin the subscription ID that
-owned the period. A report is durably changed from `PENDING` to `AMBIGUOUS`
-before its one allowed Paddle POST. Once `AMBIGUOUS`, every later run performs
-marker reconciliation against that pinned subscription indefinitely and logs
-an operator warning when unresolved; it never sends a second POST.
+The overage price is re-read immediately before charging and must remain a
+one-time EUR 0.20 price. Settlement starts only at `period_end + 1 hour` and
+pins the subscription that owned that period. Stripe receives the deterministic
+overage marker as the idempotency key for invoice creation, invoice-item
+creation and finalization; retries reconcile the same invoice instead of
+creating a second charge.
 
 ### Cloudflare Email Service
 
@@ -406,12 +390,12 @@ preserving relative API requests and same-origin cookies.
 
 | Environment | Worker | Application / Pages origin | Worker Route | Billing | Status |
 |---|---|---|---|---|---|
-| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` and `api-staging.zenguy.com` | Free; Paddle deferred | Code guard ready; Access app/AUD pending |
-| Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` | Free; Paddle deferred | Operational |
+| Staging | `zenguy-api-staging` | `https://staging-app.zenguy.com` | `staging-app.zenguy.com/api/*` and `api-staging.zenguy.com` | Stripe test | Access app/AUD pending |
+| Production | `zenguy-api-production` | `https://app.zenguy.com` | `app.zenguy.com/api/*` and `api.zenguy.com` | Stripe live | Operational |
 
-Production owns both `app.zenguy.com/api/*` and `api.zenguy.com`. Paddle is not a
-production release gate during the free launch and its secret group remains
-unset. Never substitute Sandbox values in production.
+Production owns both `app.zenguy.com/api/*` and `api.zenguy.com`. Its Stripe
+catalog, signed webhook, and Worker secrets are live-only. Never substitute
+test values in production.
 
 Do not configure either complete application hostname as a Worker custom
 domain. Pages owns the hostname and static routes; the Worker Route owns only
@@ -479,7 +463,7 @@ policy must be limited to the intended test identities and require MFA. Do not
 add a broad Bypass policy: the API Worker independently rejects staging HTTP
 requests unless Cloudflare has injected a cryptographically valid
 `Cf-Access-Jwt-Assertion` application token. The sole provider exception is
-the exact Paddle callback described below.
+the exact Stripe callback described below.
 
 The exact team origin, `https://bugfer.cloudflareaccess.com`, is pinned as the
 non-secret staging variable `CF_ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. No
@@ -506,20 +490,20 @@ required for the full staging SPA. Likewise, every ordinary non-browser caller
 (runner, smoke monitor, and CLI) must first authenticate to Access so
 Cloudflare can inject the application assertion.
 
-Paddle cannot supply Access credentials. Create a separate, most-specific
+Stripe cannot supply Access credentials. Create a separate, most-specific
 Access application for exactly
-`staging-app.zenguy.com/api/webhooks/paddle` with a Bypass policy, leaving every
+`staging-app.zenguy.com/api/webhooks/stripe` with a Bypass policy, leaving every
 broader staging path under the MFA application. The code-side exception is
 narrower than the edge policy: it accepts only `POST` on that exact HTTPS
-origin/path, with no query string and a non-empty `Paddle-Signature` header,
-then applies the 256 KiB stream cap and timestamped Paddle HMAC verification.
+origin/path, with no query string and a non-empty `Stripe-Signature` header,
+then applies the 256 KiB stream cap and timestamped Stripe HMAC verification.
 Every other host, path, method, missing signature, oversized body, or invalid
 HMAC remains denied. Do not configure a wildcard webhook bypass.
 
 The canonical remote release inventory is
 `security/required-worker-secrets.json`. Its `core` group covers boot-critical
 auth, encryption, runner and Twilio bindings; `releaseFeatures` additionally
-requires all five `TWILIO_*` values, the complete Paddle catalog/API/webhook
+requires all five `TWILIO_*` values, the complete Stripe catalog/API/webhook
 set (including both alert-credit IDs), and `EXPO_PUSH_ACCESS_TOKEN`. Staging
 also requires `CF_ACCESS_AUD`; production additionally requires
 `CF_RUNNER_ACCESS_AUD` for the service-only runner application. The staging and production deployment
@@ -672,12 +656,12 @@ Environment variables are fixed as follows:
 | `ENCRYPTION_KEY_ID` | unique staging key ID | unique production key ID |
 | `KEY_WRAPPING_KEY_ID` | active staging KMS key ID | active production KMS key ID |
 | `KEY_WRAPPING` | `zenguy-kms-staging` named RPC entrypoint | `zenguy-kms-production` named RPC entrypoint |
-| `PADDLE_ENVIRONMENT` | `sandbox` | `production` |
+| `STRIPE_ENVIRONMENT` | `test` | `live` |
 | `LLM_MODEL` | `qwen/qwen3.8-27b` | `qwen/qwen3.8-27b` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
 
-Staging uses only Paddle Sandbox tokens, keys, price IDs, customers, and its
-verified staging webhook secret. Production must use only Paddle Live
+Staging uses only Stripe test keys, price IDs, customers, and its verified
+staging webhook secret. Production must use only Stripe live
 equivalents and its own production webhook secret once activated. Browser
 inference is performed by the separately configured local runner. Deployed
 environments use the native Cloudflare Email Service `EMAIL` binding for the
@@ -741,27 +725,19 @@ covering `/*` would incorrectly hide the frontend.
 
 ### 6. Configure webhook destinations and R2 retention
 
-Create separate Paddle notification destinations only after their ingress
+Create separate Stripe webhook destinations only after their ingress
 meets the environment's authentication boundary:
 
-    Sandbox (blocked pending the exact path-specific Access Bypass app):
-      https://staging-app.zenguy.com/api/webhooks/paddle
-    Live (release gate): https://app.zenguy.com/api/webhooks/paddle
+    Test (blocked pending the exact path-specific Access Bypass app):
+      https://staging-app.zenguy.com/api/webhooks/stripe
+    Live (release gate): https://app.zenguy.com/api/webhooks/stripe
 
-Subscribe each destination to exactly `subscription.created`,
-`subscription.updated`, `subscription.canceled`, `subscription.past_due`,
-`transaction.completed`, `adjustment.created`, and `adjustment.updated`. Do not
-subscribe any other event. Store each destination's signing secret only in its
-matching Worker environment.
-
-An initial `adjustment.created` refund may be `pending_approval`; it is ignored
-until an `adjustment.updated` event reports `approved`. Immediately approved
-credits, refunds, chargebacks, early chargeback warnings, and their reversals
-are handled from `adjustment.created`. Reconciliation requests adjustment IDs
-in ascending order so an original debit precedes its reversal, including
-repeated cycles. The periodic `adjustment.read` reconciliation is the safety
-net for missed or delayed notifications, and ledger idempotency makes it safe
-to race the webhook.
+Subscribe each destination to the exact event list in **Stripe Billing** above.
+Store each endpoint's signing secret only in its matching Worker environment.
+The handler verifies the raw body against `Stripe-Signature`, accepts key
+rotation signatures, enforces a five-minute timestamp tolerance, and records
+provider event IDs in KV. D1 uniqueness remains the final idempotency boundary
+for concurrent deliveries.
 
 The cleanup cron expires operational data after 30 days. Add a 35-day R2
 lifecycle safety net to each bucket in an approved change window with a temporary
@@ -797,8 +773,8 @@ first failure:
 Deploy production and repeat the non-destructive checks against
 `https://app.zenguy.com`. Confirm `/api/health` is handled by
 `zenguy-api-production`, the application shell is served by Pages, email uses
-`zenguy.com`, and billing config reports `mode: "free"`. Paddle Live activation
-is a separate future release and any real checkout requires explicit approval.
+`zenguy.com`, and billing config reports `mode: "stripe"`. Any live checkout
+requires the approved live catalog, restricted key and webhook smoke test.
 
 ## First-demo acceptance record
 
@@ -850,9 +826,9 @@ the local/remote first-demo walkthrough above.
 | Current browser-use runtime smoke (2026-08-20) | PASS — `browser-use 0.13.8` used the current `JobExecutor`, visible Chrome and local `qwen/qwen3.8-27b` to verify `example.com`; structured `done` returned `PASSED` in two steps with one screenshot and 9,886 tokens. This local-only smoke made no Queue/API writes |
 
 The release acceptance is intentionally still open: a real Cloudflare Email
-Service recipient, the corrected Paddle Sandbox notification destination and
+Service recipient, the Stripe test webhook destination and
 checkout, and an external failure/recovery delivery have not yet been approved
-or exercised. Production remains isolated until its Paddle Live and Twilio
+or exercised. Production remains isolated until its Stripe live and Twilio
 credentials are configured and those staging checks pass.
 
 ## V1 acceptance sign-off
@@ -962,7 +938,7 @@ manual release check. Paths are relative to apps/api/src unless noted.
 | 31.7.5 | Uptime does not increment usage | Automated architecture: application/uptime/handle_check_message.test.ts; first-demo usage comparison |
 | 31.7.6 | FAILED and TIMEOUT increment usage | Automated: application/execution/attempt_lifecycle.test.ts and domain/browser_tests/run_rules.test.ts |
 | 31.7.7 | Zenguy SYSTEM_ERROR does not increment usage | Automated: application/execution/attempt_lifecycle.test.ts and application/maintenance/hourly.test.ts reverse unused usage |
-| 31.7.8 | Webhooks are idempotent | Automated: application/billing/handle_paddle_webhook.test.ts and http/routes/webhooks.test.ts |
+| 31.7.8 | Webhooks are idempotent | Automated: application/billing/handle_stripe_webhook.test.ts and http/routes/webhooks.test.ts |
 | 31.7.9 | Owner sees estimated cost | Automated: application/billing/get_billing.test.ts and http/routes/billing_routes.itest.ts enforce owner-only billing detail |
 
 ### 31.8 Security

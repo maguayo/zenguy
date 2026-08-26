@@ -59,7 +59,7 @@ export default function Privacy() {
         <p>
           We use service providers for infrastructure, communications, AI,
           payment processing when enabled, security, and support. These may
-          include Cloudflare, Twilio, OpenAI, and Paddle. They process data under
+          include Cloudflare, Twilio, OpenAI, and Stripe. They process data under
           contractual safeguards and only as needed to provide their services.
           Data may be processed outside your country using applicable transfer
           safeguards.

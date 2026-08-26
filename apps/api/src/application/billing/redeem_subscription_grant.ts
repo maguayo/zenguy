@@ -67,7 +67,7 @@ export class RedeemSubscriptionGrant {
     await this.subscriptions.upsertByWorkspace({
       id: current?.id ?? this.ids.newId("sub"),
       workspaceId: workspace.id,
-      provider: "paddle",
+      provider: "internal",
       source: "grant",
       providerCustomerId: null,
       providerSubscriptionId: null,

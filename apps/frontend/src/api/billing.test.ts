@@ -13,12 +13,12 @@ const billing: Billing = {
   },
   subscription: {
     cancelAtPeriodEnd: false,
-    cancelUrl: "https://sandbox-vendors.paddle.com/cancel",
+    cancelUrl: "https://billing.stripe.com/p/session/cancel",
     periodEnd: "2026-09-01T00:00:00.000Z",
     periodStart: "2026-08-01T00:00:00.000Z",
-    source: "paddle",
+    source: "stripe",
     status: "ACTIVE",
-    updatePaymentMethodUrl: "https://sandbox-vendors.paddle.com/payment",
+    updatePaymentMethodUrl: "https://billing.stripe.com/p/session/payment",
   },
   usage: {
     billableRuns: 10,
@@ -47,24 +47,22 @@ describe("billing API", () => {
       if (path.endsWith("/billing/config")) {
         return response({
           canIssueComplimentaryGrants: false,
-          clientToken: "test_token",
-          environment: "sandbox",
-          mode: "paddle",
-          priceId: "pri_1",
+          environment: "test",
+          mode: "stripe",
         });
       }
-      if (path.includes("/invoices/")) return response({ url: "https://paddle.test/invoice.pdf" });
+      if (path.includes("/invoices/")) return response({ url: "https://invoice.stripe.com/i/in_1.pdf" });
       return response(billing);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getBillingConfig()).resolves.toMatchObject({
-      environment: "sandbox",
-      mode: "paddle",
+      environment: "test",
+      mode: "stripe",
     });
     await expect(getBilling("ws/one")).resolves.toEqual(billing);
     await expect(getInvoiceUrl("ws/one", "txn two")).resolves.toBe(
-      "https://paddle.test/invoice.pdf",
+      "https://invoice.stripe.com/i/in_1.pdf",
     );
     expect(fetchMock.mock.calls.map(([request]) => String(request))).toEqual([
       "/api/billing/config",

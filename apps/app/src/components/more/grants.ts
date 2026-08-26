@@ -41,7 +41,7 @@ export const redeemDescription = "Activate a workspace without adding a payment 
 export const newWorkspaceHint = "None of your workspaces are unpaid, so we will create a new one.";
 
 export const issueDescription =
-  "Create a one-time link that activates a workspace without Paddle checkout.";
+  "Create a one-time link that activates a workspace without Stripe checkout.";
 
 export function defaultGrantWorkspaceName(user: Pick<User, "name"> | null): string {
   if (!user) return "My Workspace";

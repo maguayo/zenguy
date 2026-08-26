@@ -49,7 +49,7 @@
     "ENCRYPTION_KEY_ID": "primary",
     "KEY_WRAPPING_KEY_ID": "primary",
     "LLM_MODEL": "qwen/qwen3.8-27b",
-    "PADDLE_ENVIRONMENT": "production",
+    "STRIPE_ENVIRONMENT": "live",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es"
   }

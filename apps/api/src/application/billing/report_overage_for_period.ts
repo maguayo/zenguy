@@ -3,7 +3,7 @@ import type {
   UsageEventRepo,
 } from "../../domain/billing/repo";
 import type { OverageReport } from "../../domain/billing/types";
-import type { PaddleClient } from "../../infrastructure/paddle/client";
+import type { BillingProviderClient } from "../../infrastructure/billing/provider";
 import type { Clock } from "../../shared/clock";
 import {
   INCLUDED_RUNS,
@@ -34,7 +34,7 @@ export class ReportOverageForPeriod {
   constructor(
     private readonly usageEvents: UsageEventRepo,
     private readonly reports: OverageReportRepo,
-    private readonly paddle: PaddleClient,
+    private readonly billingProvider: BillingProviderClient,
     private readonly overagePriceId: string,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
@@ -109,21 +109,20 @@ export class ReportOverageForPeriod {
         providerMarker,
       );
       if (reconciled !== null) return reconciled;
-      // Paddle has no idempotency key for this operation. A missing transaction
-      // is not proof that an ambiguous POST failed, so retrying could double bill.
+      // Legacy providers may not support idempotent retries. Reconcile a
+      // persisted ambiguous attempt before considering another charge.
       logEvent("overage_reconciliation_pending", {
         workspaceId: report.workspaceId,
       });
       return { status: "reconciling" };
     }
 
-    // DEVIATION: Paddle has no client idempotency key for subscription charges.
-    // Persist AMBIGUOUS before the only allowed POST. Ambiguous attempts are
-    // reconciled indefinitely and are never submitted a second time.
+    // Persist AMBIGUOUS before the external mutation. Stripe additionally uses
+    // the marker as its idempotency key, while legacy rows remain fail-closed.
     const began = await this.reports.beginAttempt(report.id, now);
     if (!began) return { status: "reconciling" };
 
-    const { transactionId } = await this.paddle.createOneTimeCharge(
+    const { transactionId } = await this.billingProvider.createOneTimeCharge(
       providerSubscriptionId,
       this.overagePriceId,
       report.overageRuns,
@@ -175,7 +174,7 @@ export class ReportOverageForPeriod {
     subscriptionId: string,
     providerMarker: string,
   ): Promise<OverageReportResult | null> {
-    const match = await this.paddle.findSubscriptionChargeByMarker(
+    const match = await this.billingProvider.findSubscriptionChargeByMarker(
       subscriptionId,
       providerMarker,
     );

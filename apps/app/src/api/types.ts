@@ -45,7 +45,7 @@ export interface PublicInvitation {
   workspaceName: string;
 }
 
-export type SubscriptionSource = "free" | "grant" | "paddle";
+export type SubscriptionSource = "free" | "grant" | "paddle" | "stripe";
 
 interface BillingConfigBase {
   canIssueComplimentaryGrants?: boolean;
@@ -55,14 +55,14 @@ export interface FreeBillingConfig extends BillingConfigBase {
   mode: "free";
 }
 
-export interface PaddleBillingConfig extends BillingConfigBase {
-  mode: "paddle";
-  clientToken: string;
-  environment: "sandbox" | "production";
-  priceId: string;
+export interface StripeBillingConfig extends BillingConfigBase {
+  mode: "stripe";
+  environment: "test" | "live";
 }
 
-export type BillingConfig = FreeBillingConfig | PaddleBillingConfig;
+export type BillingConfig =
+  | FreeBillingConfig
+  | StripeBillingConfig;
 
 export interface Usage {
   billableRuns: number;

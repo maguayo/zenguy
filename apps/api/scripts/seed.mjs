@@ -1161,7 +1161,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
     insertRow("subscriptions", {
       id: IDS.subscription,
       workspace_id: IDS.workspace,
-      provider: "paddle",
+      provider: "internal",
       source: "grant",
       provider_customer_id: null,
       provider_subscription_id: null,

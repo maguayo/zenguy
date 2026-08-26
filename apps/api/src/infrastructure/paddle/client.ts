@@ -6,59 +6,26 @@ import {
   readLimitedJsonResponse,
 } from "../../shared/limited_response";
 import { logEvent } from "../../shared/log";
+import type {
+  BilledTransaction,
+  BillingProviderClient,
+  ProviderAdjustment,
+  SubscriptionManagementUrls,
+} from "../billing/provider";
+
+export type {
+  BilledTransaction,
+  SubscriptionManagementUrls,
+} from "../billing/provider";
 
 const MAX_PADDLE_RESPONSE_BYTES = 1_024 * 1_024;
 const MAX_PADDLE_PAGES = 10;
 
-export interface BilledTransaction {
-  id: string;
-  billedAt: string | null;
-  status: string;
-  totalCents: number;
-  currency: string;
-  invoiceNumber: string | null;
-}
-
-export interface SubscriptionManagementUrls {
-  updatePaymentMethodUrl: string | null;
-  cancelUrl: string;
-}
-
-export interface ApprovedPaddleAdjustment {
-  id: string;
-  action: string;
-  transactionId: string;
-  customerId: string;
-  amountCents: number;
-  currency: string;
-}
+export type ApprovedPaddleAdjustment = ProviderAdjustment;
 
 export const PADDLE_OVERAGE_MARKER_KEY = "zenguy_overage_marker";
 
-export interface PaddleClient {
-  createOneTimeCharge(
-    subscriptionId: string,
-    priceId: string,
-    quantity: number,
-    marker: string,
-  ): Promise<{ transactionId: string | null }>;
-  findSubscriptionChargeByMarker(
-    subscriptionId: string,
-    marker: string,
-  ): Promise<{ transactionId: string } | null>;
-  cancelSubscription(subscriptionId: string): Promise<void>;
-  listBilledTransactions(
-    subscriptionId: string,
-    limit?: number,
-  ): Promise<BilledTransaction[]>;
-  getSubscriptionManagementUrls(
-    subscriptionId: string,
-  ): Promise<SubscriptionManagementUrls>;
-  getInvoicePdfUrl(transactionId: string): Promise<string>;
-  listApprovedAdjustments(
-    transactionId: string,
-  ): Promise<ApprovedPaddleAdjustment[]>;
-}
+export type PaddleClient = BillingProviderClient;
 
 export type PaddleFetch = (
   input: string,

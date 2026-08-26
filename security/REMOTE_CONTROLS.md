@@ -15,9 +15,9 @@ passes.
    `staging-app.zenguy.com/*` and `api-staging.zenguy.com/*`. Limit its Allow
    policy to test identities and require MFA.
 3. Create a second, more-specific application only for
-   `staging-app.zenguy.com/api/webhooks/paddle`. Its provider bypass must not
+   `staging-app.zenguy.com/api/webhooks/stripe`. Its provider bypass must not
    cover any other method, host or path. The Worker still enforces exact POST,
-   origin, path, no query string, body cap, and Paddle HMAC.
+   origin, path, no query string, body cap, and Stripe HMAC.
 4. Store the first application's AUD as the staging-only `CF_ACCESS_AUD`
    Worker secret. `required-worker-secrets.json` declares it required and the
    deployment preflight fails before migration when the binding is absent.
@@ -32,7 +32,7 @@ passes.
 7. Run the secret-name preflight, migrations and deployment from the protected
    staging Environment. Then verify an anonymous request to both staging
    hostnames is denied at Access, an authenticated request reaches the Worker,
-   and the exact Paddle callback still reaches HMAC verification.
+   and the exact Stripe callback still reaches HMAC verification.
 
 The deterministic `seed.mjs` fixture is intentionally local-only. It rejects
 every `--remote` invocation, there is no `seed:staging` package command, and CI
@@ -123,7 +123,7 @@ when a reviewed exception is unavoidable.
    `cloudflare-edge-policy.json` in a reviewed pull request.
 5. Confirm the custom rule blocks the two versioned sensitive-file probes and
    truncated API headers, the auth rule challenges the five versioned paths,
-   and the resource rule blocks abusive runner, Paddle and expensive workspace
+   and the resource rule blocks abusive runner, Stripe and expensive workspace
    traffic at its separate threshold. Exercise the latter from both a normal
    client and each authorized machine identity before enabling it. Confirm the
    managed ruleset produces Security Events.

@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Info } from "lucide-react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   getBilling,
@@ -15,9 +15,9 @@ import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Spinner } from "../../components/ui/Spinner";
-import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
+import { trustedBillingUrl } from "../../lib/billing-links";
 
 type ActivationPhase = "idle" | "opening" | "activating" | "timeout";
 
@@ -74,9 +74,9 @@ export function PlanDetails() {
 
 export default function BillingSetup() {
   const { wsId = "" } = useParams();
-  const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const activationInFlight = useRef(false);
   const [phase, setPhase] = useState<ActivationPhase>("idle");
@@ -122,28 +122,27 @@ export default function BillingSetup() {
     }
   }, [navigate, queryClient, toast, wsId]);
 
+  useEffect(() => {
+    if (searchParams.get("checkout") === "success") {
+      void checkActivation();
+    }
+  }, [checkActivation, searchParams]);
+
   const startCheckout = async () => {
     setPhase("opening");
     try {
       const config = await getBillingConfig();
-      if (config.mode !== "paddle") {
+      if (config.mode === "free") {
         toast.error("Free access should activate automatically. Please try again.");
         setPhase("idle");
         return;
       }
       const checkout = await startSubscriptionCheckout(wsId);
-      // Keep third-party payment code out of every non-checkout route and load
-      // Paddle.js only after an owner explicitly starts a checkout.
-      const paddle = await import("../../lib/paddle");
-      await paddle.initPaddle(config);
-      paddle.openCheckout({
-        customData: checkout.customData,
-        email: user?.email ?? "",
-        onCompleted: () => void checkActivation(),
-        priceId: checkout.priceId,
-        quantity: checkout.quantity,
-      });
-      setPhase("idle");
+      const url = trustedBillingUrl(checkout.url);
+      if (url === null) {
+        throw new Error("The billing provider returned an untrusted link.");
+      }
+      window.location.assign(url);
     } catch (error) {
       setPhase("idle");
       toast.error(apiErrorMessage(error));

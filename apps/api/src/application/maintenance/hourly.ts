@@ -44,7 +44,7 @@ export class HourlyMaintenance {
     private readonly clock: Clock,
     private readonly alert: PlatformAlerter = platformAlert,
     private readonly defaultChannels: { execute(): Promise<unknown> } | null = null,
-    private readonly paddleCredits: { execute(): Promise<unknown> } | null = null,
+    private readonly billingCredits: { execute(): Promise<unknown> } | null = null,
   ) {}
 
   async execute(): Promise<HourlyMaintenanceResult> {
@@ -56,11 +56,11 @@ export class HourlyMaintenance {
         this.alert("default_channel_backfill_failed");
       }
     }
-    if (this.paddleCredits !== null) {
+    if (this.billingCredits !== null) {
       try {
-        await this.paddleCredits.execute();
+        await this.billingCredits.execute();
       } catch {
-        this.alert("paddle_credit_reconciliation_failed");
+        this.alert("billing_credit_reconciliation_failed");
       }
     }
     const now = this.clock.now();

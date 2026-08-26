@@ -1,13 +1,13 @@
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
-import type { PaddleClient } from "../../infrastructure/paddle/client";
+import type { BillingProviderClient } from "../../infrastructure/billing/provider";
 import { forbidden, notFound } from "../../shared/errors";
 
 export class GetInvoiceUrl {
   constructor(
     private readonly subscriptions: SubscriptionRepo,
-    private readonly paddle: PaddleClient,
+    private readonly billingProvider: BillingProviderClient,
   ) {}
 
   async execute(input: {
@@ -23,14 +23,14 @@ export class GetInvoiceUrl {
         subscription?.providerSubscriptionId === undefined) {
       throw notFound("Invoice");
     }
-    const transactions = await this.paddle.listBilledTransactions(
+    const transactions = await this.billingProvider.listBilledTransactions(
       subscription.providerSubscriptionId,
     );
     if (!transactions.some(({ id }) => id === input.transactionId)) {
       throw notFound("Invoice");
     }
     return {
-      url: await this.paddle.getInvoicePdfUrl(input.transactionId),
+      url: await this.billingProvider.getInvoicePdfUrl(input.transactionId),
     };
   }
 }

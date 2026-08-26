@@ -446,14 +446,13 @@ const coreRequiredRemoteSecrets = [
 ];
 const releaseFeatureRemoteSecrets = [
   "TWILIO_FROM_WHATSAPP",
-  "PADDLE_API_KEY",
-  "PADDLE_WEBHOOK_SECRET",
-  "PADDLE_CLIENT_TOKEN",
-  "PADDLE_PRODUCT_ID",
-  "PADDLE_PRICE_ID",
-  "PADDLE_OVERAGE_PRICE_ID",
-  "PADDLE_ALERT_CREDIT_PRODUCT_ID",
-  "PADDLE_ALERT_CREDIT_PRICE_ID",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRODUCT_ID",
+  "STRIPE_PRICE_ID",
+  "STRIPE_OVERAGE_PRICE_ID",
+  "STRIPE_ALERT_CREDIT_PRODUCT_ID",
+  "STRIPE_ALERT_CREDIT_PRICE_ID",
   "EXPO_PUSH_ACCESS_TOKEN",
 ];
 const requiredWorkerSecrets = JSON.parse(
@@ -619,6 +618,7 @@ if (
 for (const path of [
   "apps/api/src/infrastructure/llm/openai.ts",
   "apps/api/src/infrastructure/paddle/client.ts",
+  "apps/api/src/infrastructure/stripe/client.ts",
   "apps/api/src/infrastructure/notify/discord.ts",
   "apps/api/src/infrastructure/notify/expo_push.ts",
   "apps/api/src/infrastructure/notify/twilio.ts",
@@ -635,6 +635,7 @@ for (const path of [
 }
 for (const path of [
   "apps/api/src/infrastructure/paddle/client.ts",
+  "apps/api/src/infrastructure/stripe/client.ts",
   "apps/api/src/infrastructure/notify/discord.ts",
   "apps/api/src/infrastructure/notify/expo_push.ts",
   "apps/api/src/infrastructure/notify/slack.ts",
@@ -811,6 +812,7 @@ for (const [path, content] of [
 }
 if (
   !apiApp.includes("MAX_PADDLE_WEBHOOK_BODY_BYTES") ||
+  !apiApp.includes("MAX_STRIPE_WEBHOOK_BODY_BYTES") ||
   !apiApp.includes("MAX_API_REQUEST_BODY_BYTES") ||
   !apiApp.includes("strictBodyLimit({") ||
   !adminApp.includes("MAX_ADMIN_API_REQUEST_BODY_BYTES") ||
@@ -1022,6 +1024,18 @@ const paddleClient = readFileSync(
   "apps/api/src/infrastructure/paddle/client.ts",
   "utf8",
 );
+const stripeWebhook = readFileSync(
+  "apps/api/src/application/billing/handle_stripe_webhook.ts",
+  "utf8",
+);
+const stripeCheckout = readFileSync(
+  "apps/api/src/application/billing/stripe_checkout_intent.ts",
+  "utf8",
+);
+const stripeClient = readFileSync(
+  "apps/api/src/infrastructure/stripe/client.ts",
+  "utf8",
+);
 for (const invariant of [
   'event.event_type === "adjustment.created"',
   'event.event_type === "adjustment.updated"',
@@ -1031,6 +1045,44 @@ for (const invariant of [
 ]) {
   if (!paddleWebhook.includes(invariant)) {
     failures.push(`handle_paddle_webhook.ts: missing credit-accounting invariant ${invariant}`);
+  }
+}
+for (const invariant of [
+  "hmacVerifyHex(",
+  "SIGNATURE_TOLERANCE_MS",
+  'event.type === "checkout.session.completed"',
+  'event.type === "refund.updated"',
+  'event.type === "charge.dispute.closed"',
+  "Stripe checkout does not match the server intent",
+  "Stripe subscription catalog mismatch",
+  "stripe_pi:${data.payment_intent}",
+  "stripe_refund:${data.id}:succeeded",
+  "stripe_dispute:${data.id}:debit",
+]) {
+  if (!stripeWebhook.includes(invariant)) {
+    failures.push(`handle_stripe_webhook.ts: missing Stripe billing invariant ${invariant}`);
+  }
+}
+for (const invariant of [
+  "STRIPE_CHECKOUT_INTENT_TTL_MS",
+  "STRIPE_CHECKOUT_SESSION_TTL_MS",
+  "this.intents.insert({",
+  "this.stripe.createCheckoutSession({",
+]) {
+  if (!stripeCheckout.includes(invariant)) {
+    failures.push(`stripe_checkout_intent.ts: missing server-issued Checkout invariant ${invariant}`);
+  }
+}
+for (const invariant of [
+  '"Idempotency-Key"',
+  '"checkout.stripe.com"',
+  '"billing.stripe.com"',
+  'redirect: "error"',
+  "externalProviderSignal()",
+  "readLimitedJsonResponse(",
+]) {
+  if (!stripeClient.includes(invariant)) {
+    failures.push(`stripe/client.ts: missing bounded provider invariant ${invariant}`);
   }
 }
 for (const invariant of [
@@ -2641,12 +2693,15 @@ for (const line of runnerImageWorkflow.split(/\r?\n/u)) {
 }
 
 const frontendHeaders = readFileSync("apps/frontend/public/_headers", "utf8");
-const paddleScriptUrl = "https://cdn.paddle.com/paddle/v2/paddle.js";
-if (!frontendHeaders.includes(`script-src 'self' ${paddleScriptUrl};`)) {
-  failures.push("apps/frontend/public/_headers: Paddle script-src must allow only its exact SDK path");
-}
-if (frontendHeaders.includes("script-src 'self' https://cdn.paddle.com;")) {
-  failures.push("apps/frontend/public/_headers: Paddle's whole CDN origin must not be script-trusted");
+if (
+  !frontendHeaders.includes("script-src 'self';") ||
+  /(?:cdn\.paddle\.com|js\.stripe\.com|checkout\.stripe\.com|billing\.stripe\.com)/u.test(
+    frontendHeaders,
+  )
+) {
+  failures.push(
+    "apps/frontend/public/_headers: hosted Stripe redirects must not expand script or frame trust",
+  );
 }
 
 const exceptions = JSON.parse(readFileSync("security/audit-exceptions.json", "utf8"));
@@ -2776,7 +2831,7 @@ if (
             "Block abusive runner, webhook and expensive workspace traffic (v1)",
           action: "block",
           expression:
-            '(http.request.uri.path eq "/api/webhooks/paddle") or starts_with(http.request.uri.path, "/api/runner/") or (starts_with(http.request.uri.path, "/api/workspaces/") and ((http.request.uri.path contains "/browser-tests/") or (http.request.uri.path contains "/runs") or (http.request.uri.path contains "/channels")))',
+            '(http.request.uri.path eq "/api/webhooks/stripe") or starts_with(http.request.uri.path, "/api/runner/") or (starts_with(http.request.uri.path, "/api/workspaces/") and ((http.request.uri.path contains "/browser-tests/") or (http.request.uri.path contains "/runs") or (http.request.uri.path contains "/channels")))',
           ratelimit: {
             characteristics: ["cf.colo.id", "ip.src"],
             period: 10,

@@ -68,7 +68,7 @@ number for `TWILIO_FROM_CALL` would let most European call prices drop to the
 Tables (`apps/api/migrations/0019_alerts.sql`): `workspace_alert_settings`,
 `alert_credit_balances` (never negative), `alert_credit_entries` (signed
 ledger with a unique idempotency key: `charge:<deliveryId>`,
-`refund:<deliveryId>`, `paddle_txn:<transactionId>`). Debits are a single D1
+`refund:<deliveryId>`, `stripe_pi:<paymentIntentId>`). Debits are a single D1
 batch: `UPDATE … WHERE balance_cents >= ?` followed by an `INSERT … SELECT`
 that only writes the ledger row when that UPDATE applied.
 
@@ -77,42 +77,29 @@ are `FAILED` with a readable reason (`Skipped: not enough alert credit (…)`,
 `Skipped: daily limit of N paid alerts reached`, `Skipped: SMS & calls are
 turned off for this workspace`) and the incident timeline shows it.
 
-## Top-ups (Paddle)
+## Top-ups (Stripe)
 
-Top-ups are one-time Paddle checkouts of 1–10 packs of €10
+Top-ups are one-time Stripe-hosted checkouts of 1–10 packs of €10
 (`ALERT_CREDIT_PACK_CENTS`). To open them in an environment:
 
-1. In the Paddle catalog create a non-recurring price "Zenguy alert credit
-   pack" at EUR 10.00 (quantity 1–10) and copy its `pro_…` product id and
-   `pri_…` price id.
-2. Install both as the Worker secret/vars `PADDLE_ALERT_CREDIT_PRODUCT_ID` and
-   `PADDLE_ALERT_CREDIT_PRICE_ID` alongside the existing `PADDLE_*` group.
-   They are an all-or-nothing pair. Sandbox and Live ids must never be mixed.
-3. Subscribe the Paddle notification destination to exactly
-   `subscription.created`, `subscription.updated`, `subscription.canceled`,
-   `subscription.past_due`, `transaction.completed`, `adjustment.created`, and
-   `adjustment.updated`; do not subscribe any other event. The transaction
-   webhook credits `quantity × €10` only when its signed custom-data reference
-   resolves to a server-issued `alert_credit` checkout intent and its product,
-   price, quantity, currency, and net total all match.
-4. Give the server-side Paddle key `adjustment.read` in addition to the billing
-   permissions documented in `apps/api/README.md`. Every six hours the Worker
-   lists approved adjustments as a safety net for missed or delayed webhooks.
-5. Verify in staging with Paddle's sandbox cards: `Alerts → SMS & calls → Top
-   up` opens the overlay; after `checkout.completed` the page polls the
-   overview until the balance grows.
+1. In Stripe create a one-time EUR 10.00 price with inclusive tax behavior for
+   **Zenguy alert credit pack**, then set `STRIPE_ALERT_CREDIT_PRODUCT_ID` and
+   `STRIPE_ALERT_CREDIT_PRICE_ID` together.
+2. Subscribe the Stripe destination to `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`, `refund.created`,
+   `refund.updated`, `charge.dispute.created`, and `charge.dispute.closed`, in
+   addition to the subscription events listed in `apps/api/README.md`.
+3. Verify in Stripe test mode: `Alerts → SMS & calls → Top up` redirects to
+   hosted Checkout and returns to the same page. The signed webhook credits
+   the workspace, not the browser return.
 
-The credited ledger row pins both Paddle's transaction ID and customer ID from
-the verified checkout. An adjustment changes credit only when both values
-match. `adjustment.created` may be approved immediately, or a live refund may
-arrive as `pending_approval`; pending and rejected records are ignored.
-`adjustment.updated` applies the refund if Paddle later approves it. Webhook and
-reconciliation paths use the same adjustment idempotency key, so racing or
-replaying them cannot move the balance twice. A legacy top-up without a pinned
-customer fails closed and must be backfilled from its original Paddle
-transaction before it can be reconciled.
+The ledger pins Stripe's PaymentIntent and customer IDs from the verified
+Checkout Session. Succeeded refunds debit only that PaymentIntent. A dispute
+debits once and restores the amount only when Stripe closes it as won. Webhook
+and reconciliation paths use the same idempotency keys, so racing or replaying
+them cannot move the balance twice.
 
-While the alert-credit product/price pair is unset (production free launch),
+While the alert-credit product/price pair is unset (before Stripe activation),
 the API reports `topUp.available = false`, `POST …/alerts/credit/topups`
 returns 503, and the SMS & calls switch cannot be turned on unless the
 workspace already holds credit. Prices remain visible so teams can plan.

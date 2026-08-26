@@ -9,6 +9,7 @@ import type { WriteAudit } from "../../application/audit/write_audit";
 import type { AlertRepo } from "../../domain/alerts/repo";
 import type { PaddleCheckoutIntentRepo } from "../../domain/billing/repo";
 import { IssuePaddleCheckoutIntent } from "../../application/billing/paddle_checkout_intent";
+import { IssueStripeCheckoutIntent } from "../../application/billing/stripe_checkout_intent";
 import { quoteFor } from "../../domain/alerts/pricing";
 import type { ChannelRepo } from "../../domain/channels/repo";
 import type { UserRepo } from "../../domain/users/repo";
@@ -19,6 +20,7 @@ import type {
 import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
 import type { AppConfig } from "../../shared/config";
+import type { HttpStripeClient } from "../../infrastructure/stripe/client";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireAction, withWorkspace } from "../middleware/workspace";
@@ -36,11 +38,15 @@ export interface AlertRoutesDependencies {
   channels: ChannelRepo;
   alerts: AlertRepo;
   checkoutIntents: PaddleCheckoutIntentRepo;
+  stripeCheckout?: Pick<HttpStripeClient, "createCheckoutSession">;
   audit: Pick<WriteAudit, "execute">;
   track?: Pick<TrackEvent, "execute">;
   clock: Clock;
   ids: IdGenerator;
-  config: Pick<AppConfig, "jwtSecret" | "encryptionKeys" | "paddle">;
+  config: Pick<
+    AppConfig,
+    "appUrl" | "jwtSecret" | "encryptionKeys" | "paddle" | "stripe"
+  >;
 }
 
 const settingsSchema = z
@@ -70,11 +76,11 @@ function requestIp(context: {
 }
 
 export function alertCreditPriceId(
-  paddle: AppConfig["paddle"],
+  billing: AppConfig["paddle"] | AppConfig["stripe"],
 ): string | null {
-  return paddle === null || paddle.alertCreditProductId === null
+  return billing === null || billing.alertCreditProductId === null
     ? null
-    : paddle.alertCreditPriceId;
+    : billing.alertCreditPriceId;
 }
 
 export function alertRoutes(
@@ -83,7 +89,9 @@ export function alertRoutes(
   const app = new Hono<AppEnv>();
   const auth = requireAuth(dependencies);
   const workspace = withWorkspace(dependencies);
-  const priceId = alertCreditPriceId(dependencies.config.paddle);
+  const priceId = alertCreditPriceId(
+    dependencies.config.stripe ?? dependencies.config.paddle,
+  );
   const topUpAvailable = priceId !== null;
   const getOverview = new GetAlertsOverview(
     dependencies.alerts,
@@ -99,17 +107,32 @@ export function alertRoutes(
     dependencies.clock,
   );
   const listEntries = new ListCreditEntries(dependencies.alerts);
-  const startTopUp = new StartCreditTopUp(
-    new IssuePaddleCheckoutIntent(
-      dependencies.checkoutIntents,
-      dependencies.config.paddle,
-      dependencies.clock,
-      dependencies.ids,
-      undefined,
-      dependencies.track,
-    ),
-    dependencies.track,
-  );
+  const startTopUp =
+    dependencies.config.stripe !== null && dependencies.stripeCheckout !== undefined
+      ? new StartCreditTopUp(
+          new IssueStripeCheckoutIntent(
+            dependencies.checkoutIntents,
+            dependencies.config.stripe,
+            dependencies.stripeCheckout,
+            dependencies.config.appUrl,
+            dependencies.clock,
+            dependencies.ids,
+            undefined,
+            dependencies.track,
+          ),
+          dependencies.track,
+        )
+      : new StartCreditTopUp(
+          new IssuePaddleCheckoutIntent(
+            dependencies.checkoutIntents,
+            dependencies.config.paddle,
+            dependencies.clock,
+            dependencies.ids,
+            undefined,
+            dependencies.track,
+          ),
+          dependencies.track,
+        );
 
   app.get(
     "/:workspaceId/alerts",

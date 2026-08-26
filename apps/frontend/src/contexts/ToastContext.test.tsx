@@ -25,8 +25,8 @@ describe("toast context", () => {
   });
 
   it("accepts informational toasts", () => {
-    expect(appendToast([], { id: 1, message: "Continue in Paddle", tone: "info" })).toEqual([
-      { id: 1, message: "Continue in Paddle", tone: "info" },
+    expect(appendToast([], { id: 1, message: "Continue in Stripe", tone: "info" })).toEqual([
+      { id: 1, message: "Continue in Stripe", tone: "info" },
     ]);
   });
 

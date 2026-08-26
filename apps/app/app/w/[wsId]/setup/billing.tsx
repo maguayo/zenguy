@@ -11,7 +11,7 @@ import { webAppHost } from "@/components/more/billing";
 import {
   freeAccessDescription,
   freeActivationTimeoutMessage,
-  paddleActivationTimeoutMessage,
+  stripeActivationTimeoutMessage,
   pollUntilActive,
   workspaceStatus,
 } from "@/components/more/billing-setup";
@@ -63,7 +63,7 @@ export default function BillingSetupScreen() {
   const billingConfig = useQuery({ queryFn: getBillingConfig, queryKey: ["billing-config"] });
   const isOwner = role === "OWNER";
   const members = useQuery({
-    enabled: billingConfig.data?.mode === "paddle" && !isOwner,
+    enabled: billingConfig.data?.mode === "stripe" && !isOwner,
     queryFn: () => listMembers(current.id),
     queryKey: ["ws", current.id, "members"],
   });
@@ -181,7 +181,7 @@ export default function BillingSetupScreen() {
         <ActivationStatus
           checking="Checking activation…"
           phase={phase}
-          timeoutMessage={paddleActivationTimeoutMessage}
+          timeoutMessage={stripeActivationTimeoutMessage}
           onCheck={() => void checkActivation()}
         />
         {phase === "idle" ? (

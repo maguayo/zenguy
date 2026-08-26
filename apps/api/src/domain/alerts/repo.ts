@@ -34,7 +34,7 @@ export interface CreditCreditInput {
   description: string;
   deliveryId: string | null;
   providerTransactionId: string | null;
-  /** Customer pinned from a verified Paddle transaction; null otherwise. */
+  /** Customer pinned from a verified provider transaction; null otherwise. */
   providerCustomerId?: string | null;
   at: number;
 }

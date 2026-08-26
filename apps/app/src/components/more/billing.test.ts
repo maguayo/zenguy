@@ -70,7 +70,7 @@ describe("billing presentation", () => {
       name: "Zenguy — complimentary",
       paid: false,
     });
-    expect(planPresentation("paddle", "ACTIVE")).toMatchObject({
+    expect(planPresentation("stripe", "ACTIVE")).toMatchObject({
       label: "Active",
       name: "Zenguy — 39 €/month",
       paid: true,
@@ -99,8 +99,8 @@ describe("billing presentation", () => {
   });
 
   it("prices paid plans and labels the free ones", () => {
-    expect(planPrice(planPresentation("paddle", "ACTIVE"), 3_900)).toBe(`${formatEuros(3_900)} / month`);
-    expect(planPrice(planPresentation("paddle", "ACTIVE"), 3_900)).toMatch(/^39,00\s€ \/ month$/u);
+    expect(planPrice(planPresentation("stripe", "ACTIVE"), 3_900)).toBe(`${formatEuros(3_900)} / month`);
+    expect(planPrice(planPresentation("stripe", "ACTIVE"), 3_900)).toMatch(/^39,00\s€ \/ month$/u);
     expect(planPrice(planPresentation("free", "ACTIVE"), 3_900)).toBe("Free");
     expect(planPrice(planPresentation("grant", "ACTIVE"), 3_900)).toBe("Free");
   });
@@ -115,7 +115,7 @@ describe("billing presentation", () => {
         billing({
           periodEnd: "2026-09-19T00:00:00.000Z",
           periodStart: "2026-08-19T00:00:00.000Z",
-          source: "paddle",
+          source: "stripe",
         }),
       ),
     ).toEqual({ end: "2026-09-19T00:00:00.000Z", start: "2026-08-19T00:00:00.000Z" });

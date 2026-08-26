@@ -14,6 +14,7 @@ coverage/
 *.log
 .DS_Store
 TWILIO_TOKENS.md
+STRIPE_TOKENS.md
 apps/api/scripts/.seed.generated.sql
 apps/api/.ci.staging.vars
 apps/landing/.astro/

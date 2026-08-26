@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { MessageSquare, Phone, ShieldCheck, Wallet } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   alertsQueryKey,
@@ -14,7 +15,6 @@ import {
   startCreditTopUp,
   updateAlertSettings,
 } from "../../api/alerts";
-import { getBillingConfig } from "../../api/billing";
 import type {
   AlertsOverview,
   CreditEntry,
@@ -34,12 +34,12 @@ import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { Toggle } from "../../components/ui/Toggle";
-import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
 import type { ApiPage } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
+import { trustedBillingUrl } from "../../lib/billing-links";
 import { formatDateTime, formatEuros } from "../../lib/format";
 import { AlertsTabs } from "./AlertsTabs";
 
@@ -250,56 +250,23 @@ function TopUpModal({
   overview: AlertsOverview;
 }) {
   const { current } = useWorkspace();
-  const { user } = useAuth();
   const toast = useToast();
-  const invalidate = useInvalidateAlerts();
   const [packs, setPacks] = useState(overview.topUp.minPacks);
-  const [phase, setPhase] = useState<"idle" | "opening" | "confirming">("idle");
-  const previousBalance = useRef(overview.credit?.balanceCents ?? 0);
+  const [phase, setPhase] = useState<"idle" | "opening">("idle");
 
   useEffect(() => {
     if (open) setPacks(overview.topUp.minPacks);
   }, [open, overview.topUp.minPacks]);
 
-  const confirm = async () => {
-    setPhase("confirming");
-    try {
-      const credited = await pollUntilCredited(
-        () => getAlertsOverview(current.id),
-        previousBalance.current,
-      );
-      await invalidate();
-      if (credited) toast.success("Credit added");
-      else toast.info("Payment received — the credit will appear shortly.");
-    } catch (error) {
-      toast.error(apiErrorMessage(error));
-    } finally {
-      setPhase("idle");
-    }
-  };
-
   const start = async () => {
     setPhase("opening");
     try {
-      previousBalance.current = overview.credit?.balanceCents ?? 0;
       const checkout = await startCreditTopUp(current.id, packs);
-      const config = await getBillingConfig();
-      if (config.mode !== "paddle") {
-        throw new Error("Top-ups are not available yet.");
+      const url = trustedBillingUrl(checkout.url);
+      if (url === null) {
+        throw new Error("The billing provider returned an untrusted link.");
       }
-      // The Paddle loader is a separate chunk and is only evaluated after an
-      // owner explicitly requests a credit checkout.
-      const paddle = await import("../../lib/paddle");
-      await paddle.initPaddle(config);
-      paddle.openCheckout({
-        customData: checkout.customData,
-        email: user?.email ?? "",
-        onCompleted: () => void confirm(),
-        priceId: checkout.priceId,
-        quantity: checkout.quantity,
-      });
-      onClose();
-      setPhase("idle");
+      window.location.assign(url);
     } catch (error) {
       setPhase("idle");
       toast.error(apiErrorMessage(error));
@@ -345,8 +312,8 @@ function TopUpModal({
           </Select>
         </Field>
         <p className="text-xs text-zinc-500">
-          Payment is handled by Paddle in a secure overlay. Tax is added at checkout; the full
-          amount above is credited to this workspace.
+          Payment is handled securely by Stripe. Any applicable tax is calculated
+          and shown at checkout; the full credit above is added to this workspace.
         </p>
       </div>
     </Modal>
@@ -667,10 +634,33 @@ function PageSkeleton(): ReactNode {
 
 export default function PaidAlertsPage() {
   const { can, current } = useWorkspace();
+  const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const overview = useQuery({
     queryFn: () => getAlertsOverview(current.id),
     queryKey: alertsQueryKey(current.id),
   });
+
+  useEffect(() => {
+    const result = searchParams.get("topup");
+    if (result !== "success" && result !== "canceled") return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("topup");
+    setSearchParams(next, { replace: true });
+    if (result === "canceled") {
+      toast.info("Payment canceled — no credit was added.");
+      return;
+    }
+    toast.info("Payment received — confirming your credit with Stripe.");
+    void (async () => {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await overview.refetch();
+        if (attempt < 5) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 2_000));
+        }
+      }
+    })();
+  }, [overview.refetch, searchParams, setSearchParams, toast]);
 
   return (
     <div className="space-y-6">
