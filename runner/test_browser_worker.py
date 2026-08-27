@@ -843,6 +843,56 @@ class BrowserUseIntegrationTests(unittest.TestCase):
                 with self.assertRaises(worker.ConfigError):
                     worker.secure_browser_profile_args(profile)
 
+    def test_cloudflare_profile_adds_dev_shm_relief_without_touching_other_modes(self):
+        class FakeProfile:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.chromium_sandbox = kwargs["chromium_sandbox"]
+                self.disable_security = kwargs["disable_security"]
+                self.proxy = kwargs["proxy"]
+
+            def get_args(self):
+                arguments = list(self.kwargs["args"])
+                if self.kwargs["proxy"]:
+                    arguments.append(
+                        f'--proxy-server={self.kwargs["proxy"]["server"]}'
+                    )
+                    arguments.append(
+                        f'--proxy-bypass-list={self.kwargs["proxy"]["bypass"]}'
+                    )
+                return arguments
+
+        runtime = worker.BrowserUseRuntime(
+            Agent=None,
+            BrowserProfile=FakeProfile,
+            BrowserSession=None,
+            ChatOpenAI=None,
+            Tools=None,
+            ActionResult=None,
+            NavigateAction=None,
+        )
+        snapshot = {"viewport": {"width": 1440, "height": 900}, "device": "DESKTOP"}
+        host = dataclasses.replace(
+            self.config(),
+            browser_channel=None,
+            chrome_executable=None,
+            egress_proxy="http://egress-proxy:3128",
+        )
+        cloudflare = dataclasses.replace(
+            host,
+            mode="cloudflare",
+            egress_proxy=None,
+            require_egress_proxy=False,
+        )
+        cf_profile = worker.create_browser_use_profile(
+            cloudflare, snapshot, runtime, allowed_domains=["example.com"]
+        )
+        self.assertIn("--disable-dev-shm-usage", cf_profile.kwargs["args"])
+        host_profile = worker.create_browser_use_profile(
+            host, snapshot, runtime, allowed_domains=["example.com"]
+        )
+        self.assertNotIn("--disable-dev-shm-usage", host_profile.kwargs["args"])
+
     def test_custom_actions_register_against_the_real_browser_use_registry(self):
         # from __future__ import annotations convierte las anotaciones en
         # strings; el registry de browser-use compara tipos de los argumentos

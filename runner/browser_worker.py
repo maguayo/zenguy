@@ -2949,6 +2949,14 @@ def create_browser_use_profile(
             "--disable-background-networking",
             "--disable-features=ServiceWorker",
             "--disable-sync",
+            # Cloudflare Containers monta /dev/shm de 64M; sin este flag el
+            # renderer se cuelga cargando páginas reales (navegaciones que
+            # expiran a los 30 s). En host no aplica.
+            *(
+                ["--disable-dev-shm-usage"]
+                if config.mode == "cloudflare"
+                else []
+            ),
         ],
         permissions=[],
         allowed_domains=allowed_domains,
