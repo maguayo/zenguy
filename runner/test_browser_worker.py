@@ -186,6 +186,35 @@ class ConfigurationSafetyTests(unittest.TestCase):
         with self.assertRaises(worker.ConfigError):
             worker.validate_api_url("http://staging-app.zenguy.com")
 
+    def test_dns_resolution_uses_a_dedicated_generous_fixed_pool(self):
+        import concurrent.futures
+
+        pool = worker.dns_resolver_executor()
+        self.assertIsInstance(pool, concurrent.futures.ThreadPoolExecutor)
+        # Holgado y FIJO: no depende de las CPUs del contenedor (donde el pool
+        # por defecto del loop es minusculo y lo comparte el CDP). Aisla los
+        # getaddrinfo zombi de trackers del camino critico.
+        self.assertGreaterEqual(pool._max_workers, 32)
+        self.assertIs(worker.dns_resolver_executor(), pool)
+
+    async def test_public_network_check_resolves_on_the_dedicated_pool(self):
+        seen = []
+        original = worker.dns_resolver_executor().submit
+
+        def tracking_submit(fn, *args, **kwargs):
+            seen.append(getattr(fn, "__name__", str(fn)))
+            return original(fn, *args, **kwargs)
+
+        with mock.patch.object(
+            worker.socket,
+            "getaddrinfo",
+            return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+        ), mock.patch.object(
+            worker.dns_resolver_executor(), "submit", side_effect=tracking_submit
+        ):
+            await worker.assert_public_network_url("https://public.example")
+        self.assertIn("getaddrinfo", seen)
+
     def test_browser_network_rejects_private_dns_answers(self):
         private_answer = [
             (2, 1, 6, "", ("127.0.0.1", 443)),
@@ -1054,6 +1083,49 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
                 await policy.assert_request(
                     "https://169.254.169.254/", "Document", "GET"
                 )
+
+    async def test_unrestricted_allows_first_party_payments_and_blocks_trackers(self):
+        policy = worker.BrowserNetworkPolicy(("cocunat.com",), unrestricted=True)
+        with mock.patch.object(
+            worker, "assert_public_network_url", new=mock.AsyncMock()
+        ):
+            # first-party del sitio (incluye subdominios) y su POST de carrito
+            await policy.assert_request("https://cocunat.com/logo.png", "Image", "GET")
+            await policy.assert_request("https://shopify-cdn.cocunat.com/app.js", "Script", "GET")
+            await policy.assert_request("https://cocunat.com/cart/add", "XHR", "POST")
+            # infra funcional de terceros (plataforma, pago, captcha, cdn, fuentes)
+            for functional in (
+                "https://cdn.shopify.com/theme.js",
+                "https://js.stripe.com/v3/",
+                "https://www.paypal.com/sdk/js",
+                "https://challenges.cloudflare.com/turnstile/v0/api.js",
+                "https://fonts.gstatic.com/s/font.woff2",
+                "https://cdnjs.cloudflare.com/lib.js",
+            ):
+                await policy.assert_request(functional, "Script", "GET")
+            # trackers/ads de terceros: subrecurso cortado
+            for tracker in (
+                "https://cdn.taboola.com/libtrc/x.js",
+                "https://www.google-analytics.com/collect",
+                "https://connect.facebook.net/en_US/fbevents.js",
+                "https://www.googletagmanager.com/gtm.js",
+            ):
+                with self.assertRaises(worker.ActionFailure):
+                    await policy.assert_request(tracker, "Script", "GET")
+
+    async def test_unrestricted_navigation_expands_first_party_for_subresources(self):
+        policy = worker.BrowserNetworkPolicy(("cocunat.com",), unrestricted=True)
+        with mock.patch.object(
+            worker, "assert_public_network_url", new=mock.AsyncMock()
+        ):
+            # un subrecurso de otro sitio (no visitado) se corta
+            with self.assertRaises(worker.ActionFailure):
+                await policy.assert_request("https://otra-tienda.io/app.js", "Script", "GET")
+            # el test NAVEGA (Document) a ese sitio: pasa a ser first-party
+            await policy.assert_request("https://otra-tienda.io/checkout", "Document", "GET")
+            # ahora sus subrecursos first-party se permiten
+            await policy.assert_request("https://cdn.otra-tienda.io/app.js", "Script", "GET")
+        self.assertIn("otra-tienda.io", policy.journey_domains)
 
     def test_unrestricted_policy_allows_interaction_on_any_public_host(self):
         policy = worker.BrowserNetworkPolicy(("shop.example",), unrestricted=True)

@@ -23,8 +23,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import concurrent.futures
 import contextlib
 import dataclasses
+import functools
 import hashlib
 import importlib.metadata
 import io
@@ -252,6 +254,104 @@ BROWSER_USE_PROHIBITED_DOMAINS = [
     "*.internal",
     "metadata.google.internal",
 ]
+# "El test manda" (unrestricted): la red está abierta para CUALQUIER sitio y
+# CUALQUIER pasarela de pago, pero los SUBRECURSOS de terceros no esenciales
+# (redes de ad/analytics/RTB) se cortan con failRequest. Cargados de verdad,
+# sus SCRIPTS corren en el hilo de la pagina principal y ahogan el build del
+# arbol DOM de browser-use (medido: captura 30 s/paso con ellos vs 0,23 s sin
+# ellos). Estos hosts de infraestructura funcional (plataformas de e-commerce,
+# pasarelas de pago, captchas, CDNs de librerias y fuentes) SI se permiten,
+# aunque sean de otro dominio, para que cualquier flujo de compra funcione sin
+# que el usuario declare nada. Match por sufijo de dominio.
+FUNCTIONAL_THIRD_PARTY_SUFFIXES = frozenset(
+    {
+        # Plataformas de e-commerce (assets/CDN funcionales)
+        "shopify.com",
+        "myshopify.com",
+        "shopifycdn.net",
+        "shopifycloud.com",
+        "shopifysvc.com",
+        "shopifyapps.com",
+        "shop.app",
+        "woocommerce.com",
+        "bigcommerce.com",
+        "squarespace.com",
+        "wixstatic.com",
+        "wix.com",
+        # Pasarelas de pago / BNPL
+        "stripe.com",
+        "stripe.network",
+        "paypal.com",
+        "paypalobjects.com",
+        "braintreegateway.com",
+        "braintree-api.com",
+        "braintreepayments.com",
+        "adyen.com",
+        "klarna.com",
+        "klarnacdn.net",
+        "klarnaservices.com",
+        "checkout.com",
+        "squareup.com",
+        "square.site",
+        "amazonpay.com",
+        "payments-amazon.com",
+        "pay.google.com",
+        "mollie.com",
+        "redsys.es",
+        "affirm.com",
+        "afterpay.com",
+        "clearpay.co.uk",
+        "sezzle.com",
+        "zip.co",
+        "apple-pay-gateway.apple.com",
+        # Captcha / bot-challenge (necesarios en checkout/login)
+        "hcaptcha.com",
+        "recaptcha.net",
+        "challenges.cloudflare.com",
+        # CDNs de librerias y fuentes (assets funcionales)
+        "cdnjs.cloudflare.com",
+        "jsdelivr.net",
+        "unpkg.com",
+        "jquery.com",
+        "bootstrapcdn.com",
+        "googleapis.com",
+        "gstatic.com",
+    }
+)
+
+
+def is_functional_third_party_host(host: str) -> bool:
+    host = (host or "").strip().lower().rstrip(".")
+    if not host:
+        return False
+    return any(
+        host == suffix or host.endswith("." + suffix)
+        for suffix in FUNCTIONAL_THIRD_PARTY_SUFFIXES
+    )
+
+
+# TLDs de segundo nivel comunes para aproximar el dominio registrable sin PSL.
+_MULTIPART_TLD_SLDS = frozenset(
+    {"co", "com", "org", "net", "gov", "edu", "ac", "gob"}
+)
+
+
+def registrable_site(host: str) -> str:
+    """Aproxima el dominio registrable (p.ej. www.cocunat.com -> cocunat.com).
+
+    Sin lista de sufijos publica: usa las 2 ultimas etiquetas, o 3 cuando la
+    penultima es un SLD conocido (co.uk, com.au, com.br...). Suficiente para
+    tratar subdominios first-party y evitar sobre-permitir un TLD entero.
+    """
+
+    labels = (host or "").strip().lower().rstrip(".").split(".")
+    if len(labels) <= 2:
+        return ".".join(labels)
+    if labels[-2] in _MULTIPART_TLD_SLDS and len(labels) >= 3:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
 ALLOWED_DOMAIN_PATTERN = re.compile(
     r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
 )
@@ -1625,6 +1725,34 @@ def assert_safe_external_url(raw: str) -> str:
     return urllib.parse.urlunsplit(parsed)
 
 
+_DNS_RESOLVER_MAX_WORKERS = 64
+_dns_resolver_pool: "concurrent.futures.ThreadPoolExecutor | None" = None
+_dns_resolver_lock = threading.Lock()
+
+
+def dns_resolver_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Dedicated, generously and FIXED-sized pool for socket.getaddrinfo.
+
+    The guard resolves every new host to enforce the anti-SSRF boundary, but
+    getaddrinfo cannot be cancelled: a slow/NXDOMAIN third-party tracker leaves
+    its worker blocked past the wait_for deadline. On the loop's default
+    executor — only min(32, cpu+4) threads, a handful inside the container and
+    shared with every other to_thread and CDP round-trip — a fan-out of
+    trackers (only reachable with the network open) starves the whole attempt
+    into a ~120 s hang. Isolating DNS on its own large pool keeps those zombie
+    lookups off the critical path, independent of the container CPU count.
+    """
+    global _dns_resolver_pool
+    if _dns_resolver_pool is None:
+        with _dns_resolver_lock:
+            if _dns_resolver_pool is None:
+                _dns_resolver_pool = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=_DNS_RESOLVER_MAX_WORKERS,
+                    thread_name_prefix="zenguy-dns",
+                )
+    return _dns_resolver_pool
+
+
 async def assert_public_network_url(raw: str) -> None:
     destination = assert_safe_external_url(raw)
     parsed = urllib.parse.urlsplit(destination)
@@ -1633,11 +1761,14 @@ async def assert_public_network_url(raw: str) -> None:
         raise ActionFailure("Navigation blocked: URL not allowed")
     try:
         addresses = await asyncio.wait_for(
-            asyncio.to_thread(
-                socket.getaddrinfo,
-                host,
-                parsed.port or (443 if parsed.scheme == "https" else 80),
-                type=socket.SOCK_STREAM,
+            asyncio.get_running_loop().run_in_executor(
+                dns_resolver_executor(),
+                functools.partial(
+                    socket.getaddrinfo,
+                    host,
+                    parsed.port or (443 if parsed.scheme == "https" else 80),
+                    type=socket.SOCK_STREAM,
+                ),
             ),
             timeout=5,
         )
@@ -1680,14 +1811,38 @@ class BrowserNetworkPolicy:
     writable_domains: tuple[str, ...] = ()
     irreversible_scopes: tuple[Mapping[str, Any], ...] = ()
     action_authorizer: Callable[[Mapping[str, Any]], Awaitable[bool]] | None = None
-    # Modo "el test manda" (CLOUDFLARE_RUNNER.md): sin allowlist de dominios,
-    # sin ledger de acciones irreversibles ni gate de HTTP mutante. El test
-    # hace lo que sus instrucciones digan, incluido checkout con tarjeta. Se
-    # mantienen las barreras de INTEGRIDAD (no de política): anti-SSRF/rebinding
-    # (`assert_public_network_url`), redacción de secretos, topes de tamaño,
-    # descargas denegadas, sandbox de Chromium y el set de acciones sin
-    # `evaluate`/`send_keys`/subida de ficheros.
+    # Modo "el test manda" (CLOUDFLARE_RUNNER.md): sin ledger de acciones
+    # irreversibles ni gate de HTTP mutante. El test hace lo que sus
+    # instrucciones digan (checkout con tarjeta incluido) en cualquier sitio y
+    # cualquier pasarela de pago. La navegacion (Document/iframe) se permite a
+    # cualquier host publico; los SUBRECURSOS de terceros no esenciales
+    # (trackers/ads) se cortan para que su JS no ahogue la lectura del DOM. Se
+    # mantienen las barreras de INTEGRIDAD (no de politica): anti-SSRF/rebinding,
+    # redaccion de secretos, topes de tamano, descargas denegadas, sandbox de
+    # Chromium y el set de acciones sin evaluate/send_keys/subida de ficheros.
     unrestricted: bool = False
+    # Sitios registrables que el test ha visitado (documentos); sus subrecursos
+    # first-party se permiten aunque no estuvieran en el allowlist inicial.
+    journey_domains: set[str] = dataclasses.field(
+        default_factory=set, compare=False, hash=False
+    )
+
+    def _is_first_party(self, host: str) -> bool:
+        """El host pertenece al sitio de arranque, a un dominio declarado, o a
+        un sitio que el test ya ha visitado (por dominio registrable)."""
+
+        site = registrable_site(host)
+        if not site:
+            return False
+        if site in self.journey_domains:
+            return True
+        for pattern in self.allowed_domains:
+            base = pattern.lower()
+            if base.startswith("*."):
+                base = base[2:]
+            if registrable_site(base) == site:
+                return True
+        return False
 
     @staticmethod
     def _path_and_query(parsed: urllib.parse.SplitResult) -> str:
@@ -1716,10 +1871,24 @@ class BrowserNetworkPolicy:
         if verify_dns:
             await assert_public_network_url(raw)
         if self.unrestricted:
-            # Cualquier host público y cualquier método: la única frontera es
-            # la verificación anti-SSRF de arriba (protege la infra de Zenguy,
-            # no limita a dónde llega el test).
-            return
+            host = (urllib.parse.urlsplit(raw).hostname or "").lower()
+            # Navegaciones (documento principal o iframe): a cualquier sitio.
+            # Su dominio pasa a ser first-party del recorrido; y un iframe de
+            # terceros corre en su propio proceso (--site-per-process), asi que
+            # no ahoga el hilo de la pagina.
+            if resource_type == "Document":
+                if host:
+                    self.journey_domains.add(registrable_site(host))
+                return
+            # Subrecursos: first-party del sitio/recorrido o infra funcional
+            # (e-commerce/pago/captcha/CDN/fuentes). El resto —trackers/ads cuyo
+            # JS ahogaria la lectura del DOM— se corta con failRequest.
+            if self._is_first_party(host) or is_functional_third_party_host(host):
+                return
+            raise ActionFailure(
+                f"Request blocked: {host or 'unknown host'} is a non-essential "
+                "third-party subresource (ad/tracker)"
+            )
         parsed = urllib.parse.urlsplit(raw)
         host = parsed.hostname or ""
         normalized_method = method.upper()
