@@ -111,6 +111,30 @@ export function testEnv(): Bindings {
   };
 }
 
+/** Stripe-only bindings. loadConfig rejects Stripe and Paddle together. */
+export function stripeTestEnv(): Bindings {
+  return {
+    ...testEnv(),
+    PADDLE_API_KEY: undefined,
+    PADDLE_WEBHOOK_SECRET: undefined,
+    PADDLE_CLIENT_TOKEN: undefined,
+    PADDLE_ENVIRONMENT: undefined,
+    PADDLE_PRODUCT_ID: undefined,
+    PADDLE_PRICE_ID: undefined,
+    PADDLE_OVERAGE_PRICE_ID: undefined,
+    PADDLE_ALERT_CREDIT_PRODUCT_ID: undefined,
+    PADDLE_ALERT_CREDIT_PRICE_ID: undefined,
+    STRIPE_SECRET_KEY: "sk_test_integration123",
+    STRIPE_WEBHOOK_SECRET: "whsec_integration123",
+    STRIPE_ENVIRONMENT: "test",
+    STRIPE_PRODUCT_ID: "prod_integration123",
+    STRIPE_PRICE_ID: "price_integration123",
+    STRIPE_OVERAGE_PRICE_ID: "price_overageintegration123",
+    STRIPE_ALERT_CREDIT_PRODUCT_ID: "prod_alertcredit123",
+    STRIPE_ALERT_CREDIT_PRICE_ID: "price_alertcredit123",
+  };
+}
+
 export async function encryptTestValue(
   context: EncryptionContext,
   plaintext = "synthetic-integration-test-value",

@@ -18,6 +18,7 @@ import type {
   WorkspaceInvitation,
 } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
+import type { HttpStripeClient } from "../../infrastructure/stripe/client";
 import { D1ApiKeyRepo } from "../../infrastructure/db/api_key_repo";
 import { D1ArtifactRepo } from "../../infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "../../infrastructure/db/attempt_repo";
@@ -45,10 +46,14 @@ import {
   hmacSign,
   sha256Hex,
 } from "../../shared/crypto";
-import { RecordingBillingCanceller, RecordingPaddleClient } from "../../test/fakes/billing";
+import {
+  RecordingBillingCanceller,
+  RecordingPaddleClient,
+  RecordingStripeClient,
+} from "../../test/fakes/billing";
 import { RecordingEmailSender } from "../../test/fakes/email";
 import { FakeIds } from "../../test/fakes/ids";
-import { freshDb, freshKv, testEnv } from "../../test/helpers";
+import { freshDb, freshKv, stripeTestEnv } from "../../test/helpers";
 import { signArtifactUrl } from "../artifact_sign";
 
 type Caller = "owner" | "admin" | "member" | "outsider" | "unauthenticated";
@@ -244,7 +249,7 @@ async function seedFixture(
   activeSubscription = true,
 ): Promise<MatrixFixture> {
   await Promise.all([freshDb(), freshKv()]);
-  const bindings = testEnv();
+  const bindings = stripeTestEnv();
   const config = loadConfig(bindings);
   const clock = new FixedClock(NOW);
   const users = new D1UserRepo(bindings.DB);
@@ -588,6 +593,7 @@ async function seedFixture(
     ids,
     emailSender: new RecordingEmailSender(),
     paddleClient: paddle,
+    stripeClient: new RecordingStripeClient() as unknown as HttpStripeClient,
     billingCanceller: new RecordingBillingCanceller(),
     channelSender: {
       send: async () => ({ providerMessageId: "msg_rbac_matrix" }),
@@ -749,26 +755,29 @@ const ROUTES: RouteCase[] = [
     json("POST", { events: [{ type: "app.opened" }] }),
   ),
   {
-    label: "POST /api/webhooks/paddle",
+    label: "POST /api/webhooks/stripe",
     access: "P",
     success: 200,
     request: async (fixture, caller) => {
-      const rawBody = JSON.stringify({
-        event_id: `evt_rbac_${caller}`,
-        event_type: "transaction.completed",
-        occurred_at: new Date(NOW).toISOString(),
-        data: {},
-      });
       const timestamp = Math.floor(NOW / 1_000);
+      const rawBody = JSON.stringify({
+        id: `evt_rbac_${caller}`,
+        type: "ping",
+        created: timestamp,
+        data: { object: {} },
+      });
       const signature = await hmacSha256Hex(
-        fixture.config.paddle!.webhookSecret,
-        `${timestamp}:${rawBody}`,
+        fixture.config.stripe!.webhookSecret,
+        `${timestamp}.${rawBody}`,
       );
       return {
-        path: "/api/webhooks/paddle",
+        path: "/api/webhooks/stripe",
         init: {
           method: "POST",
-          headers: { "Paddle-Signature": `ts=${timestamp};h1=${signature}` },
+          headers: {
+            "content-type": "application/json",
+            "Stripe-Signature": `t=${timestamp},v1=${signature}`,
+          },
           body: rawBody,
         },
       };

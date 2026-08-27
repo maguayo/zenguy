@@ -26,7 +26,7 @@ import { FixedClock, systemClock } from "../../shared/clock";
 import { loadConfig } from "../../shared/config";
 import { FakeIds } from "../../test/fakes/ids";
 import { RecordingPaddleClient } from "../../test/fakes/billing";
-import { freshDb, testEnv } from "../../test/helpers";
+import { freshDb, stripeTestEnv } from "../../test/helpers";
 
 const NOW = Date.parse("2026-08-19T11:00:00.000Z");
 const RAW_SECRET = "raw-saved-secret-value";
@@ -85,7 +85,7 @@ const SUBSCRIPTION: Subscription = {
 describe("workspace read endpoint secret-leak sweep", () => {
   it("never exposes saved/channel/monitor secrets to a member or in privileged metadata reads", async () => {
     await freshDb();
-    const bindings = testEnv();
+    const bindings = stripeTestEnv();
     const config = loadConfig(bindings);
     const users = new D1UserRepo(bindings.DB);
     await users.insert(OWNER);

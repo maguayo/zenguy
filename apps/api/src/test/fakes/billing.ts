@@ -5,6 +5,22 @@ import type {
   PaddleClient,
   SubscriptionManagementUrls,
 } from "../../infrastructure/paddle/client";
+import type {
+  CreateStripeCheckoutInput,
+  StripeCheckoutSession,
+} from "../../infrastructure/stripe/client";
+
+export class RecordingStripeClient {
+  readonly sessions: CreateStripeCheckoutInput[] = [];
+  url = "https://checkout.stripe.com/c/pay/cs_test_recording";
+
+  async createCheckoutSession(
+    input: CreateStripeCheckoutInput,
+  ): Promise<StripeCheckoutSession> {
+    this.sessions.push(input);
+    return { id: "cs_test_recording", url: this.url };
+  }
+}
 
 export class RecordingBillingCanceller implements BillingCanceller {
   readonly workspaceIds: string[] = [];
