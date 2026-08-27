@@ -12,7 +12,7 @@ related:
   - browser-tests-in-plain-english
   - best-website-monitoring-for-small-teams
 image: /articles/uptime-monitoring-and-browser-tests.jpg
-imageAlt: "A small white router with violet LEDs beside a laptop on a night desk."
+imageAlt: "A coastal lighthouse beside a village bakery, a customer stepping through the open shop door."
 ---
 
 Two probes, two failures:

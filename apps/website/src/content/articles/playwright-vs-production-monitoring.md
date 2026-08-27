@@ -13,7 +13,7 @@ related:
   - browser-tests-in-plain-english
   - what-is-synthetic-monitoring
 image: /articles/playwright-vs-production-monitoring.jpg
-imageAlt: "A roll of paper beside an open laptop with a violet screen."
+imageAlt: "A warehouse conveyor of boxes marked MERGE LIVE, looking out at a rainy street and an open shop."
 ---
 
 Playwright is the right tool for testing **your code**, in **your pipeline**, on **your infrastructure**, before it ships.

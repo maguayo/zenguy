@@ -13,7 +13,7 @@ related:
   - ci-passed-production-broke
   - natural-language-browser-testing
 image: /articles/failure-reports-for-ai-coding-agents.jpg
-imageAlt: "Printed pages fanned across a night desk in front of a violet laptop glow."
+imageAlt: "Hands holding a printed failure report in front of a laptop with a code editor open."
 ---
 
 Most monitoring tools emit a badge: red, “checkout failed”, a link that needs a login. A coding agent cannot do much with that. A junior engineer on a Sunday cannot either.

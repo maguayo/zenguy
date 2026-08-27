@@ -12,7 +12,7 @@ related:
   - playwright-vs-production-monitoring
   - browser-tests-in-plain-english
 image: /articles/what-is-synthetic-monitoring.jpg
-imageAlt: "A wooden mannequin walking across a night desk toward a violet laptop screen."
+imageAlt: "A wooden mannequin pushing a shopping cart down a supermarket aisle of cardboard boxes."
 ---
 
 Synthetic monitoring is a robot that uses your product on a schedule so you do not have to wait for a customer to do it badly, in public, at 09:40.

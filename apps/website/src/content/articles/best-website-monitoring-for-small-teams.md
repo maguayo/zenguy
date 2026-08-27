@@ -12,7 +12,7 @@ related:
   - betterstack-alternative
   - how-to-get-alerted-when-checkout-breaks
 image: /articles/best-website-monitoring-for-small-teams.jpg
-imageAlt: "Two coffee cups on a night desk in front of a laptop with a violet screen."
+imageAlt: "Two people at a kitchen table with laptops, tea, and houseplants, working through a page together."
 ---
 
 A small team is not an enterprise SRE org with a smaller logo. It is often one founder, one engineer, and whoever answers support on the weekend.

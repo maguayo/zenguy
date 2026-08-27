@@ -12,7 +12,7 @@ related:
   - why-http-200-is-not-enough
   - how-to-get-alerted-when-checkout-breaks
 image: /articles/website-monitoring-for-founders.jpg
-imageAlt: "A modest night desk: plant, hoodie on a chair, laptop with a violet screen."
+imageAlt: "A small apartment at night: hoodie on a chair, pizza box, empty cups, and a blank monitor by a rainy window."
 ---
 
 If you do not have a QA team, you *are* the QA team, plus support, plus whatever you shipped on Friday.

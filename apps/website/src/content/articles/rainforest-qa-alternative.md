@@ -13,7 +13,7 @@ related:
   - playwright-vs-production-monitoring
   - browser-tests-in-plain-english
 image: /articles/rainforest-qa-alternative.jpg
-imageAlt: "A wooden clipboard on a night desk in front of a laptop."
+imageAlt: "A daylight office of testers at desks with clipboards, laptops, and a whiteboard of API notes."
 ---
 
 Rainforest QA sits in a different category than Zenguy, and it is worth saying so in the first paragraph.

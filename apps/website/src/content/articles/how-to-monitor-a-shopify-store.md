@@ -13,7 +13,7 @@ related:
   - why-http-200-is-not-enough
   - how-to-get-alerted-when-checkout-breaks
 image: /articles/how-to-monitor-a-shopify-store.jpg
-imageAlt: "Folded t-shirt and a mailer on a night desk beside a laptop."
+imageAlt: "A small clothing studio: a rack of shirts, stacked kraft mailers, tape, and a Thank you card by the window."
 ---
 
 A Shopify store is several systems glued together: the theme on your domain, apps injecting scripts, and **checkout on Shopify's domain**. Uptime on the homepage does not watch the glue.

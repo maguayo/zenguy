@@ -13,7 +13,7 @@ related:
   - uptime-monitoring-and-browser-tests
   - best-uptime-monitoring-tools
 image: /articles/uptimerobot-alternative.jpg
-imageAlt: "A small cream box with a green LED and a coiled ethernet cable."
+imageAlt: "A close-up of a doorbell on a blue front door next to a brass house number."
 ---
 
 UptimeRobot is the tool most small sites actually use. The free tier is generous, the paid plans are cheap, and “ping this URL every few minutes” is a solved problem.
