@@ -1096,11 +1096,16 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
             # infra funcional de terceros (plataforma, pago, captcha, cdn, fuentes)
             for functional in (
                 "https://cdn.shopify.com/theme.js",
+                "https://extensions.shopifycdn.com/ext.js",
                 "https://js.stripe.com/v3/",
                 "https://www.paypal.com/sdk/js",
                 "https://challenges.cloudflare.com/turnstile/v0/api.js",
                 "https://fonts.gstatic.com/s/font.woff2",
                 "https://cdnjs.cloudflare.com/lib.js",
+                # infra first-party de la tienda en hosting compartido
+                "https://static-cache.cocunat.workers.dev/x.js",
+                # proteccion de bots del checkout
+                "https://api.config-security.com/c.js",
             ):
                 await policy.assert_request(functional, "Script", "GET")
             # trackers/ads de terceros: subrecurso cortado

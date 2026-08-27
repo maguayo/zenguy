@@ -269,6 +269,7 @@ FUNCTIONAL_THIRD_PARTY_SUFFIXES = frozenset(
         "shopify.com",
         "myshopify.com",
         "shopifycdn.net",
+        "shopifycdn.com",
         "shopifycloud.com",
         "shopifysvc.com",
         "shopifyapps.com",
@@ -278,6 +279,20 @@ FUNCTIONAL_THIRD_PARTY_SUFFIXES = frozenset(
         "squarespace.com",
         "wixstatic.com",
         "wix.com",
+        # Hosting compartido donde las tiendas alojan su infra first-party
+        # (Workers/edge propios, funciones); no son dominios registrables de la
+        # tienda pero su contenido es funcional del sitio bajo test.
+        "workers.dev",
+        "pages.dev",
+        "vercel.app",
+        "netlify.app",
+        # Proteccion de bots/fraude presente en muchos checkouts (si se corta,
+        # la pasarela no valida y la pagina se queda colgada).
+        "config-security.com",
+        "datadome.co",
+        "px-cloud.net",
+        "perimeterx.net",
+        "hcaptcha.com",
         # Pasarelas de pago / BNPL
         "stripe.com",
         "stripe.network",
