@@ -2581,8 +2581,16 @@ def _harden_browser_use_docker_defaults(browser_profile: type[Any]) -> None:
     docker_args.clear()
 
 
-def secure_browser_profile_args(profile: Any) -> list[str]:
-    """Return the final Chromium argv or fail on a sandbox/isolation bypass."""
+def secure_browser_profile_args(
+    profile: Any, *, proxy_required: bool = True
+) -> list[str]:
+    """Return the final Chromium argv or fail on a sandbox/isolation bypass.
+
+    `proxy_required=False` is the documented --cloudflare exemption
+    (CLOUDFLARE_RUNNER.md, decisión 4): sin sidecar de egreso, la frontera de
+    red es la capa CDP por job. Incluso exento, cualquier resto de
+    configuración proxy en el argv se rechaza como ambiguo.
+    """
 
     if getattr(profile, "chromium_sandbox", None) is not True:
         raise ConfigError("Chromium launch refused without its process sandbox")
@@ -2603,10 +2611,6 @@ def secure_browser_profile_args(profile: Any) -> list[str]:
     else:
         proxy_server = getattr(proxy, "server", None)
         proxy_bypass = getattr(proxy, "bypass", None)
-    if not isinstance(proxy_server, str) or not proxy_server:
-        raise ConfigError("Chromium launch refused without its egress proxy")
-    if proxy_bypass != REQUIRED_PROXY_BYPASS:
-        raise ConfigError("Chromium loopback must not bypass the egress proxy")
     proxy_switches = [
         argument for argument in raw_args if argument.startswith("--proxy-server=")
     ]
@@ -2615,10 +2619,20 @@ def secure_browser_profile_args(profile: Any) -> list[str]:
         for argument in raw_args
         if argument.startswith("--proxy-bypass-list=")
     ]
-    if proxy_switches != [f"--proxy-server={proxy_server}"]:
-        raise ConfigError("Chromium egress proxy arguments are ambiguous")
-    if bypass_switches != [f"--proxy-bypass-list={REQUIRED_PROXY_BYPASS}"]:
-        raise ConfigError("Chromium proxy bypass arguments are ambiguous")
+    if not isinstance(proxy_server, str) or not proxy_server:
+        if proxy_required:
+            raise ConfigError("Chromium launch refused without its egress proxy")
+        if proxy_switches or bypass_switches:
+            raise ConfigError("Chromium egress proxy arguments are ambiguous")
+    else:
+        if proxy_bypass != REQUIRED_PROXY_BYPASS:
+            raise ConfigError(
+                "Chromium loopback must not bypass the egress proxy"
+            )
+        if proxy_switches != [f"--proxy-server={proxy_server}"]:
+            raise ConfigError("Chromium egress proxy arguments are ambiguous")
+        if bypass_switches != [f"--proxy-bypass-list={REQUIRED_PROXY_BYPASS}"]:
+            raise ConfigError("Chromium proxy bypass arguments are ambiguous")
     for argument in raw_args:
         switch, separator, value = argument.partition("=")
         if switch in FORBIDDEN_CHROMIUM_SWITCHES:
@@ -2948,7 +2962,10 @@ def create_browser_use_profile(
         demo_mode=False,
         highlight_elements=True,
     )
-    secure_browser_profile_args(profile)
+    secure_browser_profile_args(
+        profile,
+        proxy_required=bool(config.egress_proxy) or config.require_egress_proxy,
+    )
     return profile
 
 

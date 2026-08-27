@@ -843,6 +843,39 @@ class BrowserUseIntegrationTests(unittest.TestCase):
                 with self.assertRaises(worker.ConfigError):
                     worker.secure_browser_profile_args(profile)
 
+    def test_profile_without_proxy_passes_only_with_explicit_exemption(self):
+        clean_args = [worker.REQUIRED_CHROMIUM_SWITCH]
+        profile = SimpleNamespace(
+            chromium_sandbox=True,
+            disable_security=False,
+            proxy=None,
+            get_args=lambda: clean_args,
+        )
+        with self.assertRaises(worker.ConfigError):
+            worker.secure_browser_profile_args(profile)
+        self.assertEqual(
+            worker.secure_browser_profile_args(profile, proxy_required=False),
+            clean_args,
+        )
+        for tainted in (
+            [worker.REQUIRED_CHROMIUM_SWITCH, "--proxy-server=http://x:1"],
+            [
+                worker.REQUIRED_CHROMIUM_SWITCH,
+                f"--proxy-bypass-list={worker.REQUIRED_PROXY_BYPASS}",
+            ],
+        ):
+            with self.subTest(tainted=tainted):
+                stray = SimpleNamespace(
+                    chromium_sandbox=True,
+                    disable_security=False,
+                    proxy=None,
+                    get_args=lambda tainted=tainted: tainted,
+                )
+                with self.assertRaises(worker.ConfigError):
+                    worker.secure_browser_profile_args(
+                        stray, proxy_required=False
+                    )
+
     def test_hardens_only_the_exact_pinned_browser_use_docker_defaults(self):
         module_name = "fake_browser_use_profile"
         module = SimpleNamespace(
