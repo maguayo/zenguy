@@ -3259,40 +3259,6 @@ class CloudflareWorkerTests(unittest.IsolatedAsyncioTestCase):
             instance.executor.jobs, [{"reference": {"attemptId": "att_1"}}]
         )
 
-    async def test_network_probe_logs_python_and_chromium_outcomes(self):
-        instance = object.__new__(worker.CloudflareWorker)
-        instance.config = SimpleNamespace(chrome_executable=None)
-        events = []
-
-        class FakeResponse:
-            status = 200
-
-            def read(self, _limit):
-                return b"x" * 128
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        completed = SimpleNamespace(returncode=0, stdout=b"<html>", stderr=b"")
-        with mock.patch.object(
-            worker.urllib.request, "urlopen", return_value=FakeResponse()
-        ), mock.patch.object(
-            worker.subprocess, "run", return_value=completed
-        ) as chromium, mock.patch.object(
-            worker,
-            "log",
-            side_effect=lambda event, **fields: events.append((event, fields)),
-        ):
-            await instance._network_probe()
-
-        names = [event for event, _ in events]
-        self.assertEqual(names, ["cf_probe_python", "cf_probe_chromium"])
-        child_env = chromium.call_args.kwargs["env"]
-        self.assertEqual(sorted(child_env), ["HOME", "PATH"])
-
     async def test_skip_disposition_executes_nothing(self):
         class FakeApp:
             async def claim(self, delivery_id, claim_message):

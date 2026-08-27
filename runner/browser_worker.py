@@ -4217,63 +4217,6 @@ class CloudflareWorker:
             started_at=int(time.time() * 1000),
         )
 
-    async def _network_probe(self) -> None:
-        """Sonda F2 temporal: egreso Python vs Chromium dentro del contenedor.
-
-        Corre antes del claim y solo loguea; el hijo Chromium recibe un
-        entorno mínimo explícito para no heredar credenciales del worker.
-        """
-
-        def fetch() -> tuple[int, int]:
-            with urllib.request.urlopen(
-                "https://cocunat.com", timeout=10
-            ) as response:
-                return response.status, len(response.read(65536))
-
-        try:
-            status, size = await asyncio.to_thread(fetch)
-            log("cf_probe_python", status=status, bytes=size)
-        except Exception as error:
-            log(
-                "cf_probe_python",
-                error=f"{type(error).__name__}: {error}"[:160],
-            )
-
-        executable = str(self.config.chrome_executable or "/usr/bin/chromium")
-
-        def dump() -> subprocess.CompletedProcess[bytes]:
-            return subprocess.run(
-                [
-                    executable,
-                    "--headless",
-                    "--disable-gpu",
-                    "--no-first-run",
-                    "--virtual-time-budget=15000",
-                    "--dump-dom",
-                    "https://example.com/",
-                ],
-                capture_output=True,
-                timeout=30,
-                env={
-                    "PATH": os.environ.get("PATH", ""),
-                    "HOME": os.environ.get("HOME", "/home/runner"),
-                },
-            )
-
-        try:
-            result = await asyncio.to_thread(dump)
-            log(
-                "cf_probe_chromium",
-                rc=result.returncode,
-                out=len(result.stdout),
-                err=result.stderr.decode("utf-8", "replace")[-200:],
-            )
-        except Exception as error:
-            log(
-                "cf_probe_chromium",
-                error=f"{type(error).__name__}: {error}"[:160],
-            )
-
     async def run(self) -> None:
         log(
             "cf_runner_started",
@@ -4283,7 +4226,6 @@ class CloudflareWorker:
             attemptId=self.message.get("attemptId"),
             deliveryId=self.delivery_id,
         )
-        await self._network_probe()
         self.heartbeat.start()
         try:
             await self._execute_once()
