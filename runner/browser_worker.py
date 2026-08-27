@@ -3995,7 +3995,16 @@ class JobExecutor:
                 self.config,
                 snapshot,
                 runtime,
-                allowed_domains=list(network_policy.allowed_domains),
+                # En modo unrestricted el SecurityWatchdog de browser-use NO
+                # debe restringir la navegacion (bloqueaba subdominios como el
+                # host de checkout api-less.cocunat.com con "blocked by the
+                # browser security policy"): el guard CDP es la unica frontera
+                # de red. Fuera de unrestricted se mantiene el allowlist.
+                allowed_domains=(
+                    None
+                    if self.config.unrestricted_actions
+                    else list(network_policy.allowed_domains)
+                ),
             )
             tools = create_browser_use_tools(
                 runtime, secrets, redactor, network_policy
