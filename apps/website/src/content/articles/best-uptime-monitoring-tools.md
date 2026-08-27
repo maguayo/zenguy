@@ -11,6 +11,8 @@ related:
   - uptimerobot-alternative
   - betterstack-alternative
   - best-website-monitoring-for-small-teams
+image: /articles/best-uptime-monitoring-tools.jpg
+imageAlt: "Three cream cubes with green, amber and violet LEDs on a night desk."
 ---
 
 “Best uptime monitoring tool” is a useless title unless you say **best at what**.

@@ -12,6 +12,8 @@ related:
   - uptime-monitoring-and-browser-tests
   - how-to-monitor-a-checkout-flow
   - uptimerobot-alternative
+image: /articles/why-http-200-is-not-enough.jpg
+imageAlt: "A cream status brick with a green LED in front of a laptop glowing violet."
 ---
 
 Uptime monitoring is a health check from the outside: request a URL, accept a status code, maybe hunt for a string, record latency.
@@ -33,6 +35,8 @@ It does not say:
 - the total on the next page matches the last one.
 
 A 500 is a clear outage. A 200 with a broken total is a **silent** outage. Customers produce it. Status pages do not.
+
+![Checkout order summary captured by a Zenguy run, showing a total of 0,00 €.](/hero/step-checkout.png)
 
 ## The classic night
 

@@ -12,6 +12,8 @@ related:
   - why-http-200-is-not-enough
   - what-is-synthetic-monitoring
   - how-to-get-alerted-when-checkout-breaks
+image: /articles/ci-passed-production-broke.jpg
+imageAlt: "Closed laptop with a green square on the lid, papers sliding off a night desk."
 ---
 
 CI is a gate on **change**. Production monitoring is a watch on **reality**.

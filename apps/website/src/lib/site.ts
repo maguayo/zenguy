@@ -7,12 +7,10 @@ export const homeNavLinks = [
   { href: "#uptime", label: "Uptime" },
   { href: "#app", label: "iOS app" },
   { href: "#pricing", label: "Pricing" },
-  { href: "/articles/", label: "Articles" },
 ];
 
 export const innerNavLinks = [
   { href: "/", label: "Product" },
-  { href: "/articles/", label: "Articles" },
   { href: "/#uptime", label: "Uptime" },
   { href: "/#pricing", label: "Pricing" },
 ];

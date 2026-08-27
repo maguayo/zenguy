@@ -11,6 +11,8 @@ related:
   - best-uptime-monitoring-tools
   - browser-tests-in-plain-english
   - best-website-monitoring-for-small-teams
+image: /articles/uptime-monitoring-and-browser-tests.jpg
+imageAlt: "A small white router with violet LEDs beside a laptop on a night desk."
 ---
 
 Two probes, two failures:

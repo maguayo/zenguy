@@ -12,6 +12,8 @@ related:
   - how-to-monitor-a-shopify-store
   - how-to-get-alerted-when-checkout-breaks
   - why-http-200-is-not-enough
+image: /articles/best-tools-to-monitor-checkout.jpg
+imageAlt: "Three tiny kraft shopping bags in a row on a night desk."
 ---
 
 Checkout is the flow that makes the rest of the site worth hosting. It is also the flow monitoring tools are worst at, because it is long, stateful, and it leaves your domain.

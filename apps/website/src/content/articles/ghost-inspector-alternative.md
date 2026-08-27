@@ -12,6 +12,8 @@ related:
   - pingdom-alternative
   - natural-language-browser-testing
   - how-to-monitor-a-checkout-flow
+image: /articles/ghost-inspector-alternative.jpg
+imageAlt: "A cassette recorder on a night desk in front of a violet laptop glow."
 ---
 
 Ghost Inspector is a veteran of **recorded cloud browser tests**: click through the product, save the recording, replay it on a schedule, get screenshots when it fails.

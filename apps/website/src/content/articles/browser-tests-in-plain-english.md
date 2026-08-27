@@ -11,6 +11,8 @@ related:
   - playwright-vs-production-monitoring
   - how-to-monitor-a-checkout-flow
   - checkly-alternative
+image: /articles/browser-tests-in-plain-english.jpg
+imageAlt: "Someone at a laptop with a fountain pen and a handwritten card."
 ---
 
 The product promise is small enough to put on one card:
@@ -53,6 +55,8 @@ Every attempt tries to keep:
 - a Markdown report when the run ends in failed or timeout.
 
 That report is factual. It does not invent a root cause. It is meant to be handed to a person or pasted into a coding agent.
+
+![The storefront as the agent saw it, captured mid-walk.](/hero/step-home.png)
 
 ## What a run costs
 

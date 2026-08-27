@@ -12,11 +12,15 @@ related:
   - how-to-monitor-a-shopify-store
   - how-to-get-alerted-when-checkout-breaks
   - why-http-200-is-not-enough
+image: /articles/how-to-monitor-a-checkout-flow.jpg
+imageAlt: "Night desk with a kraft shopping bag, a receipt, and a laptop glowing violet."
 ---
 
 A checkout monitor is not “hit `/checkout` every five minutes”. It is a **walk with memory**: pick a product, remember the price, add it, check the cart, continue, check again, stop.
 
 Here is a setup that works on Zenguy. The same structure applies if you later encode it in Playwright.
+
+![The failure this watch is for: checkout still renders, the total is 0,00 €.](/hero/step-checkout.png)
 
 ## 1. Use a catalog you are allowed to abuse
 

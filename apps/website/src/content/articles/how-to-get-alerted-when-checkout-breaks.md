@@ -12,6 +12,8 @@ related:
   - failure-reports-for-ai-coding-agents
   - ci-passed-production-broke
   - best-tools-to-monitor-checkout
+image: /articles/how-to-get-alerted-when-checkout-breaks.jpg
+imageAlt: "A bedside table at night: phone with a violet glow, clock, glass of water."
 ---
 
 The failure mode of alerting is not “we didn't know”. It is “we turned it off”. Checkout watches die when they page people for a slow CDN blip.

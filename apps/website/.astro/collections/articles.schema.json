@@ -38,6 +38,12 @@
         "type": "string"
       }
     },
+    "image": {
+      "type": "string"
+    },
+    "imageAlt": {
+      "type": "string"
+    },
     "$schema": {
       "type": "string"
     }
@@ -46,6 +52,8 @@
     "title",
     "description",
     "pubDate",
-    "category"
+    "category",
+    "image",
+    "imageAlt"
   ]
 }

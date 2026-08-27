@@ -12,6 +12,8 @@ related:
   - uptimerobot-alternative
   - best-uptime-monitoring-tools
   - why-http-200-is-not-enough
+image: /articles/statuscake-alternative.jpg
+imageAlt: "A wooden metronome in the foreground, laptop glowing violet behind it."
 ---
 
 StatusCake is one of the older names in website monitoring: uptime, page speed, SSL, some contact options, plans that grow with monitor count. It is a fine ping tool. It is not a checkout walker.

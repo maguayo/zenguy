@@ -11,6 +11,8 @@ related:
   - uptime-monitoring-and-browser-tests
   - betterstack-alternative
   - how-to-get-alerted-when-checkout-breaks
+image: /articles/best-website-monitoring-for-small-teams.jpg
+imageAlt: "Two coffee cups on a night desk in front of a laptop with a violet screen."
 ---
 
 A small team is not an enterprise SRE org with a smaller logo. It is often one founder, one engineer, and whoever answers support on the weekend.

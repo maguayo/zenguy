@@ -12,6 +12,8 @@ related:
   - playwright-vs-production-monitoring
   - what-is-synthetic-monitoring
   - failure-reports-for-ai-coding-agents
+image: /articles/natural-language-browser-testing.jpg
+imageAlt: "A blank cream card and a fountain pen in front of a violet laptop screen."
 ---
 
 Natural language browser testing means the artifact you maintain is a **goal in English** (or whatever language you write), and a model-driven agent operates a real browser to prove or disprove that goal.

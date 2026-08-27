@@ -11,6 +11,8 @@ related:
   - browser-tests-in-plain-english
   - why-http-200-is-not-enough
   - how-to-get-alerted-when-checkout-breaks
+image: /articles/website-monitoring-for-founders.jpg
+imageAlt: "A modest night desk: plant, hoodie on a chair, laptop with a violet screen."
 ---
 
 If you do not have a QA team, you *are* the QA team, plus support, plus whatever you shipped on Friday.

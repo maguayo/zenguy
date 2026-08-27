@@ -12,6 +12,8 @@ related:
   - uptimerobot-alternative
   - best-uptime-monitoring-tools
   - how-to-monitor-a-checkout-flow
+image: /articles/hyperping-alternative.jpg
+imageAlt: "A brass service bell on a night desk beside a laptop and phone."
 ---
 
 Hyperping sits in the modern uptime cluster: fast HTTP checks, status pages on your domain, on-call-ish alerting, and a handful of browser / synthetic checks on higher plans.

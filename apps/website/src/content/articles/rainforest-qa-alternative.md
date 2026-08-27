@@ -12,6 +12,8 @@ related:
   - natural-language-browser-testing
   - playwright-vs-production-monitoring
   - browser-tests-in-plain-english
+image: /articles/rainforest-qa-alternative.jpg
+imageAlt: "A wooden clipboard on a night desk in front of a laptop."
 ---
 
 Rainforest QA sits in a different category than Zenguy, and it is worth saying so in the first paragraph.

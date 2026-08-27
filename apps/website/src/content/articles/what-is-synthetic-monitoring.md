@@ -11,6 +11,8 @@ related:
   - why-http-200-is-not-enough
   - playwright-vs-production-monitoring
   - browser-tests-in-plain-english
+image: /articles/what-is-synthetic-monitoring.jpg
+imageAlt: "A wooden mannequin walking across a night desk toward a violet laptop screen."
 ---
 
 Synthetic monitoring is a robot that uses your product on a schedule so you do not have to wait for a customer to do it badly, in public, at 09:40.

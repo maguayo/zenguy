@@ -12,6 +12,8 @@ related:
   - checkly-alternative
   - why-http-200-is-not-enough
   - best-uptime-monitoring-tools
+image: /articles/betterstack-alternative.jpg
+imageAlt: "A thick black notebook with a cable beside a blank cream card and a fountain pen."
 ---
 
 Better Stack is a strong product. It is not the same product as Zenguy.

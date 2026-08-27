@@ -25,6 +25,7 @@ const title = "Articles — Zenguy";
 const description =
   "Guides and comparisons on production browser tests, uptime monitoring, and why a 200 is not enough. Written by Zenguy.";
 const canonical = `${SITE_URL}/articles/`;
+const hero = "/articles/night-desk.jpg";
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -32,6 +33,7 @@ const jsonLd = {
   name: "Zenguy articles",
   description,
   url: canonical,
+  image: `${SITE_URL}${hero}`,
   isPartOf: { "@type": "WebSite", name: "Zenguy", url: SITE_URL },
   mainEntity: {
     "@type": "ItemList",
@@ -45,7 +47,7 @@ const jsonLd = {
 };
 ---
 
-<Base title={title} description={description}>
+<Base title={title} description={description} image={hero}>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </Fragment>
@@ -53,15 +55,24 @@ const jsonLd = {
     <Nav links={innerNavLinks} />
     <main class="min-w-0 flex-1 px-10 py-[88px] max-md:px-5 max-md:py-16">
       <div class="container-site min-w-0">
-        <header class="mb-16 max-w-[640px]">
-          <span class="eyebrow">Articles</span>
-          <h1 class="m-0 mt-3 text-[44px] font-semibold leading-[1.12] tracking-[-0.03em] max-md:text-[34px]">
-            What still works after the merge.
-          </h1>
-          <p class="m-0 mt-4 text-[17px] leading-[1.6] text-body">
-            Comparisons, roundups and guides on watching a live site the way a
-            customer uses it. Written by Zenguy — we sell the product we describe.
-          </p>
+        <header class="mb-10 grid grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] items-end gap-12 max-lg:grid-cols-1 max-lg:gap-8">
+          <div class="max-w-[560px]">
+            <span class="eyebrow">Articles</span>
+            <h1 class="m-0 mt-3 text-[44px] font-semibold leading-[1.12] tracking-[-0.03em] max-md:text-[34px]">
+              What still works after the merge.
+            </h1>
+            <p class="m-0 mt-4 text-[17px] leading-[1.6] text-body">
+              Comparisons, roundups and guides on watching a live site the way a
+              customer uses it. Written by Zenguy — we sell the product we describe.
+            </p>
+          </div>
+          <img
+            src={hero}
+            alt="A desk at night: laptop glowing violet, cold coffee, phone with a small violet light."
+            width="1280"
+            height="720"
+            class="card-shadow-sm aspect-[16/9] w-full rounded-[14px] border border-line object-cover"
+          />
         </header>
 
         <div class="flex flex-col gap-16">
@@ -75,13 +86,22 @@ const jsonLd = {
                     <li class="border-t border-line">
                       <a
                         href={articleHref(article.id)}
-                        class="link-quiet group grid grid-cols-[148px_minmax(0,1fr)] items-baseline gap-8 py-[22px] max-md:grid-cols-1 max-md:gap-2"
+                        class="link-quiet group grid grid-cols-[168px_minmax(0,1fr)] items-center gap-7 py-5 max-md:grid-cols-1 max-md:gap-3"
                       >
-                        <span class="font-mono text-[12px] text-muted">
-                          {formatArticleDate(article.data.pubDate)}
-                        </span>
+                        <img
+                          src={article.data.image}
+                          alt={article.data.imageAlt}
+                          width="336"
+                          height="210"
+                          loading="lazy"
+                          decoding="async"
+                          class="aspect-[16/10] w-full rounded-[10px] border border-line object-cover"
+                        />
                         <span class="min-w-0 max-w-full">
-                          <span class="block wrap-break-word text-[17.5px] font-semibold leading-[1.3] text-ink group-hover:text-violet-deep">
+                          <span class="block font-mono text-[12px] text-muted">
+                            {formatArticleDate(article.data.pubDate)}
+                          </span>
+                          <span class="mt-1.5 block wrap-break-word text-[17.5px] font-semibold leading-[1.3] text-ink group-hover:text-violet-deep">
                             {article.data.title}
                           </span>
                           <span class="mt-1.5 block wrap-break-word text-[14.5px] leading-[1.55] text-body">

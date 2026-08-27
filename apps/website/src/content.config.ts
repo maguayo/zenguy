@@ -12,6 +12,8 @@ const articles = defineCollection({
     category: z.enum(["comparison", "roundup", "guide"]),
     tags: z.array(z.string()).default([]),
     related: z.array(z.string()).default([]),
+    image: z.string(),
+    imageAlt: z.string(),
   }),
 });
 

@@ -12,6 +12,8 @@ related:
   - best-synthetic-monitoring-tools
   - checkly-alternative
   - playwright-vs-production-monitoring
+image: /articles/new-relic-synthetics-alternative.jpg
+imageAlt: "Brass calipers and a metal ruler on a night desk."
 ---
 
 New Relic Synthetics (now part of New Relic's broader capability set) is a reasonable button to press **if New Relic is already where traces live**. Browser and scripted monitors sit next to APM, logs, and the rest of the user interface your team was trained on.

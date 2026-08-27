@@ -12,6 +12,8 @@ related:
   - checkly-alternative
   - ci-passed-production-broke
   - playwright-vs-production-monitoring
+image: /articles/datadog-synthetics-alternative.jpg
+imageAlt: "A tall stack of dark binders beside a closed laptop and a blank cream card."
 ---
 
 Datadog Synthetics is not a bad product. It is a module inside a platform whose gravity is **hosts, APM, logs, and RUM**. If that platform is already the source of truth, adding synthetic browser tests there is coherent.

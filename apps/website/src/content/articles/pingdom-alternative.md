@@ -12,6 +12,8 @@ related:
   - best-uptime-monitoring-tools
   - uptimerobot-alternative
   - checkly-alternative
+image: /articles/pingdom-alternative.jpg
+imageAlt: "A silver stopwatch on a night desk in front of a laptop."
 ---
 
 Pingdom (SolarWinds) is the name a lot of teams still type when they want “website monitoring”. It is good at what it was built for in the 2010s: HTTP checks from many locations, page-speed waterfalls, and **transaction checks** you record or script.
