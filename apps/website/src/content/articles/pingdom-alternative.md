@@ -13,7 +13,7 @@ related:
   - uptimerobot-alternative
   - checkly-alternative
 image: /articles/pingdom-alternative.jpg
-imageAlt: "A coastal lighthouse at dusk sweeping a beam across dark water and rocks."
+imageAlt: "A wall map of green pings while someone runs a real browser checkout on a laptop."
 ---
 
 Pingdom (SolarWinds) is the name a lot of teams still type when they want “website monitoring”. It is good at what it was built for in the 2010s: HTTP checks from many locations, page-speed waterfalls, and **transaction checks** you record or script.

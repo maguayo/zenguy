@@ -12,7 +12,7 @@ related:
   - browser-tests-in-plain-english
   - best-website-monitoring-for-small-teams
 image: /articles/uptime-monitoring-and-browser-tests.jpg
-imageAlt: "A coastal lighthouse beside a village bakery, a customer stepping through the open shop door."
+imageAlt: "A wide monitor split: an uptime chart on the left, a live checkout walk on the right."
 ---
 
 Two probes, two failures:

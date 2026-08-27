@@ -12,7 +12,7 @@ related:
   - how-to-monitor-a-checkout-flow
   - checkly-alternative
 image: /articles/browser-tests-in-plain-english.jpg
-imageAlt: "A person writing a test in handwriting on cream paper in front of a dark computer screen."
+imageAlt: "A checkout in the browser with a cream overlay: add this item then proceed to checkout."
 ---
 
 The product promise is small enough to put on one card:

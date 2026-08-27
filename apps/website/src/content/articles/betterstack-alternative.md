@@ -13,7 +13,7 @@ related:
   - why-http-200-is-not-enough
   - best-uptime-monitoring-tools
 image: /articles/betterstack-alternative.jpg
-imageAlt: "A server-room aisle opening onto a sunlit clothing floor with racks and mannequins."
+imageAlt: "A wall of logs and graphs beside a single laptop running a checkout browser test."
 ---
 
 Better Stack is a strong product. It is not the same product as Zenguy.
