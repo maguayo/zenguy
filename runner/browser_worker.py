@@ -286,13 +286,10 @@ FUNCTIONAL_THIRD_PARTY_SUFFIXES = frozenset(
         "pages.dev",
         "vercel.app",
         "netlify.app",
-        # Proteccion de bots/fraude presente en muchos checkouts (si se corta,
-        # la pasarela no valida y la pagina se queda colgada).
-        "config-security.com",
-        "datadome.co",
-        "px-cloud.net",
-        "perimeterx.net",
-        "hcaptcha.com",
+        # NOTA: la proteccion de bots/fraude (config-security, datadome,
+        # perimeterx) NO se permite: su JS de fingerprinting corre en TODA
+        # pagina y ahoga el renderer igual que un tracker (medido: vuelve el
+        # cuelgue de 30 s en la home). Se corta como cualquier tercero pesado.
         # Pasarelas de pago / BNPL
         "stripe.com",
         "stripe.network",
