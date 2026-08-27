@@ -3168,11 +3168,15 @@ def create_browser_use_tools(
         "Input text. Secret values are permitted only on their scoped HTTPS origin.",
         param_model=input_action.param_model,
     )
+    # has_sensitive_data/sensitive_data son argumentos especiales inyectados
+    # por el registry de browser-use, que compara sus anotaciones sin resolver
+    # los strings de `from __future__ import annotations`: anotarlos aquí
+    # rompe el registro. Se dejan sin anotación a propósito.
     async def input(
         params: Any,
         browser_session,
-        has_sensitive_data: bool = False,
-        sensitive_data: Any = None,
+        has_sensitive_data=False,
+        sensitive_data=None,
     ) -> Any:
         index = getattr(params, "index", None)
         if not isinstance(index, int):

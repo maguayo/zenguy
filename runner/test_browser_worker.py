@@ -843,6 +843,26 @@ class BrowserUseIntegrationTests(unittest.TestCase):
                 with self.assertRaises(worker.ConfigError):
                     worker.secure_browser_profile_args(profile)
 
+    def test_custom_actions_register_against_the_real_browser_use_registry(self):
+        # from __future__ import annotations convierte las anotaciones en
+        # strings; el registry de browser-use compara tipos de los argumentos
+        # especiales sin resolverlas y rechazaba el wrapper de input en
+        # producción. Registrar contra la librería real es la única cobertura.
+        # El lock exacto lo garantiza la imagen (--verify-image); el venv del
+        # Mac puede derivar sin invalidar lo que este test cubre: el registro.
+        with mock.patch.object(
+            worker, "assert_locked_runtime_versions", lambda: None
+        ):
+            runtime = worker.load_browser_use_runtime()
+        tools = worker.create_browser_use_tools(
+            runtime,
+            {},
+            worker.Redactor({}),
+            worker.BrowserNetworkPolicy(allowed_domains=("example.com",)),
+        )
+        for action in ("click", "input", "select_dropdown"):
+            self.assertIn(action, tools.registry.registry.actions)
+
     def test_profile_without_proxy_passes_only_with_explicit_exemption(self):
         clean_args = [worker.REQUIRED_CHROMIUM_SWITCH]
         profile = SimpleNamespace(
