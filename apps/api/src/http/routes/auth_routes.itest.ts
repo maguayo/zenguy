@@ -61,15 +61,29 @@ function tokenFromMessage(text: string | undefined): string {
 async function registerUser(
   app: Hono<AppEnv>,
   ip: string,
-  input = {
-    name: "Alice",
-    email: "alice@example.com",
-    password: "initial-password",
-  },
+  input: {
+    name?: string;
+    email?: string;
+    password?: string;
+    acceptedPrivacy?: boolean;
+    acceptedTerms?: boolean;
+    marketingOptIn?: boolean;
+  } = {},
 ): Promise<Response> {
   return app.request(
     "/api/auth/register",
-    jsonRequest(input, { "CF-Connecting-IP": ip }),
+    jsonRequest(
+      {
+        name: "Alice",
+        email: "alice@example.com",
+        password: "initial-password",
+        acceptedPrivacy: true,
+        acceptedTerms: true,
+        marketingOptIn: false,
+        ...input,
+      },
+      { "CF-Connecting-IP": ip },
+    ),
   );
 }
 
@@ -771,7 +785,14 @@ describe("auth routes", () => {
     const registerResponse = await app.request(
       "/api/auth/register",
       jsonRequest(
-        { name: "Alice", email: "alice@example.com", password: "initial-password" },
+        {
+          name: "Alice",
+          email: "alice@example.com",
+          password: "initial-password",
+          acceptedPrivacy: true,
+          acceptedTerms: true,
+          marketingOptIn: false,
+        },
         { ...native, "CF-Connecting-IP": "198.51.100.40" },
       ),
     );

@@ -1,0 +1,266 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Privacy Policy — Zenguy"
+  description="How NIESAYO GROUP, S.L. processes personal data for Zenguy under the GDPR and Spain’s LOPDGDD."
+  heading="Privacy Policy"
+>
+  <p>
+    This Privacy Policy explains how {legalCompany.legalName} (“we”, “us”),
+    acting under the trade name {legalCompany.tradeName}, processes personal
+    data when you use {legalCompany.site}, {legalCompany.app}, the iOS app, or
+    related services (browser tests, uptime monitoring, incidents, alerts and
+    billing).
+  </p>
+  <p>
+    It is the layered information required by articles 13 and 14 of Regulation
+    (EU) 2016/679 (GDPR) and Organic Law 3/2018 (LOPDGDD). It is not a contract
+    of adhesion for extra processing: account data needed to provide Zenguy
+    rest on the contract; marketing and non-essential cookies rest on separate
+    consent.
+  </p>
+
+  <h2>1. Controller</h2>
+  <dl>
+    <dt>Controller</dt>
+    <dd>{legalCompany.legalName}</dd>
+    <dt>NIF</dt>
+    <dd>{legalCompany.nif}</dd>
+    <dt>Address</dt>
+    <dd>{legalAddress}</dd>
+    <dt>Email</dt>
+    <dd><a href={legalMailto}>{legalCompany.email}</a></dd>
+  </dl>
+  <p>
+    We have not appointed a data protection officer because our core activities
+    do not require one under article 37 GDPR. You can still write to{" "}
+    <a href={legalMailto}>{legalCompany.email}</a> for any privacy request.
+    You may also complain to the Spanish Data Protection Agency (AEPD),
+    {" "}<a href="https://www.aepd.es">www.aepd.es</a>, or to another EU
+    supervisory authority where you live or work.
+  </p>
+
+  <h2>2. Roles: controller and processor</h2>
+  <p>
+    For your account, workspace membership, billing, support and security logs,
+    we are the <strong>controller</strong>.
+  </p>
+  <p>
+    For personal data that appear inside the sites you ask us to test or
+    monitor (for example a name on a checkout screenshot, a customer email in
+    a flow, or a secret you store), <strong>you are the controller</strong> and
+    we act as your <strong>processor</strong> under article 28 GDPR. You must
+    have a lawful basis to involve us, must not send special-category data
+    unless strictly necessary and lawful, and must configure tests so they
+    avoid unnecessary personal data. Processor terms are in the{" "}
+    <a href="/terms/">Terms of Service</a>.
+  </p>
+
+  <h2>3. Data we process</h2>
+  <ul>
+    <li>
+      <strong>Account data:</strong> name, email, password hash, verification
+      status, legal acceptances (terms, privacy acknowledgement, marketing
+      choice and version).
+    </li>
+    <li>
+      <strong>Workspace data:</strong> workspace name, members, roles,
+      invitations, settings and time zone.
+    </li>
+    <li>
+      <strong>Service configuration:</strong> browser-test instructions, start
+      URLs, schedules, HTTP monitors, alert channels (email, phone number,
+      Slack/Discord webhooks), and encrypted secrets you store.
+    </li>
+    <li>
+      <strong>Run evidence:</strong> logs, screenshots, network diagnostics,
+      Markdown failure reports and incident records, retained for 30 days.
+    </li>
+    <li>
+      <strong>Billing data:</strong> Stripe customer and subscription
+      identifiers, invoices, usage of runs and prepaid alert credit. Card
+      details are collected by Stripe, not stored by us.
+    </li>
+    <li>
+      <strong>Device and security data:</strong> IP address, user agent,
+      approximate location derived from IP, session tokens, app version, and
+      diagnostic logs needed to secure the service.
+    </li>
+    <li>
+      <strong>Communications:</strong> emails we send (verification, password
+      reset, operational alerts, and, if you opt in, product updates) and
+      support messages you send us.
+    </li>
+    <li>
+      <strong>iOS app:</strong> Face ID stays on the device (we do not receive
+      biometric templates). Push tokens are processed to deliver optional
+      notifications you enable.
+    </li>
+  </ul>
+  <p>We do not sell personal data. We do not build advertising profiles.</p>
+
+  <h2>4. Purposes and legal bases</h2>
+  <p>Each purpose has its own article 6 GDPR basis:</p>
+  <ul>
+    <li>
+      <strong>Create and administer the account, workspaces and the service</strong>
+      — performance of the contract (art. 6.1.b). Providing name, email and a
+      password is necessary; without them we cannot open an account.
+    </li>
+    <li>
+      <strong>Run the tests and monitors you configure, store evidence, and
+      send operational alerts to destinations you add</strong>
+      — contract (art. 6.1.b). For phone, SMS or WhatsApp destinations we also
+      need the recipient’s permission, which you confirm when you create the
+      channel (consent, art. 6.1.a, as regards that recipient).
+    </li>
+    <li>
+      <strong>Billing, invoicing, tax and accounting</strong>
+      — contract (art. 6.1.b) and legal obligation (art. 6.1.c), including the
+      Spanish Commercial Code and General Tax Law retention duties.
+    </li>
+    <li>
+      <strong>Security, abuse prevention, debugging and service reliability</strong>
+      — legitimate interests (art. 6.1.f): keeping the service safe and
+      available for you and other customers. You may object under article 21
+      GDPR.
+    </li>
+    <li>
+      <strong>Comply with law, respond to authorities, and handle claims</strong>
+      — legal obligation (art. 6.1.c) or legitimate interests (art. 6.1.f).
+    </li>
+    <li>
+      <strong>Product emails about Zenguy</strong> (not operational alerts) —
+      consent (art. 6.1.a and art. 21 LSSI-CE). The checkbox is optional,
+      unchecked by default, and can be withdrawn at any time by writing to{" "}
+      <a href={legalMailto}>{legalCompany.email}</a>. Consent is not a
+      condition of creating an account.
+    </li>
+  </ul>
+  <p>
+    We do not take solely automated decisions with legal or similarly
+    significant effects (art. 22 GDPR).
+  </p>
+
+  <h2>5. Recipients and processors</h2>
+  <p>
+    We only share data with providers that help us operate Zenguy, under a
+    contract, and only as needed:
+  </p>
+  <ul>
+    <li>
+      <strong>Cloudflare, Inc.</strong> and its EEA entity — hosting (Workers,
+      Pages), database (D1), object storage (R2), DNS, email sending and
+      security.
+    </li>
+    <li>
+      <strong>Stripe, Inc. / Stripe Payments Europe, Limited</strong> —
+      subscriptions, invoices, tax and the customer portal.
+    </li>
+    <li>
+      <strong>Twilio Inc.</strong> — SMS and voice operational alerts you
+      configure. We do not share mobile numbers with anyone for their
+      marketing.
+    </li>
+    <li>
+      <strong>OpenAI, LLC</strong> — model inference used to drive the browser
+      agent that executes your instructions. Do not put secrets in the
+      instruction text if you can avoid it; use the secrets vault.
+    </li>
+    <li>
+      <strong>Expo (650 Industries, Inc.)</strong> — iOS push delivery and app
+      updates, when you use the iOS app.
+    </li>
+    <li>
+      Slack, Discord or other destinations <em>you</em> choose as alert
+      webhooks — those providers then process the message under their terms.
+    </li>
+  </ul>
+  <p>
+    We may also disclose data if required by a court or authority, or to
+    professional advisers bound by confidentiality.
+  </p>
+
+  <h2>6. International transfers</h2>
+  <p>
+    Some providers (notably Cloudflare, Stripe, Twilio, OpenAI and Expo) may
+    process data in the United States or other countries outside the EEA.
+    Where that happens we rely on an adequacy decision, the EU–US Data Privacy
+    Framework if the provider is certified, and/or the European Commission’s
+    Standard Contractual Clauses, plus supplementary measures where needed
+    (GDPR Chapter V).
+  </p>
+
+  <h2>7. Retention</h2>
+  <ul>
+    <li>Account and workspace records: while the account is open.</li>
+    <li>
+      After deletion: we keep billing and tax records for up to six years, as
+      Spanish commercial and tax law requires, and security logs for up to
+      twelve months unless a claim needs them longer.
+    </li>
+    <li>Run evidence (screenshots, reports, logs): 30 days.</li>
+    <li>Marketing consent records: until you withdraw consent, plus evidence of the consent for the period we may need to demonstrate it (art. 7.1 GDPR).</li>
+    <li>
+      If you never verify the email, the pending account and its verification
+      token expire on the schedule described in the product (verification
+      tokens last 24 hours; unverified accounts may be removed as abuse
+      prevention).
+    </li>
+  </ul>
+
+  <h2>8. Security</h2>
+  <p>
+    We use TLS, hashed passwords, encrypted secrets, access control by
+    workspace role, short-lived sessions, rate limits and audit logs. No
+    online service is perfectly secure. If a personal-data breach is likely to
+    result in a risk to you, we will notify the AEPD within 72 hours where
+    required (art. 33 GDPR) and we will inform you when art. 34 GDPR requires
+    it.
+  </p>
+
+  <h2>9. Your rights</h2>
+  <p>
+    You may request access, rectification, erasure, restriction, portability
+    and objection, and you may withdraw consent without affecting earlier
+    lawful processing (arts. 15–21 GDPR, arts. 12–18 LOPDGDD). You also have
+    the right not to be subject to solely automated decisions (art. 22).
+  </p>
+  <p>
+    Write to <a href={legalMailto}>{legalCompany.email}</a>. We may need to
+    verify your identity. We will answer within one month, extendable as the
+    GDPR allows. You can also complain to the AEPD.
+  </p>
+  <p>
+    In Spain, users aged 14 or over may generally consent to information-society
+    services (art. 7 LOPDGDD). Zenguy is a business service: the contract
+    requires that you are 18 or older and able to bind yourself or your
+    organisation.
+  </p>
+
+  <h2>10. SMS and phone alerts</h2>
+  <p>
+    Operational SMS and calls are only sent to numbers you enrol, after an
+    explicit, unchecked confirmation in the product. We do not sell mobile
+    numbers or SMS opt-in data, and we do not share them with third parties
+    for their marketing. Recipients can reply STOP to opt out of SMS from the
+    sending number, or HELP for help. Consent to SMS is not a condition of
+    buying Zenguy. Frequency follows the monitors you configure and may include
+    several messages in a day when something is down.
+  </p>
+
+  <h2>11. Children</h2>
+  <p>Zenguy is not directed at children and we do not knowingly collect their data.</p>
+
+  <h2>12. Changes</h2>
+  <p>
+    We may update this policy when the service or the law changes. The date at
+    the top is the current version. Material changes will be announced in the
+    product or by email when appropriate. Continued use after the effective
+    date of a change that does not require new consent means you have been
+    informed of that change.
+  </p>
+</Legal>

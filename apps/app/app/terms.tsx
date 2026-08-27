@@ -9,108 +9,53 @@ export default function Terms() {
   return (
     <LegalPage related={{ href: "/privacy", label: "Privacy Policy" }} title="Terms of Service">
       <LegalParagraph>
-        These Terms govern access to and use of Zenguy. By creating an account or using the
-        service, you agree to these Terms and our Privacy Policy. If you use Zenguy for an
-        organization, you confirm that you may bind that organization.
+        These Terms govern Zenguy, a service of NIESAYO GROUP, S.L. (NIF
+        B23920663), Barcelona. Creating an account means you agree to them. The
+        full text is at zenguy.com/terms.
       </LegalParagraph>
 
       <LegalSection title="1. The service">
         <LegalParagraph>
-          Zenguy provides automated browser testing, uptime monitoring, incident records,
-          reports, and notifications. Results may contain false positives, false negatives,
-          delays, or incomplete information. Zenguy is an operational aid and is not a
-          substitute for your own security, backup, compliance, or business-continuity controls.
+          Zenguy runs natural-language browser tests and HTTP uptime checks,
+          stores evidence, and sends alerts. Results can be wrong or late. It is
+          an operational aid, not a substitute for your own security, QA or
+          backups.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="2. Accounts and authorized use">
+      <LegalSection title="2. Accounts and use">
         <LegalParagraph>
-          You must provide accurate information, protect your credentials and secrets, and
-          promptly report suspected misuse. You may test only sites, accounts, and systems you
-          own or are authorized to access. You must not use Zenguy to attack, overload, evade
-          controls, scrape unlawfully, distribute malware, violate privacy, infringe rights, or
-          break any law.
+          You must be 18 or older, keep credentials safe, and test only systems
+          you own or are authorised to access. Do not attack, overload, scrape
+          unlawfully, or use Zenguy to break the law.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="3. Customer content and test data">
+      <LegalSection title="3. Your content">
         <LegalParagraph>
-          You retain ownership of the configurations, instructions, and other content you
-          submit. You grant Zenguy the limited rights needed to host, process, transmit, and
-          display that content to operate the service. You are responsible for the legality,
-          accuracy, permissions, and backup of your content and for avoiding unnecessary
-          production personal data in tests.
+          You keep ownership of what you submit. When tests capture third-party
+          personal data, you are the controller and we are the processor (GDPR
+          art. 28).
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="4. Notifications and SMS terms">
+      <LegalSection title="4. Notifications and SMS">
         <LegalParagraph>
-          You must have each recipient&apos;s permission before adding an email, phone, WhatsApp, or
-          other destination. Zenguy SMS is a recurring operational-alert program for requested
-          test failures, downtime, recoveries, and channel verification. Message frequency
-          varies with monitoring activity and incidents, and may include multiple messages per
-          day. Message and data rates may apply. Carriers are not liable for delayed or
-          undelivered messages.
-        </LegalParagraph>
-        <LegalParagraph>
-          Reply STOP to opt out of SMS from the sending number or HELP for help. You may also
-          remove or disable the channel in Zenguy. Consent to SMS is not a condition of
-          purchase. Do not enroll a number if its owner has not expressly agreed to these
-          messages.
+          Get each recipient’s permission before adding a channel. SMS is a
+          recurring operational-alert programme. Reply STOP to opt out or HELP
+          for help. Consent to SMS is not a condition of purchase.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="5. Fees and third-party services">
+      <LegalSection title="5. Fees, liability and law">
         <LegalParagraph>
-          Zenguy may offer paid subscriptions and prepaid alert credit. Prices, included usage,
-          taxes, billing cycle, renewal, and cancellation terms are shown before purchase and
-          require your express agreement. Subscriptions renew until canceled; cancellation takes
-          effect as shown in the billing portal. Third-party services such as Cloudflare, Twilio,
-          OpenAI, and Stripe may have their own terms and availability. Zenguy is not responsible
-          for third-party systems outside our reasonable control.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="6. Intellectual property">
-        <LegalParagraph>
-          Zenguy and its software, design, documentation, and trademarks are protected by
-          intellectual-property laws. Except for the limited right to use the service under
-          these Terms, no rights are transferred to you. Feedback may be used without
-          restriction or obligation.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="7. Suspension and termination">
-        <LegalParagraph>
-          You may stop using Zenguy at any time. We may suspend or terminate access for material
-          breach, unlawful or dangerous activity, security risk, nonpayment, or when required by
-          law. Where practical, we will provide notice and a reasonable opportunity to cure.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="8. Disclaimers and liability">
-        <LegalParagraph>
-          To the maximum extent permitted by law, Zenguy is provided “as is” and “as
-          available,” without warranties not expressly stated in these Terms. Neither party is
-          liable for indirect, incidental, special, consequential, or punitive damages, or lost
-          profits, revenue, data, or goodwill. Zenguy&apos;s aggregate liability relating to the
-          service will not exceed the fees you paid for it during the twelve months before the
-          event giving rise to liability. These limits do not apply where law prohibits them.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="9. Governing law and changes">
-        <LegalParagraph>
-          These Terms are governed by the laws of Spain, without regard to conflict-of-law
-          rules. Courts in Madrid, Spain have jurisdiction except where mandatory consumer or
-          other law requires otherwise. We may update these Terms; material changes will be
-          communicated through the service or another appropriate channel.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="10. Contact">
-        <LegalParagraph>
-          Questions about these Terms may be sent to <LegalContactEmail />.
+          Prices and taxes are shown in Stripe Checkout. Subscriptions renew
+          until cancelled. Creating an account asks us to start immediately;
+          consumers then lose the 14-day withdrawal right once performance has
+          begun. These Terms do not limit liability that Spanish or EU law
+          forbids limiting. Spanish law applies. Courts of Barcelona have
+          jurisdiction, except that consumers may use the courts of their
+          domicile. Questions: <LegalContactEmail />.
         </LegalParagraph>
       </LegalSection>
     </LegalPage>

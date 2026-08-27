@@ -1,4 +1,8 @@
 import type {
+  LegalAcceptance,
+  LegalAcceptanceRepo,
+} from "../../domain/users/legal_acceptance";
+import type {
   EmailTokenRepo,
   RefreshTokenRepo,
   SessionRevocationReason,
@@ -150,6 +154,17 @@ export class FakeUserRepo implements UserRepo {
     if (user !== undefined) {
       this.users.set(id, { ...user, name, updatedAt: at });
     }
+  }
+}
+
+export class FakeLegalAcceptanceRepo implements LegalAcceptanceRepo {
+  readonly rows = new Map<string, LegalAcceptance>();
+
+  async insert(row: LegalAcceptance): Promise<void> {
+    if (this.rows.has(row.userId)) {
+      throw new Error("legal acceptance constraint violation");
+    }
+    this.rows.set(row.userId, { ...row });
   }
 }
 

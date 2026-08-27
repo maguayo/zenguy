@@ -68,6 +68,8 @@ const IssueGrants = lazy(() => import("./pages/billing/IssueGrants"));
 const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const Privacy = lazy(() => import("./pages/legal/Privacy"));
 const Terms = lazy(() => import("./pages/legal/Terms"));
+const LegalNotice = lazy(() => import("./pages/legal/LegalNotice"));
+const Cookies = lazy(() => import("./pages/legal/Cookies"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 export function RequireAuth({ children }: { children?: ReactNode }) {
@@ -163,6 +165,8 @@ function AppRoutes() {
         <Route element={<RedeemGrant />} path="/grants/:token" />
         <Route element={<Privacy />} path="/privacy" />
         <Route element={<Terms />} path="/terms" />
+        <Route element={<LegalNotice />} path="/legal-notice" />
+        <Route element={<Cookies />} path="/cookies" />
 
         <Route element={<RequireAuth />}>
           <Route element={<IssueGrants />} path="/complimentary" />

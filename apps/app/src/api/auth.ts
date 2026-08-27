@@ -71,13 +71,23 @@ export async function activateSession<T extends AuthSession>(session: T): Promis
 }
 
 /** Returns a new session for AuthContext to adopt after tearing down any prior principal. */
+export interface RegistrationConsent {
+  acceptedPrivacy: boolean;
+  acceptedTerms: boolean;
+  marketingOptIn: boolean;
+}
+
 /** Registration is deliberately token-free until inbox + password verification. */
 export function register(
   name: string,
   email: string,
   password: string,
+  consent: RegistrationConsent,
 ): Promise<RegistrationPending> {
   return apiPost<RegistrationPending>("/api/auth/register", {
+    acceptedPrivacy: consent.acceptedPrivacy,
+    acceptedTerms: consent.acceptedTerms,
+    marketingOptIn: consent.marketingOptIn,
     email,
     name,
     password,

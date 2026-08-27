@@ -651,6 +651,9 @@ const ROUTES: RouteCase[] = [
       name: "New Matrix User",
       email: "new-user@rbac.test",
       password: PASSWORD,
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
     }),
   ),
   route(

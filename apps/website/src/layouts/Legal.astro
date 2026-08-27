@@ -1,0 +1,37 @@
+---
+import Base from "./Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { innerNavLinks } from "../lib/site";
+import { LEGAL_EFFECTIVE } from "../lib/legal";
+
+interface Props {
+  title: string;
+  description: string;
+  heading: string;
+  eyebrow?: string;
+}
+
+const { title, description, heading, eyebrow } = Astro.props;
+---
+
+<Base title={title} description={description}>
+  <div class="flex min-h-screen min-w-0 flex-col overflow-x-clip bg-cream">
+    <Nav links={innerNavLinks} />
+    <main class="min-w-0 flex-1 px-10 py-[88px] max-md:px-5 max-md:py-16">
+      <article class="container-site max-w-[720px]">
+        {eyebrow ? <span class="eyebrow">{eyebrow}</span> : null}
+        <h1 class:list={["m-0 text-[40px] font-semibold leading-[1.12] tracking-[-0.03em] max-md:text-[30px]", eyebrow && "mt-3"]}>
+          {heading}
+        </h1>
+        <p class="m-0 mt-3 text-[14px] text-muted">
+          Effective and last updated: {LEGAL_EFFECTIVE}
+        </p>
+        <div class="legal-body article-body mt-10">
+          <slot />
+        </div>
+      </article>
+    </main>
+    <Footer />
+  </div>
+</Base>

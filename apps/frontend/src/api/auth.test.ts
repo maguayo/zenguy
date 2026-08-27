@@ -52,7 +52,13 @@ describe("auth API", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(pending, 201));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(register("María", user.email, "Password123!")).resolves.toEqual(pending);
+    await expect(
+      register("María", user.email, "Password123!", {
+        acceptedPrivacy: true,
+        acceptedTerms: true,
+        marketingOptIn: false,
+      }),
+    ).resolves.toEqual(pending);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/register");
     expect(getToken().accessToken).toBeNull();
   });

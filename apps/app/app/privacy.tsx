@@ -9,92 +9,54 @@ export default function Privacy() {
   return (
     <LegalPage related={{ href: "/terms", label: "Terms of Service" }} title="Privacy Policy">
       <LegalParagraph>
-        This Privacy Policy explains how Zenguy collects, uses, and protects personal data when
-        you use our website, application, browser testing, uptime monitoring, incident, and
-        notification services.
+        NIESAYO GROUP, S.L. (NIF B23920663), Calle Doctor Pi i Molist, 72, 3º 2ª,
+        08016 Barcelona, Spain, is the controller for Zenguy. Contact{" "}
+        <LegalContactEmail />. You may also complain to the Spanish Data
+        Protection Agency (AEPD). The full policy is at zenguy.com/privacy.
       </LegalParagraph>
 
-      <LegalSection title="1. Data we collect">
+      <LegalSection title="What we process">
         <LegalParagraph>
-          We collect account and contact information, workspace membership, product
-          configuration, usage and billing records, support communications, and security and
-          technical logs. When you configure a notification channel, we also process its
-          destination, such as an email address, phone number, or provider webhook.
-        </LegalParagraph>
-        <LegalParagraph>
-          Browser tests and uptime monitors may create run logs, screenshots, network
-          diagnostics, and incident reports. You are responsible for ensuring that the targets
-          and test data you provide may lawfully be processed by Zenguy.
+          Account and contact data, workspace membership, test and monitor
+          configuration, encrypted secrets, run evidence for 30 days, billing
+          records via Stripe, security logs, and notification destinations you
+          add.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="2. How we use data">
+      <LegalSection title="Why">
         <LegalParagraph>
-          We use personal data to provide and secure Zenguy, authenticate users, execute tests
-          and monitors, send requested operational alerts, provide support, administer
-          subscriptions, prevent abuse, comply with law, and improve reliability. Depending on
-          the context, our legal bases include performance of a contract, legitimate interests,
-          legal obligations, and consent.
+          Account and service data: contract (GDPR art. 6.1.b). Billing and tax:
+          legal obligation (art. 6.1.c). Security: legitimate interests (art.
+          6.1.f). Product emails: consent, optional, not required to open an
+          account. We do not sell personal data.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="3. SMS privacy and consent">
+      <LegalSection title="Your tests">
         <LegalParagraph>
-          Zenguy does not sell mobile numbers or SMS opt-in data. We do not share mobile numbers
-          or SMS consent with third parties or affiliates for their marketing or promotional
-          purposes. We disclose them only to service providers that deliver Zenguy messages on
-          our behalf, such as Twilio, or when required by law. Those providers may use the data
-          only to perform services for Zenguy under their contractual obligations.
-        </LegalParagraph>
-        <LegalParagraph>
-          SMS messages are recurring operational alerts requested by the user, such as test
-          failures, downtime, recoveries, and channel-verification messages. Frequency varies
-          with the configured monitoring activity and incidents, and recipients may receive
-          multiple messages per day. Message and data rates may apply. Reply STOP to opt out or
-          HELP for help. Consent to SMS is not a condition of purchasing Zenguy.
+          You are the controller of personal data that appears on the sites you
+          ask us to watch. Zenguy is the processor. Avoid unnecessary production
+          personal data in tests.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="4. Service providers and international transfers">
+      <LegalSection title="SMS and phone">
         <LegalParagraph>
-          We use service providers for infrastructure, communications, AI, payment processing
-          when enabled, security, and support. These may include Cloudflare, Twilio, OpenAI, and
-          Stripe. They process data under contractual safeguards and only as needed to provide
-          their services. Data may be processed outside your country using applicable transfer
-          safeguards.
+          We do not sell mobile numbers or SMS opt-in data, and we do not share
+          them with third parties for their marketing. Alerts go only to numbers
+          you enrol after an explicit checkbox. Reply STOP to opt out or HELP
+          for help. Consent to SMS is not a condition of purchase.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="5. Retention and security">
+      <LegalSection title="Providers, transfers and rights">
         <LegalParagraph>
-          We retain data only for as long as needed for the purposes described above,
-          contractual and legal obligations, dispute resolution, and security. Retention periods
-          depend on the data category and account state. We use access controls, encryption,
-          secret redaction, and other technical and organizational measures, but no service can
-          guarantee absolute security.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="6. Your rights">
-        <LegalParagraph>
-          Depending on your location, you may request access, correction, deletion, restriction,
-          portability, or objection, and may withdraw consent at any time without affecting
-          earlier lawful processing. You may also complain to your local data protection
-          authority. We may need to verify your identity before acting on a request.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="7. Children and changes">
-        <LegalParagraph>
-          Zenguy is a business service and is not directed to children. We may update this
-          policy as the service or law changes. Material changes will be communicated through
-          the service or another appropriate channel.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="8. Contact">
-        <LegalParagraph>
-          For privacy questions or rights requests, email <LegalContactEmail />.
+          Cloudflare, Stripe, Twilio, OpenAI and Expo help operate Zenguy. Some
+          processing is outside the EEA under Standard Contractual Clauses or
+          the EU–US Data Privacy Framework. You may request access,
+          rectification, erasure, restriction, portability and objection. You
+          must be 18 to open an account.
         </LegalParagraph>
       </LegalSection>
     </LegalPage>

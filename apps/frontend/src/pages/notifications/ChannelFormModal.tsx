@@ -439,13 +439,13 @@ export function ChannelFormModal({
                   Carrier charges may apply. For SMS, reply STOP to opt out or HELP for help.
                   See the{
                   " "}
-                  <a className="font-medium text-accent-700 hover:underline" href="/terms/">
+                  <a className="font-medium text-accent-700 hover:underline" href="https://zenguy.com/terms/">
                     Terms
                   </a>{
                   " "}
                   and{
                   " "}
-                  <a className="font-medium text-accent-700 hover:underline" href="/privacy/">
+                  <a className="font-medium text-accent-700 hover:underline" href="https://zenguy.com/privacy/">
                     Privacy Policy
                   </a>
                   .

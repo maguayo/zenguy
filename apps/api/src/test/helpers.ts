@@ -74,6 +74,7 @@ const DELETE_STATEMENTS = [
   "DELETE FROM admin_sessions",
   "DELETE FROM refresh_tokens",
   "DELETE FROM email_tokens",
+  "DELETE FROM user_legal_acceptances",
   "DELETE FROM users",
 ] as const;
 

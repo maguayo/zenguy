@@ -4,6 +4,8 @@ import { shouldRetryQuery } from "./App";
 import { ApiError } from "./lib/api";
 import RedeemGrant from "./pages/billing/RedeemGrant";
 import IssueGrants from "./pages/billing/IssueGrants";
+import Cookies from "./pages/legal/Cookies";
+import LegalNotice from "./pages/legal/LegalNotice";
 import Privacy from "./pages/legal/Privacy";
 import Terms from "./pages/legal/Terms";
 
@@ -33,8 +35,10 @@ describe("application query policy", () => {
     expect(IssueGrants).toEqual(expect.any(Function));
   });
 
-  it("ships public privacy and terms pages", () => {
+  it("ships public legal pages", () => {
     expect(Privacy).toEqual(expect.any(Function));
     expect(Terms).toEqual(expect.any(Function));
+    expect(LegalNotice).toEqual(expect.any(Function));
+    expect(Cookies).toEqual(expect.any(Function));
   });
 });

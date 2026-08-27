@@ -1,0 +1,78 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Cookie Policy — Zenguy"
+  description="Cookie policy for Zenguy under article 22.2 LSSI-CE and AEPD guidance."
+  heading="Cookie Policy"
+>
+  <p>
+    This policy explains how {legalCompany.legalName} uses cookies and similar
+    technologies on {legalCompany.site} and {legalCompany.app}, under article
+    22.2 of Law 34/2002 (LSSI-CE), the ePrivacy Directive, the GDPR, and the
+    AEPD cookie guidance.
+  </p>
+
+  <h2>1. What cookies are</h2>
+  <p>
+    Cookies are small files stored on your device. Similar technologies
+    include local storage, session tokens and pixels. Some are set by us
+    (first-party), others by providers (third-party).
+  </p>
+
+  <h2>2. What we use today</h2>
+  <p>
+    We do <strong>not</strong> use advertising cookies, social plugins, or
+    analytics cookies such as Google Analytics.
+  </p>
+  <p>
+    On the application ({legalCompany.app}) we use a strictly necessary
+    HttpOnly session cookie (a host-prefixed refresh token) so you stay signed
+    in. It is first-party, Secure, and not accessible to scripts. Local
+    storage may hold a short-lived access token and UI preferences. These are
+    needed to provide the service you request, so they do not require prior
+    consent (art. 22.2 LSSI-CE, first indent).
+  </p>
+  <p>
+    Cloudflare, which hosts the websites, may set a security cookie (for
+    example to distinguish people from bots). That cookie is used to keep the
+    service available and safe.
+  </p>
+  <p>
+    Stripe Checkout and the Stripe customer portal — which open only when you
+    start or manage a payment — set their own cookies on Stripe’s domains.
+    Those are Stripe’s responsibility and are needed to take payment.
+  </p>
+  <p>
+    The public marketing site loads the Geist typeface from Google Fonts. That
+    is a network request to Google, not a Zenguy analytics cookie. Google may
+    process technical data such as IP address as described in Google’s
+    documentation. We load the font because it is part of the site you asked
+    to see.
+  </p>
+
+  <h2>3. Consent</h2>
+  <p>
+    Because we do not currently set non-essential cookies on the marketing
+    site, we do not show a consent banner there. If we later add analytics or
+    advertising cookies, we will ask for opt-in consent first, with an equally
+    easy reject control, in line with AEPD guidance. Pre-ticked boxes and
+    “continued browsing” are not consent.
+  </p>
+
+  <h2>4. How to control cookies</h2>
+  <p>
+    You can delete or block cookies in your browser settings. Blocking the
+    session cookie will sign you out of the application. You can also use
+    private browsing.
+  </p>
+
+  <h2>5. More information</h2>
+  <p>
+    Personal data involved in these technologies is described in the{" "}
+    <a href="/privacy/">Privacy Policy</a>. Questions:{" "}
+    <a href={legalMailto}>{legalCompany.email}</a>.
+  </p>
+</Legal>

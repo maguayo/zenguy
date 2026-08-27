@@ -9,6 +9,8 @@ import {
   renderRegistrationAttemptEmail,
   renderWelcomeEmail,
 } from "../../infrastructure/email/templates";
+import type { LegalAcceptanceRepo } from "../../domain/users/legal_acceptance";
+import { LEGAL_VERSION } from "../../shared/constants";
 import type { AppConfig } from "../../shared/config";
 import type { Clock } from "../../shared/clock";
 import { EMAIL_VERIFY_TTL_HOURS } from "../../shared/constants";
@@ -24,10 +26,14 @@ export interface RegisterInput {
   name: string;
   email: string;
   password: string;
+  acceptedTerms?: boolean;
+  acceptedPrivacy?: boolean;
+  marketingOptIn?: boolean;
 }
 
 export interface RegisterDependencies {
   users: UserRepo;
+  legalAcceptances: LegalAcceptanceRepo;
   emailTokens: EmailTokenRepo;
   emailSender: EmailSender;
   config: Pick<AppConfig, "appUrl">;
@@ -48,6 +54,15 @@ function normalizeInput(input: RegisterInput): RegisterInput {
   if (name.length < 1 || name.length > 80) {
     details.push({ field: "name", message: "Must be between 1 and 80 characters" });
   }
+  if (input.acceptedTerms === false) {
+    details.push({ field: "acceptedTerms", message: "You must accept the Terms of Service." });
+  }
+  if (input.acceptedPrivacy === false) {
+    details.push({
+      field: "acceptedPrivacy",
+      message: "You must confirm that you have read the Privacy Policy.",
+    });
+  }
   details.push(
     ...newPasswordIssues(input.password).map((message) => ({
       field: "password",
@@ -55,7 +70,14 @@ function normalizeInput(input: RegisterInput): RegisterInput {
     })),
   );
   if (details.length > 0) throw validation(details);
-  return { name, email, password: input.password };
+  return {
+    acceptedPrivacy: input.acceptedPrivacy === true,
+    acceptedTerms: input.acceptedTerms === true,
+    email,
+    marketingOptIn: input.marketingOptIn === true,
+    name,
+    password: input.password,
+  };
 }
 
 export class Register {
@@ -126,6 +148,17 @@ export class Register {
         throw new Error("Account creation constraint violation");
       }
       return this.existingAccountResponse(racedExisting, input.email);
+    }
+
+    if (input.acceptedTerms && input.acceptedPrivacy) {
+      await this.dependencies.legalAcceptances.insert({
+        userId: user.id,
+        termsAcceptedAt: now,
+        privacyAcknowledgedAt: now,
+        marketingOptInAt: input.marketingOptIn ? now : null,
+        legalVersion: LEGAL_VERSION,
+        createdAt: now,
+      });
     }
 
     // Only a real account creation is an event: the existing-email branches

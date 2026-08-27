@@ -1,0 +1,127 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Legal notice — Zenguy"
+  description="Legal notice (aviso legal) of NIESAYO GROUP, S.L., the provider of Zenguy, under Spanish LSSI-CE."
+  eyebrow="Aviso legal"
+  heading="Legal notice"
+>
+  <p>
+    This legal notice identifies the provider of the information-society services
+    available at {legalCompany.site} and {legalCompany.app} (together, the
+    “websites”), as required by article 10 of Law 34/2002 of 11 July on
+    information-society services and electronic commerce (LSSI-CE).
+  </p>
+
+  <h2>1. Service provider</h2>
+  <dl>
+    <dt>Legal name</dt>
+    <dd>{legalCompany.legalName}</dd>
+    <dt>Trade name</dt>
+    <dd>{legalCompany.tradeName}</dd>
+    <dt>Tax ID (NIF)</dt>
+    <dd>{legalCompany.nif}</dd>
+    <dt>Registered office</dt>
+    <dd>{legalAddress}</dd>
+    <dt>Companies register</dt>
+    <dd>{legalCompany.registry}</dd>
+    <dt>Email</dt>
+    <dd><a href={legalMailto}>{legalCompany.email}</a></dd>
+    <dt>Websites</dt>
+    <dd>
+      <a href={legalCompany.site}>{legalCompany.site}</a>
+      {" "}and{" "}
+      <a href={legalCompany.app}>{legalCompany.app}</a>
+    </dd>
+  </dl>
+  <p>
+    Zenguy is a trade name of {legalCompany.legalName}. Email is the ordinary
+    channel for a direct and effective communication with the provider, as
+    article 10.1.c LSSI-CE requires.
+  </p>
+
+  <h2>2. Purpose of the websites</h2>
+  <p>
+    The websites describe and provide access to Zenguy, a software service that
+    runs natural-language browser tests and HTTP uptime checks on sites the
+    customer authorises. Use of the application itself is also governed by the
+    {" "}
+    <a href="/terms/">Terms of Service</a>.
+  </p>
+
+  <h2>3. Users and conditions of use</h2>
+  <p>
+    Anyone who accesses the websites is a user. Access is free of charge aside
+    from the user’s own network costs. Using the websites implies that the user
+    has read this notice, the{" "}
+    <a href="/privacy/">Privacy Policy</a> and the{" "}
+    <a href="/cookies/">Cookie Policy</a>. Paid use of Zenguy also requires
+    acceptance of the Terms of Service at registration.
+  </p>
+  <p>
+    The user must use the websites lawfully, in good faith, and without damaging
+    the provider, other users, or third parties. In particular the user must not
+    introduce malware, attempt unauthorised access, overload the service, scrape
+    it in a way that impairs it, or use it to test systems they do not own or
+    are not authorised to test.
+  </p>
+
+  <h2>4. Intellectual and industrial property</h2>
+  <p>
+    The websites, their design, software, trademarks, copy and other contents
+    belong to {legalCompany.legalName} or to their licensors. Viewing them does
+    not transfer any rights. Reproduction, distribution, public communication or
+    transformation of those contents beyond private, personal use requires prior
+    written permission, except where a mandatory limitation of Spanish
+    intellectual-property law applies.
+  </p>
+
+  <h2>5. Liability</h2>
+  <p>
+    The provider makes reasonable efforts to keep the websites available and
+    free of harmful code, but does not warrant uninterrupted access, the
+    absence of errors, or the fitness of the public marketing pages for any
+    particular purpose. The application’s contractual warranties and limits
+    are those set out in the Terms of Service, without prejudice to mandatory
+    rights of consumers and users under Royal Legislative Decree 1/2007
+    (TRLGDCU).
+  </p>
+  <p>
+    The provider is not responsible for third-party websites linked from these
+    pages, nor for the user’s use of those sites. Linking does not imply
+    endorsement.
+  </p>
+
+  <h2>6. Prices and contracting</h2>
+  <p>
+    Subscription prices, included usage, taxes and the billing cycle are shown
+    in the application before payment and in Stripe Checkout. Marketing pages
+    may display a reference price; the price that binds the parties is the one
+    confirmed at checkout, including applicable VAT or equivalent tax.
+  </p>
+
+  <h2>7. Personal data</h2>
+  <p>
+    Personal data are processed as described in the{" "}
+    <a href="/privacy/">Privacy Policy</a>, under Regulation (EU) 2016/679
+    (GDPR) and Organic Law 3/2018 (LOPDGDD).
+  </p>
+
+  <h2>8. Cookies</h2>
+  <p>
+    Information about cookies and similar technologies is in the{" "}
+    <a href="/cookies/">Cookie Policy</a>, under article 22.2 LSSI-CE and the
+    AEPD cookie guidance.
+  </p>
+
+  <h2>9. Applicable law and venue</h2>
+  <p>
+    This notice is governed by the laws of Spain. Unless a mandatory rule
+    (including consumer law) gives the user a different venue, the courts of
+    Barcelona, Spain have jurisdiction over disputes about the public websites.
+    Disputes about the paid service follow the Terms of Service.
+  </p>
+</Legal>

@@ -40,6 +40,7 @@ import type {
   UsageEventRepo,
 } from "./domain/billing/repo";
 import type { PeriodOverageReporter } from "./application/billing/handle_paddle_webhook";
+import type { LegalAcceptanceRepo } from "./domain/users/legal_acceptance";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -70,6 +71,7 @@ import { D1ActivityEventRepo } from "./infrastructure/db/activity_event_repo";
 import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
 import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
+import { D1LegalAcceptanceRepo } from "./infrastructure/db/legal_acceptance_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { D1SessionSecurityRepo } from "./infrastructure/db/session_security_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
@@ -174,6 +176,7 @@ export interface AppOverrides {
   clock?: Clock;
   ids?: IdGenerator;
   users?: UserRepo;
+  legalAcceptances?: LegalAcceptanceRepo;
   emailTokens?: EmailTokenRepo;
   refreshTokens?: RefreshTokenRepo;
   sessionSecurity?: SessionSecurityRepo;
@@ -242,6 +245,8 @@ export function buildApp(
   const config = loadConfig(env);
   const clock = overrides.clock ?? systemClock;
   const users = overrides.users ?? new D1UserRepo(env.DB);
+  const legalAcceptances =
+    overrides.legalAcceptances ?? new D1LegalAcceptanceRepo(env.DB);
   const emailTokens =
     overrides.emailTokens ?? new D1EmailTokenRepo(env.DB);
   const refreshTokens =
@@ -600,6 +605,7 @@ export function buildApp(
     "/api/auth",
     authRoutes({
       users,
+      legalAcceptances,
       emailTokens,
       refreshTokens,
       sessionSecurity,

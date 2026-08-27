@@ -26,6 +26,10 @@ export const GET: APIRoute = async () => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${url(`${SITE_URL}/`, iso(newest), "weekly", "1.0")}
 ${url(`${SITE_URL}/articles/`, iso(newest), "weekly", "0.8")}
+${url(`${SITE_URL}/legal-notice/`, iso(newest), "yearly", "0.3")}
+${url(`${SITE_URL}/privacy/`, iso(newest), "yearly", "0.3")}
+${url(`${SITE_URL}/terms/`, iso(newest), "yearly", "0.3")}
+${url(`${SITE_URL}/cookies/`, iso(newest), "yearly", "0.3")}
 ${articles
   .map((article) =>
     url(

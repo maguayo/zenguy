@@ -14,6 +14,9 @@ describe("Register", () => {
       name: "  Alice  ",
       email: "  Alice@Example.COM ",
       password: "strong-password",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
 
@@ -50,6 +53,13 @@ describe("Register", () => {
       storedToken?.tokenHash,
     );
     expect(storedToken?.tokenHash).not.toBe(tokenPlain);
+    expect([...dependencies.legalAcceptances.rows.values()]).toEqual([
+      expect.objectContaining({
+        userId: user?.id,
+        legalVersion: "2026-08-27",
+        marketingOptInAt: null,
+      }),
+    ]);
   });
 
   it("returns no credentials or persisted session until the inbox is verified", async () => {
@@ -59,6 +69,9 @@ describe("Register", () => {
       name: "Alice",
       email: "alice@example.com",
       password: "strong-password",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
 
@@ -78,6 +91,9 @@ describe("Register", () => {
       name: "Alice",
       email: "alice@example.com",
       password: "unique-password-one",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
     dependencies.emailSender.messages.length = 0;
@@ -86,7 +102,10 @@ describe("Register", () => {
         name: "Other",
         email: "ALICE@EXAMPLE.COM",
         password: "unique-password-two",
-        client: "web",
+        acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+      client: "web",
       });
     expect(duplicate).toEqual({
       registrationPending: true,
@@ -112,6 +131,9 @@ describe("Register", () => {
       name: "Other registrant",
       email: "existing@example.com",
       password: "another strong password",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
 
@@ -138,6 +160,9 @@ describe("Register", () => {
       name: "Other registrant",
       email: "RACE@EXAMPLE.COM",
       password: "another strong password",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
 
@@ -165,11 +190,39 @@ describe("Register", () => {
         name: "Alice",
         email: "alice@example.com",
         password: "unique-password-one",
-        client: "web",
+        acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+      client: "web",
       }),
     ).resolves.toEqual({
       registrationPending: true,
       email: "alice@example.com",
+    });
+  });
+
+  it("rejects explicit refusal of the terms or privacy checkboxes", async () => {
+    const useCase = new Register(authTestDependencies());
+
+    await expect(
+      useCase.execute({
+        name: "Alice",
+        email: "alice@example.com",
+        password: "strong-password",
+        acceptedPrivacy: false,
+        acceptedTerms: false,
+        marketingOptIn: false,
+        client: "web",
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: expect.arrayContaining([
+        { field: "acceptedTerms", message: "You must accept the Terms of Service." },
+        {
+          field: "acceptedPrivacy",
+          message: "You must confirm that you have read the Privacy Policy.",
+        },
+      ]),
     });
   });
 
@@ -181,7 +234,10 @@ describe("Register", () => {
         name: "  ",
         email: "x@example.com",
         password: "short",
-        client: "web",
+        acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+      client: "web",
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
@@ -194,7 +250,10 @@ describe("Register", () => {
         name: "Alice",
         email: "short@example.com",
         password: "12345678901234",
-        client: "web",
+        acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+      client: "web",
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     await expect(
@@ -202,7 +261,10 @@ describe("Register", () => {
         name: "Alice",
         email: "known@example.com",
         password: "passwordpassword",
-        client: "web",
+        acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+      client: "web",
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
@@ -215,6 +277,9 @@ describe("Register", () => {
       name: "Alice",
       email: "alice@example.com",
       password: "strong-password",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
 
@@ -232,6 +297,9 @@ describe("Register", () => {
       name: "Alice",
       email: "alice@example.com",
       password: "unique-password-one",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "web",
     });
     track.calls.length = 0;
@@ -240,6 +308,9 @@ describe("Register", () => {
       name: "Other",
       email: "ALICE@EXAMPLE.COM",
       password: "unique-password-two",
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
       client: "app",
     });
 

@@ -24,9 +24,11 @@ export default function SignUp() {
   const confirmPasswordRef = useRef<TextInput>(null);
   const form = useForm<SignUpValues>({
     defaultValues: {
+      acceptedPrivacy: false,
       acceptedTerms: false,
       confirmPassword: "",
       email: "",
+      marketingOptIn: false,
       name: "",
       password: "",
     },
@@ -36,11 +38,11 @@ export default function SignUp() {
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
     try {
-      const pending = await registerAccount(
-        values.name,
-        values.email,
-        values.password,
-      );
+      const pending = await registerAccount(values.name, values.email, values.password, {
+        acceptedPrivacy: true,
+        acceptedTerms: true,
+        marketingOptIn: values.marketingOptIn,
+      });
       setPendingRegistrationEmail(pending.email);
       router.replace("/verify-pending");
     } catch (error) {
@@ -150,13 +152,17 @@ export default function SignUp() {
             </Field>
           )}
         />
+        <Muted>
+          NIESAYO GROUP, S.L. will use your name and email to create the account,
+          as described in the Privacy Policy. You must be 18 or older.
+        </Muted>
         <Controller
           control={form.control}
           name="acceptedTerms"
           render={({ field, fieldState }) => (
             <View style={styles.terms}>
               <Pressable
-                accessibilityLabel="I accept the Terms of Service and Privacy Policy"
+                accessibilityLabel="I accept the Terms of Service"
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: field.value }}
                 hitSlop={8}
@@ -174,11 +180,8 @@ export default function SignUp() {
                   I accept the{" "}
                   <Link href="/terms">
                     <Label color={colors.accentDark}>Terms of Service</Label>
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy">
-                    <Label color={colors.accentDark}>Privacy Policy</Label>
                   </Link>
+                  , including that the service starts immediately.
                 </Small>
               </Pressable>
               {fieldState.error?.message ? (
@@ -187,6 +190,65 @@ export default function SignUp() {
                 </Caption>
               ) : null}
             </View>
+          )}
+        />
+        <Controller
+          control={form.control}
+          name="acceptedPrivacy"
+          render={({ field, fieldState }) => (
+            <View style={styles.terms}>
+              <Pressable
+                accessibilityLabel="I have read the Privacy Policy"
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: field.value }}
+                hitSlop={8}
+                style={styles.termsRow}
+                onPress={() => field.onChange(!field.value)}
+              >
+                <Feather
+                  color={
+                    fieldState.error ? colors.danger : field.value ? colors.accent : colors.textSubtle
+                  }
+                  name={field.value ? "check-square" : "square"}
+                  size={22}
+                />
+                <Small color={colors.textBody} style={styles.termsText}>
+                  I have read the{" "}
+                  <Link href="/privacy">
+                    <Label color={colors.accentDark}>Privacy Policy</Label>
+                  </Link>
+                  .
+                </Small>
+              </Pressable>
+              {fieldState.error?.message ? (
+                <Caption accessibilityRole="alert" color={colors.danger} style={styles.termsError}>
+                  {fieldState.error.message}
+                </Caption>
+              ) : null}
+            </View>
+          )}
+        />
+        <Controller
+          control={form.control}
+          name="marketingOptIn"
+          render={({ field }) => (
+            <Pressable
+              accessibilityLabel="Send me occasional product emails"
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: field.value }}
+              hitSlop={8}
+              style={styles.termsRow}
+              onPress={() => field.onChange(!field.value)}
+            >
+              <Feather
+                color={field.value ? colors.accent : colors.textSubtle}
+                name={field.value ? "check-square" : "square"}
+                size={22}
+              />
+              <Small color={colors.textBody} style={styles.termsText}>
+                Send me occasional product emails. Optional.
+              </Small>
+            </Pressable>
           )}
         />
         <FormError message={form.formState.errors.root?.message} />

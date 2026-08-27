@@ -16,6 +16,7 @@ import { ResetPassword } from "../../application/auth/reset_password";
 import type { AuthSession } from "../../application/auth/session";
 import { VerifyEmail } from "../../application/auth/verify_email";
 import type { EmailSender } from "../../domain/email/sender";
+import type { LegalAcceptanceRepo } from "../../domain/users/legal_acceptance";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -52,6 +53,7 @@ import { zjson } from "../validate";
 
 export interface AuthRoutesDependencies {
   users: UserRepo;
+  legalAcceptances: LegalAcceptanceRepo;
   emailTokens: EmailTokenRepo;
   refreshTokens: RefreshTokenRepo;
   sessionSecurity: SessionSecurityRepo;
@@ -79,6 +81,9 @@ const registerSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: emailSchema,
   password: newPasswordSchema,
+  acceptedTerms: z.boolean().optional(),
+  acceptedPrivacy: z.boolean().optional(),
+  marketingOptIn: z.boolean().optional().default(false),
 });
 const emailInputSchema = z.object({ email: emailSchema });
 const existingPasswordSchema = z

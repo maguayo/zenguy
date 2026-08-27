@@ -5,7 +5,7 @@ import { Linking, StyleSheet, View } from "react-native";
 import { colors, spacing } from "@/theme";
 import { Body, Heading, Label, Muted, Screen, Title } from "@/ui";
 
-export const legalEffectiveDate = "Effective and last updated: August 21, 2026";
+export const legalEffectiveDate = "Effective and last updated: 27 August 2026";
 export const legalContactEmail = "privacy@zenguy.com";
 
 /** Mirrors the web LegalLayout: title, effective date, sections, related link. */

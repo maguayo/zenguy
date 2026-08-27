@@ -1,0 +1,187 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Terms of Service — Zenguy"
+  description="Terms of Service for Zenguy, the browser-testing and uptime product of NIESAYO GROUP, S.L."
+  heading="Terms of Service"
+>
+  <p>
+    These Terms govern access to Zenguy, a service of {legalCompany.legalName}
+    (NIF {legalCompany.nif}), with registered office at {legalAddress}. By
+    creating an account or using the service you agree to these Terms and
+    confirm that you have read the{" "}
+    <a href="/privacy/">Privacy Policy</a>. If you use Zenguy for an
+    organisation, you confirm that you may bind that organisation.
+  </p>
+  <p>
+    The contract language is English. Mandatory Spanish and EU consumer rules
+    still apply where you qualify as a consumer or user under Royal
+    Legislative Decree 1/2007 (TRLGDCU).
+  </p>
+
+  <h2>1. The service</h2>
+  <p>
+    Zenguy provides automated browser testing from natural-language
+    instructions, HTTP uptime monitoring, incident records, evidence
+    (including screenshots and Markdown reports), and notifications. Results
+    may contain false positives, false negatives, delays or incomplete
+    information. Zenguy is an operational aid. It is not a substitute for your
+    own security, backup, QA, compliance or business-continuity controls, and
+    it does not guarantee that your site will keep working.
+  </p>
+
+  <h2>2. Accounts</h2>
+  <p>
+    You must be at least 18 and provide accurate information. You must protect
+    credentials and secrets and tell us promptly if you suspect misuse. One
+    person must not share a login; invite teammates to the workspace instead.
+    We may refuse, suspend or close an account for a material breach, unlawful
+    or dangerous use, a security risk, non-payment, or when the law requires
+    it. Where practical we will give notice and a chance to fix the issue.
+  </p>
+  <p>
+    You may close the account from the product settings or by emailing{" "}
+    <a href={legalMailto}>{legalCompany.email}</a>. Evidence follows the
+    30-day retention in the Privacy Policy; billing records may be kept longer
+    where the law requires it.
+  </p>
+
+  <h2>3. Acceptable use</h2>
+  <p>
+    You may test only sites, accounts and systems you own or are authorised to
+    access. You must not use Zenguy to attack, overload, evade security
+    controls, scrape unlawfully, distribute malware, violate privacy, infringe
+    rights, or break any law. You must not probe Zenguy itself, our
+    infrastructure, or other customers.
+  </p>
+
+  <h2>4. Customer content and processor terms</h2>
+  <p>
+    You keep ownership of the configurations, instructions, secrets and other
+    content you submit. You grant us a limited licence to host, process,
+    transmit and display that content solely to operate Zenguy.
+  </p>
+  <p>
+    When that content includes personal data of third parties, you are the
+    controller and {legalCompany.legalName} is the processor (art. 28 GDPR).
+    In that role we will:
+  </p>
+  <ul>
+    <li>process the data only on your documented instructions (the configuration you save and the runs you request);</li>
+    <li>ensure persons authorised to process it are bound by confidentiality;</li>
+    <li>use the technical and organisational measures described in the Privacy Policy;</li>
+    <li>use the subprocessors listed there, and tell you of material changes;</li>
+    <li>help you answer data-subject requests, so far as the product allows;</li>
+    <li>notify you without undue delay after becoming aware of a personal-data breach affecting data we process for you;</li>
+    <li>delete run evidence on the 30-day cycle, and other processor data when you delete the workspace, except data we must keep as controller (billing, security);</li>
+    <li>make available information reasonably needed to show these obligations.</li>
+  </ul>
+  <p>
+    You are responsible for the legality of the content, for avoiding
+    unnecessary production personal data in tests, and for backups of anything
+    you still need after our retention window.
+  </p>
+
+  <h2>5. Notifications and SMS</h2>
+  <p>
+    You must have each recipient’s permission before adding an email, phone,
+    WhatsApp or other destination. Zenguy SMS is a recurring operational-alert
+    programme for requested test failures, downtime, recoveries and channel
+    verification. Frequency follows monitoring activity and may include
+    several messages in a day. Message and data rates may apply. Carriers are
+    not liable for delayed or undelivered messages.
+  </p>
+  <p>
+    Recipients may reply STOP to opt out of SMS from the sending number, or
+    HELP for help, or you can remove the channel in Zenguy. Consent to SMS is
+    not a condition of purchase.
+  </p>
+
+  <h2>6. Fees, taxes and cancellation</h2>
+  <p>
+    Paid plans, included runs, overage, prepaid alert credit, taxes, the
+    billing cycle and renewal are shown before you pay and require your
+    express agreement (LSSI-CE arts. 27 and 28; TRLGDCU). Checkout is hosted
+    by Stripe. Subscriptions renew until cancelled; cancellation takes effect
+    at the end of the period already paid, as shown in the billing portal,
+    unless a mandatory rule says otherwise.
+  </p>
+  <p>
+    Prices on marketing pages are a reference. The binding price is the one
+    Stripe shows, with applicable VAT or equivalent tax. SMS, voice and
+    WhatsApp alerts are charged per alert from prepaid credit at the
+    destination prices shown in the product. Credit is only spent on alerts
+    you configure, never goes negative, and is returned when a carrier rejects
+    a message.
+  </p>
+  <p>
+    If you are a consumer, EU cooling-off rules for digital services apply
+    (TRLGDCU and Directive 2011/83/EU, as amended). Because Zenguy starts as
+    soon as the account is created and, where relevant, as soon as a workspace
+    is billed, creating an account is a request that we start performing the
+    service immediately. Once performance has begun you lose the 14-day
+    withdrawal right for that digital service, as the law allows when you
+    request immediate performance and acknowledge the loss of withdrawal.
+    Business customers are not consumers.
+  </p>
+
+  <h2>7. Intellectual property</h2>
+  <p>
+    Zenguy, its software, design, documentation and trademarks are protected
+    by intellectual-property laws. Except for the limited right to use the
+    service under these Terms, no rights are transferred. Feedback may be used
+    without restriction or obligation, provided we do not publish it in a way
+    that identifies you without permission.
+  </p>
+
+  <h2>8. Third-party services</h2>
+  <p>
+    The service depends on providers such as Cloudflare, Stripe, Twilio,
+    OpenAI and Expo. They have their own terms and availability. We are not
+    responsible for systems outside our reasonable control.
+  </p>
+
+  <h2>9. Disclaimers and liability</h2>
+  <p>
+    We provide Zenguy with reasonable skill and care. We do not warrant that
+    tests will catch every failure or that the service will be error-free or
+    uninterrupted.
+  </p>
+  <p>
+    Nothing in these Terms limits liability for intent (dolo), gross
+    negligence, or any liability that Spanish or EU law does not allow to be
+    limited, including mandatory consumer rights and liability for death or
+    personal injury.
+  </p>
+  <p>
+    Subject to that, we are not liable for lost profits, revenue, data or
+    goodwill, or for indirect or consequential loss, and our aggregate
+    liability relating to the service is limited to the fees you paid for it
+    in the twelve months before the event giving rise to liability, or 39 € if
+    you have paid nothing.
+  </p>
+
+  <h2>10. Governing law and venue</h2>
+  <p>
+    These Terms are governed by the laws of Spain. Courts of Barcelona, Spain
+    have jurisdiction, except that consumers may also bring proceedings in the
+    courts of their domicile, and other mandatory rules remain available.
+    The European Commission’s consumer ODR platform is at{" "}
+    <a href="https://ec.europa.eu/consumers/odr">ec.europa.eu/consumers/odr</a>.
+    We are not obliged to use alternative dispute resolution, but we will look
+    at good-faith complaints sent to{" "}
+    <a href={legalMailto}>{legalCompany.email}</a>.
+  </p>
+
+  <h2>11. Changes</h2>
+  <p>
+    We may update these Terms. Material changes will be communicated in the
+    product or by email. If you do not agree you may stop using Zenguy and
+    cancel before the change takes effect. Continued paid use after that date
+    means you accept the updated Terms, except where a mandatory rule requires
+    a new express agreement.
+  </p>
+</Legal>

@@ -31,7 +31,7 @@ describe("visitEventFor", () => {
   });
 
   it("ignores public and unknown paths", () => {
-    for (const path of ["/signin", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/invitations/abc", "/grants/abc", "/privacy", "/terms", "/", "/nope", "/verify-pending"]) {
+    for (const path of ["/signin", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/invitations/abc", "/grants/abc", "/privacy", "/terms", "/legal-notice", "/cookies", "/", "/nope", "/verify-pending"]) {
       expect(visitEventFor(path)).toBeNull();
     }
   });

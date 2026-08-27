@@ -60,7 +60,11 @@ describe("auth API sessions", () => {
     };
     fetchMock.mockResolvedValueOnce(jsonResponse(pending, 201));
 
-    const result = await register("María", user.email, "Password123!");
+    const result = await register("María", user.email, "Password123!", {
+      acceptedPrivacy: true,
+      acceptedTerms: true,
+      marketingOptIn: false,
+    });
 
     expect(result).toEqual(pending);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8787/api/auth/register");

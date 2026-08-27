@@ -48,14 +48,24 @@ async function prepareForNewSession(): Promise<void> {
   if (isTerminalLogoutPending()) await retryPendingLogout();
 }
 
+export interface RegistrationConsent {
+  acceptedPrivacy: boolean;
+  acceptedTerms: boolean;
+  marketingOptIn: boolean;
+}
+
 /** Registration is deliberately token-free until inbox + password verification. */
 export function register(
   name: string,
   email: string,
   password: string,
+  consent: RegistrationConsent,
 ): Promise<RegistrationPending> {
   return apiPost<RegistrationPending>("/api/auth/register", {
+    acceptedPrivacy: consent.acceptedPrivacy,
+    acceptedTerms: consent.acceptedTerms,
     email,
+    marketingOptIn: consent.marketingOptIn,
     name,
     password,
   });

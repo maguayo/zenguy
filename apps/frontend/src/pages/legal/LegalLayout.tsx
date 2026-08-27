@@ -20,20 +20,23 @@ export function LegalLayout({
           {title}
         </h1>
         <p className="mt-2 text-sm text-zinc-500">
-          Effective and last updated: August 21, 2026
+          Effective and last updated: 27 August 2026
         </p>
         <div className="legal-copy mt-10 space-y-8 text-[15px] leading-7">
           {children}
         </div>
-        <footer className="mt-12 flex gap-4 border-t border-zinc-200 pt-6 text-sm">
-          <a className="text-accent-700 hover:underline" href="/privacy">
+        <footer className="mt-12 flex flex-wrap gap-4 border-t border-zinc-200 pt-6 text-sm">
+          <a className="text-accent-700 hover:underline" href="https://zenguy.com/legal-notice/">
+            Legal notice
+          </a>
+          <a className="text-accent-700 hover:underline" href="https://zenguy.com/privacy/">
             Privacy
           </a>
-          <a className="text-accent-700 hover:underline" href="/terms">
+          <a className="text-accent-700 hover:underline" href="https://zenguy.com/terms/">
             Terms
           </a>
-          <a className="text-accent-700 hover:underline" href="https://app.zenguy.com">
-            Open Zenguy
+          <a className="text-accent-700 hover:underline" href="https://zenguy.com/cookies/">
+            Cookies
           </a>
         </footer>
       </article>

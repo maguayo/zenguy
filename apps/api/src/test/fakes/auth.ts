@@ -6,6 +6,7 @@ import { FakeIds } from "./ids";
 import {
   FakeEmailTokenRepo,
   FakeAuditRepo,
+  FakeLegalAcceptanceRepo,
   FakeMemberRepo,
   FakeRefreshTokenRepo,
   FakeSessionSecurityRepo,
@@ -22,9 +23,11 @@ export function authTestDependencies() {
   const audits = new FakeAuditRepo();
   const workspaceState = new FakeWorkspaceState();
   const users = new FakeUserRepo();
+  const legalAcceptances = new FakeLegalAcceptanceRepo();
   const refreshTokens = new FakeRefreshTokenRepo();
   return {
     users,
+    legalAcceptances,
     emailTokens: new FakeEmailTokenRepo(),
     refreshTokens,
     sessionSecurity: new FakeSessionSecurityRepo(users, refreshTokens),
