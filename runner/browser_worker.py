@@ -1694,8 +1694,14 @@ class BrowserNetworkPolicy:
         raw: str,
         resource_type: str = "Document",
         method: str = "GET",
+        *,
+        verify_dns: bool = True,
     ) -> None:
-        await assert_public_network_url(raw)
+        # verify_dns=False solo cuando el llamante YA verificó el host por su
+        # cuenta (el guard CDP memoiza el veredicto por host unos segundos
+        # para que una tormenta de subrecursos no resuelva DNS por request).
+        if verify_dns:
+            await assert_public_network_url(raw)
         parsed = urllib.parse.urlsplit(raw)
         host = parsed.hostname or ""
         normalized_method = method.upper()
@@ -2258,6 +2264,12 @@ class BrowserNetworkGuard:
     }
     NON_NETWORK_TARGET_TYPES = {"browser"}
 
+    # Un veredicto DNS por host se reutiliza esta ventana. Igual que la caché
+    # del propio navegador, acota la re-verificación anti-rebinding a unos
+    # segundos sin resolver DNS para cada subrecurso de la página.
+    DNS_VERDICT_TTL_SECONDS = 30.0
+    SLOW_REQUEST_LOG_SECONDS = 1.0
+
     def __init__(self, browser_session: Any, policy: BrowserNetworkPolicy) -> None:
         self.browser_session = browser_session
         self.policy = policy
@@ -2266,6 +2278,40 @@ class BrowserNetworkGuard:
         self.response_received_bytes: dict[tuple[str, str], int] = {}
         self.quota_exceeded = False
         self._quota_abort_task: asyncio.Task[Any] | None = None
+        self._dns_verdicts: dict[
+            str, tuple[float, asyncio.Future[str | None]]
+        ] = {}
+        self._request_tasks: set[asyncio.Task[Any]] = set()
+
+    async def _gate_dns(self, raw: str) -> None:
+        host = urllib.parse.urlsplit(raw).hostname or ""
+        now = time.monotonic()
+        entry = self._dns_verdicts.get(host)
+        if entry is not None and entry[0] > now:
+            # Las requests concurrentes al mismo host comparten una única
+            # resolución en vuelo en lugar de resolver cada una por su cuenta.
+            verdict = await entry[1]
+            if verdict is not None:
+                raise ActionFailure(verdict)
+            return
+        future: asyncio.Future[str | None] = (
+            asyncio.get_running_loop().create_future()
+        )
+        self._dns_verdicts[host] = (now + self.DNS_VERDICT_TTL_SECONDS, future)
+        try:
+            await assert_public_network_url(raw)
+        except ActionFailure as error:
+            future.set_result(str(error))
+            raise
+        except BaseException:
+            # Fail-closed: los que esperan este veredicto no deben colgarse si
+            # la resolución muere por cancelación u otro error inesperado.
+            if not future.done():
+                future.set_result(
+                    "Navigation blocked: host could not be resolved"
+                )
+            raise
+        future.set_result(None)
 
     @staticmethod
     def _positive_cdp_length(value: Any) -> int:
@@ -2379,7 +2425,9 @@ class BrowserNetworkGuard:
             if "attachment" in dispositions or "application/pdf" in content_types:
                 raise ActionFailure("Response blocked: downloads and PDFs are disabled")
 
-        async def on_request_paused(event: Mapping[str, Any], session_id: str | None):
+        async def process_paused_request(
+            event: Mapping[str, Any], session_id: str | None
+        ):
             request_id = event.get("requestId")
             request = event.get("request")
             raw = request.get("url") if isinstance(request, Mapping) else None
@@ -2387,29 +2435,60 @@ class BrowserNetworkGuard:
             resource_type = str(event.get("resourceType") or "")
             if not isinstance(request_id, str) or not isinstance(raw, str):
                 return
+            started = time.monotonic()
+            host = urllib.parse.urlsplit(raw).hostname or ""
             try:
                 if event.get("responseStatusCode") is None:
+                    await self._gate_dns(raw)
                     await self.policy.assert_request(
                         raw,
                         resource_type,
                         str(method or "GET"),
+                        verify_dns=False,
                     )
                 else:
                     assert_response(event)
-            except Exception:
-                await client.send.Fetch.failRequest(
-                    params={"requestId": request_id, "errorReason": "BlockedByClient"},
-                    session_id=session_id,
+            except Exception as error:
+                log(
+                    "guard_request_blocked",
+                    host=host,
+                    reason=str(error)[:120],
                 )
+                with contextlib.suppress(Exception):
+                    await client.send.Fetch.failRequest(
+                        params={
+                            "requestId": request_id,
+                            "errorReason": "BlockedByClient",
+                        },
+                        session_id=session_id,
+                    )
                 return
-            if event.get("responseStatusCode") is None:
-                await client.send.Fetch.continueRequest(
-                    params={"requestId": request_id}, session_id=session_id
+            elapsed = time.monotonic() - started
+            if elapsed > self.SLOW_REQUEST_LOG_SECONDS:
+                log(
+                    "guard_request_slow",
+                    host=host,
+                    ms=int(elapsed * 1000),
                 )
-            else:
-                await client.send.Fetch.continueResponse(
-                    params={"requestId": request_id}, session_id=session_id
-                )
+            with contextlib.suppress(Exception):
+                if event.get("responseStatusCode") is None:
+                    await client.send.Fetch.continueRequest(
+                        params={"requestId": request_id}, session_id=session_id
+                    )
+                else:
+                    await client.send.Fetch.continueResponse(
+                        params={"requestId": request_id}, session_id=session_id
+                    )
+
+        async def on_request_paused(event: Mapping[str, Any], session_id: str | None):
+            # El dispatcher de eventos CDP espera a cada handler: verificar en
+            # línea serializa la cola y una resolución DNS lenta de un tercero
+            # atasca la carga entera de la página. Cada pausa se procesa en su
+            # propia task; la request queda retenida por Chromium hasta su
+            # continue/fail individual.
+            task = asyncio.create_task(process_paused_request(event, session_id))
+            self._request_tasks.add(task)
+            task.add_done_callback(self._request_tasks.discard)
 
         async def on_data_received(event: Mapping[str, Any], session_id: str | None):
             if original_data_received is not None:

@@ -1281,6 +1281,156 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
                         recycle_after_attempt=False,
                     )
 
+    @staticmethod
+    async def _drain_guard(guard):
+        while guard._request_tasks:
+            await asyncio.gather(*list(guard._request_tasks))
+
+    @staticmethod
+    def _minimal_guard_client(calls):
+        class Fetch:
+            async def enable(self, *, params, session_id):
+                calls.append(("enable", session_id))
+
+            async def failRequest(self, *, params, session_id):
+                calls.append(("fail", session_id, params["requestId"]))
+
+            async def continueRequest(self, *, params, session_id):
+                calls.append(("continue", session_id, params["requestId"]))
+
+            async def continueResponse(self, *, params, session_id):
+                calls.append(("continue_response", session_id, params["requestId"]))
+
+        class Target:
+            async def setAutoAttach(self, *, params):
+                calls.append(("auto_attach",))
+
+        class Browser:
+            async def setDownloadBehavior(self, *, params):
+                calls.append(("download",))
+
+        class Network:
+            async def enable(self, *, params, session_id):
+                calls.append(("network_enable", session_id))
+
+            async def setCacheDisabled(self, *, params, session_id):
+                calls.append(("cache", session_id))
+
+            async def setBypassServiceWorker(self, *, params, session_id):
+                calls.append(("service_worker", session_id))
+
+            async def setBlockedURLs(self, *, params, session_id):
+                calls.append(("blocked_urls", session_id))
+
+        class FetchRegistration:
+            def requestPaused(self, handler):
+                self.handler = handler
+
+        class NetworkRegistration:
+            def dataReceived(self, handler):
+                pass
+
+            def loadingFinished(self, handler):
+                pass
+
+            def loadingFailed(self, handler):
+                pass
+
+        async def original_attached(_event, _session_id):
+            return None
+
+        class Registry:
+            _handlers = {"Target.attachedToTarget": original_attached}
+
+            def register(self, name, handler):
+                self._handlers[name] = handler
+
+        fetch_registration = FetchRegistration()
+        client = SimpleNamespace(
+            send=SimpleNamespace(
+                Fetch=Fetch(), Target=Target(), Browser=Browser(), Network=Network()
+            ),
+            register=SimpleNamespace(
+                Fetch=fetch_registration, Network=NetworkRegistration()
+            ),
+            _event_registry=Registry(),
+        )
+        browser_session = SimpleNamespace(
+            _cdp_client_root=client,
+            session_manager=SimpleNamespace(
+                _sessions={"existing": SimpleNamespace(session_id="existing")}
+            ),
+            kill=mock.AsyncMock(),
+        )
+        return browser_session, fetch_registration
+
+    async def test_a_slow_policy_check_does_not_block_other_paused_requests(self):
+        calls = []
+        browser_session, fetch_registration = self._minimal_guard_client(calls)
+        release = asyncio.Event()
+
+        async def gated_assert_request(raw, resource_type="", method="GET", **_):
+            if "slow" in raw:
+                await release.wait()
+
+        policy = SimpleNamespace(assert_request=gated_assert_request)
+        guard = worker.BrowserNetworkGuard(browser_session, policy)
+        await guard.start()
+        handler = fetch_registration.handler
+
+        slow_event = {
+            "requestId": "req-slow",
+            "request": {"url": "https://slow.example/", "method": "GET"},
+            "resourceType": "Document",
+        }
+        fast_event = {
+            "requestId": "req-fast",
+            "request": {"url": "https://fast.example/", "method": "GET"},
+            "resourceType": "Document",
+        }
+        with mock.patch.object(
+            worker.BrowserNetworkGuard, "_gate_dns", new=mock.AsyncMock()
+        ):
+            await asyncio.wait_for(handler(slow_event, "existing"), timeout=1)
+            await asyncio.wait_for(handler(fast_event, "existing"), timeout=1)
+            for _ in range(200):
+                if ("continue", "existing", "req-fast") in calls:
+                    break
+                await asyncio.sleep(0.01)
+            self.assertIn(("continue", "existing", "req-fast"), calls)
+            self.assertNotIn(("continue", "existing", "req-slow"), calls)
+            release.set()
+            await self._drain_guard(guard)
+        self.assertIn(("continue", "existing", "req-slow"), calls)
+
+    async def test_guard_memoizes_dns_verdicts_across_paused_requests(self):
+        calls = []
+        browser_session, fetch_registration = self._minimal_guard_client(calls)
+        policy = worker.BrowserNetworkPolicy(("example.com",))
+        guard = worker.BrowserNetworkGuard(browser_session, policy)
+        await guard.start()
+        handler = fetch_registration.handler
+        public_answer = [(2, 1, 6, "", ("93.184.216.34", 443))]
+        with mock.patch.object(
+            worker.socket, "getaddrinfo", return_value=public_answer
+        ) as resolver:
+            for index in range(3):
+                await handler(
+                    {
+                        "requestId": f"req-{index}",
+                        "request": {
+                            "url": "https://example.com/asset",
+                            "method": "GET",
+                        },
+                        "resourceType": "Image",
+                    },
+                    "existing",
+                )
+            await self._drain_guard(guard)
+        continued = [call for call in calls if call[0] == "continue"]
+        self.assertEqual(len(continued), 3)
+        self.assertEqual(resolver.call_count, 1)
+
     async def test_cdp_guard_enables_every_session_and_fails_blocked_requests(self):
         calls = []
 
@@ -1416,6 +1566,8 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls.count(("original_attached",)), original_count)
 
         with mock.patch.object(
+            worker.BrowserNetworkGuard, "_gate_dns", new=mock.AsyncMock()
+        ), mock.patch.object(
             worker.BrowserNetworkPolicy,
             "assert_request",
             new=mock.AsyncMock(),
@@ -1428,6 +1580,7 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
                 },
                 "existing",
             )
+            await self._drain_guard(guard)
         self.assertIn(
             (
                 "continue",
@@ -1438,6 +1591,8 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with mock.patch.object(
+            worker.BrowserNetworkGuard, "_gate_dns", new=mock.AsyncMock()
+        ), mock.patch.object(
             worker.BrowserNetworkPolicy,
             "assert_request",
             new=mock.AsyncMock(side_effect=worker.ActionFailure("blocked")),
@@ -1450,6 +1605,7 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
                 },
                 "existing",
             )
+            await self._drain_guard(guard)
         self.assertIn(
             (
                 "fail",
@@ -1478,6 +1634,7 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
             },
             "existing",
         )
+        await self._drain_guard(guard)
         self.assertIn(
             (
                 "continue_response",
@@ -1502,6 +1659,7 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
             },
             "existing",
         )
+        await self._drain_guard(guard)
         self.assertTrue(
             any(
                 call[0] == "fail"
@@ -1522,6 +1680,7 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
             },
             "existing",
         )
+        await self._drain_guard(guard)
         self.assertTrue(
             any(
                 call[0] == "fail" and call[2].get("requestId") == "pdf-response"
