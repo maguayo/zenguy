@@ -72,6 +72,11 @@ export function buildRunnerEnvVars(
     // disparar 'load'; el default de 30 s de browser-use las dejaba en
     // about:blank. 60 s da margen sin colgar un attempt real (limite 300 s).
     TIMEOUT_NavigateToUrlEvent: "60",
+    // Tiendas con mucha media first-party generan un DOM grande; construirlo en
+    // el contenedor puede pasar de los 30 s por defecto de browser-use, que
+    // entonces devuelve un DOM VACIO y el agente se atasca. 90 s da margen para
+    // que la captura termine con un DOM real.
+    TIMEOUT_BrowserStateRequestEvent: "90",
   };
 }
 

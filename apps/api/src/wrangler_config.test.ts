@@ -401,7 +401,7 @@ describe("wrangler environments", () => {
           class_name: "RunnerContainer",
           image: "../../runner/deploy/Dockerfile",
           image_build_context: "../../runner",
-          instance_type: "standard-3",
+          instance_type: "standard-4",
           max_instances: 5,
         },
       ]);
