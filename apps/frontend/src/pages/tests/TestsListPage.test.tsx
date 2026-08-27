@@ -28,6 +28,7 @@ const test: BrowserTest = {
   nextRunAt: "2026-08-19T16:00:00.000Z",
   notifyOnRecovery: true,
   openIncidentId: "incident_1",
+  recentRuns: [],
   startUrl: "https://example.com",
   updatedAt: "2026-08-19T10:00:00.000Z",
 };
@@ -62,7 +63,45 @@ describe("import feedback", () => {
 
 describe("browser tests list", () => {
   it("keeps the required column order", () => {
-    expect(testListHeaders).toEqual(["Test", "Last run", "Next run", "Alerts"]);
+    expect(testListHeaders).toEqual([
+      "Test",
+      "History",
+      "Last run",
+      "Next run",
+      "Alerts",
+    ]);
+  });
+
+  it("draws the run history strip with a pass-rate caption", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent
+          test={{
+            ...test,
+            recentRuns: [
+              { finishedAt: "2026-08-19T04:00:00.000Z", id: "run_a", status: "FAILED" },
+              { finishedAt: "2026-08-19T10:00:00.000Z", id: "run_b", status: "PASSED" },
+            ],
+          }}
+          timezone="Europe/Madrid"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('href="/w/ws_1/runs/run_a"');
+    expect(html).toContain('href="/w/ws_1/runs/run_b"');
+    expect(html).toContain("bg-danger-600");
+    expect(html).toContain("bg-ok-600");
+    expect(html).toContain("1/2 passed");
+  });
+
+  it("invites the first run when there is no history yet", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent test={test} timezone="Europe/Madrid" workspaceId="ws_1" />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("No runs yet");
   });
 
   it("renders a rich identity, schedule, and incident state", () => {

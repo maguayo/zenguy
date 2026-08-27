@@ -140,7 +140,7 @@ export function AppLayout() {
 
         {subscriptionStatus === "PAST_DUE" ? (
           <div className="border-b border-warn-600/20 bg-warn-50 px-4 py-3 text-sm text-zinc-800 md:px-6">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
               <p>Your last payment failed. Update your payment method to keep runs going.</p>
               {can("billing.manage") ? (
                 <Link
@@ -158,7 +158,7 @@ export function AppLayout() {
 
         {creditBanner ? (
           <div className="border-b border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-zinc-800 md:px-6">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
               <p>{creditBanner.message}</p>
               {creditBanner.showTopUp ? (
                 <Link
@@ -174,7 +174,7 @@ export function AppLayout() {
           </div>
         ) : null}
 
-        <main className="mx-auto max-w-6xl px-4 py-6 md:px-6">
+        <main className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 xl:px-10">
           <Outlet />
         </main>
       </div>

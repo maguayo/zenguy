@@ -195,6 +195,13 @@ export type IrreversibleActionScope =
       maxUses: number;
     };
 
+/** One slot in a test's history strip. Oldest first; the last tick is the newest run. */
+export interface RunTick {
+  finishedAt: string | null;
+  id: string;
+  status: RunStatus;
+}
+
 export type RunSummary = {
   createdAt: string;
   durationMs: number | null;
@@ -224,6 +231,8 @@ export interface BrowserTest {
   nextRunAt: string;
   notifyOnRecovery: boolean;
   openIncidentId: string | null;
+  /** Populated by the list endpoint; the detail endpoint leaves it empty. */
+  recentRuns?: RunTick[];
   startUrl: string;
   updatedAt: string;
 }

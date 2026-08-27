@@ -26,6 +26,7 @@ import {
   type ImportTestsSummary,
 } from "../../api/tests";
 import type { BrowserTest, RunSource } from "../../api/types";
+import { passRateLabel, PulseStrip } from "../../components/PulseStrip";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -124,7 +125,7 @@ function TestActions({ test }: { test: BrowserTest }) {
         {can("tests.run") ? (
           <Button
             aria-label={`Run ${test.name} now`}
-            className="hidden lg:inline-flex"
+            className="max-lg:hidden"
             disabled={isActiveRun(test) || run.pending}
             size="sm"
             onClick={run.requestRun}
@@ -159,10 +160,16 @@ function TestActions({ test }: { test: BrowserTest }) {
   );
 }
 
-export const testListHeaders = ["Test", "Last run", "Next run", "Alerts"] as const;
+export const testListHeaders = [
+  "Test",
+  "History",
+  "Last run",
+  "Next run",
+  "Alerts",
+] as const;
 
-const testListGrid =
-  "lg:grid-cols-[minmax(260px,1.7fr)_minmax(155px,0.85fr)_minmax(135px,0.72fr)_minmax(165px,0.9fr)_auto]";
+export const testListGrid =
+  "lg:grid-cols-[minmax(220px,1.45fr)_minmax(140px,0.95fr)_minmax(150px,0.9fr)_minmax(105px,0.62fr)_minmax(150px,0.85fr)_auto]";
 
 export function testHost(url: string): string {
   try {
@@ -255,17 +262,33 @@ export function TestRowContent({
               <Globe2 aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="truncate">{testHost(test.startUrl)}</span>
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600">
-                <DeviceIcon aria-hidden="true" className="size-3" />
-                {deviceLabel}
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-500">
+              <DeviceIcon aria-hidden="true" className="size-3.5" />
+              {deviceLabel}
+              <span aria-hidden="true" className="text-zinc-300">
+                ·
               </span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600">
-                <CalendarClock aria-hidden="true" className="size-3" />
-                {formatInterval(test.intervalHours)}
-              </span>
-            </div>
+              <CalendarClock aria-hidden="true" className="size-3.5" />
+              {formatInterval(test.intervalHours)}
+            </p>
           </div>
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        role="cell"
+      >
+        <MobileCellLabel>History</MobileCellLabel>
+        <div className="min-w-0 lg:pt-1">
+          <PulseStrip
+            className="max-w-56"
+            runs={test.recentRuns ?? []}
+            workspaceId={workspaceId}
+          />
+          <p className="mt-1.5 text-xs text-zinc-500">
+            {passRateLabel(test.recentRuns ?? []) ?? "No runs yet"}
+          </p>
         </div>
       </div>
 
@@ -301,16 +324,13 @@ export function TestRowContent({
         role="cell"
       >
         <MobileCellLabel>Next run</MobileCellLabel>
-        <div>
-          <p
-            className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
-            title={formatDateTime(test.nextRunAt, timezone)}
-          >
-            <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
-            {formatRelative(test.nextRunAt)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">Automatic</p>
-        </div>
+        <p
+          className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
+          title={formatDateTime(test.nextRunAt, timezone)}
+        >
+          <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
+          {formatRelative(test.nextRunAt)}
+        </p>
       </div>
 
       <div
