@@ -1026,6 +1026,44 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
             ):
                 worker.browser_network_policy("https://example.com", {}, snapshot)
 
+    async def test_unrestricted_policy_allows_any_public_host_and_mutating_requests(
+        self,
+    ):
+        policy = worker.BrowserNetworkPolicy(("shop.example",), unrestricted=True)
+        with mock.patch.object(
+            worker, "assert_public_network_url", new=mock.AsyncMock()
+        ) as resolver:
+            # Un host fuera del allowlist (la pasarela de pago) y un POST de
+            # checkout se permiten en modo unrestricted.
+            await policy.assert_request(
+                "https://checkout.stripe.com/pay", "Document", "GET"
+            )
+            await policy.assert_request(
+                "https://shop.example/cart/add", "XHR", "POST"
+            )
+        # La verificación anti-SSRF/rebinding se mantiene siempre.
+        self.assertEqual(resolver.await_count, 2)
+        with mock.patch.object(
+            worker,
+            "assert_public_network_url",
+            new=mock.AsyncMock(
+                side_effect=worker.ActionFailure("private address")
+            ),
+        ):
+            with self.assertRaises(worker.ActionFailure):
+                await policy.assert_request(
+                    "https://169.254.169.254/", "Document", "GET"
+                )
+
+    def test_unrestricted_policy_allows_interaction_on_any_public_host(self):
+        policy = worker.BrowserNetworkPolicy(("shop.example",), unrestricted=True)
+        policy.assert_interaction("https://checkout.stripe.com/pay", "Input")
+        with self.assertRaises(worker.ActionFailure):
+            policy.assert_interaction("ftp://checkout.stripe.com/pay", "Input")
+        restricted = worker.BrowserNetworkPolicy(("shop.example",))
+        with self.assertRaises(worker.ActionFailure):
+            restricted.assert_interaction("https://checkout.stripe.com/", "Input")
+
     async def test_job_allowlist_covers_documents_and_subresources(self):
         policy = worker.BrowserNetworkPolicy(("example.com",))
         with mock.patch.object(
@@ -1874,6 +1912,34 @@ class BrowserPolicyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("human approval and exact action scope", neutral_result.error)
         self.assertIn("login and checkout POST", neutral_result.error)
         original_click.assert_not_awaited()
+
+    async def test_unrestricted_policy_clicks_buttons_without_the_ledger(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime,
+            {},
+            worker.Redactor({}),
+            worker.BrowserNetworkPolicy(("shop.example",), unrestricted=True),
+        )
+        click = tools.registry.registry.actions["click"].function
+        browser_session = SimpleNamespace(
+            get_current_page_url=mock.AsyncMock(
+                return_value="https://checkout.stripe.com/pay"
+            ),
+            get_element_by_index=mock.AsyncMock(
+                return_value=SimpleNamespace(
+                    node_name="BUTTON",
+                    node_value="",
+                    text="Pay now",
+                    attributes={"type": "submit"},
+                )
+            ),
+        )
+
+        result = await click(SimpleNamespace(index=7), browser_session)
+
+        original_click.assert_awaited_once()
+        self.assertFalse(getattr(result, "error", None))
 
     async def test_links_bypass_page_handlers_but_only_exact_scoped_toggles_can_click(self):
         runtime, original_click, *_ = self.runtime()
@@ -3153,6 +3219,21 @@ class CloudflareRuntimeTests(unittest.TestCase):
         self.assertFalse(config.require_egress_proxy)
         self.assertTrue(config.runner_version.startswith("zenguy-cf-runner/"))
         self.assertEqual(config.cloudflare_queues_token, "")
+        self.assertFalse(config.unrestricted_actions)
+
+    def test_cloudflare_config_reads_unrestricted_actions_flag(self):
+        for raw, expected in (
+            ("1", True),
+            ("true", True),
+            ("YES", True),
+            ("0", False),
+            ("", False),
+        ):
+            with self.subTest(raw=raw):
+                config = worker.RunnerConfig.for_cloudflare(
+                    environ={**self.ENVIRON, "ZENGUY_UNRESTRICTED_ACTIONS": raw}
+                )
+                self.assertEqual(config.unrestricted_actions, expected)
 
     def test_cloudflare_config_validates_optional_proxy(self):
         config = worker.RunnerConfig.for_cloudflare(

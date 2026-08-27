@@ -31,6 +31,16 @@ describe("buildRunnerEnvVars", () => {
     expect(vars.ZENGUY_RUNNER_TOKEN).toBe(env.RUNNER_CF_API_TOKEN);
     expect(vars.OPENAI_API_KEY).toBe("sk-test");
     expect(vars.CF_ACCESS_CLIENT_ID).toBe(env.RUNNER_CF_ACCESS_CLIENT_ID);
+    expect(vars.ZENGUY_UNRESTRICTED_ACTIONS).toBe("0");
+  });
+
+  it("propaga el flag unrestricted cuando el Worker lo activa", () => {
+    const vars = buildRunnerEnvVars(
+      { ...env, RUNNER_UNRESTRICTED_ACTIONS: "true" },
+      message,
+      "cf-abc",
+    );
+    expect(vars.ZENGUY_UNRESTRICTED_ACTIONS).toBe("1");
   });
 
   it("rechaza un entorno sin secretos", () => {

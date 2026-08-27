@@ -11,7 +11,18 @@ export type RunnerContainerEnv = {
   OPENAI_API_KEY_CF: string;
   RUNNER_CF_ACCESS_CLIENT_ID: string;
   RUNNER_CF_ACCESS_CLIENT_SECRET: string;
+  /**
+   * "El test manda": cuando es truthy, el runner ejecuta lo que digan las
+   * instrucciones del test sin gate de acciones irreversibles ni allowlist de
+   * dominios (checkout, login, compra). Var del Worker para poder desactivarlo
+   * sin reconstruir la imagen.
+   */
+  RUNNER_UNRESTRICTED_ACTIONS?: string;
 };
+
+function envFlagEnabled(raw: string | undefined): boolean {
+  return ["1", "t", "y"].includes((raw ?? "").trim().toLowerCase().charAt(0));
+}
 
 export const WATCHDOG_DELAY_SECONDS = 8 * 60;
 export const WATCHDOG_RECHECK_SECONDS = 4 * 60;
@@ -54,6 +65,9 @@ export function buildRunnerEnvVars(
     OPENAI_API_KEY: env.OPENAI_API_KEY_CF,
     CF_ACCESS_CLIENT_ID: env.RUNNER_CF_ACCESS_CLIENT_ID,
     CF_ACCESS_CLIENT_SECRET: env.RUNNER_CF_ACCESS_CLIENT_SECRET,
+    ZENGUY_UNRESTRICTED_ACTIONS: envFlagEnabled(env.RUNNER_UNRESTRICTED_ACTIONS)
+      ? "1"
+      : "0",
   };
 }
 

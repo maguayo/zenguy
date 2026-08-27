@@ -347,6 +347,7 @@ describe("wrangler environments", () => {
       RUNNER_DISPATCH: "container",
       RUNNER_ENVIRONMENT: "production",
       PUBLIC_API_URL: "https://app.zenguy.com",
+      RUNNER_UNRESTRICTED_ACTIONS: "true",
     });
 
     expect(staging.d1_databases).toEqual([

@@ -492,6 +492,8 @@ class RunnerConfig:
     model_reasoning_effort_schedule: tuple[str, ...] = ()
     mode: str = "queue"
     model_native_structured: bool = False
+    # "El test manda": sin gate de acciones/dominios (ver BrowserNetworkPolicy).
+    unrestricted_actions: bool = False
     runner_version: str = RUNNER_VERSION
     # Reported with every outcome so the API can tell which executor ran an
     # attempt: the primary local worker or the plan-B fallback on the VPS.
@@ -825,6 +827,8 @@ class RunnerConfig:
         else:
             chrome_executable = None
             browser_channel = None
+        unrestricted_actions = (env.get("ZENGUY_UNRESTRICTED_ACTIONS") or "") \
+            .strip().lower()[:1] in {"1", "t", "y"}
         return cls(
             environment=environment,
             cloudflare_account_id="",
@@ -856,6 +860,7 @@ class RunnerConfig:
             mode="cloudflare",
             runner_kind="cf",
             model_native_structured=True,
+            unrestricted_actions=unrestricted_actions,
             runner_version=CF_RUNNER_VERSION,
             chrome_executable=chrome_executable,
             worker_id=worker_id,
@@ -1675,6 +1680,14 @@ class BrowserNetworkPolicy:
     writable_domains: tuple[str, ...] = ()
     irreversible_scopes: tuple[Mapping[str, Any], ...] = ()
     action_authorizer: Callable[[Mapping[str, Any]], Awaitable[bool]] | None = None
+    # Modo "el test manda" (CLOUDFLARE_RUNNER.md): sin allowlist de dominios,
+    # sin ledger de acciones irreversibles ni gate de HTTP mutante. El test
+    # hace lo que sus instrucciones digan, incluido checkout con tarjeta. Se
+    # mantienen las barreras de INTEGRIDAD (no de política): anti-SSRF/rebinding
+    # (`assert_public_network_url`), redacción de secretos, topes de tamaño,
+    # descargas denegadas, sandbox de Chromium y el set de acciones sin
+    # `evaluate`/`send_keys`/subida de ficheros.
+    unrestricted: bool = False
 
     @staticmethod
     def _path_and_query(parsed: urllib.parse.SplitResult) -> str:
@@ -1702,6 +1715,11 @@ class BrowserNetworkPolicy:
         # para que una tormenta de subrecursos no resuelva DNS por request).
         if verify_dns:
             await assert_public_network_url(raw)
+        if self.unrestricted:
+            # Cualquier host público y cualquier método: la única frontera es
+            # la verificación anti-SSRF de arriba (protege la infra de Zenguy,
+            # no limita a dónde llega el test).
+            return
         parsed = urllib.parse.urlsplit(raw)
         host = parsed.hostname or ""
         normalized_method = method.upper()
@@ -1746,9 +1764,11 @@ class BrowserNetworkPolicy:
         except ValueError as error:
             raise ActionFailure("Interaction blocked: current URL is invalid") from error
         host = parsed.hostname or ""
-        if parsed.scheme not in {"http", "https"} or not domain_allowed(
-            host, self.allowed_domains
-        ):
+        if parsed.scheme not in {"http", "https"}:
+            raise ActionFailure("Interaction blocked: current host is not allowed")
+        if self.unrestricted:
+            return
+        if not domain_allowed(host, self.allowed_domains):
             raise ActionFailure("Interaction blocked: current host is not allowed")
         if not domain_allowed(host, self.writable_domains):
             raise ActionFailure(
@@ -2175,6 +2195,7 @@ def browser_network_policy(
     snapshot: Mapping[str, Any] | None = None,
     reference: Mapping[str, Any] | None = None,
     action_authorizer: Callable[[Mapping[str, Any]], Awaitable[bool]] | None = None,
+    unrestricted: bool = False,
 ) -> BrowserNetworkPolicy:
     parsed = urllib.parse.urlsplit(assert_safe_external_url(start_url))
     if parsed.hostname is None:
@@ -2234,6 +2255,7 @@ def browser_network_policy(
         tuple(sorted(normalized_writable_domains)),
         irreversible_scopes_from_snapshot(snapshot or {}, reference),
         action_authorizer,
+        unrestricted=unrestricted,
     )
 
 
@@ -3187,6 +3209,21 @@ def create_browser_use_tools(
                     return runtime.ActionResult(
                         error="Action blocked: target is not a reviewed click control"
                     )
+                if policy.unrestricted:
+                    # Modo "el test manda": pulsar el botón/submit directamente
+                    # (checkout, login, comprar). Solo se comprueba que el host
+                    # actual sea http/https; sin ledger ni scope exacto.
+                    try:
+                        current_url = await browser_session.get_current_page_url()
+                        policy.assert_interaction(current_url, "Button click")
+                    except Exception as error:
+                        return runtime.ActionResult(
+                            error=redactor.redact(str(error) or "Button click blocked")
+                        )
+                    return await click_action.function(
+                        params=params,
+                        browser_session=browser_session,
+                    )
                 if not policy.irreversible_scopes:
                     return runtime.ActionResult(
                         error=(
@@ -3744,6 +3781,7 @@ class JobExecutor:
             snapshot,
             reference,
             authorize_action,
+            unrestricted=self.config.unrestricted_actions,
         )
 
         agent: Any = None

@@ -54,6 +54,7 @@
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
     "RUNNER_DISPATCH": "container",
     "RUNNER_ENVIRONMENT": "production",
-    "PUBLIC_API_URL": "https://app.zenguy.com"
+    "PUBLIC_API_URL": "https://app.zenguy.com",
+    "RUNNER_UNRESTRICTED_ACTIONS": "true"
   }
 }
