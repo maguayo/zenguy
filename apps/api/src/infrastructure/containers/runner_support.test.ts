@@ -32,6 +32,7 @@ describe("buildRunnerEnvVars", () => {
     expect(vars.OPENAI_API_KEY).toBe("sk-test");
     expect(vars.CF_ACCESS_CLIENT_ID).toBe(env.RUNNER_CF_ACCESS_CLIENT_ID);
     expect(vars.ZENGUY_UNRESTRICTED_ACTIONS).toBe("0");
+    expect(vars.TIMEOUT_NavigateToUrlEvent).toBe("60");
   });
 
   it("propaga el flag unrestricted cuando el Worker lo activa", () => {

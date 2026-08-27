@@ -68,6 +68,10 @@ export function buildRunnerEnvVars(
     ZENGUY_UNRESTRICTED_ACTIONS: envFlagEnabled(env.RUNNER_UNRESTRICTED_ACTIONS)
       ? "1"
       : "0",
+    // Paginas de pasarela/checkout son pesadas y tardan mas que la home en
+    // disparar 'load'; el default de 30 s de browser-use las dejaba en
+    // about:blank. 60 s da margen sin colgar un attempt real (limite 300 s).
+    TIMEOUT_NavigateToUrlEvent: "60",
   };
 }
 

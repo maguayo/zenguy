@@ -2473,6 +2473,10 @@ class BrowserNetworkGuard:
             str, tuple[float, asyncio.Future[str | None]]
         ] = {}
         self._request_tasks: set[asyncio.Task[Any]] = set()
+        # Hosts distintos cortados por politica (diagnostico): un tracker de
+        # terceros es correcto; un host funcional (pasarela/captcha) revelaria
+        # una allowlist incompleta que rompe la pagina.
+        self.blocked_hosts: dict[str, int] = {}
 
     async def _gate_dns(self, raw: str) -> None:
         host = urllib.parse.urlsplit(raw).hostname or ""
@@ -2640,11 +2644,8 @@ class BrowserNetworkGuard:
                 else:
                     assert_response(event)
             except Exception as error:
-                log(
-                    "guard_request_blocked",
-                    host=host,
-                    reason=str(error)[:120],
-                )
+                if host:
+                    self.blocked_hosts[host] = self.blocked_hosts.get(host, 0) + 1
                 with contextlib.suppress(Exception):
                     await client.send.Fetch.failRequest(
                         params={
@@ -4091,6 +4092,18 @@ class JobExecutor:
                 "networkErrors": [],
             }
         finally:
+            if network_guard is not None and network_guard.blocked_hosts:
+                top = sorted(
+                    network_guard.blocked_hosts.items(),
+                    key=lambda kv: kv[1],
+                    reverse=True,
+                )[:40]
+                log(
+                    "guard_blocked_hosts_summary",
+                    attemptId=reference.get("attemptId"),
+                    distinct=len(network_guard.blocked_hosts),
+                    hosts={host: count for host, count in top},
+                )
             quota_abort = (
                 network_guard._quota_abort_task
                 if network_guard is not None
