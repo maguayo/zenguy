@@ -1104,6 +1104,8 @@ class BrowserNetworkPolicyTests(unittest.IsolatedAsyncioTestCase):
                 "https://cdnjs.cloudflare.com/lib.js",
                 # infra first-party de la tienda en hosting compartido
                 "https://static-cache.cocunat.workers.dev/x.js",
+                # proteccion de bots exigida por el checkout
+                "https://api.config-security.com/c.js",
             ):
                 await policy.assert_request(functional, "Script", "GET")
             # trackers/ads de terceros: subrecurso cortado
