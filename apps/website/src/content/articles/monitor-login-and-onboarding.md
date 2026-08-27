@@ -13,7 +13,7 @@ related:
   - why-http-200-is-not-enough
   - ci-passed-production-broke
 image: /articles/monitor-login-and-onboarding.jpg
-imageAlt: "A wooden front door ajar with a brass key in the lock, sunlight on a hallway rug."
+imageAlt: "A laptop split between a sign-in form and a three-step onboarding wizard."
 ---
 
 For a shop, the money path is checkout. For a SaaS, it is **sign in and the first successful action** — create a project, invite a teammate, see a dashboard that is not an error.

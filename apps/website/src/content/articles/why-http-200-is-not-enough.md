@@ -13,7 +13,7 @@ related:
   - how-to-monitor-a-checkout-flow
   - uptimerobot-alternative
 image: /articles/why-http-200-is-not-enough.jpg
-imageAlt: "A clothing boutique at night with an OPEN neon in the rain: the store looks open, the street is empty."
+imageAlt: "A laptop terminal showing HTTP 200 OK next to a phone checkout whose Pay button is locked."
 ---
 
 Uptime monitoring is a health check from the outside: request a URL, accept a status code, maybe hunt for a string, record latency.

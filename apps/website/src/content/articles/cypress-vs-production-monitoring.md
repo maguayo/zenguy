@@ -13,7 +13,7 @@ related:
   - checkly-alternative
   - what-is-synthetic-monitoring
 image: /articles/cypress-vs-production-monitoring.jpg
-imageAlt: "A lab of test devices on white benches, with a wet city street and OPEN 24 shop outside the window."
+imageAlt: "Daylight laptop of green local tests beside a night window and the live site on a phone."
 ---
 
 Cypress taught a generation of front-end teams to test in a real browser. It is still a good **development and CI** tool.

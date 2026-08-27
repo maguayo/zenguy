@@ -12,7 +12,7 @@ related:
   - betterstack-alternative
   - best-website-monitoring-for-small-teams
 image: /articles/best-uptime-monitoring-tools.jpg
-imageAlt: "A ship's bridge at night: gauges, green lamps, and dark water through the windows."
+imageAlt: "A wall of green OK tiles with one red browser-test failure for checkout in the center."
 ---
 
 “Best uptime monitoring tool” is a useless title unless you say **best at what**.

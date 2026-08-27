@@ -13,7 +13,7 @@ related:
   - checkly-alternative
   - playwright-vs-production-monitoring
 image: /articles/new-relic-synthetics-alternative.jpg
-imageAlt: "A long, empty aisle of server racks with blue status lights receding into the fog."
+imageAlt: "Colorful APM traces on an ultrawide, and a login browser test on a laptop in front."
 ---
 
 New Relic Synthetics (now part of New Relic's broader capability set) is a reasonable button to press **if New Relic is already where traces live**. Browser and scripted monitors sit next to APM, logs, and the rest of the user interface your team was trained on.

@@ -13,7 +13,7 @@ related:
   - how-to-get-alerted-when-checkout-breaks
   - why-http-200-is-not-enough
 image: /articles/best-tools-to-monitor-checkout.jpg
-imageAlt: "Five generations of card terminals lined up on a repair bench under a work lamp."
+imageAlt: "A QA lab with three desks: test code, a click recorder, and a handwritten payment-bug note."
 ---
 
 Checkout is the flow that makes the rest of the site worth hosting. It is also the flow monitoring tools are worst at, because it is long, stateful, and it leaves your domain.

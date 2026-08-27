@@ -13,7 +13,7 @@ related:
   - best-synthetic-monitoring-tools
   - datadog-synthetics-alternative
 image: /articles/checkly-alternative.jpg
-imageAlt: "An empty chair in front of two monitors of code, with a handwritten note and pen on the desk."
+imageAlt: "Empty chair, two monitors of test code, and a handwritten English test in the foreground."
 ---
 
 Checkly is the default answer when an engineering team already writes Playwright and wants those tests to keep running after deploy, from many regions, as code.

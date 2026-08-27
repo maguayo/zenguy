@@ -12,7 +12,7 @@ related:
   - how-to-monitor-a-checkout-flow
   - best-tools-to-monitor-checkout
 image: /articles/best-synthetic-monitoring-tools.jpg
-imageAlt: "A white robot at a supermarket self-checkout, holding a basket, with Scan & Bag Here on the screen."
+imageAlt: "A device lab: desktop and phone on stands running the same automated browser flow."
 ---
 
 Synthetic monitoring is a robot pretending to be a user, on a schedule, against production (or a production-like URL).

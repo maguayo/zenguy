@@ -13,7 +13,7 @@ related:
   - what-is-synthetic-monitoring
   - how-to-get-alerted-when-checkout-breaks
 image: /articles/ci-passed-production-broke.jpg
-imageAlt: "A brightly lit office celebrating through glass, next to a dark shop with only a red lamp on."
+imageAlt: "Two monitors at night: a green CI pipeline on the left, a failing checkout on the right."
 ---
 
 CI is a gate on **change**. Production monitoring is a watch on **reality**.

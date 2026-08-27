@@ -13,7 +13,7 @@ related:
   - ci-passed-production-broke
   - playwright-vs-production-monitoring
 image: /articles/datadog-synthetics-alternative.jpg
-imageAlt: "An empty operations room lined with walls of graph monitors and a single vacant chair."
+imageAlt: "A cockpit of metric charts with one simple laptop showing checkout complete in front."
 ---
 
 Datadog Synthetics is not a bad product. It is a module inside a platform whose gravity is **hosts, APM, logs, and RUM**. If that platform is already the source of truth, adding synthetic browser tests there is coherent.
