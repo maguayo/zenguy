@@ -2364,6 +2364,7 @@ for (const path of [
   "BIONIC.md",
   "BACKUP_RUNNER.md",
 ]) {
+  if (!trackedPaths.has(path)) continue;
   const content = readFileSync(path, "utf8");
   if (
     /wrangler\s+(?:auth\s+(?:create|activate|token)|login)|--profile(?:\s|=)|zenguy-personal/u.test(
