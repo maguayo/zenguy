@@ -1,5 +1,5 @@
 import type { StripeConfig } from "../../shared/config";
-import { HttpStripeClient } from "./client";
+import { classifyRequestFailure, HttpStripeClient } from "./client";
 
 const CONFIG: StripeConfig = {
   secretKey: "sk_test_example123",
@@ -140,5 +140,39 @@ describe("HttpStripeClient", () => {
       "pricing[price]": "price_overage",
       quantity: "3",
     });
+  });
+});
+
+describe("classifyRequestFailure", () => {
+  it("maps known runtime failures to fixed tags and never echoes text", () => {
+    expect(
+      classifyRequestFailure(
+        new TypeError(
+          "Illegal invocation: function called with incorrect `this`",
+        ),
+      ),
+    ).toBe("illegal_invocation");
+    expect(
+      classifyRequestFailure(
+        new TypeError('Invalid redirect value, must be one of "follow"…'),
+      ),
+    ).toBe("invalid_redirect");
+    expect(classifyRequestFailure(new TypeError("Invalid header value."))).toBe(
+      "invalid_header",
+    );
+    expect(
+      classifyRequestFailure(
+        new TypeError("Cannot convert argument to a ByteString"),
+      ),
+    ).toBe("byte_string");
+    expect(
+      classifyRequestFailure(
+        new DOMException("The operation was aborted", "TimeoutError"),
+      ),
+    ).toBe("timed_out");
+    expect(classifyRequestFailure(new Error("sk_live_secret leaked"))).toBe(
+      "unmatched",
+    );
+    expect(classifyRequestFailure("not an error")).toBe("unmatched");
   });
 });

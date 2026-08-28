@@ -1,5 +1,5 @@
 import type { StripeConfig } from "../../shared/config";
-import { HttpStripeClient } from "./client";
+import { classifyRequestFailure, HttpStripeClient } from "./client";
 
 // Regression coverage for the production checkout outage: workerd validates
 // RequestInit more strictly than Node's undici (`redirect: "error"` is
@@ -78,6 +78,27 @@ describe("HttpStripeClient RequestInit on the workers runtime", () => {
     const body = new URLSearchParams(await request.text());
     expect(body.get("line_items[0][price]")).toBe(CONFIG.priceId);
     expect(body.get("client_reference_id")).toBe(CHECKOUT_INPUT.intentId);
+  });
+
+  it("dispatches through the DEFAULT fetchFn without tripping init validation", async () => {
+    // The production outage came from the default path (no injected fetchFn):
+    // workerd rejected the unbound global fetch / its RequestInit before any
+    // I/O. Point the client at a reserved TLD so a request that passes
+    // validation can only fail on DNS — which classifies as "unmatched",
+    // never as one of the known init-validation failures.
+    const client = new HttpStripeClient(
+      { ...CONFIG, apiBase: "https://stripe.invalid" as StripeConfig["apiBase"] },
+      "https://app.zenguy.com",
+    );
+    let caught: unknown = null;
+    try {
+      await client.createCheckoutSession(CHECKOUT_INPUT);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught).not.toBeInstanceOf(TypeError);
+    expect(classifyRequestFailure(caught)).toBe("unmatched");
   });
 
   it("treats a redirect response as a failed request, not a hop to follow", async () => {

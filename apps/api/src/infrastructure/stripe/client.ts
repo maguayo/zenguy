@@ -104,11 +104,34 @@ function assertHostedUrl(raw: string, hostname: string): string {
   return url.toString();
 }
 
+/**
+ * Fixed vocabulary of failure shapes for `stripe_request_failed` logs. Only
+ * the matched tag is ever logged — raw error text may embed request data.
+ */
+const REQUEST_FAILURE_PATTERNS: readonly (readonly [string, RegExp])[] = [
+  ["illegal_invocation", /illegal invocation/i],
+  ["invalid_redirect", /invalid redirect/i],
+  ["invalid_header", /invalid header/i],
+  ["byte_string", /bytestring/i],
+  ["timed_out", /abort|timed?\s?out/i],
+];
+
+export function classifyRequestFailure(error: unknown): string {
+  const text = error instanceof Error ? `${error.name}: ${error.message}` : "";
+  for (const [tag, pattern] of REQUEST_FAILURE_PATTERNS) {
+    if (pattern.test(text)) return tag;
+  }
+  return "unmatched";
+}
+
 export class HttpStripeClient implements BillingProviderClient {
   constructor(
     private readonly config: StripeConfig,
     private readonly appUrl: string,
-    private readonly fetchFn: StripeFetch = fetch,
+    // Wrapped instead of referencing the global directly: workerd can enforce
+    // the receiver on global fetch, and `this.fetchFn(...)` with the unbound
+    // function then throws "Illegal invocation" before dispatching anything.
+    private readonly fetchFn: StripeFetch = (input, init) => fetch(input, init),
   ) {}
 
   private async request(
@@ -144,8 +167,10 @@ export class HttpStripeClient implements BillingProviderClient {
       logEvent("stripe_request_failed", {
         operation,
         durationMs: Date.now() - startedAt,
-        // Name only: provider/runtime error messages may embed request data.
+        // Name and fixed pattern tag only: provider/runtime error messages
+        // may embed request data, so raw text never reaches the log.
         errorName: error instanceof Error ? error.name : "unknown",
+        errorPattern: classifyRequestFailure(error),
       });
       throw error;
     }
