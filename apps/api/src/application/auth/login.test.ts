@@ -85,7 +85,7 @@ describe("Login", () => {
 
   it("keeps the unknown-account dummy record on the full current KDF", async () => {
     expect(DUMMY_PASSWORD_HASH).toMatch(
-      /^pbkdf2-sha256\$v1\$600000\$[^$]+\$[^$]+$/u,
+      /^pbkdf2-sha256\$v1\$100000\$[^$]+\$[^$]+$/u,
     );
     expect(passwordNeedsRehash(DUMMY_PASSWORD_HASH)).toBe(false);
     await expect(
@@ -110,7 +110,7 @@ describe("Login", () => {
 
       const updated = await dependencies.users.findById(user.id);
       expect(updated?.passwordHash).toMatch(
-        /^pbkdf2-sha256\$v1\$600000\$/u,
+        /^pbkdf2-sha256\$v1\$100000\$/u,
       );
       await expect(
         verifyPassword("correct-password", updated?.passwordHash ?? ""),

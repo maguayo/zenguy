@@ -25,7 +25,7 @@ describe("password hashing", () => {
     const stored = await hashPassword("correct horse battery staple");
 
     expect(stored).toMatch(
-      /^pbkdf2-sha256\$v1\$600000\$[^$]+\$[^$]+$/,
+      /^pbkdf2-sha256\$v1\$100000\$[^$]+\$[^$]+$/,
     );
     await expect(
       verifyPassword("correct horse battery staple", stored),
@@ -46,12 +46,12 @@ describe("password hashing", () => {
     ).toBe(true);
     expect(
       passwordNeedsRehash(
-        "pbkdf2-sha256$v1$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "pbkdf2-sha256$v1$50000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       ),
     ).toBe(true);
     expect(
       passwordNeedsRehash(
-        "pbkdf2-sha256$v1$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "pbkdf2-sha256$v1$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       ),
     ).toBe(false);
     expect(

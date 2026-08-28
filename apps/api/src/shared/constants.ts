@@ -14,7 +14,13 @@ export const INVITATION_TTL_DAYS = 7;
 // records without invalidating credentials.
 export const PASSWORD_HASH_SCHEME = "pbkdf2-sha256";
 export const PASSWORD_HASH_VERSION = "v1";
-export const PBKDF2_ITERATIONS = 600_000;
+// Deployed Workers reject PBKDF2 above 100k iterations as a DoS guard
+// (NotSupportedError from deriveBits; workerd issue #1346). Local workerd and
+// CI do not enforce the cap, so any higher value only fails in production:
+// hashPassword throws on register/reset and on the login rehash path.
+// Raising the work factor beyond this requires leaving Workers PBKDF2
+// (e.g. WASM Argon2id), not editing this constant.
+export const PBKDF2_ITERATIONS = 100_000;
 // Reject corrupted/hostile database records before they can force an
 // unbounded KDF. A future factor above this ceiling requires a format/version
 // rollout first, which keeps old deployments from silently accepting it.
