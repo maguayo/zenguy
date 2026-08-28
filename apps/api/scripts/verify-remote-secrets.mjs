@@ -114,6 +114,7 @@ export function validateRunnerAccessContract(contract, environment) {
   const expectedBootstrap = {
     primary: "RUNNER_API_TOKEN",
     fallback: "RUNNER_FALLBACK_API_TOKEN",
+    cf: "RUNNER_CF_API_TOKEN",
   };
   if (
     environment !== "production" ||
@@ -143,13 +144,13 @@ export function validateRunnerAccessContract(contract, environment) {
     selected.bypassPolicies.length !== 0 ||
     !isObject(identities) ||
     JSON.stringify(Object.keys(identities).sort()) !==
-      JSON.stringify(["fallback", "primary"])
+      JSON.stringify(["cf", "fallback", "primary"])
   ) {
     throw new Error(`Invalid runner Access contract for ${environment}`);
   }
 
   const serviceTokenNames = new Set();
-  for (const role of ["primary", "fallback"]) {
+  for (const role of ["primary", "fallback", "cf"]) {
     const identity = identities[role];
     if (
       !isObject(identity) ||
@@ -157,7 +158,10 @@ export function validateRunnerAccessContract(contract, environment) {
       identity.bootstrapBinding !== expectedBootstrap[role] ||
       typeof identity.serviceTokenName !== "string" ||
       identity.serviceTokenName !== `zenguy-${environment}-${role}-runner` ||
-      serviceTokenNames.has(identity.serviceTokenName)
+      serviceTokenNames.has(identity.serviceTokenName) ||
+      (role === "cf"
+        ? identity.commonNameBinding !== "RUNNER_CF_ACCESS_COMMON_NAME"
+        : identity.commonNameBinding !== undefined)
     ) {
       throw new Error(`Invalid runner Access contract for ${environment}`);
     }

@@ -79,6 +79,12 @@ test("requires a service-only runner Access contract with distinct role identiti
             workerId: "zenguy-production-fallback",
             bootstrapBinding: "RUNNER_FALLBACK_API_TOKEN",
           },
+          cf: {
+            serviceTokenName: "zenguy-production-cf-runner",
+            workerId: "zenguy-production-cf",
+            bootstrapBinding: "RUNNER_CF_API_TOKEN",
+            commonNameBinding: "RUNNER_CF_ACCESS_COMMON_NAME",
+          },
         },
       },
     },
@@ -92,6 +98,7 @@ test("requires a service-only runner Access contract with distinct role identiti
     serviceTokenNames: [
       "zenguy-production-primary-runner",
       "zenguy-production-fallback-runner",
+      "zenguy-production-cf-runner",
     ],
   });
   assert.throws(
@@ -141,6 +148,26 @@ test("requires a service-only runner Access contract with distinct role identiti
                   serviceTokenName: "zenguy-production-primary-runner",
                 },
               },
+            },
+          },
+        },
+        "production",
+      ),
+    /Invalid runner Access contract/u,
+  );
+  const withoutCf = {
+    ...contract.environments.production.identities,
+  };
+  delete withoutCf.cf;
+  assert.throws(
+    () =>
+      validateRunnerAccessContract(
+        {
+          ...contract,
+          environments: {
+            production: {
+              ...contract.environments.production,
+              identities: withoutCf,
             },
           },
         },
