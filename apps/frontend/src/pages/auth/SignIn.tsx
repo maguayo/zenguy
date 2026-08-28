@@ -10,7 +10,6 @@ import { Input } from "../../components/ui/Input";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
-import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 
@@ -23,7 +22,6 @@ type SignInValues = z.infer<typeof signInSchema>;
 
 export default function SignIn() {
   const { signIn } = useAuth();
-  const toast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const form = useForm<SignInValues>({
@@ -43,7 +41,9 @@ export default function SignIn() {
       } else if (error instanceof ApiError && error.code === "RATE_LIMITED") {
         form.setError("root", { message: "Too many attempts. Try again in a moment." });
       } else {
-        toast.error(apiErrorMessage(error));
+        // A blocking form action reports failure inline; a transient toast is
+        // easy to miss and leaves the form looking like nothing happened.
+        form.setError("root", { message: apiErrorMessage(error) });
       }
     }
   });

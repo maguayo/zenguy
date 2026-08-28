@@ -11,7 +11,6 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { fieldError } from "../../components/ui/form";
-import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
 import {
   isAcceptableNewPassword,
@@ -49,7 +48,6 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 
 export default function SignUp() {
   const navigate = useNavigate();
-  const toast = useToast();
   const form = useForm<SignUpValues>({
     defaultValues: {
       acceptedPrivacy: false,
@@ -76,7 +74,9 @@ export default function SignUp() {
         state: { email: pending.email },
       });
     } catch (error) {
-      toast.error(apiErrorMessage(error));
+      // A blocking form action reports failure inline; a transient toast is
+      // easy to miss and leaves the form looking like nothing happened.
+      form.setError("root", { message: apiErrorMessage(error) });
     }
   });
 
