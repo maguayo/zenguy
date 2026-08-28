@@ -304,6 +304,25 @@ test("accepts only metadata for non-exportable AES-256-GCM secret_key bindings",
   );
   assert.deepEqual(invalidKeyBindings(required, valid), []);
 
+  // Real `wrangler secret list` output carries only {name, type}.
+  const cliShaped = parseSecretList(
+    JSON.stringify([
+      { name: "KMS_KEY_2026_08", type: "secret_key" },
+      { name: "KMS_KEY_2026_01", type: "secret_key" },
+    ]),
+  );
+  assert.deepEqual(invalidKeyBindings(required, cliShaped), []);
+
+  const wrongFormat = new Map(valid);
+  wrongFormat.set("KMS_KEY_2026_08", {
+    name: "KMS_KEY_2026_08",
+    type: "secret_key",
+    format: "jwk",
+  });
+  assert.deepEqual(invalidKeyBindings(required, wrongFormat), [
+    "KMS_KEY_2026_08",
+  ]);
+
   const wrongType = new Map(valid);
   wrongType.set("KMS_KEY_2026_08", {
     name: "KMS_KEY_2026_08",

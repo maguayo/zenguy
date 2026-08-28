@@ -290,16 +290,22 @@ export function invalidKeyBindings(required, available) {
       invalid.push(binding);
       continue;
     }
+    // `wrangler secret list` reports only {name, type}; format, algorithm and
+    // usages travel exclusively in richer API metadata. Enforce each field
+    // when present rather than failing on its absence, so the preflight can
+    // pass against the CLI listing while still rejecting a malformed binding.
     const usages = Array.isArray(metadata.usages)
       ? new Set(metadata.usages)
       : new Set();
     if (
       metadata.type !== "secret_key" ||
-      metadata.format !== "raw" ||
-      !isAesGcmAlgorithm(metadata.algorithm) ||
-      usages.size !== 2 ||
-      !usages.has("encrypt") ||
-      !usages.has("decrypt") ||
+      (Object.hasOwn(metadata, "format") && metadata.format !== "raw") ||
+      (Object.hasOwn(metadata, "algorithm") &&
+        !isAesGcmAlgorithm(metadata.algorithm)) ||
+      (Object.hasOwn(metadata, "usages") &&
+        (usages.size !== 2 ||
+          !usages.has("encrypt") ||
+          !usages.has("decrypt"))) ||
       Object.hasOwn(metadata, "key_base64") ||
       Object.hasOwn(metadata, "key_jwk") ||
       Object.hasOwn(metadata, "text")
