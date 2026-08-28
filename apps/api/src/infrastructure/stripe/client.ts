@@ -134,13 +134,18 @@ export class HttpStripeClient implements BillingProviderClient {
             ? {}
             : { "Idempotency-Key": init.idempotencyKey }),
         },
-        redirect: "error",
+        // workerd's fetch rejects `redirect: "error"` with a synchronous
+        // TypeError; "manual" keeps the same posture because a 3xx surfaces
+        // below as !response.ok and fails the request instead of following.
+        redirect: "manual",
         signal: externalProviderSignal(),
       });
     } catch (error) {
       logEvent("stripe_request_failed", {
         operation,
         durationMs: Date.now() - startedAt,
+        // Name only: provider/runtime error messages may embed request data.
+        errorName: error instanceof Error ? error.name : "unknown",
       });
       throw error;
     }
