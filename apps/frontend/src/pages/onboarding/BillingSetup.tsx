@@ -72,6 +72,17 @@ export function PlanDetails() {
   );
 }
 
+export function ActionErrorNotice({ message }: { message: string }) {
+  return (
+    <p
+      className="mb-3 rounded-md border border-danger-600/20 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
 export default function BillingSetup() {
   const { wsId = "" } = useParams();
   const toast = useToast();
@@ -80,6 +91,7 @@ export default function BillingSetup() {
   const queryClient = useQueryClient();
   const activationInFlight = useRef(false);
   const [phase, setPhase] = useState<ActivationPhase>("idle");
+  const [actionError, setActionError] = useState<string | null>(null);
   const workspaceQuery = useQuery({
     enabled: Boolean(wsId),
     queryFn: () => getWorkspace(wsId),
@@ -101,6 +113,7 @@ export default function BillingSetup() {
     if (activationInFlight.current) return;
     activationInFlight.current = true;
     setPhase("activating");
+    setActionError(null);
     try {
       const active = await pollUntilActive(() => getBilling(wsId));
       if (!active) {
@@ -116,7 +129,9 @@ export default function BillingSetup() {
       navigate(`/w/${wsId}/overview`, { replace: true });
     } catch (error) {
       setPhase("idle");
-      toast.error(apiErrorMessage(error));
+      // A blocking action reports failure inline; a transient toast is easy
+      // to miss and leaves the page looking like nothing happened.
+      setActionError(apiErrorMessage(error));
     } finally {
       activationInFlight.current = false;
     }
@@ -130,6 +145,7 @@ export default function BillingSetup() {
 
   const startCheckout = async () => {
     setPhase("opening");
+    setActionError(null);
     try {
       await getBillingConfig();
       const checkout = await startSubscriptionCheckout(wsId);
@@ -140,7 +156,9 @@ export default function BillingSetup() {
       window.location.assign(url);
     } catch (error) {
       setPhase("idle");
-      toast.error(apiErrorMessage(error));
+      // A blocking action reports failure inline; a transient toast is easy
+      // to miss and leaves the page looking like nothing happened.
+      setActionError(apiErrorMessage(error));
     }
   };
 
@@ -208,6 +226,7 @@ export default function BillingSetup() {
       <PlanDetails />
 
       <div className="mt-6">
+        {actionError ? <ActionErrorNotice message={actionError} /> : null}
         {phase === "activating" ? (
           <div className="flex items-center justify-center gap-2 rounded-md bg-info-50 px-3 py-3 text-sm font-medium text-info-600">
             <Spinner label="Activating subscription" />

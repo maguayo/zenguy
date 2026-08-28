@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Billing } from "../../api/types";
-import { PlanDetails, pollUntilActive } from "./BillingSetup";
+import { ActionErrorNotice, PlanDetails, pollUntilActive } from "./BillingSetup";
 
 function billing(status: Billing["subscription"]["status"]): Billing {
   return {
@@ -48,6 +48,14 @@ describe("billing onboarding", () => {
     ]) {
       expect(html).toContain(copy);
     }
+  });
+
+  it("announces a failed action inline instead of relying on a toast", () => {
+    const html = renderToStaticMarkup(
+      <ActionErrorNotice message="Internal error" />,
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Internal error");
   });
 
   it("polls until the subscription becomes active", async () => {
