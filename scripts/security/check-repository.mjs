@@ -1164,7 +1164,9 @@ const resetPasswordUseCase = readFileSync(
 for (const invariant of [
   'PASSWORD_HASH_SCHEME = "pbkdf2-sha256"',
   'PASSWORD_HASH_VERSION = "v1"',
-  "PBKDF2_ITERATIONS = 600_000",
+  // 100k is the deployed-Workers PBKDF2 ceiling (NotSupportedError above it);
+  // the gate pins the platform maximum, not the OWASP figure. See constants.ts.
+  "PBKDF2_ITERATIONS = 100_000",
   "PBKDF2_MAX_VERIFY_ITERATIONS = 1_200_000",
   "MIN_PASSWORD_LENGTH = 15",
 ]) {
