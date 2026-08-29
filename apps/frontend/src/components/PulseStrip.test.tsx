@@ -102,6 +102,22 @@ describe("PulseStrip", () => {
     expect(html).toContain("h-6");
     expect(html).toContain("w-full");
   });
+
+  it("supports a compact density without removing run links", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <PulseStrip
+          density="compact"
+          runs={[tick("run_1", "PASSED"), tick("run_2", "RUNNING", null)]}
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("h-[18px]");
+    expect(html).toContain("gap-0.5");
+    expect(html).toContain('href="/w/ws_1/runs/run_1"');
+    expect(html).toContain('href="/w/ws_1/runs/run_2"');
+  });
 });
 
 describe("CheckPulseStrip", () => {

@@ -6,6 +6,7 @@ import { formatRelative } from "../lib/format";
 
 export interface PulseStripProps {
   className?: string;
+  density?: "compact" | "prominent";
   /** Number of slots; missing history renders as quiet placeholders. */
   max?: number;
   /** Oldest first; the last tick is the most recent run. */
@@ -158,10 +159,17 @@ function VisualPulseStrip({
  * coloured by result, newest on the right, breathing while work is in
  * progress. Each tick opens its run.
  */
-export function PulseStrip({ className, max = 20, runs, workspaceId }: PulseStripProps) {
+export function PulseStrip({
+  className,
+  density = "prominent",
+  max = 20,
+  runs,
+  workspaceId,
+}: PulseStripProps) {
   return (
     <VisualPulseStrip
       className={className}
+      density={density}
       max={max}
       ticks={runs.map((run) => ({
         className: tickTone[run.status].className,

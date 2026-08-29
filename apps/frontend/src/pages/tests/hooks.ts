@@ -16,7 +16,8 @@ export const irreversibleRunApprovalCopy =
   "You attest that all credentials and data are staging/test-only and authorize the configured exact, one-shot irreversible action scopes for this run.";
 
 export function isActiveRun(test: BrowserTest): boolean {
-  return test.lastRun?.status === "QUEUED" || test.lastRun?.status === "RUNNING";
+  const status = test.recentRuns?.at(-1)?.status ?? test.lastRun?.status;
+  return status === "QUEUED" || status === "RUNNING";
 }
 
 export interface UseRunNowResult {

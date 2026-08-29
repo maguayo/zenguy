@@ -6,12 +6,14 @@ import type { BrowserTest } from "../../api/types";
 import { ApiError } from "../../lib/api";
 import {
   TestRowContent,
-  alertChannelsLabel,
   importErrorMessage,
   importSummaryMessage,
+  runHistoryCaption,
   runSourceLabel,
   testHost,
+  testIntervalLabel,
   testListHeaders,
+  testStatus,
 } from "./TestsListPage";
 
 const test: BrowserTest = {
@@ -27,7 +29,7 @@ const test: BrowserTest = {
   name: "Checkout",
   nextRunAt: "2026-08-19T16:00:00.000Z",
   notifyOnRecovery: true,
-  openIncidentId: "incident_1",
+  openIncidentId: null,
   recentRuns: [],
   startUrl: "https://example.com",
   updatedAt: "2026-08-19T10:00:00.000Z",
@@ -64,14 +66,15 @@ describe("import feedback", () => {
 describe("browser tests list", () => {
   it("keeps the required column order", () => {
     expect(testListHeaders).toEqual([
+      "Status",
       "Test",
-      "History",
-      "Next run",
-      "Alerts",
+      "Every",
+      "Last run",
+      "Last 20 runs",
     ]);
   });
 
-  it("draws the run history strip with a pass-rate caption", () => {
+  it("draws compact linked history with a pass-rate caption", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TestRowContent
@@ -89,8 +92,11 @@ describe("browser tests list", () => {
     );
     expect(html).toContain('href="/w/ws_1/runs/run_a"');
     expect(html).toContain('href="/w/ws_1/runs/run_b"');
+    expect(html).toContain('aria-label="Failed ·');
+    expect(html).toContain('aria-label="Passed ·');
     expect(html).toContain("bg-danger-600");
     expect(html).toContain("bg-ok-600");
+    expect(html).toContain("h-[18px]");
     expect(html).toContain("1/2 passed");
   });
 
@@ -101,37 +107,35 @@ describe("browser tests list", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("No runs yet");
+    expect(html).toContain("Not run yet");
   });
 
-  it("renders a rich identity, schedule, and incident state", () => {
+  it("renders a concise identity and schedule", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TestRowContent test={test} timezone="Europe/Madrid" workspaceId="ws_1" />
       </MemoryRouter>,
     );
     expect(html).toContain("Checkout");
-    expect(html).toContain(">example.com<");
-    expect(html).toContain("Desktop");
-    expect(html).toContain("Every 6 hours");
+    expect(html).toContain("Desktop · example.com");
+    expect(html).toContain("6 h");
+    expect(html).toContain("Next ");
     expect(html).toContain("Not run yet");
-    expect(html).toContain("No alert channels");
-    expect(html).toContain("/w/ws_1/incidents/incident_1");
-    expect(html).toContain("Open incident");
+    expect(html).toContain("Waiting for first run");
   });
 
-  it("shows completed-run duration, source, and clear alert coverage", () => {
+  it("shows completed-run status, duration, source, and retry result", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TestRowContent
           test={{
             ...test,
-            channelIds: ["ch_email", "ch_push"],
             lastRun: {
               createdAt: "2026-08-19T09:58:00.000Z",
               durationMs: 90_000,
               finishedAt: "2026-08-19T10:00:00.000Z",
               id: "run_1",
-              passedAfterRetry: false,
+              passedAfterRetry: true,
               source: "SCHEDULED",
               startedAt: "2026-08-19T09:58:30.000Z",
               status: "PASSED",
@@ -144,13 +148,12 @@ describe("browser tests list", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Passed");
+    expect(html).toContain("Passed after retry");
     expect(html).toContain("1m 30s");
     expect(html).toContain("Scheduled");
-    expect(html).toContain("All clear");
-    expect(html).toContain("2 alert channels");
   });
 
-  it("does not call a failed test clear before an incident exists", () => {
+  it("keeps the failure in the dedicated status cell", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TestRowContent
@@ -174,8 +177,51 @@ describe("browser tests list", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Failed");
-    expect(html).toContain("No open incident");
-    expect(html).not.toContain("All clear");
+    expect(html).not.toContain("Incident");
+  });
+
+  it("prioritises the newest active run over the last completed result", () => {
+    const activeTest: BrowserTest = {
+      ...test,
+      lastRun: {
+        createdAt: "2026-08-19T09:58:00.000Z",
+        durationMs: 90_000,
+        finishedAt: "2026-08-19T10:00:00.000Z",
+        id: "run_passed",
+        passedAfterRetry: false,
+        source: "SCHEDULED",
+        startedAt: "2026-08-19T09:58:30.000Z",
+        status: "PASSED",
+      },
+      recentRuns: [
+        { finishedAt: "2026-08-19T10:00:00.000Z", id: "run_passed", status: "PASSED" },
+        { finishedAt: null, id: "run_running", status: "RUNNING" },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent test={activeTest} timezone="Europe/Madrid" workspaceId="ws_1" />
+      </MemoryRouter>,
+    );
+    expect(testStatus(activeTest)).toBe("RUNNING");
+    expect(html).toContain("Running");
+    expect(html).toContain("1m 30s · Scheduled");
+    expect(html).toContain("animate-pulse");
+  });
+
+  it("describes an active first run without claiming there is no history", () => {
+    const activeTest: BrowserTest = {
+      ...test,
+      recentRuns: [{ finishedAt: null, id: "run_queued", status: "QUEUED" }],
+    };
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent test={activeTest} timezone="Europe/Madrid" workspaceId="ws_1" />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Queued");
+    expect(html).toContain("Run in progress");
+    expect(html).not.toContain("Not run yet");
   });
 
   it("uses safe host and metadata labels", () => {
@@ -183,9 +229,14 @@ describe("browser tests list", () => {
       "example.com",
     );
     expect(testHost("not a url")).toBe("Unknown host");
-    expect(alertChannelsLabel(0)).toBe("No alert channels");
-    expect(alertChannelsLabel(1)).toBe("1 alert channel");
-    expect(alertChannelsLabel(3)).toBe("3 alert channels");
+    expect(testIntervalLabel(1)).toBe("1 h");
+    expect(testIntervalLabel(6)).toBe("6 h");
+    expect(testIntervalLabel(0)).toBe("—");
+    expect(runHistoryCaption([])).toBe("No runs yet");
+    expect(runHistoryCaption([{ status: "RUNNING" }])).toBe("Run in progress");
+    expect(runHistoryCaption([{ status: "SYSTEM_ERROR" }])).toBe(
+      "No completed runs",
+    );
     expect(runSourceLabel("MANUAL")).toBe("Manual");
     expect(runSourceLabel("VALIDATION")).toBe("Validation");
   });

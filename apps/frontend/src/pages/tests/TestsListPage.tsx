@@ -1,12 +1,8 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bell,
-  CalendarClock,
-  CheckCircle2,
   CircleAlert,
   Download,
-  Globe2,
   Laptop,
   MoreHorizontal,
   Play,
@@ -25,7 +21,7 @@ import {
   type ExportFormat,
   type ImportTestsSummary,
 } from "../../api/tests";
-import type { BrowserTest, RunSource } from "../../api/types";
+import type { BrowserTest, RunSource, RunStatus } from "../../api/types";
 import { passRateLabel, PulseStrip } from "../../components/PulseStrip";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
@@ -47,7 +43,6 @@ import { apiErrorMessage } from "../../lib/errors";
 import {
   formatDateTime,
   formatDuration,
-  formatInterval,
   formatRelative,
 } from "../../lib/format";
 import { isActiveRun, useRunNow } from "./hooks";
@@ -161,14 +156,15 @@ function TestActions({ test }: { test: BrowserTest }) {
 }
 
 export const testListHeaders = [
+  "Status",
   "Test",
-  "History",
-  "Next run",
-  "Alerts",
+  "Every",
+  "Last run",
+  "Last 20 runs",
 ] as const;
 
 export const testListGrid =
-  "min-[1200px]:grid-cols-[minmax(175px,1fr)_minmax(240px,1.5fr)_minmax(105px,0.62fr)_minmax(110px,0.68fr)_112px]";
+  "min-[1200px]:grid-cols-[128px_minmax(165px,1.05fr)_78px_126px_minmax(165px,1fr)_112px]";
 
 export function testHost(url: string): string {
   try {
@@ -178,9 +174,9 @@ export function testHost(url: string): string {
   }
 }
 
-export function alertChannelsLabel(count: number): string {
-  if (count === 0) return "No alert channels";
-  return `${count} alert ${count === 1 ? "channel" : "channels"}`;
+export function testIntervalLabel(hours: number): string {
+  if (!Number.isFinite(hours) || hours <= 0) return "—";
+  return `${hours} h`;
 }
 
 export function runSourceLabel(source: RunSource): string {
@@ -194,21 +190,18 @@ export function runSourceLabel(source: RunSource): string {
   }
 }
 
-function indicatorClass(test: BrowserTest): string {
-  if (test.openIncidentId) return "bg-danger-600";
-  switch (test.lastRun?.status) {
-    case "PASSED":
-      return "bg-ok-600";
-    case "FAILED":
-      return "bg-danger-600";
-    case "TIMEOUT":
-      return "bg-warn-600";
-    case "QUEUED":
-    case "RUNNING":
-      return "bg-info-600 motion-safe:animate-pulse";
-    default:
-      return "bg-zinc-400";
+export function testStatus(test: BrowserTest): RunStatus | null {
+  return test.recentRuns?.at(-1)?.status ?? test.lastRun?.status ?? null;
+}
+
+export function runHistoryCaption(runs: readonly { status: RunStatus }[]): string {
+  const rate = passRateLabel(runs);
+  if (rate) return rate;
+  if (runs.length === 0) return "No runs yet";
+  if (runs.some((run) => run.status === "QUEUED" || run.status === "RUNNING")) {
+    return "Run in progress";
   }
+  return "No completed runs";
 }
 
 function MobileCellLabel({ children }: { children: string }) {
@@ -233,131 +226,109 @@ export function TestRowContent({
   const lastRunAt =
     test.lastRun?.finishedAt ?? test.lastRun?.startedAt ?? test.lastRun?.createdAt;
   const recentRuns = (test.recentRuns ?? []).slice(-20);
+  const currentStatus = testStatus(test);
+  const latestRun = recentRuns.at(-1);
+  const historyLabel = runHistoryCaption(recentRuns);
+  const lastRunDetails = test.lastRun
+    ? [
+        test.lastRun.durationMs === null
+          ? null
+          : formatDuration(test.lastRun.durationMs),
+        runSourceLabel(test.lastRun.source),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Waiting for first run";
 
   return (
     <>
-      <div className="min-w-0 pr-10 min-[1200px]:pr-0" role="cell">
-        <div className="flex items-start gap-3">
-          <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-700">
-            <DeviceIcon aria-hidden="true" className="size-5" />
-            <span
-              aria-hidden="true"
-              className={clsx(
-                "absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white",
-                indicatorClass(test),
-              )}
-            />
-          </span>
-          <div className="min-w-0 flex-1">
-            <Link
-              className="block truncate text-sm font-semibold text-zinc-950 hover:text-accent-700 hover:underline"
-              to={`/w/${workspaceId}/tests/${test.id}`}
-            >
-              {test.name}
-            </Link>
-            <p
-              className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-zinc-500"
-              title={testHost(test.startUrl)}
-            >
-              <Globe2 aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="truncate">{testHost(test.startUrl)}</span>
-            </p>
-            <p className="mt-1.5 text-xs text-zinc-500">{deviceLabel}</p>
-          </div>
-        </div>
-      </div>
-
       <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
+        className="col-span-2 flex flex-col items-start gap-1.5 pr-10 min-[480px]:col-span-1 min-[480px]:pr-0 min-[1200px]:col-span-1"
         role="cell"
       >
-        <MobileCellLabel>History</MobileCellLabel>
-        <div className="min-w-0 rounded-lg bg-zinc-50/90 p-2.5 ring-1 ring-inset ring-zinc-200">
-          <div className="flex min-h-6 flex-wrap items-center gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {test.lastRun ? (
-                <StatusBadge
-                  passedAfterRetry={test.lastRun.passedAfterRetry}
-                  status={test.lastRun.status}
-                />
-              ) : (
-                <Badge tone="neutral">Not run yet</Badge>
-              )}
-            </div>
-          </div>
-          <PulseStrip
-            className="mt-2.5 w-full"
-            runs={recentRuns}
-            workspaceId={workspaceId}
+        {currentStatus ? (
+          <StatusBadge
+            passedAfterRetry={Boolean(
+              test.lastRun?.passedAfterRetry &&
+                (latestRun === undefined || latestRun.id === test.lastRun.id),
+            )}
+            status={currentStatus}
           />
-          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="text-xs font-semibold tabular-nums text-zinc-700">
-              {passRateLabel(recentRuns) ?? "No runs yet"}
-            </p>
-            <span
-              className="whitespace-nowrap text-[11px] text-zinc-500"
-              title={lastRunAt ? formatDateTime(lastRunAt, timezone) : undefined}
-            >
-              {lastRunAt ? formatRelative(lastRunAt) : "Waiting for first run"}
-              {test.lastRun?.durationMs !== null && test.lastRun?.durationMs !== undefined
-                ? ` · ${formatDuration(test.lastRun.durationMs)}`
-                : null}
-              {test.lastRun ? ` · ${runSourceLabel(test.lastRun.source)}` : null}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
-        role="cell"
-      >
-        <MobileCellLabel>Next run</MobileCellLabel>
-        <div>
-          <p
-            className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
-            title={formatDateTime(test.nextRunAt, timezone)}
+        ) : (
+          <Badge tone="neutral">Not run yet</Badge>
+        )}
+        {test.openIncidentId ? (
+          <Link
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-700 hover:underline"
+            to={`/w/${workspaceId}/incidents/${test.openIncidentId}`}
           >
-            <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
-            {formatRelative(test.nextRunAt)}
-          </p>
-          <p className="mt-1.5 text-xs text-zinc-500">
-            {formatInterval(test.intervalHours)}
-          </p>
-        </div>
+            <CircleAlert aria-hidden="true" className="size-3" />
+            Incident
+          </Link>
+        ) : null}
       </div>
 
       <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
+        className="col-span-2 min-w-0 min-[480px]:col-span-1 min-[480px]:pr-10 min-[1200px]:col-span-1 min-[1200px]:pr-0"
         role="cell"
       >
-        <MobileCellLabel>Alerts</MobileCellLabel>
-        <div className="space-y-1.5">
-          {test.openIncidentId ? (
-            <Link
-              className="inline-flex"
-              to={`/w/${workspaceId}/incidents/${test.openIncidentId}`}
-            >
-              <Badge tone="danger">
-                <CircleAlert aria-hidden="true" className="size-3" />
-                Open incident
-              </Badge>
-            </Link>
-          ) : test.lastRun?.status === "PASSED" ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ok-700">
-              <CheckCircle2 aria-hidden="true" className="size-3.5" />
-              All clear
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
-              <CheckCircle2 aria-hidden="true" className="size-3.5 text-zinc-400" />
-              No open incident
-            </span>
-          )}
-          <p className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <Bell aria-hidden="true" className="size-3.5" />
-            {alertChannelsLabel(test.channelIds.length)}
-          </p>
+        <Link
+          className="block truncate text-sm font-semibold text-zinc-950 hover:text-accent-700 hover:underline"
+          to={`/w/${workspaceId}/tests/${test.id}`}
+        >
+          {test.name}
+        </Link>
+        <p
+          className="mt-1 flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-zinc-500"
+          title={`${deviceLabel} · ${testHost(test.startUrl)}`}
+        >
+          <DeviceIcon aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">
+            {deviceLabel} · {testHost(test.startUrl)}
+          </span>
+        </p>
+      </div>
+
+      <div className="min-w-0" role="cell">
+        <MobileCellLabel>Every</MobileCellLabel>
+        <p className="mt-1 font-mono text-sm tabular-nums text-zinc-800 min-[1200px]:mt-0">
+          {testIntervalLabel(test.intervalHours)}
+        </p>
+        <p
+          className="mt-1 whitespace-nowrap text-[11px] text-zinc-500"
+          title={formatDateTime(test.nextRunAt, timezone)}
+        >
+          Next {formatRelative(test.nextRunAt)}
+        </p>
+      </div>
+
+      <div className="min-w-0" role="cell">
+        <MobileCellLabel>Last run</MobileCellLabel>
+        <p
+          className="mt-1 whitespace-nowrap font-mono text-sm tabular-nums text-zinc-800 min-[1200px]:mt-0"
+          title={lastRunAt ? formatDateTime(lastRunAt, timezone) : undefined}
+        >
+          {lastRunAt ? formatRelative(lastRunAt) : "—"}
+        </p>
+        <p className="mt-1 truncate text-[11px] text-zinc-500" title={lastRunDetails}>
+          {lastRunDetails}
+        </p>
+      </div>
+
+      <div
+        className="col-span-2 min-w-0 min-[1200px]:col-span-1"
+        role="cell"
+      >
+        <MobileCellLabel>Last 20 runs</MobileCellLabel>
+        <PulseStrip
+          className="mt-2 w-full min-[1200px]:mt-0"
+          density="compact"
+          runs={recentRuns}
+          workspaceId={workspaceId}
+        />
+        <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-zinc-500 min-[1200px]:sr-only">
+          <span>{historyLabel}</span>
+          <span>Newest on right</span>
         </div>
       </div>
     </>
@@ -374,17 +345,22 @@ function TestsListSkeleton() {
     >
       <div className="divide-y divide-zinc-200">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="flex items-center gap-4 px-5 py-5">
-            <Skeleton className="size-11 shrink-0 rounded-xl" />
+          <div
+            key={index}
+            className={clsx(
+              "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 px-5 py-4",
+              testListGrid,
+            )}
+          >
+            <Skeleton className="h-6 w-20 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-4 w-44 max-w-full" />
               <Skeleton className="h-3 w-32 max-w-full" />
             </div>
-            <div className="hidden w-64 space-y-2 min-[1200px]:block">
-              <Skeleton className="h-6 w-full rounded" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-            <Skeleton className="hidden h-6 w-20 min-[1200px]:block" />
+            <Skeleton className="hidden h-5 w-12 min-[1200px]:block" />
+            <Skeleton className="hidden h-5 w-20 min-[1200px]:block" />
+            <Skeleton className="col-span-2 h-[18px] w-full min-[1200px]:col-span-1 min-[1200px]:block" />
+            <Skeleton className="hidden h-8 w-24 min-[1200px]:block" />
           </div>
         ))}
       </div>
@@ -401,13 +377,8 @@ function BrowserTestsList({
   timezone: string;
   workspaceId: string;
 }) {
-  const navigate = useNavigate();
-  const openTest = (testId: string) => {
-    navigate(`/w/${workspaceId}/tests/${testId}`);
-  };
-
   return (
-    <Card className="overflow-hidden" padding="none">
+    <Card className="overflow-hidden shadow-sm" padding="none">
       <div aria-label="Browser tests" role="table">
         <div
           className="sr-only min-[1200px]:not-sr-only min-[1200px]:block min-[1200px]:border-b min-[1200px]:border-zinc-200 min-[1200px]:bg-zinc-50"
@@ -415,23 +386,14 @@ function BrowserTestsList({
         >
           <div
             className={clsx(
-              "grid items-center gap-4 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500",
+              "grid items-center gap-4 px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-wide text-zinc-500",
               testListGrid,
             )}
             role="row"
           >
             {testListHeaders.map((header) => (
               <div key={header} role="columnheader">
-                {header === "History" ? (
-                  <span className="flex items-baseline gap-1.5">
-                    <span>{header}</span>
-                    <span className="text-[10px] font-normal normal-case tracking-normal text-zinc-400">
-                      latest 20
-                    </span>
-                  </span>
-                ) : (
-                  header
-                )}
+                {header}
               </div>
             ))}
             <div className="sr-only" role="columnheader">
@@ -444,19 +406,10 @@ function BrowserTestsList({
             <div
               key={test.id}
               className={clsx(
-                "relative grid cursor-pointer grid-cols-1 gap-x-4 gap-y-4 px-5 py-5 transition-colors hover:bg-zinc-50/80 min-[1200px]:items-center",
+                "relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4 px-5 py-4 transition-colors hover:bg-zinc-50/70 min-[1200px]:items-center",
                 testListGrid,
               )}
               role="row"
-              onClick={(event) => {
-                if (
-                  event.target instanceof Element &&
-                  event.target.closest("a, button")
-                ) {
-                  return;
-                }
-                openTest(test.id);
-              }}
             >
               <TestRowContent
                 test={test}
@@ -486,6 +439,7 @@ export default function TestsListPage() {
   const tests = useQuery({
     queryFn: () => listTests(current.id),
     queryKey: ["ws", current.id, "tests"],
+    refetchInterval: 30_000,
   });
   const importFile = useMutation({
     mutationFn: (text: string) => importTests(current.id, text),

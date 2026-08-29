@@ -34,16 +34,42 @@ describe("run-now flow", () => {
           ...test,
           lastRun: {
             createdAt: test.createdAt,
-            durationMs: null,
-            finishedAt: null,
-            id: "run_1",
+            durationMs: 20_000,
+            finishedAt: test.updatedAt,
+            id: "run_completed",
             passedAfterRetry: false,
-            source: "MANUAL",
-            startedAt: null,
-            status,
+            source: "SCHEDULED",
+            startedAt: test.createdAt,
+            status: "PASSED",
           },
+          recentRuns: [
+            {
+              finishedAt: test.updatedAt,
+              id: "run_completed",
+              status: "PASSED",
+            },
+            { finishedAt: null, id: "run_active", status },
+          ],
         }),
       ).toBe(true);
     }
+  });
+
+  it("keeps compatibility with an active lastRun when history is absent", () => {
+    expect(
+      isActiveRun({
+        ...test,
+        lastRun: {
+          createdAt: test.createdAt,
+          durationMs: null,
+          finishedAt: null,
+          id: "run_legacy",
+          passedAfterRetry: false,
+          source: "MANUAL",
+          startedAt: null,
+          status: "RUNNING",
+        },
+      }),
+    ).toBe(true);
   });
 });
