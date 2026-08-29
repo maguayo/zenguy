@@ -32,6 +32,14 @@ export const AUDIT_ACTIONS = {
   authPasswordReset: "auth.password_reset",
   apiKeyCreated: "api_key.created",
   apiKeyRevoked: "api_key.revoked",
+  statusPageCreated: "status_page.created",
+  statusPageUpdated: "status_page.updated",
+  statusPagePublished: "status_page.published",
+  statusPageUnpublished: "status_page.unpublished",
+  statusPageDeleted: "status_page.deleted",
+  statusPageItemsChanged: "status_page.items_changed",
+  incidentUpdatePosted: "incident.update_posted",
+  incidentUpdateDeleted: "incident.update_deleted",
 } as const;
 
 export type AuditAction =

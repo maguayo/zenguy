@@ -3,6 +3,7 @@ import { ensureActiveSubscription } from "../billing/ensure_active_subscription"
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { BrowserTestRepo } from "../../domain/browser_tests/repo";
+import type { StatusPageItemRepo } from "../../domain/status_pages/repo";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
 import type { User } from "../../domain/users/types";
@@ -15,6 +16,10 @@ export class DeleteBrowserTest {
     private readonly tests: BrowserTestRepo,
     private readonly subscriptions: SubscriptionRepo,
     private readonly incidents: IncidentCloserOnDelete,
+    private readonly statusPageItems: Pick<
+      StatusPageItemRepo,
+      "removeForResource"
+    >,
     private readonly audit: Pick<WriteAudit, "execute">,
     private readonly clock: Clock,
   ) {}
@@ -41,6 +46,7 @@ export class DeleteBrowserTest {
       testId: test.id,
       at: now,
     });
+    await this.statusPageItems.removeForResource({ browserTestId: test.id });
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,

@@ -66,6 +66,14 @@ export const ACTIVITY_EVENTS = {
   billingGrantIssued: "billing.grant_issued",
   billingGrantRedeemed: "billing.grant_redeemed",
   pushDeviceRegistered: "push_device.registered",
+  statusPageCreated: "status_page.created",
+  statusPageUpdated: "status_page.updated",
+  statusPagePublished: "status_page.published",
+  statusPageUnpublished: "status_page.unpublished",
+  statusPageDeleted: "status_page.deleted",
+  statusPageItemsChanged: "status_page.items_changed",
+  incidentUpdatePosted: "incident.update_posted",
+  incidentUpdateDeleted: "incident.update_deleted",
 } as const;
 
 export type ActivityEventType =
@@ -165,6 +173,14 @@ export const ACTIVITY_EVENT_SPECS: Record<ActivityEventType, ActivityEventSpec> 
   "billing.grant_issued": spec("workspace", "subscription_grant"),
   "billing.grant_redeemed": spec("workspace", "subscription_grant"),
   "push_device.registered": spec("user", "push_device"),
+  "status_page.created": spec("workspace", "status_page"),
+  "status_page.updated": spec("workspace", "status_page"),
+  "status_page.published": spec("workspace", "status_page"),
+  "status_page.unpublished": spec("workspace", "status_page"),
+  "status_page.deleted": spec("workspace", "status_page"),
+  "status_page.items_changed": spec("workspace", "status_page"),
+  "incident.update_posted": spec("workspace", "incident"),
+  "incident.update_deleted": spec("workspace", "incident"),
 };
 
 /** Audited mutations are bridged into activity by `WriteAudit`; exhaustive by type. */
@@ -204,6 +220,14 @@ export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> = {
   [AUDIT_ACTIONS.authPasswordReset]: ACTIVITY_EVENTS.userPasswordReset,
   [AUDIT_ACTIONS.apiKeyCreated]: ACTIVITY_EVENTS.apiKeyCreated,
   [AUDIT_ACTIONS.apiKeyRevoked]: ACTIVITY_EVENTS.apiKeyRevoked,
+  [AUDIT_ACTIONS.statusPageCreated]: ACTIVITY_EVENTS.statusPageCreated,
+  [AUDIT_ACTIONS.statusPageUpdated]: ACTIVITY_EVENTS.statusPageUpdated,
+  [AUDIT_ACTIONS.statusPagePublished]: ACTIVITY_EVENTS.statusPagePublished,
+  [AUDIT_ACTIONS.statusPageUnpublished]: ACTIVITY_EVENTS.statusPageUnpublished,
+  [AUDIT_ACTIONS.statusPageDeleted]: ACTIVITY_EVENTS.statusPageDeleted,
+  [AUDIT_ACTIONS.statusPageItemsChanged]: ACTIVITY_EVENTS.statusPageItemsChanged,
+  [AUDIT_ACTIONS.incidentUpdatePosted]: ACTIVITY_EVENTS.incidentUpdatePosted,
+  [AUDIT_ACTIONS.incidentUpdateDeleted]: ACTIVITY_EVENTS.incidentUpdateDeleted,
 };
 
 export function isActivityEventType(value: string): value is ActivityEventType {

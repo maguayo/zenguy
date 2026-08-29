@@ -3,6 +3,7 @@ import { ensureActiveSubscription } from "../billing/ensure_active_subscription"
 import { AUDIT_ACTIONS } from "../../domain/audit/actions";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type { IncidentEventRepo, IncidentRepo } from "../../domain/incidents/repo";
+import type { StatusPageItemRepo } from "../../domain/status_pages/repo";
 import type { MonitorRepo } from "../../domain/uptime/repo";
 import type { User } from "../../domain/users/types";
 import { can } from "../../domain/workspaces/permissions";
@@ -16,6 +17,10 @@ export class DeleteMonitor {
     private readonly monitors: MonitorRepo,
     private readonly incidents: IncidentRepo,
     private readonly events: IncidentEventRepo,
+    private readonly statusPageItems: Pick<
+      StatusPageItemRepo,
+      "removeForResource"
+    >,
     private readonly subscriptions: SubscriptionRepo,
     private readonly audit: Pick<WriteAudit, "execute">,
     private readonly clock: Clock,
@@ -42,6 +47,9 @@ export class DeleteMonitor {
     if (monitor === null) throw notFound("Uptime monitor");
     const now = this.clock.now();
     await this.monitors.softDelete(monitor.id, now);
+    await this.statusPageItems.removeForResource({
+      uptimeMonitorId: monitor.id,
+    });
     const incident = await this.incidents.findOpenForMonitor(monitor.id);
     if (incident !== null && incident.workspaceId === input.workspaceId) {
       await this.incidents.resolve(incident.id, now, {});

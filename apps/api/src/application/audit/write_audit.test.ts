@@ -129,6 +129,14 @@ describe("WriteAudit", () => {
         "alerts.settings_updated",
         "alerts.credit_topup",
         "alerts.credit_adjusted",
+        "status_page.created",
+        "status_page.updated",
+        "status_page.published",
+        "status_page.unpublished",
+        "status_page.deleted",
+        "status_page.items_changed",
+        "incident.update_posted",
+        "incident.update_deleted",
       ].sort(),
     );
   });

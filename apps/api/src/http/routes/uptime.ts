@@ -22,6 +22,7 @@ import {
   monitorConfigUpdateSchema,
   type MonitorConfig,
 } from "../../domain/uptime/rules";
+import type { StatusPageItemRepo } from "../../domain/status_pages/repo";
 import type { CheckRepo, MonitorRepo } from "../../domain/uptime/repo";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
@@ -55,6 +56,7 @@ export interface UptimeRoutesDependencies {
   checks: CheckRepo;
   incidents: IncidentRepo;
   incidentEvents: IncidentEventRepo;
+  statusPageItems: Pick<StatusPageItemRepo, "removeForResource">;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
   track?: Pick<TrackEvent, "execute">;
@@ -121,6 +123,7 @@ export function uptimeRoutes(
     dependencies.monitors,
     dependencies.incidents,
     dependencies.incidentEvents,
+    dependencies.statusPageItems,
     dependencies.subscriptions,
     dependencies.audit,
     dependencies.clock,

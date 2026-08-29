@@ -35,6 +35,14 @@ const ACTION_USE_CASES = {
   alertsSettingsUpdated: "../alerts/update_alert_settings.ts",
   alertsCreditTopup: "../billing/handle_paddle_webhook.ts",
   alertsCreditAdjusted: "../billing/handle_paddle_webhook.ts",
+  statusPageCreated: "../status_pages/create_status_page.ts",
+  statusPageUpdated: "../status_pages/update_status_page.ts",
+  statusPagePublished: "../status_pages/publish_status_page.ts",
+  statusPageUnpublished: "../status_pages/publish_status_page.ts",
+  statusPageDeleted: "../status_pages/delete_status_page.ts",
+  statusPageItemsChanged: "../status_pages/add_item.ts",
+  incidentUpdatePosted: "../incidents/post_incident_update.ts",
+  incidentUpdateDeleted: "../incidents/delete_incident_update.ts",
 } as const satisfies Record<keyof typeof AUDIT_ACTIONS, string>;
 
 describe("audit action wiring", () => {

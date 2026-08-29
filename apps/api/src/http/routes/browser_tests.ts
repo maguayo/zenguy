@@ -11,6 +11,7 @@ import { GetBrowserTest } from "../../application/browser_tests/get_browser_test
 import { GetRun } from "../../application/browser_tests/get_run";
 import { ImportBrowserTests } from "../../application/browser_tests/import_tests";
 import type { IncidentCloserOnDelete } from "../../application/browser_tests/incident_closer";
+import type { StatusPageItemRepo } from "../../domain/status_pages/repo";
 import { ListBrowserTests } from "../../application/browser_tests/list_browser_tests";
 import { ListRuns } from "../../application/browser_tests/list_runs";
 import { RunNow } from "../../application/browser_tests/run_now";
@@ -78,6 +79,7 @@ export interface BrowserTestRoutesDependencies {
   artifacts: ArtifactRepo;
   artifactStorage: Pick<ArtifactStorage, "get">;
   incidents: IncidentCloserOnDelete;
+  statusPageItems: Pick<StatusPageItemRepo, "removeForResource">;
   durableWorkflows: Pick<DurableWorkflowRepo, "insertRunWithAttempt">;
   outboxPublisher: Pick<PublishQueueOutbox, "publishById">;
   rateLimiter: RateLimiter;
@@ -192,6 +194,7 @@ export function browserTestRoutes(
     dependencies.tests,
     dependencies.subscriptions,
     dependencies.incidents,
+    dependencies.statusPageItems,
     dependencies.audit,
     dependencies.clock,
   );
