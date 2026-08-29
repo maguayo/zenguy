@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
+  Signal,
   Siren,
   Users,
 } from "lucide-react";
@@ -34,6 +35,7 @@ export const navigationItems: NavigationItem[] = [
   { icon: Globe, label: "Browser Tests", path: "tests" },
   { icon: Activity, label: "Uptime", path: "uptime" },
   { icon: Siren, label: "Incidents", path: "incidents" },
+  { icon: Signal, label: "Status Pages", path: "status-pages" },
   { icon: Bell, label: "Alerts", path: "alerts" },
   { icon: KeyRound, label: "Secrets", path: "secrets" },
   { icon: Users, label: "Members", path: "members" },

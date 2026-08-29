@@ -57,6 +57,12 @@ const NewMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
 const MonitorDetailPage = lazy(() => import("./pages/uptime/MonitorDetailPage"));
 const EditMonitorPage = lazy(() => import("./pages/uptime/MonitorFormPage"));
 const IncidentsPage = lazy(() => import("./pages/incidents/IncidentsPage"));
+const StatusPagesListPage = lazy(
+  () => import("./pages/status_pages/StatusPagesListPage"),
+);
+const StatusPageEditorPage = lazy(
+  () => import("./pages/status_pages/StatusPageEditorPage"),
+);
 const IncidentDetailPage = lazy(() => import("./pages/incidents/IncidentDetailPage"));
 const ChannelsPage = lazy(() => import("./pages/notifications/ChannelsPage"));
 const PaidAlertsPage = lazy(() => import("./pages/alerts/PaidAlertsPage"));
@@ -186,6 +192,11 @@ function AppRoutes() {
             <Route element={<EditMonitorPage />} path="uptime/:monitorId/edit" />
             <Route element={<IncidentsPage />} path="incidents" />
             <Route element={<IncidentDetailPage />} path="incidents/:incidentId" />
+            <Route element={<StatusPagesListPage />} path="status-pages" />
+            <Route
+              element={<StatusPageEditorPage />}
+              path="status-pages/:pageId"
+            />
             <Route element={<ChannelsPage />} path="alerts" />
             <Route element={<PaidAlertsPage />} path="alerts/sms-calls" />
             <Route element={<LegacyNotificationsRedirect />} path="notifications" />

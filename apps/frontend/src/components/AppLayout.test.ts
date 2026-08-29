@@ -43,6 +43,7 @@ describe("workspace navigation", () => {
       "Browser Tests",
       "Uptime",
       "Incidents",
+      "Status Pages",
       "Alerts",
       "Secrets",
       "Members",

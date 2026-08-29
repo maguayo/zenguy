@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { getIncident } from "../../api/incidents";
 import type { IncidentDelivery } from "../../api/types";
 import { IncidentTimeline } from "../../components/IncidentTimeline";
+import { PublicUpdatesPanel } from "./PublicUpdatesPanel";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
@@ -151,6 +152,8 @@ export default function IncidentDetailPage() {
           workspaceId={current.id}
         />
       </Card>
+
+      <PublicUpdatesPanel incidentId={incidentId} />
 
       <Card className="overflow-hidden" padding="none">
         <div className="px-4 pt-4">
