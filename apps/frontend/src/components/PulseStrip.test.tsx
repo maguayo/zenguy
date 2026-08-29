@@ -2,8 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
-import type { RunTick } from "../api/types";
-import { passRateLabel, PulseStrip } from "./PulseStrip";
+import type { CheckTick, RunTick } from "../api/types";
+import {
+  CheckPulseStrip,
+  passRateLabel,
+  PulseStrip,
+  RunHistoryStrip,
+} from "./PulseStrip";
 
 function tick(id: string, status: RunTick["status"], finishedAt: string | null = "2026-08-27T10:00:00.000Z"): RunTick {
   return { finishedAt, id, status };
@@ -13,6 +18,28 @@ function render(runs: RunTick[], max = 20): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <PulseStrip max={max} runs={runs} workspaceId="ws_1" />
+    </MemoryRouter>,
+  );
+}
+
+function check(
+  id: string,
+  status: CheckTick["status"],
+  checkedAt = "2026-08-27T10:00:00.000Z",
+): CheckTick {
+  return { checkedAt, id, status };
+}
+
+function renderChecks(checks: CheckTick[], max = 20): string {
+  return renderToStaticMarkup(<CheckPulseStrip checks={checks} max={max} />);
+}
+
+function renderHistory(
+  runs: Array<{ createdAt: string; id: string; status: RunTick["status"] }>,
+): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <RunHistoryStrip runs={runs} workspaceId="ws_1" />
     </MemoryRouter>,
   );
 }
@@ -69,6 +96,72 @@ describe("PulseStrip", () => {
     const active = render([tick("run_1", "RUNNING", null)]);
     expect(active).toContain('aria-label="Running · in progress"');
   });
+
+  it("uses a taller track that can fill its container", () => {
+    const html = render([tick("run_1", "PASSED")]);
+    expect(html).toContain("h-6");
+    expect(html).toContain("w-full");
+  });
+});
+
+describe("CheckPulseStrip", () => {
+  it("colours checks by result, oldest on the left", () => {
+    const html = renderChecks([
+      check("check_1", "FAILED"),
+      check("check_2", "PASSED"),
+      check("check_3", "FAILED"),
+    ]);
+    const firstFailure = html.indexOf("bg-danger-600");
+    const pass = html.indexOf("bg-ok-600");
+    const secondFailure = html.indexOf("bg-danger-600", firstFailure + 1);
+    expect(firstFailure).toBeGreaterThan(-1);
+    expect(pass).toBeGreaterThan(firstFailure);
+    expect(secondFailure).toBeGreaterThan(pass);
+  });
+
+  it("labels checks with their result and relative check time", () => {
+    const html = renderChecks([check("check_1", "PASSED")]);
+    expect(html).toMatch(/aria-label="Passed · [^"]+"/);
+    expect(html).toMatch(/title="Passed · [^"]+"/);
+  });
+
+  it("renders labelled ticks without links", () => {
+    const html = renderChecks([
+      check("check_1", "PASSED"),
+      check("check_2", "FAILED"),
+    ]);
+    expect(html.match(/role="img"/g)).toHaveLength(2);
+    expect(html).not.toContain("href=");
+    expect(html).not.toContain("<a");
+  });
+
+  it("pads missing history with the same quiet placeholders", () => {
+    const html = renderChecks([check("check_1", "PASSED")], 20);
+    expect(html.match(/aria-hidden="true"/g)).toHaveLength(19);
+    expect(html).toContain("bg-zinc-200/70");
+  });
+
+  it("keeps only the newest checks when history overflows", () => {
+    const checks = Array.from({ length: 25 }, (_, index) =>
+      check(`check_${index + 1}`, index < 5 ? "FAILED" : "PASSED"),
+    );
+    const html = renderChecks(checks, 20);
+    expect(html).not.toContain("bg-danger-600");
+    expect(html.match(/bg-ok-600/g)).toHaveLength(20);
+    expect(html.match(/role="img"/g)).toHaveLength(20);
+  });
+});
+
+describe("RunHistoryStrip", () => {
+  it("links list results without calling their creation time a start or finish time", () => {
+    const html = renderHistory([
+      { createdAt: "2026-08-27T10:00:00.000Z", id: "run_1", status: "PASSED" },
+    ]);
+    expect(html).toContain('href="/w/ws_1/runs/run_1"');
+    expect(html).toMatch(/aria-label="Passed · [^"]+"/);
+    expect(html).not.toContain("started");
+    expect(html).not.toContain("finished");
+  });
 });
 
 describe("passRateLabel", () => {
@@ -88,5 +181,14 @@ describe("passRateLabel", () => {
   it("stays quiet without completed runs", () => {
     expect(passRateLabel([])).toBeNull();
     expect(passRateLabel([tick("run_1", "QUEUED", null)])).toBeNull();
+  });
+
+  it("accepts uptime checks while preserving the same pass-rate semantics", () => {
+    const checks: CheckTick[] = [
+      check("check_1", "PASSED"),
+      check("check_2", "FAILED"),
+      check("check_3", "PASSED"),
+    ];
+    expect(passRateLabel(checks)).toBe("2/3 passed");
   });
 });

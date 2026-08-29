@@ -33,6 +33,23 @@ const monitor: Monitor = {
   nextCheckAt: "2026-08-19T10:05:00.000Z",
   notifyOnRecovery: true,
   openIncidentId: "incident_1",
+  recentChecks: [
+    {
+      checkedAt: "2026-08-19T09:51:00.000Z",
+      id: "check_1",
+      status: "PASSED",
+    },
+    {
+      checkedAt: "2026-08-19T09:56:00.000Z",
+      id: "check_2",
+      status: "FAILED",
+    },
+    {
+      checkedAt: "2026-08-19T10:01:00.000Z",
+      id: "check_3",
+      status: "PASSED",
+    },
+  ],
   status: "UP",
   timeoutSeconds: 10,
   updatedAt: "2026-08-19T10:00:00.000Z",
@@ -43,13 +60,13 @@ describe("uptime monitor list", () => {
   it("keeps the required column order", () => {
     expect(uptimeListHeaders).toEqual([
       "Monitor",
-      "Last check",
+      "History",
       "Next check",
       "Alerts",
     ]);
   });
 
-  it("renders monitor identity, current check data, and alert coverage", () => {
+  it("renders monitor identity, check history, and alert coverage", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MonitorRowContent
@@ -68,7 +85,12 @@ describe("uptime monitor list", () => {
     expect(html).toContain("Checking");
     expect(html).toContain("Every 5 min");
     expect(html).toContain("184 ms");
-    expect(html).toContain("Automatic");
+    expect(html).not.toContain("Automatic");
+    expect(html).toContain("2/3 passed");
+    expect(html).toContain("bg-ok-600");
+    expect(html).toContain("bg-danger-600");
+    expect(html).toContain("aria-label=\"Passed ·");
+    expect(html).toContain("aria-label=\"Failed ·");
     expect(html).toContain("/w/ws_1/incidents/incident_1");
     expect(html).toContain("Open incident");
     expect(html).toContain("2 alert channels");
@@ -85,6 +107,7 @@ describe("uptime monitor list", () => {
             lastCheckAt: null,
             lastResponseTimeMs: null,
             openIncidentId: null,
+            recentChecks: [],
             status: "UNKNOWN",
           }}
           timezone="Europe/Madrid"
@@ -94,6 +117,7 @@ describe("uptime monitor list", () => {
     );
     expect(html).toContain("Unknown");
     expect(html).toContain("Waiting for first check");
+    expect(html).toContain("No checks yet");
     expect(html).toContain("No open incident");
     expect(html).toContain("No alert channels");
     expect(html).not.toContain("/incidents/");
@@ -117,7 +141,28 @@ describe("uptime monitor list", () => {
     );
     expect(html).toContain("Down");
     expect(html).toContain("No response");
+    expect(html).toContain("No open incident");
+    expect(html).not.toContain("All clear");
     expect(html).not.toContain("Waiting for first check");
+  });
+
+  it("shows All clear only for a healthy monitor without an incident", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <MonitorRowContent
+          monitor={{
+            ...monitor,
+            checking: false,
+            openIncidentId: null,
+            status: "UP",
+          }}
+          timezone="Europe/Madrid"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("All clear");
+    expect(html).not.toContain("No open incident");
   });
 
   it("uses safe host, response, and channel labels", () => {

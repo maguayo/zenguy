@@ -66,7 +66,6 @@ describe("browser tests list", () => {
     expect(testListHeaders).toEqual([
       "Test",
       "History",
-      "Last run",
       "Next run",
       "Alerts",
     ]);
@@ -149,6 +148,34 @@ describe("browser tests list", () => {
     expect(html).toContain("Scheduled");
     expect(html).toContain("All clear");
     expect(html).toContain("2 alert channels");
+  });
+
+  it("does not call a failed test clear before an incident exists", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TestRowContent
+          test={{
+            ...test,
+            lastRun: {
+              createdAt: "2026-08-19T09:58:00.000Z",
+              durationMs: 30_000,
+              finishedAt: "2026-08-19T10:00:00.000Z",
+              id: "run_failed",
+              passedAfterRetry: false,
+              source: "SCHEDULED",
+              startedAt: "2026-08-19T09:59:30.000Z",
+              status: "FAILED",
+            },
+            openIncidentId: null,
+          }}
+          timezone="Europe/Madrid"
+          workspaceId="ws_1"
+        />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Failed");
+    expect(html).toContain("No open incident");
+    expect(html).not.toContain("All clear");
   });
 
   it("uses safe host and metadata labels", () => {

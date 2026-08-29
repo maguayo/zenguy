@@ -6,6 +6,7 @@ import {
   checkColumns,
   expectationSummary,
   monitorHeaderLines,
+  recentCheckHistory,
   uptimeTone,
 } from "./MonitorDetailPage";
 
@@ -63,6 +64,20 @@ describe("uptime monitor detail", () => {
     expect(html).toContain("503");
     expect(html).toContain("184 ms");
     expect(html).toContain("Expected 200, got 503");
+  });
+
+  it("shows the newest 20 checks oldest-to-newest without mutating API order", () => {
+    const checks = Array.from({ length: 24 }, (_, index): Check => ({
+      ...check,
+      checkedAt: new Date(Date.UTC(2026, 7, 19, 10, index)).toISOString(),
+      id: `check_${index}`,
+    }));
+    const originalOrder = checks.map((item) => item.id);
+
+    expect(recentCheckHistory(checks).map((item) => item.id)).toEqual([
+      ...Array.from({ length: 20 }, (_, index) => `check_${19 - index}`),
+    ]);
+    expect(checks.map((item) => item.id)).toEqual(originalOrder);
   });
 
   it("never leaks monitor headers to a member", () => {

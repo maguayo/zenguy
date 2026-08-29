@@ -379,6 +379,13 @@ export interface MonitorInput {
   url: string;
 }
 
+/** One recent check result for the list's history strip (oldest first). */
+export interface CheckTick {
+  checkedAt: string;
+  id: string;
+  status: "PASSED" | "FAILED";
+}
+
 export interface Monitor
   extends Omit<
     MonitorInput,
@@ -398,6 +405,7 @@ export interface Monitor
   lastResponseTimeMs: number | null;
   nextCheckAt: string;
   openIncidentId: string | null;
+  recentChecks?: CheckTick[];
   status: "UNKNOWN" | "UP" | "DOWN";
   updatedAt: string;
 }

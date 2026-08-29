@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { Link } from "react-router-dom";
 
-import type { RunStatus, RunTick } from "../api/types";
+import type { CheckTick, RunStatus, RunTick } from "../api/types";
 import { formatRelative } from "../lib/format";
 
 export interface PulseStripProps {
@@ -10,6 +10,23 @@ export interface PulseStripProps {
   max?: number;
   /** Oldest first; the last tick is the most recent run. */
   runs: RunTick[];
+  workspaceId: string;
+}
+
+export interface CheckPulseStripProps {
+  /** Oldest first; the last tick is the most recent check. */
+  checks: CheckTick[];
+  className?: string;
+  /** Number of slots; missing history renders as quiet placeholders. */
+  max?: number;
+}
+
+export interface RunHistoryStripProps {
+  className?: string;
+  /** Number of slots; missing history renders as quiet placeholders. */
+  max?: number;
+  /** Oldest first; timestamps are run creation times from the runs endpoint. */
+  runs: Array<Pick<RunTick, "id" | "status"> & { createdAt: string }>;
   workspaceId: string;
 }
 
@@ -33,14 +50,79 @@ function tickLabel(tick: RunTick): string {
   return `${label} · ${tick.finishedAt === null ? "in progress" : formatRelative(tick.finishedAt)}`;
 }
 
+function checkTickLabel(tick: CheckTick): string {
+  return `${tickTone[tick.status].label} · ${formatRelative(tick.checkedAt)}`;
+}
+
+function runHistoryTickLabel(tick: RunHistoryStripProps["runs"][number]): string {
+  return `${tickTone[tick.status].label} · ${formatRelative(tick.createdAt)}`;
+}
+
 const COMPLETED: ReadonlySet<RunStatus> = new Set(["FAILED", "PASSED", "TIMEOUT"]);
 
-/** "17/20 passed" over completed runs; null while there is nothing to count. */
-export function passRateLabel(runs: RunTick[]): string | null {
-  const completed = runs.filter((run) => COMPLETED.has(run.status));
+/** "17/20 passed" over completed results; null while there is nothing to count. */
+export function passRateLabel<T extends { status: RunStatus }>(ticks: readonly T[]): string | null {
+  const completed = ticks.filter((tick) => COMPLETED.has(tick.status));
   if (completed.length === 0) return null;
-  const passed = completed.filter((run) => run.status === "PASSED").length;
+  const passed = completed.filter((tick) => tick.status === "PASSED").length;
   return `${passed}/${completed.length} passed`;
+}
+
+interface VisualTick {
+  className: string;
+  href?: string;
+  id: string;
+  label: string;
+}
+
+interface VisualPulseStripProps {
+  className?: string;
+  max: number;
+  ticks: VisualTick[];
+}
+
+const tickShape = "h-6 min-w-[4px] flex-1 rounded-[4px]";
+
+/** Shared visual track for browser runs and uptime checks. */
+function VisualPulseStrip({ className, max, ticks }: VisualPulseStripProps) {
+  const recent = ticks.slice(-max);
+  const placeholders = Math.max(0, max - recent.length);
+
+  return (
+    <div className={clsx("flex w-full cursor-default items-center gap-[3px]", className)}>
+      {Array.from({ length: placeholders }, (_, index) => (
+        <span
+          key={`empty-${index}`}
+          aria-hidden="true"
+          className={clsx(tickShape, "bg-zinc-200/70")}
+        />
+      ))}
+      {recent.map((tick) =>
+        tick.href ? (
+          <Link
+            key={tick.id}
+            aria-label={tick.label}
+            className={clsx(
+              tickShape,
+              "cursor-pointer transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2",
+              tick.className,
+            )}
+            title={tick.label}
+            to={tick.href}
+            onClick={(event) => event.stopPropagation()}
+          />
+        ) : (
+          <span
+            key={tick.id}
+            aria-label={tick.label}
+            className={clsx(tickShape, tick.className)}
+            role="img"
+            title={tick.label}
+          />
+        ),
+      )}
+    </div>
+  );
 }
 
 /**
@@ -49,28 +131,52 @@ export function passRateLabel(runs: RunTick[]): string | null {
  * progress. Each tick opens its run.
  */
 export function PulseStrip({ className, max = 20, runs, workspaceId }: PulseStripProps) {
-  const recent = runs.slice(-max);
-  const placeholders = Math.max(0, max - recent.length);
-  const tickShape =
-    "h-[18px] w-full min-w-[3px] max-w-[7px] flex-1 rounded-[3px]";
   return (
-    <div className={clsx("flex items-center gap-[3px]", className)}>
-      {Array.from({ length: placeholders }, (_, index) => (
-        <span
-          key={`empty-${index}`}
-          aria-hidden="true"
-          className={clsx(tickShape, "bg-zinc-200/70")}
-        />
-      ))}
-      {recent.map((run) => (
-        <Link
-          key={run.id}
-          aria-label={tickLabel(run)}
-          className={clsx(tickShape, "transition-opacity hover:opacity-75", tickTone[run.status].className)}
-          title={tickLabel(run)}
-          to={`/w/${workspaceId}/runs/${run.id}`}
-        />
-      ))}
-    </div>
+    <VisualPulseStrip
+      className={className}
+      max={max}
+      ticks={runs.map((run) => ({
+        className: tickTone[run.status].className,
+        id: run.id,
+        label: tickLabel(run),
+        href: `/w/${workspaceId}/runs/${run.id}`,
+      }))}
+    />
+  );
+}
+
+/** Uptime history uses the same visual language without linking each check. */
+export function CheckPulseStrip({ checks, className, max = 20 }: CheckPulseStripProps) {
+  return (
+    <VisualPulseStrip
+      className={className}
+      max={max}
+      ticks={checks.map((check) => ({
+        className: tickTone[check.status].className,
+        id: check.id,
+        label: checkTickLabel(check),
+      }))}
+    />
+  );
+}
+
+/** Detail-page history sourced from run-list items, which expose creation time rather than finish time. */
+export function RunHistoryStrip({
+  className,
+  max = 20,
+  runs,
+  workspaceId,
+}: RunHistoryStripProps) {
+  return (
+    <VisualPulseStrip
+      className={className}
+      max={max}
+      ticks={runs.map((run) => ({
+        className: tickTone[run.status].className,
+        id: run.id,
+        label: runHistoryTickLabel(run),
+        href: `/w/${workspaceId}/runs/${run.id}`,
+      }))}
+    />
   );
 }

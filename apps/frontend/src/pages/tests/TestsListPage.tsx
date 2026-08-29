@@ -125,7 +125,7 @@ function TestActions({ test }: { test: BrowserTest }) {
         {can("tests.run") ? (
           <Button
             aria-label={`Run ${test.name} now`}
-            className="max-lg:hidden"
+            className="max-[1199px]:hidden"
             disabled={isActiveRun(test) || run.pending}
             size="sm"
             onClick={run.requestRun}
@@ -163,13 +163,12 @@ function TestActions({ test }: { test: BrowserTest }) {
 export const testListHeaders = [
   "Test",
   "History",
-  "Last run",
   "Next run",
   "Alerts",
 ] as const;
 
 export const testListGrid =
-  "lg:grid-cols-[minmax(220px,1.45fr)_minmax(140px,0.95fr)_minmax(150px,0.9fr)_minmax(105px,0.62fr)_minmax(150px,0.85fr)_auto]";
+  "min-[1200px]:grid-cols-[minmax(175px,1fr)_minmax(240px,1.5fr)_minmax(105px,0.62fr)_minmax(110px,0.68fr)_112px]";
 
 export function testHost(url: string): string {
   try {
@@ -214,7 +213,7 @@ function indicatorClass(test: BrowserTest): string {
 
 function MobileCellLabel({ children }: { children: string }) {
   return (
-    <p className="pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 lg:hidden">
+    <p className="pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 min-[1200px]:hidden">
       {children}
     </p>
   );
@@ -233,10 +232,11 @@ export function TestRowContent({
   const deviceLabel = test.device === "DESKTOP" ? "Desktop" : "Mobile";
   const lastRunAt =
     test.lastRun?.finishedAt ?? test.lastRun?.startedAt ?? test.lastRun?.createdAt;
+  const recentRuns = (test.recentRuns ?? []).slice(-20);
 
   return (
     <>
-      <div className="min-w-0 pr-10 lg:pr-0" role="cell">
+      <div className="min-w-0 pr-10 min-[1200px]:pr-0" role="cell">
         <div className="flex items-start gap-3">
           <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-700">
             <DeviceIcon aria-hidden="true" className="size-5" />
@@ -262,79 +262,73 @@ export function TestRowContent({
               <Globe2 aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="truncate">{testHost(test.startUrl)}</span>
             </p>
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-500">
-              <DeviceIcon aria-hidden="true" className="size-3.5" />
-              {deviceLabel}
-              <span aria-hidden="true" className="text-zinc-300">
-                ·
-              </span>
-              <CalendarClock aria-hidden="true" className="size-3.5" />
-              {formatInterval(test.intervalHours)}
-            </p>
+            <p className="mt-1.5 text-xs text-zinc-500">{deviceLabel}</p>
           </div>
         </div>
       </div>
 
       <div
-        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
         role="cell"
       >
         <MobileCellLabel>History</MobileCellLabel>
-        <div className="min-w-0 lg:pt-1">
+        <div className="min-w-0 rounded-lg bg-zinc-50/90 p-2.5 ring-1 ring-inset ring-zinc-200">
+          <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {test.lastRun ? (
+                <StatusBadge
+                  passedAfterRetry={test.lastRun.passedAfterRetry}
+                  status={test.lastRun.status}
+                />
+              ) : (
+                <Badge tone="neutral">Not run yet</Badge>
+              )}
+            </div>
+          </div>
           <PulseStrip
-            className="max-w-56"
-            runs={test.recentRuns ?? []}
+            className="mt-2.5 w-full"
+            runs={recentRuns}
             workspaceId={workspaceId}
           />
-          <p className="mt-1.5 text-xs text-zinc-500">
-            {passRateLabel(test.recentRuns ?? []) ?? "No runs yet"}
-          </p>
+          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <p className="text-xs font-semibold tabular-nums text-zinc-700">
+              {passRateLabel(recentRuns) ?? "No runs yet"}
+            </p>
+            <span
+              className="whitespace-nowrap text-[11px] text-zinc-500"
+              title={lastRunAt ? formatDateTime(lastRunAt, timezone) : undefined}
+            >
+              {lastRunAt ? formatRelative(lastRunAt) : "Waiting for first run"}
+              {test.lastRun?.durationMs !== null && test.lastRun?.durationMs !== undefined
+                ? ` · ${formatDuration(test.lastRun.durationMs)}`
+                : null}
+              {test.lastRun ? ` · ${runSourceLabel(test.lastRun.source)}` : null}
+            </span>
+          </div>
         </div>
       </div>
 
       <div
-        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
-        role="cell"
-      >
-        <MobileCellLabel>Last run</MobileCellLabel>
-        <div className="min-w-0">
-          {test.lastRun ? (
-            <StatusBadge
-              passedAfterRetry={test.lastRun.passedAfterRetry}
-              status={test.lastRun.status}
-            />
-          ) : (
-            <Badge tone="neutral">Not run yet</Badge>
-          )}
-          <p
-            className="mt-1.5 whitespace-nowrap text-xs text-zinc-500"
-            title={lastRunAt ? formatDateTime(lastRunAt, timezone) : undefined}
-          >
-            {lastRunAt ? formatRelative(lastRunAt) : "Waiting for first run"}
-            {test.lastRun?.durationMs !== null && test.lastRun?.durationMs !== undefined
-              ? ` · ${formatDuration(test.lastRun.durationMs)}`
-              : null}
-            {test.lastRun ? ` · ${runSourceLabel(test.lastRun.source)}` : null}
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
         role="cell"
       >
         <MobileCellLabel>Next run</MobileCellLabel>
-        <p
-          className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
-          title={formatDateTime(test.nextRunAt, timezone)}
-        >
-          <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
-          {formatRelative(test.nextRunAt)}
-        </p>
+        <div>
+          <p
+            className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
+            title={formatDateTime(test.nextRunAt, timezone)}
+          >
+            <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
+            {formatRelative(test.nextRunAt)}
+          </p>
+          <p className="mt-1.5 text-xs text-zinc-500">
+            {formatInterval(test.intervalHours)}
+          </p>
+        </div>
       </div>
 
       <div
-        className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 lg:block"
+        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
         role="cell"
       >
         <MobileCellLabel>Alerts</MobileCellLabel>
@@ -349,10 +343,15 @@ export function TestRowContent({
                 Open incident
               </Badge>
             </Link>
-          ) : (
+          ) : test.lastRun?.status === "PASSED" ? (
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ok-700">
               <CheckCircle2 aria-hidden="true" className="size-3.5" />
               All clear
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+              <CheckCircle2 aria-hidden="true" className="size-3.5 text-zinc-400" />
+              No open incident
             </span>
           )}
           <p className="flex items-center gap-1.5 text-xs text-zinc-500">
@@ -375,13 +374,17 @@ function TestsListSkeleton() {
     >
       <div className="divide-y divide-zinc-200">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="flex items-center gap-3 px-4 py-4">
+          <div key={index} className="flex items-center gap-4 px-5 py-5">
             <Skeleton className="size-11 shrink-0 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-4 w-44 max-w-full" />
               <Skeleton className="h-3 w-32 max-w-full" />
             </div>
-            <Skeleton className="hidden h-6 w-20 sm:block" />
+            <div className="hidden w-64 space-y-2 min-[1200px]:block">
+              <Skeleton className="h-6 w-full rounded" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="hidden h-6 w-20 min-[1200px]:block" />
           </div>
         ))}
       </div>
@@ -399,24 +402,36 @@ function BrowserTestsList({
   workspaceId: string;
 }) {
   const navigate = useNavigate();
+  const openTest = (testId: string) => {
+    navigate(`/w/${workspaceId}/tests/${testId}`);
+  };
 
   return (
     <Card className="overflow-hidden" padding="none">
       <div aria-label="Browser tests" role="table">
         <div
-          className="hidden border-b border-zinc-200 bg-zinc-50/80 lg:block"
+          className="sr-only min-[1200px]:not-sr-only min-[1200px]:block min-[1200px]:border-b min-[1200px]:border-zinc-200 min-[1200px]:bg-zinc-50"
           role="rowgroup"
         >
           <div
             className={clsx(
-              "grid items-center gap-6 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
+              "grid items-center gap-4 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500",
               testListGrid,
             )}
             role="row"
           >
             {testListHeaders.map((header) => (
               <div key={header} role="columnheader">
-                {header}
+                {header === "History" ? (
+                  <span className="flex items-baseline gap-1.5">
+                    <span>{header}</span>
+                    <span className="text-[10px] font-normal normal-case tracking-normal text-zinc-400">
+                      latest 20
+                    </span>
+                  </span>
+                ) : (
+                  header
+                )}
               </div>
             ))}
             <div className="sr-only" role="columnheader">
@@ -429,14 +444,18 @@ function BrowserTestsList({
             <div
               key={test.id}
               className={clsx(
-                "relative grid cursor-pointer grid-cols-1 gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-zinc-50/80",
+                "relative grid cursor-pointer grid-cols-1 gap-x-4 gap-y-4 px-5 py-5 transition-colors hover:bg-zinc-50/80 min-[1200px]:items-center",
                 testListGrid,
               )}
               role="row"
               onClick={(event) => {
-                const target = event.target as HTMLElement;
-                if (target.closest("a, button")) return;
-                navigate(`/w/${workspaceId}/tests/${test.id}`);
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest("a, button")
+                ) {
+                  return;
+                }
+                openTest(test.id);
               }}
             >
               <TestRowContent
@@ -445,7 +464,7 @@ function BrowserTestsList({
                 workspaceId={workspaceId}
               />
               <div
-                className="absolute right-3 top-3 lg:static lg:self-center"
+                className="absolute right-4 top-4 min-[1200px]:static min-[1200px]:self-center"
                 role="cell"
               >
                 <TestActions test={test} />

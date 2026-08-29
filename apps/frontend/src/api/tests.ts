@@ -129,9 +129,9 @@ export function runNow(
 export function runsPath(
   workspaceId: string,
   testId: string,
-  options: { cursor?: string | null; status?: RunStatus | null } = {},
+  options: { cursor?: string | null; limit?: number; status?: RunStatus | null } = {},
 ): string {
-  const search = new URLSearchParams({ limit: "100" });
+  const search = new URLSearchParams({ limit: String(options.limit ?? 100) });
   if (options.cursor) search.set("cursor", options.cursor);
   if (options.status) search.set("status", options.status);
   return `${workspacePath(workspaceId)}/browser-tests/${encodeURIComponent(testId)}/runs?${search}`;
@@ -140,7 +140,7 @@ export function runsPath(
 export function listRuns(
   workspaceId: string,
   testId: string,
-  options: { cursor?: string | null; status?: RunStatus | null } = {},
+  options: { cursor?: string | null; limit?: number; status?: RunStatus | null } = {},
 ): Promise<ApiPage<RunListItem>> {
   return apiGetPage(runsPath(workspaceId, testId, options));
 }

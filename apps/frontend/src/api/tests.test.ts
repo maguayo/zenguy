@@ -25,8 +25,10 @@ describe("browser-test API paths", () => {
   it("preserves opaque cursors and status filters", () => {
     const path = runsPath("ws_1", "test_1", {
       cursor: "next+/=",
+      limit: 20,
       status: "SYSTEM_ERROR",
     });
+    expect(path).toContain("limit=20");
     expect(path).toContain("cursor=next%2B%2F%3D");
     expect(path).toContain("status=SYSTEM_ERROR");
   });

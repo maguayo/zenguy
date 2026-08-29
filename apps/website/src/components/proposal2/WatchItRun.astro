@@ -112,7 +112,7 @@ const instruction =
         </div>
         <span
           class="font-hand absolute -bottom-[34px] left-2 -rotate-2 text-[24px] leading-none font-bold text-violet max-lg:static max-lg:mt-3 max-lg:max-w-[440px] max-lg:rotate-0"
-          >This hourly test catches checkout failures before customers do.</span
+          >Catches checkout failures before customers do.</span
         >
       </div>
 
@@ -145,19 +145,21 @@ const instruction =
                 <span class="h-1.5 w-1.5 rounded-full bg-green" aria-hidden="true"></span>check passed
               </span>
             ) : (
-              <button
-                type="button"
-                class="wir-shot ml-auto inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface transition-colors hover:bg-cream"
-                data-screenshot={s.screenshot}
-                data-alt={s.screenshotAlt}
-                data-title={`Step ${s.n} · ${s.t}`}
-                data-caption={`${s.action} — ${s.note}`}
+              <a
+                href={s.screenshot ?? "#"}
+                class="wir-shot ml-auto inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface text-ink transition-colors hover:bg-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                data-screenshot-trigger
+                data-screenshot-src={s.screenshot}
+                data-screenshot-alt={s.screenshotAlt}
+                data-screenshot-title={`Step ${s.n} · ${s.t}`}
+                data-screenshot-caption={`${s.action} — ${s.note}`}
                 aria-label={`Open screenshot for step ${s.n}: ${s.action}`}
                 aria-haspopup="dialog"
+                aria-controls="screenshot-dialog"
                 title="View screenshot"
               >
                 <Icon name="camera" size={14} class="opacity-70" />
-              </button>
+              </a>
             )}
           </div>
         ))}
@@ -171,35 +173,6 @@ const instruction =
         </div>
       </div>
     </div>
-
-    <dialog
-      class="wir-dialog m-auto w-[min(720px,calc(100%_-_40px))] overflow-hidden rounded-[18px] border border-line bg-surface p-0 text-ink"
-      aria-labelledby="wir-dialog-title"
-      aria-describedby="wir-dialog-caption"
-    >
-      <div class="flex items-start gap-5 border-b border-line px-5 py-4">
-        <div class="min-w-0 flex-1">
-          <h3 id="wir-dialog-title" class="wir-dialog-title m-0 text-[16px] font-semibold">Run screenshot</h3>
-          <p id="wir-dialog-caption" class="wir-dialog-caption m-0 mt-1 text-[13px] leading-[1.45] text-muted"></p>
-        </div>
-        <button
-          type="button"
-          class="wir-dialog-close inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface text-[20px] leading-none text-body hover:bg-cream"
-          aria-label="Close screenshot"
-        >
-          &times;
-        </button>
-      </div>
-      <div class="bg-cream p-5 max-md:p-3">
-        <img
-          src="/hero/step-home.png"
-          alt=""
-          width="600"
-          height="375"
-          class="wir-dialog-image mx-auto h-auto w-full rounded-xl border border-line bg-surface object-contain"
-        />
-      </div>
-    </dialog>
 
     <div class="mt-[72px] grid grid-cols-3 gap-8 border-t border-line pt-[26px] max-lg:grid-cols-1">
       {facts.map((f) => (
@@ -260,64 +233,10 @@ const instruction =
   .wir-wait .wir-pending {
     display: flex;
   }
-  .wir-dialog {
-    box-shadow:
-      rgba(19, 17, 13, 0.12) 0 4px 12px,
-      rgba(19, 17, 13, 0.3) 0 28px 80px;
-  }
-  .wir-dialog::backdrop {
-    background: rgba(19, 17, 13, 0.58);
-    backdrop-filter: blur(5px);
-  }
-  .wir-dialog[open] {
-    animation: wir-dialog-in 180ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
-  @keyframes wir-dialog-in {
-    from {
-      opacity: 0;
-      transform: translateY(10px) scale(0.98);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .wir-dialog[open] {
-      animation: none;
-    }
-  }
 </style>
 
 <script>
   const root = document.querySelector<HTMLElement>(".wir");
-  if (root) {
-    const shotDialog = root.querySelector<HTMLDialogElement>(".wir-dialog");
-    const shotImage = root.querySelector<HTMLImageElement>(".wir-dialog-image");
-    const shotTitle = root.querySelector<HTMLElement>(".wir-dialog-title");
-    const shotCaption = root.querySelector<HTMLElement>(".wir-dialog-caption");
-    const shotClose = root.querySelector<HTMLButtonElement>(".wir-dialog-close");
-
-    root.querySelectorAll<HTMLButtonElement>(".wir-shot").forEach((trigger) => {
-      trigger.addEventListener("click", () => {
-        const screenshot = trigger.dataset.screenshot;
-        if (!shotDialog || !shotImage || !shotTitle || !shotCaption || !screenshot) return;
-        shotImage.src = screenshot;
-        shotImage.alt = trigger.dataset.alt ?? "Run screenshot";
-        shotTitle.textContent = trigger.dataset.title ?? "Run screenshot";
-        shotCaption.textContent = trigger.dataset.caption ?? "";
-        if (!shotDialog.open) shotDialog.showModal();
-      });
-    });
-
-    shotClose?.addEventListener("click", () => shotDialog?.close());
-    shotDialog?.addEventListener("click", (event) => {
-      if (event.target === shotDialog) shotDialog.close();
-    });
-    shotDialog?.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        shotDialog.close();
-      }
-    });
-  }
-
   const motionOk =
     typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (root && motionOk && "IntersectionObserver" in window) {
