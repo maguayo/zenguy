@@ -9,6 +9,7 @@ export type Action =
   | "channels.manage"
   | "paid_alerts.manage"
   | "secrets.manage"
+  | "status_pages.manage"
   | "members.invite"
   | "members.remove"
   | "admins.manage"
@@ -28,6 +29,7 @@ export const actions: Action[] = [
   "channels.manage",
   "paid_alerts.manage",
   "secrets.manage",
+  "status_pages.manage",
   "members.invite",
   "members.remove",
   "admins.manage",
@@ -47,6 +49,7 @@ const adminActions = new Set<Action>([
   "uptime.manage",
   "channels.manage",
   "secrets.manage",
+  "status_pages.manage",
   "members.invite",
   "members.remove",
   "billing.view",

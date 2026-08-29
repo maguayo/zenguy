@@ -486,6 +486,55 @@ export interface IncidentDetail extends Incident {
   openedByRunId: string | null;
 }
 
+export type StatusPageTheme = "LIGHT" | "DARK" | "SYSTEM";
+
+export interface StatusPage {
+  accentColor: string | null;
+  createdAt: string;
+  description: string | null;
+  id: string;
+  publishedAt: string | null;
+  slug: string;
+  theme: StatusPageTheme;
+  title: string;
+  updatedAt: string;
+}
+
+export interface StatusPageItem {
+  displayName: string;
+  groupName: string | null;
+  id: string;
+  position: number;
+  resourceId: string;
+  resourceType: "BROWSER_TEST" | "UPTIME_MONITOR";
+}
+
+export interface StatusPageDetail extends StatusPage {
+  items: StatusPageItem[];
+}
+
+export interface StatusPageInput {
+  accentColor?: string | null;
+  description?: string | null;
+  slug?: string;
+  theme?: StatusPageTheme;
+  title?: string;
+}
+
+export interface StatusPageItemInput {
+  displayName: string;
+  groupName?: string | null;
+  resourceId: string;
+  resourceType: "BROWSER_TEST" | "UPTIME_MONITOR";
+}
+
+export interface IncidentUpdate {
+  createdAt: string;
+  createdBy: string | null;
+  id: string;
+  message: string;
+}
+
 export type ActivityType =
   | "TEST_PASSED"
   | "TEST_FAILED"

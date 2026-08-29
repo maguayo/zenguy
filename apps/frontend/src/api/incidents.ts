@@ -1,5 +1,5 @@
-import { apiGet, apiGetPage, type ApiPage } from "../lib/api";
-import type { Incident, IncidentDetail } from "./types";
+import { apiDelete, apiGet, apiGetPage, apiPost, type ApiPage } from "../lib/api";
+import type { Incident, IncidentDetail, IncidentUpdate } from "./types";
 
 export interface IncidentFilters {
   from?: string | null;
@@ -38,4 +38,33 @@ export function listIncidents(
 
 export function getIncident(workspaceId: string, incidentId: string): Promise<IncidentDetail> {
   return apiGet(`${incidentsBasePath(workspaceId)}/${encodeURIComponent(incidentId)}`);
+}
+
+function incidentUpdatesPath(workspaceId: string, incidentId: string): string {
+  return `${incidentsBasePath(workspaceId)}/${encodeURIComponent(incidentId)}/updates`;
+}
+
+export function listIncidentUpdates(
+  workspaceId: string,
+  incidentId: string,
+): Promise<IncidentUpdate[]> {
+  return apiGet(incidentUpdatesPath(workspaceId, incidentId));
+}
+
+export function postIncidentUpdate(
+  workspaceId: string,
+  incidentId: string,
+  message: string,
+): Promise<IncidentUpdate> {
+  return apiPost(incidentUpdatesPath(workspaceId, incidentId), { message });
+}
+
+export function deleteIncidentUpdate(
+  workspaceId: string,
+  incidentId: string,
+  updateId: string,
+): Promise<void> {
+  return apiDelete(
+    `${incidentUpdatesPath(workspaceId, incidentId)}/${encodeURIComponent(updateId)}`,
+  ).then(() => undefined);
 }
