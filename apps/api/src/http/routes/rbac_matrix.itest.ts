@@ -28,6 +28,11 @@ import { D1CheckRepo } from "../../infrastructure/db/check_repo";
 import { D1EmailTokenRepo } from "../../infrastructure/db/email_token_repo";
 import { D1IncidentEventRepo } from "../../infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "../../infrastructure/db/incident_repo";
+import { D1IncidentUpdateRepo } from "../../infrastructure/db/incident_update_repo";
+import {
+  D1StatusPageItemRepo,
+  D1StatusPageRepo,
+} from "../../infrastructure/db/status_page_repo";
 import { D1InvitationRepo } from "../../infrastructure/db/invitation_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1MonitorRepo } from "../../infrastructure/db/monitor_repo";
@@ -175,6 +180,9 @@ const REPORT_ID = "art_rbac_report";
 const MONITOR_ID = "mon_rbac_matrix";
 const CHECK_ID = "chk_rbac_matrix";
 const INCIDENT_ID = "inc_rbac_matrix";
+const STATUS_PAGE_ID = "sp_rbac_matrix";
+const STATUS_PAGE_ITEM_ID = "spi_rbac_matrix";
+const INCIDENT_UPDATE_ID = "iu_rbac_matrix";
 const INVITATION_ID = "inv_rbac_matrix";
 const PUBLIC_INVITATION_ID = "inv_rbac_public";
 const PUBLIC_INVITATION_TOKEN = "rbac-public-invitation-token";
@@ -574,6 +582,40 @@ async function seedFixture(
     createdAt: NOW,
   };
   await new D1IncidentEventRepo(bindings.DB).insert(event);
+  await new D1StatusPageRepo(bindings.DB).insert({
+    id: STATUS_PAGE_ID,
+    workspaceId: WORKSPACE.id,
+    slug: "rbac-matrix-page",
+    title: "Matrix Status",
+    description: null,
+    accentColor: null,
+    theme: "SYSTEM",
+    publishedAt: null,
+    createdBy: USERS.owner.id,
+    createdAt: NOW,
+    updatedAt: NOW,
+    deletedAt: null,
+  });
+  await new D1StatusPageItemRepo(bindings.DB).insert({
+    id: STATUS_PAGE_ITEM_ID,
+    statusPageId: STATUS_PAGE_ID,
+    workspaceId: WORKSPACE.id,
+    resourceType: "UPTIME_MONITOR",
+    browserTestId: null,
+    uptimeMonitorId: MONITOR_ID,
+    displayName: "Matrix API",
+    groupName: null,
+    position: 0,
+    createdAt: NOW,
+  });
+  await new D1IncidentUpdateRepo(bindings.DB).insert({
+    id: INCIDENT_UPDATE_ID,
+    incidentId: INCIDENT_ID,
+    workspaceId: WORKSPACE.id,
+    message: "Matrix update",
+    createdBy: USERS.owner.id,
+    createdAt: NOW,
+  });
 
   const paddle = new RecordingPaddleClient();
   paddle.transactions = [
@@ -1091,6 +1133,102 @@ const ROUTES: RouteCase[] = [
     200,
     `/api/workspaces/${WORKSPACE.id}/uptime-monitors/test-request`,
     json("POST", MONITOR_CONFIG),
+    true,
+  ),
+  route("GET .../status-pages", "M", 200, `/api/workspaces/${WORKSPACE.id}/status-pages`),
+  route("GET .../status-pages/:id", "M", 200, `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}`),
+  route("GET .../status-pages/:id/preview", "M", 200, `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/preview`),
+  route(
+    "POST .../status-pages",
+    "OWNER_ADMIN",
+    201,
+    `/api/workspaces/${WORKSPACE.id}/status-pages`,
+    json("POST", { title: "Matrix page", slug: "rbac-matrix-page-new" }),
+    true,
+  ),
+  route(
+    "PATCH .../status-pages/:id",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}`,
+    json("PATCH", { title: "Renamed page" }),
+    true,
+  ),
+  route(
+    "POST .../status-pages/:id/publish",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/publish`,
+    { method: "POST" },
+    true,
+  ),
+  route(
+    "POST .../status-pages/:id/unpublish",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/unpublish`,
+    { method: "POST" },
+    true,
+  ),
+  route(
+    "DELETE .../status-pages/:id",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}`,
+    { method: "DELETE" },
+    true,
+  ),
+  route(
+    "POST .../status-pages/:id/items",
+    "OWNER_ADMIN",
+    201,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/items`,
+    json("POST", {
+      resourceType: "BROWSER_TEST",
+      resourceId: TEST_ID,
+      displayName: "Matrix checkout",
+    }),
+    true,
+  ),
+  route(
+    "PATCH .../status-pages/:id/items/:itemId",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/items/${STATUS_PAGE_ITEM_ID}`,
+    json("PATCH", { displayName: "Renamed item" }),
+    true,
+  ),
+  route(
+    "PUT .../status-pages/:id/items/order",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/items/order`,
+    json("PUT", { itemIds: [STATUS_PAGE_ITEM_ID] }),
+    true,
+  ),
+  route(
+    "DELETE .../status-pages/:id/items/:itemId",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/items/${STATUS_PAGE_ITEM_ID}`,
+    { method: "DELETE" },
+    true,
+  ),
+  route("GET .../incidents/:id/updates", "M", 200, `/api/workspaces/${WORKSPACE.id}/incidents/${INCIDENT_ID}/updates`),
+  route(
+    "POST .../incidents/:id/updates",
+    "OWNER_ADMIN",
+    201,
+    `/api/workspaces/${WORKSPACE.id}/incidents/${INCIDENT_ID}/updates`,
+    json("POST", { message: "Matrix public update" }),
+    true,
+  ),
+  route(
+    "DELETE .../incidents/:id/updates/:updateId",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/incidents/${INCIDENT_ID}/updates/${INCIDENT_UPDATE_ID}`,
+    { method: "DELETE" },
     true,
   ),
   route("GET .../incidents", "M", 200, `/api/workspaces/${WORKSPACE.id}/incidents`),

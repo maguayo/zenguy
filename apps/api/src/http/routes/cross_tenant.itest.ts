@@ -17,6 +17,11 @@ import { D1ArtifactRepo } from "../../infrastructure/db/artifact_repo";
 import { D1AttemptRepo } from "../../infrastructure/db/attempt_repo";
 import { D1BrowserTestRepo } from "../../infrastructure/db/browser_test_repo";
 import { D1IncidentRepo } from "../../infrastructure/db/incident_repo";
+import { D1IncidentUpdateRepo } from "../../infrastructure/db/incident_update_repo";
+import {
+  D1StatusPageItemRepo,
+  D1StatusPageRepo,
+} from "../../infrastructure/db/status_page_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1MonitorRepo } from "../../infrastructure/db/monitor_repo";
 import { D1RunRepo } from "../../infrastructure/db/run_repo";
@@ -252,6 +257,43 @@ describe("cross-tenant route isolation", () => {
       createdAt: NOW,
     };
     await new D1IncidentRepo(bindings.DB).insertOpen(incident);
+    const statusPage = {
+      id: "sp_tenant_a",
+      workspaceId: WORKSPACE_A.id,
+      slug: "tenant-a-status",
+      title: "Tenant A Status",
+      description: null,
+      accentColor: null,
+      theme: "SYSTEM" as const,
+      publishedAt: null,
+      createdBy: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      deletedAt: null,
+    };
+    await new D1StatusPageRepo(bindings.DB).insert(statusPage);
+    const statusPageItem = {
+      id: "spi_tenant_a",
+      statusPageId: statusPage.id,
+      workspaceId: WORKSPACE_A.id,
+      resourceType: "UPTIME_MONITOR" as const,
+      browserTestId: null,
+      uptimeMonitorId: monitor.id,
+      displayName: "Tenant A API",
+      groupName: null,
+      position: 0,
+      createdAt: NOW,
+    };
+    await new D1StatusPageItemRepo(bindings.DB).insert(statusPageItem);
+    const incidentUpdate = {
+      id: "iu_tenant_a",
+      incidentId: incident.id,
+      workspaceId: WORKSPACE_A.id,
+      message: "Tenant A update",
+      createdBy: null,
+      createdAt: NOW,
+    };
+    await new D1IncidentUpdateRepo(bindings.DB).insert(incidentUpdate);
     const secret: WorkspaceSecret = {
       id: "sec_tenant_a",
       workspaceId: WORKSPACE_A.id,
@@ -323,6 +365,54 @@ describe("cross-tenant route isolation", () => {
       {
         label: "incident",
         path: `/api/workspaces/${WORKSPACE_B.id}/incidents/${incident.id}`,
+      },
+      {
+        label: "status page",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}`,
+      },
+      {
+        label: "status page preview",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}/preview`,
+      },
+      {
+        label: "status page mutation",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}`,
+        init: {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "Hijacked" }),
+        },
+      },
+      {
+        label: "status page item added against a foreign monitor",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}/items`,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            resourceType: "UPTIME_MONITOR",
+            resourceId: monitor.id,
+            displayName: "Stolen",
+          }),
+        },
+      },
+      {
+        label: "incident updates listing",
+        path: `/api/workspaces/${WORKSPACE_B.id}/incidents/${incident.id}/updates`,
+      },
+      {
+        label: "incident update posted cross-tenant",
+        path: `/api/workspaces/${WORKSPACE_B.id}/incidents/${incident.id}/updates`,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ message: "Hijacked update" }),
+        },
+      },
+      {
+        label: "incident update deleted cross-tenant",
+        path: `/api/workspaces/${WORKSPACE_B.id}/incidents/${incident.id}/updates/${incidentUpdate.id}`,
+        init: { method: "DELETE" },
       },
       {
         label: "secret mutation lookup",

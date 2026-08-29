@@ -1,5 +1,4 @@
 import { html, raw } from "hono/html";
-import type { HtmlEscapedString } from "hono/utils/html";
 import type {
   OverallStatus,
   PublicIncidentView,
@@ -52,7 +51,7 @@ function barTitle(day: PublicStatusItem["days"][number]): string {
   return `${day.date} — ${formatDuration(day.downtimeSeconds)} down`;
 }
 
-function renderItem(item: PublicStatusItem): HtmlEscapedString {
+function renderItem(item: PublicStatusItem): ReturnType<typeof html> {
   return html`<article class="item">
     <div class="item-head">
       <h3>${item.displayName}</h3>
@@ -71,7 +70,7 @@ function renderItem(item: PublicStatusItem): HtmlEscapedString {
   </article>`;
 }
 
-function renderItems(items: PublicStatusItem[]): HtmlEscapedString {
+function renderItems(items: PublicStatusItem[]): ReturnType<typeof html> {
   const ungrouped = items.filter((item) => item.groupName === null);
   const groups: { name: string; items: PublicStatusItem[] }[] = [];
   for (const item of items) {
@@ -92,7 +91,7 @@ function renderItems(items: PublicStatusItem[]): HtmlEscapedString {
   )}`;
 }
 
-function renderIncident(incident: PublicIncidentView): HtmlEscapedString {
+function renderIncident(incident: PublicIncidentView): ReturnType<typeof html> {
   const range =
     incident.resolvedAt === null
       ? `Since ${formatUtc(incident.startedAt)}`
@@ -179,6 +178,12 @@ function styles(accent: string, theme: PublicStatusPageView["theme"]): string {
   `;
 }
 
+function htmlToString(value: ReturnType<typeof html>): string {
+  // Nothing async is ever interpolated into these templates.
+  if (value instanceof Promise) throw new Error("unexpected async template");
+  return value.toString();
+}
+
 export interface RenderStatusPageOptions {
   canonicalUrl: string;
   preview: boolean;
@@ -230,7 +235,7 @@ ${options.preview ? raw("") : raw('<meta http-equiv="refresh" content="60">')}
 </main>
 </body>
 </html>`;
-  return document.toString();
+  return htmlToString(document);
 }
 
 export function renderStatusPageNotFound(): string {
@@ -253,5 +258,5 @@ export function renderStatusPageNotFound(): string {
 </main>
 </body>
 </html>`;
-  return document.toString();
+  return htmlToString(document);
 }
