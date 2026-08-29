@@ -299,6 +299,26 @@ async function seedCompleteWorkspaceGraph(): Promise<void> {
        VALUES (?, 0, 1, 999999)`,
       `run_create:workspace:${WORKSPACE_ID}`,
     ),
+    statement(
+      `INSERT INTO status_pages
+        (id, workspace_id, slug, title, theme, created_at, updated_at)
+       VALUES ('sp_delete', ?, 'delete-me-status', 'Doomed Status', 'SYSTEM', 1, 1)`,
+      WORKSPACE_ID,
+    ),
+    statement(
+      `INSERT INTO status_page_items
+        (id, status_page_id, workspace_id, resource_type, uptime_monitor_id,
+         display_name, position, created_at)
+       VALUES ('spi_delete', 'sp_delete', ?, 'UPTIME_MONITOR', 'mon_delete',
+               'Doomed API', 0, 1)`,
+      WORKSPACE_ID,
+    ),
+    statement(
+      `INSERT INTO incident_updates
+        (id, incident_id, workspace_id, message, created_by, created_at)
+       VALUES ('iu_delete', 'inc_delete', ?, 'Doomed update', 'usr_delete', 1)`,
+      WORKSPACE_ID,
+    ),
   ]);
 }
 

@@ -35,6 +35,11 @@ experiences them, and alerts the team when something breaks.
 - **Read-only public API.** Per-workspace API keys expose workspace,
   uptime-monitor, browser-test, and run data over a rate-limited read-only
   REST API.
+- **Public status pages.** Curated status pages per workspace at
+  `app.zenguy.com/status/<slug>`: hand-picked monitors and browser tests
+  published under editable display names, 90-day incident-derived
+  availability bars, and manual public incident updates. Server-rendered,
+  edge-cached, and strictly sanitized (no internal URLs, names, or ids).
 
 ## Repository layout
 

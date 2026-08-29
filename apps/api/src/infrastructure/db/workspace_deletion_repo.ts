@@ -448,6 +448,15 @@ export class D1WorkspaceDeletionRepo implements WorkspaceDeletionRepo {
         .prepare("DELETE FROM activity_events WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database
+        .prepare("DELETE FROM status_page_items WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
+        .prepare("DELETE FROM status_pages WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
+        .prepare("DELETE FROM incident_updates WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
         .prepare("DELETE FROM uptime_checks WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database
