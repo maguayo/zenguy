@@ -12,9 +12,11 @@ import { listMembers } from "../../api/members";
 import type { Billing } from "../../api/types";
 import { getWorkspace } from "../../api/workspaces";
 import { AuthShell } from "../../components/AuthShell";
+import { SignOutButton } from "../../components/SignOutButton";
 import { Button } from "../../components/ui/Button";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Spinner } from "../../components/ui/Spinner";
+import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
 import { trustedBillingUrl } from "../../lib/billing-links";
@@ -85,6 +87,7 @@ export function ActionErrorNotice({ message }: { message: string }) {
 
 export default function BillingSetup() {
   const { wsId = "" } = useParams();
+  const { signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -221,6 +224,7 @@ export default function BillingSetup() {
           ? "Add a payment method to start scheduled runs again."
           : "Add a payment method to activate scheduled browser runs."
       }
+      footer={<SignOutButton onSignOut={() => void signOut()} />}
       title={reactivating ? "Reactivate your workspace" : "Set up billing"}
     >
       <PlanDetails />

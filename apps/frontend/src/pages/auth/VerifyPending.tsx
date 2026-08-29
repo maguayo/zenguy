@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { AuthShell } from "../../components/AuthShell";
+import { SignOutButton } from "../../components/SignOutButton";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
@@ -84,13 +85,7 @@ export default function VerifyPending() {
       }
       footer={
         signedIn ? (
-          <button
-            className="font-medium text-accent-700 hover:underline"
-            type="button"
-            onClick={() => void signOut()}
-          >
-            Sign out
-          </button>
+          <SignOutButton onSignOut={() => void signOut()} />
         ) : (
           <Link className="font-medium text-accent-700 hover:underline" to="/signin">
             Sign in

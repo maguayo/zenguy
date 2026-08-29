@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { createWorkspace, listWorkspaces } from "../../api/workspaces";
 import { AuthShell } from "../../components/AuthShell";
+import { SignOutButton } from "../../components/SignOutButton";
 import { Button } from "../../components/ui/Button";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Field } from "../../components/ui/Field";
@@ -44,7 +45,7 @@ function timezones(): string[] {
 }
 
 export default function CreateWorkspace() {
-  const { user } = useAuth();
+  const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [timezoneFilter, setTimezoneFilter] = useState("");
@@ -99,14 +100,17 @@ export default function CreateWorkspace() {
     <AuthShell
       description="Set the name and timezone your team will use. You'll set up billing securely with Stripe next."
       footer={
-        backWorkspace ? (
-          <Link
-            className="font-medium text-accent-700 hover:underline"
-            to={`/w/${backWorkspace.id}/overview`}
-          >
-            ← Back to {backWorkspace.name}
-          </Link>
-        ) : undefined
+        <div className="flex items-center justify-between gap-4">
+          {backWorkspace ? (
+            <Link
+              className="font-medium text-accent-700 hover:underline"
+              to={`/w/${backWorkspace.id}/overview`}
+            >
+              ← Back to {backWorkspace.name}
+            </Link>
+          ) : null}
+          <SignOutButton onSignOut={() => void signOut()} />
+        </div>
       }
       title="Create your workspace"
     >
