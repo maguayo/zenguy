@@ -15,6 +15,10 @@ Cloudflare Worker (`zenguy-admin`):
 - Login is delegated server to server to `POST {ZENGUY_API_ORIGIN}/api/auth/login`;
   the returned tokens are discarded. The returned account must be verified and
   its stable user id must be in `ADMIN_USER_IDS`; email is never the authority.
+- The Cloudflare Access gate and the credential login are deliberately
+  **independent factors**: the Access identity (e.g. a personal-inbox OTP) does
+  not need to match the Zenguy account email that signs in here. Do not add an
+  equality check between the two — it locks out the intended two-identity setup.
 - The admin session is a random, opaque `__Host-zenguy_admin_session` cookie
   (30 minutes, HttpOnly/Secure/SameSite=Strict). D1 stores only its SHA-256
   digest and rechecks expiry, revocation, verification and `auth_version` on

@@ -148,7 +148,10 @@ export function authRoutes(deps: AuthRoutesDependencies): Hono<AppEnv> {
         await deps.delay(LOGIN_FAILURE_DELAY_MS);
         throw new AppError("UNAUTHORIZED", "Invalid credentials");
       };
-      if (email !== context.get("accessEmail")) return reject();
+      // The Access gate and this credential login are independent factors by
+      // design: the Access identity may be a different inbox than the Zenguy
+      // account signing in. Never require the two emails to match — the
+      // ADMIN_USER_IDS allowlist, not any email, decides who gets in.
       const verdict = await verifyWithApi(deps, endpoint, email, password);
       if (verdict.kind === "invalid") return reject();
       if (verdict.kind === "rate_limited") {

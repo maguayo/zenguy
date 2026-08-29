@@ -27,11 +27,10 @@ export function requireSession(deps: SessionDependencies) {
             await sessionTokenHash(token, context.get("accessSubject")),
             deps.clock.now(),
           );
-    if (
-      session === null ||
-      !isAdminUserId(deps.adminUserIds, session.userId) ||
-      session.email.toLowerCase() !== context.get("accessEmail")
-    ) {
+    // No accessEmail comparison here: the Access identity is deliberately
+    // independent of the Zenguy account (see routes/auth.ts). The token hash
+    // above already binds the cookie to the stable Access subject.
+    if (session === null || !isAdminUserId(deps.adminUserIds, session.userId)) {
       throw new AppError("UNAUTHORIZED", "Admin session required");
     }
     context.set("adminEmail", session.email);

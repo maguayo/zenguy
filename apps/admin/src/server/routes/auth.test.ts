@@ -66,6 +66,27 @@ describe("admin auth", () => {
     await expect(me.json()).resolves.toEqual({ data: { email: "marcos@aguayo.es" } });
   });
 
+  it("logs in when the Access identity email differs from the account email", async () => {
+    const { fetchImpl } = fetchReturning(200, verifiedLoginBody());
+    const sessions = new FakeAdminSessionStore();
+    const app = buildTestApp(fakeBindings(), {
+      fetch: fetchImpl,
+      delay: noDelay,
+      clock,
+      sessions,
+      accessVerifier: {
+        verify: async () => ({ email: "gate@example.com", subject: "access-gate" }),
+      },
+    });
+
+    const response = await login(app, { email: ADMIN_EMAIL, password: "abc123456" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: { email: ADMIN_EMAIL } });
+    const cookie = (response.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
+    expect((await app.request("/api/auth/me", { headers: { Cookie: cookie } })).status).toBe(200);
+  });
+
   it("rejects a valid account whose stable user id is not allowlisted", async () => {
     const { calls, fetchImpl } = fetchReturning(
       200,
