@@ -37,6 +37,8 @@ export interface BrowserTestUpdate {
 export interface BrowserTestRepo {
   insert(test: BrowserTest): Promise<void>;
   findById(workspaceId: string, id: string): Promise<BrowserTest | null>;
+  /** Live tests of the workspace among `ids`; order unspecified. */
+  findByIds(workspaceId: string, ids: string[]): Promise<BrowserTest[]>;
   list(workspaceId: string): Promise<BrowserTest[]>;
   listPage(
     workspaceId: string,
@@ -76,6 +78,11 @@ export interface RunIncidentOrder {
 
 export interface RunRepo {
   insert(run: TestRun): Promise<void>;
+  /** Ids among `testIds` that have at least one finished run. */
+  testsWithFinishedRuns(
+    workspaceId: string,
+    testIds: string[],
+  ): Promise<Set<string>>;
   insertWithAttempt(run: TestRun, attempt: TestAttempt): Promise<void>;
   findByIdForExecution(runId: string): Promise<TestRun | null>;
   findById(workspaceId: string, runId: string): Promise<TestRun | null>;

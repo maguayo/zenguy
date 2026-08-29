@@ -76,6 +76,20 @@ export class FakeIncidentRepo implements IncidentRepo {
     return incident === undefined ? null : copy(incident);
   }
 
+  async listForPublicWindow(
+    workspaceId: string,
+    sinceMs: number,
+  ): Promise<Incident[]> {
+    return [...this.incidents.values()]
+      .filter(
+        (incident) =>
+          incident.workspaceId === workspaceId &&
+          (incident.status === "OPEN" || incident.openedAt >= sinceMs),
+      )
+      .sort((left, right) => right.openedAt - left.openedAt)
+      .map((incident) => ({ ...incident }));
+  }
+
   async findOpenForMonitors(
     workspaceId: string,
     monitorIds: string[],

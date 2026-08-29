@@ -45,6 +45,21 @@ export class FakeMonitorRepo implements MonitorRepo {
       : copy(monitor);
   }
 
+  async findByIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<UptimeMonitor[]> {
+    const wanted = new Set(ids);
+    return [...this.monitors.values()]
+      .filter(
+        (monitor) =>
+          monitor.workspaceId === workspaceId &&
+          monitor.deletedAt === null &&
+          wanted.has(monitor.id),
+      )
+      .map((monitor) => ({ ...monitor }));
+  }
+
   async list(workspaceId: string): Promise<UptimeMonitor[]> {
     return [...this.monitors.values()]
       .filter(

@@ -1,10 +1,13 @@
+import type { Incident } from "../../domain/incidents/types";
 import type {
   IncidentUpdate,
   StatusPage,
   StatusPageItem,
 } from "../../domain/status_pages/types";
 import { freshDb, testEnv } from "../../test/helpers";
+import { D1IncidentRepo } from "./incident_repo";
 import { D1IncidentUpdateRepo } from "./incident_update_repo";
+import { D1RunRepo } from "./run_repo";
 import { D1StatusPageItemRepo, D1StatusPageRepo } from "./status_page_repo";
 
 const NOW = 1_756_400_000_000;
@@ -211,6 +214,123 @@ describe("D1StatusPageItemRepo", () => {
     expect((await repo.listForPage("sp_a")).map((entry) => entry.id)).toEqual([
       "spi_keep",
     ]);
+  });
+});
+
+function incidentRow(input: {
+  id: string;
+  openedAt: number;
+  resolvedAt?: number | null;
+  workspaceId?: string;
+  monitorId?: string;
+}): Incident {
+  return {
+    id: input.id,
+    workspaceId: input.workspaceId ?? "ws_1",
+    resourceType: "UPTIME_MONITOR",
+    browserTestId: null,
+    uptimeMonitorId: input.monitorId ?? `mon_${input.id}`,
+    status: (input.resolvedAt ?? null) === null ? "OPEN" : "RESOLVED",
+    openedAt: input.openedAt,
+    resolvedAt: input.resolvedAt ?? null,
+    openedByRunId: null,
+    resolvedByRunId: null,
+    openedByCheckId: `chk_${input.id}`,
+    resolvedByCheckId: null,
+    lastEventAt: input.openedAt,
+    createdAt: input.openedAt,
+  };
+}
+
+describe("public read-model repo methods", () => {
+  beforeEach(freshDb);
+
+  it("lists incidents for the public window: open at any age plus recent ones", async () => {
+    const repo = new D1IncidentRepo(testEnv().DB);
+    const since = NOW - 90 * 86_400_000;
+    await repo.insertOpen(
+      incidentRow({ id: "inc_ancient_open", openedAt: NOW - 200 * 86_400_000 }),
+    );
+    await repo.insertOpen(incidentRow({ id: "inc_recent", openedAt: NOW - 1_000 }));
+    const oldResolved = incidentRow({
+      id: "inc_old_resolved",
+      openedAt: NOW - 120 * 86_400_000,
+    });
+    await repo.insertOpen(oldResolved);
+    await repo.resolve(oldResolved.id, NOW - 119 * 86_400_000, {});
+    await repo.insertOpen(
+      incidentRow({ id: "inc_foreign", openedAt: NOW, workspaceId: "ws_2" }),
+    );
+
+    const listed = await repo.listForPublicWindow("ws_1", since);
+    expect(listed.map((entry) => entry.id)).toEqual([
+      "inc_recent",
+      "inc_ancient_open",
+    ]);
+  });
+
+  it("findByIds returns only live monitors of the workspace", async () => {
+    const database = testEnv().DB;
+    const insert = (id: string, workspaceId: string, deletedAt: number | null) =>
+      database
+        .prepare(
+          `INSERT INTO uptime_monitors
+            (id, workspace_id, name, url, method, expected_status,
+             frequency_seconds, timeout_seconds, max_retries,
+             notify_on_recovery, next_check_at, current_status,
+             created_at, updated_at, deleted_at)
+           VALUES (?, ?, 'name', 'https://x.example.com', 'GET', 200,
+                   300, 10, 0, 1, ?, 'UP', ?, ?, ?)`,
+        )
+        .bind(id, workspaceId, NOW, NOW, NOW, deletedAt)
+        .run();
+    await insert("mon_live", "ws_1", null);
+    await insert("mon_dead", "ws_1", NOW);
+    await insert("mon_foreign", "ws_2", null);
+
+    const { D1MonitorRepo } = await import("./monitor_repo");
+    const monitors = new D1MonitorRepo(database);
+    const found = await monitors.findByIds("ws_1", [
+      "mon_live",
+      "mon_dead",
+      "mon_foreign",
+      "mon_missing",
+    ]);
+    expect(found.map((entry) => entry.id)).toEqual(["mon_live"]);
+    expect(await monitors.findByIds("ws_1", [])).toEqual([]);
+  });
+
+  it("finds live tests with finished runs among the given ids", async () => {
+    const database = testEnv().DB;
+    const runs = new D1RunRepo(database);
+    await database
+      .prepare(
+        `INSERT INTO test_runs
+          (id, workspace_id, browser_test_id, source, status, snapshot_json,
+           queued_at, started_at, finished_at, duration_ms, attempt_count,
+           infra_attempts, passed_after_retry, billable, created_at)
+         VALUES (?, ?, ?, 'SCHEDULED', 'PASSED', '{}', ?, ?, ?, 60000, 1, 0, 0, 1, ?)`,
+      )
+      .bind("run_done", "ws_1", "bt_done", NOW, NOW, NOW + 60_000, NOW)
+      .run();
+    await database
+      .prepare(
+        `INSERT INTO test_runs
+          (id, workspace_id, browser_test_id, source, status, snapshot_json,
+           queued_at, attempt_count, infra_attempts, passed_after_retry,
+           billable, created_at)
+         VALUES (?, ?, ?, 'SCHEDULED', 'QUEUED', '{}', ?, 0, 0, 0, 1, ?)`,
+      )
+      .bind("run_pending", "ws_1", "bt_pending", NOW, NOW)
+      .run();
+
+    const finished = await runs.testsWithFinishedRuns("ws_1", [
+      "bt_done",
+      "bt_pending",
+      "bt_missing",
+    ]);
+    expect(finished).toEqual(new Set(["bt_done"]));
+    expect(await runs.testsWithFinishedRuns("ws_1", [])).toEqual(new Set());
   });
 });
 

@@ -41,6 +41,8 @@ export type CheckAverageScope =
 export interface MonitorRepo {
   insert(monitor: UptimeMonitor): Promise<void>;
   findById(workspaceId: string, id: string): Promise<UptimeMonitor | null>;
+  /** Live monitors of the workspace among `ids`; order unspecified. */
+  findByIds(workspaceId: string, ids: string[]): Promise<UptimeMonitor[]>;
   list(workspaceId: string): Promise<UptimeMonitor[]>;
   listPage(
     workspaceId: string,

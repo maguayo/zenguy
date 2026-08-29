@@ -175,6 +175,22 @@ export class D1IncidentRepo implements IncidentRepo {
     return row === null ? null : toIncident(row);
   }
 
+  async listForPublicWindow(
+    workspaceId: string,
+    sinceMs: number,
+  ): Promise<Incident[]> {
+    const rows = await all<IncidentRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM incidents
+           WHERE workspace_id = ? AND (status = 'OPEN' OR opened_at >= ?)
+           ORDER BY opened_at DESC, id DESC`,
+        )
+        .bind(workspaceId, sinceMs),
+    );
+    return rows.map(toIncident);
+  }
+
   async findOpenForMonitors(
     workspaceId: string,
     monitorIds: string[],

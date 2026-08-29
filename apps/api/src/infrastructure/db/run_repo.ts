@@ -99,6 +99,24 @@ function parseActionAuthorizations(raw: string): ActionAuthorizationState[] {
 export class D1RunRepo implements RunRepo {
   constructor(private readonly database: D1Database) {}
 
+  async testsWithFinishedRuns(
+    workspaceId: string,
+    testIds: string[],
+  ): Promise<Set<string>> {
+    if (testIds.length === 0) return new Set();
+    const placeholders = testIds.map(() => "?").join(", ");
+    const rows = await all<{ browser_test_id: string }>(
+      this.database
+        .prepare(
+          `SELECT DISTINCT browser_test_id FROM test_runs
+           WHERE workspace_id = ? AND finished_at IS NOT NULL
+             AND browser_test_id IN (${placeholders})`,
+        )
+        .bind(workspaceId, ...testIds),
+    );
+    return new Set(rows.map((row) => row.browser_test_id));
+  }
+
   async insert(value: TestRun): Promise<void> {
     await run(
       this.database

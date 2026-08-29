@@ -136,6 +136,24 @@ export class D1MonitorRepo implements MonitorRepo {
     return row === null ? null : toMonitor(row);
   }
 
+  async findByIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<UptimeMonitor[]> {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = await all<MonitorRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM uptime_monitors
+           WHERE workspace_id = ? AND deleted_at IS NULL
+             AND id IN (${placeholders})`,
+        )
+        .bind(workspaceId, ...ids),
+    );
+    return rows.map(toMonitor);
+  }
+
   async list(workspaceId: string): Promise<UptimeMonitor[]> {
     const rows = await all<MonitorRow>(
       this.database

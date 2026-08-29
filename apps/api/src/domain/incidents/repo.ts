@@ -38,6 +38,11 @@ export interface IncidentRepo {
     cursor: Cursor | null | undefined,
     limit: number,
   ): Promise<IncidentWithResourceName[]>;
+  /**
+   * Incidents feeding a public status page: every OPEN incident regardless of
+   * age, plus incidents opened at or after `sinceMs`. Newest first.
+   */
+  listForPublicWindow(workspaceId: string, sinceMs: number): Promise<Incident[]>;
 }
 
 export interface IncidentEventRepo {

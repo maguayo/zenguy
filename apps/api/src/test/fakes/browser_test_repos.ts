@@ -53,6 +53,21 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
       : copy(test);
   }
 
+  async findByIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<BrowserTest[]> {
+    const wanted = new Set(ids);
+    return [...this.tests.values()]
+      .filter(
+        (test) =>
+          test.workspaceId === workspaceId &&
+          test.deletedAt === null &&
+          wanted.has(test.id),
+      )
+      .map(copy);
+  }
+
   async list(workspaceId: string): Promise<BrowserTest[]> {
     return [...this.tests.values()]
       .filter(
@@ -158,6 +173,25 @@ export class FakeBrowserTestRepo implements BrowserTestRepo {
 export class FakeRunRepo implements RunRepo {
   readonly runs = new Map<string, TestRun>();
   readonly initialAttempts = new Map<string, TestAttempt>();
+
+  async testsWithFinishedRuns(
+    workspaceId: string,
+    testIds: string[],
+  ): Promise<Set<string>> {
+    const wanted = new Set(testIds);
+    const finished = new Set<string>();
+    for (const run of this.runs.values()) {
+      if (
+        run.workspaceId === workspaceId &&
+        run.finishedAt !== null &&
+        run.browserTestId !== null &&
+        wanted.has(run.browserTestId)
+      ) {
+        finished.add(run.browserTestId);
+      }
+    }
+    return finished;
+  }
 
   async insert(run: TestRun): Promise<void> {
     if (this.runs.has(run.id)) throw new Error("run constraint violation");

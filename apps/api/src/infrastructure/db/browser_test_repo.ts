@@ -155,6 +155,24 @@ export class D1BrowserTestRepo implements BrowserTestRepo {
     return row === null ? null : toBrowserTest(row);
   }
 
+  async findByIds(
+    workspaceId: string,
+    ids: string[],
+  ): Promise<BrowserTest[]> {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = await all<BrowserTestRow>(
+      this.database
+        .prepare(
+          `SELECT * FROM browser_tests
+           WHERE workspace_id = ? AND deleted_at IS NULL
+             AND id IN (${placeholders})`,
+        )
+        .bind(workspaceId, ...ids),
+    );
+    return rows.map(toBrowserTest);
+  }
+
   async list(workspaceId: string): Promise<BrowserTest[]> {
     return (
       await all<BrowserTestRow>(
