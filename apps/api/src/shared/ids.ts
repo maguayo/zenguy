@@ -32,6 +32,9 @@ export const ID_PREFIXES = {
   paddleCheckoutIntent: "pci",
   pushDevice: "pd",
   activityEvent: "act",
+  statusPage: "sp",
+  statusPageItem: "spi",
+  incidentUpdate: "iu",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

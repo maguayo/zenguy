@@ -9,6 +9,7 @@ export type Action =
   | "channels.manage"
   | "paid_alerts.manage"
   | "secrets.manage"
+  | "status_pages.manage"
   | "api_keys.manage"
   | "members.invite"
   | "members.remove"
@@ -30,6 +31,7 @@ export const PERMISSIONS = {
     "channels.manage": true,
     "paid_alerts.manage": true,
     "secrets.manage": true,
+    "status_pages.manage": true,
     "api_keys.manage": true,
     "members.invite": true,
     "members.remove": true,
@@ -50,6 +52,7 @@ export const PERMISSIONS = {
     "channels.manage": true,
     "paid_alerts.manage": false,
     "secrets.manage": true,
+    "status_pages.manage": true,
     "api_keys.manage": true,
     "members.invite": true,
     "members.remove": true,
@@ -70,6 +73,7 @@ export const PERMISSIONS = {
     "channels.manage": false,
     "paid_alerts.manage": false,
     "secrets.manage": false,
+    "status_pages.manage": false,
     "api_keys.manage": false,
     "members.invite": false,
     "members.remove": false,

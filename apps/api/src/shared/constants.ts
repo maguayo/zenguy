@@ -102,6 +102,11 @@ export const PAST_DUE_GRACE_DAYS = 7;
 export const MAX_BROWSER_TESTS_PER_WORKSPACE = 200;
 export const MAX_SECRETS_PER_WORKSPACE = 100;
 export const MAX_CHANNELS_PER_WORKSPACE = 50;
+export const MAX_STATUS_PAGES_PER_WORKSPACE = 5;
+export const MAX_STATUS_PAGE_ITEMS = 50;
+export const MAX_INCIDENT_UPDATE_LENGTH = 2000;
+export const STATUS_PAGE_HISTORY_DAYS = 90;
+export const STATUS_PAGE_RECENT_INCIDENT_DAYS = 15;
 
 export const DEVICE_PROFILES = {
   DESKTOP: {
@@ -142,6 +147,8 @@ export const RATE_LIMITS = {
   test_import: { limit: 10, windowSeconds: 3600 },
   report_download: { limit: 60, windowSeconds: 3600 },
   public_api: { limit: 120, windowSeconds: 60 },
+  /** Anonymous public status-page views, per source IP, applied on cache miss. */
+  status_page: { limit: 120, windowSeconds: 60 },
   subscription_grants: { limit: 20, windowSeconds: 3600 },
   /**
    * Best-effort telemetry, capped per actor and per source IP. Clients flush
