@@ -1001,3 +1001,16 @@ Preview iframe: `<iframe title="Status page preview" sandbox="" className="h-[60
 - [ ] **Step 2: Local smoke.** Start the API (`pnpm --filter @zenguy/api dev`, port 8790 per the local setup) and `curl -i http://localhost:8790/status/nope` → 404 HTML with the expected cache/CSP headers. If a seeded workspace exists locally, create a page through the SPA (`pnpm --filter @zenguy/frontend dev`, port 5174) and open `http://localhost:8790/status/<slug>`; otherwise note the manual QA step for Marcos.
 - [ ] **Step 3: Shared files reconciliation.** `git status` — if `app.ts` / `wrangler.jsonc` / `wrangler_config.test.ts` are STILL dirty with the OAuth session's hunks, do NOT commit them; write down exactly which status-page hunks inside them remain uncommitted (route mounts, repo wiring, `/status/*` routes, config-test expectations) and surface that list to Marcos at the end. If the peer committed meanwhile, rebase-check (`git diff`) that only your hunks remain and commit them: `git add apps/api/src/app.ts apps/api/wrangler.jsonc apps/api/src/wrangler_config.test.ts && git commit -m "api: status pages — wiring y rutas /status en wrangler"`.
 - [ ] **Step 4: Report.** Summarize to Marcos: what shipped, test totals, the public URL shape, pending manual QA, pending shared-file commits (if any), and that deploy (push) stays in his hands.
+
+---
+
+## Execution log (2026-08-30)
+
+Ejecutado por sesión zenguy-94. Los 15 tasks completados con TDD; suites finales: API 1181 unit + 420 integration, frontend 334, typechecks limpios. Commits `0a9baa9..7bd4fc2` (9 de código + spec/plan). Desviaciones del plan:
+
+- Migración renumerada a `0050_status_pages.sql` (colisión con `0049_oauth_identities.sql`, huérfana y untracked de una sesión OAuth abandonada).
+- Tasks 2–4 fusionadas en un commit: `audit_wiring.test.ts` y `AUDIT_TO_ACTIVITY` son exhaustivos por tipos y exigen todas las acciones a la vez.
+- La cache de borde usa `caches.open("status-pages")` en vez de `caches.default` (los tipos generados por wrangler no exponen `default`).
+- Tests de páginas frontend siguen el patrón de la casa (renderToStaticMarkup de componentes presentacionales + helpers puros), no interacción completa.
+- Smoke local no ejecutado: `pnpm dev` falla porque el `local-secrets.mjs` huérfano exige items GOOGLE_* de Keychain sin aprovisionar. QA manual pendiente.
+- PENDIENTE DE COMMIT (hunks propios mezclados con los huérfanos de OAuth — no commitear hasta resolver esa sesión): `apps/api/src/app.ts` (wiring repos + mounts /api/workspaces y /status), `apps/api/wrangler.jsonc` + `apps/api/src/wrangler_config.test.ts` (routes `app.zenguy.com/status/*` y staging), `apps/api/src/test/helpers.ts` (3 DELETEs en freshDb), `apps/frontend/src/lib/api.ts` (apiGetText).
