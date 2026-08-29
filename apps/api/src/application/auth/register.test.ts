@@ -34,7 +34,7 @@ describe("Register", () => {
     expect(message?.to).toEqual([user?.email]);
     expect(message?.subject).toBe("Welcome to Zenguy — verify your email");
     expect(message?.html).toContain("Welcome, Alice.");
-    expect(message?.html).toContain("YOUR ZENGUY PLAN");
+    expect(message?.html).not.toContain("YOUR ZENGUY PLAN");
     expect(message?.text).toContain("activate it securely with Stripe");
 
     const tokenPlain = new URL(

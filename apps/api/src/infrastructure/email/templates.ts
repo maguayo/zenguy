@@ -137,13 +137,6 @@ export function renderWelcomeEmail(
   const verifyUrl = authUrl(appUrl, "verify-email", token);
   const subject = "Welcome to Zenguy — verify your email";
   const contentHtml = `<p style="margin:0 0 18px">Your Zenguy account is ready. Confirm your email to start monitoring the journeys and endpoints your business depends on.</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f8fafc" style="width:100%;margin:22px 0 0;background:#f8fafc;border:1px solid #e4e4e7;border-radius:8px">
-  <tr><td style="padding:18px 20px 8px;color:#52525b;font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:700;letter-spacing:1.2px">YOUR ZENGUY PLAN</td></tr>
-  <tr><td style="padding:6px 20px;color:#27272a;font-size:14px;line-height:21px"><span style="color:#059669;font-weight:700">✓</span>&nbsp;&nbsp;39 € per month, per workspace</td></tr>
-  <tr><td style="padding:6px 20px;color:#27272a;font-size:14px;line-height:21px"><span style="color:#059669;font-weight:700">✓</span>&nbsp;&nbsp;300 browser-test runs every month</td></tr>
-  <tr><td style="padding:6px 20px;color:#27272a;font-size:14px;line-height:21px"><span style="color:#059669;font-weight:700">✓</span>&nbsp;&nbsp;Unlimited uptime checks</td></tr>
-  <tr><td style="padding:6px 20px 18px;color:#27272a;font-size:14px;line-height:21px"><span style="color:#059669;font-weight:700">✓</span>&nbsp;&nbsp;Unlimited team members</td></tr>
-</table>
 <p style="margin:18px 0 0;padding:12px 14px;background:#eef2ff;border-left:3px solid #4f46e5;border-radius:4px;color:#3730a3;font-size:13px;line-height:20px">After verification, create a workspace and activate it securely with Stripe. Billing starts only after you confirm Checkout.</p>`;
   const html = renderEmailFrame({
     preheader: "Open the link and enter your registration password to verify your email.",
@@ -159,12 +152,6 @@ export function renderWelcomeEmail(
     `Welcome to Zenguy, ${name}.`,
     "",
     "Your Zenguy account is ready. Confirm your email to start monitoring the journeys and endpoints your business depends on.",
-    "",
-    "Your Zenguy plan:",
-    "- 39 € per month, per workspace",
-    "- 300 browser-test runs every month",
-    "- Unlimited uptime checks",
-    "- Unlimited team members",
     "",
     "After verification, create a workspace and activate it securely with Stripe. Billing starts only after you confirm Checkout.",
     "",
