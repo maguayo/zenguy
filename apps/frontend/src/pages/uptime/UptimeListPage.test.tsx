@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { Monitor } from "../../api/types";
 import {
   MonitorRowContent,
-  monitorAlertChannelsLabel,
+  monitorFrequencyLabel,
   monitorHost,
   monitorResponseTimeLabel,
   uptimeListHeaders,
@@ -59,14 +59,15 @@ const monitor: Monitor = {
 describe("uptime monitor list", () => {
   it("keeps the required column order", () => {
     expect(uptimeListHeaders).toEqual([
+      "Status",
       "Monitor",
-      "History",
-      "Next check",
-      "Alerts",
+      "Every",
+      "Response",
+      "Last 20 checks",
     ]);
   });
 
-  it("renders monitor identity, check history, and alert coverage", () => {
+  it("renders monitor identity, status, cadence, response, and compact history", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MonitorRowContent
@@ -83,20 +84,24 @@ describe("uptime monitor list", () => {
     expect(html).not.toContain("private=value");
     expect(html).toContain("Up");
     expect(html).toContain("Checking");
-    expect(html).toContain("Every 5 min");
+    expect(html).toContain("5 min");
+    expect(html).toContain("Next ");
     expect(html).toContain("184 ms");
     expect(html).not.toContain("Automatic");
     expect(html).toContain("2/3 passed");
     expect(html).toContain("bg-ok-600");
     expect(html).toContain("bg-danger-600");
-    expect(html).toContain("aria-label=\"Passed ·");
-    expect(html).toContain("aria-label=\"Failed ·");
+    expect(html).toContain("h-[18px]");
+    expect(html).toContain(
+      'aria-label="Last 20 checks for Storefront home: 2/3 passed; newest on the right"',
+    );
+    expect(html).toContain("title=\"Passed ·");
+    expect(html).toContain("title=\"Failed ·");
     expect(html).toContain("/w/ws_1/incidents/incident_1");
-    expect(html).toContain("Open incident");
-    expect(html).toContain("2 alert channels");
+    expect(html).toContain("Incident");
   });
 
-  it("shows an explicit first-check and no-incident state", () => {
+  it("shows an explicit first-check state without inventing response data", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MonitorRowContent
@@ -118,8 +123,7 @@ describe("uptime monitor list", () => {
     expect(html).toContain("Unknown");
     expect(html).toContain("Waiting for first check");
     expect(html).toContain("No checks yet");
-    expect(html).toContain("No open incident");
-    expect(html).toContain("No alert channels");
+    expect(html).toContain(">—<");
     expect(html).not.toContain("/incidents/");
   });
 
@@ -141,12 +145,11 @@ describe("uptime monitor list", () => {
     );
     expect(html).toContain("Down");
     expect(html).toContain("No response");
-    expect(html).toContain("No open incident");
-    expect(html).not.toContain("All clear");
+    expect(html).not.toContain("/incidents/");
     expect(html).not.toContain("Waiting for first check");
   });
 
-  it("shows All clear only for a healthy monitor without an incident", () => {
+  it("keeps a healthy status concise when there is no incident", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MonitorRowContent
@@ -161,19 +164,21 @@ describe("uptime monitor list", () => {
         />
       </MemoryRouter>,
     );
-    expect(html).toContain("All clear");
-    expect(html).not.toContain("No open incident");
+    expect(html).toContain("Up");
+    expect(html).not.toContain("/incidents/");
+    expect(html).not.toContain("Incident");
   });
 
-  it("uses safe host, response, and channel labels", () => {
+  it("uses safe host, cadence, and response labels", () => {
     expect(
       monitorHost("https://user:secret@example.com:8443/path?token=private#hash"),
     ).toBe("example.com:8443");
     expect(monitorHost("not a url")).toBe("Unknown host");
     expect(monitorHost("javascript:alert(1)")).toBe("Unknown host");
-    expect(monitorAlertChannelsLabel(0)).toBe("No alert channels");
-    expect(monitorAlertChannelsLabel(1)).toBe("1 alert channel");
-    expect(monitorAlertChannelsLabel(3)).toBe("3 alert channels");
+    expect(monitorFrequencyLabel(300)).toBe("5 min");
+    expect(monitorFrequencyLabel(3_600)).toBe("1 h");
+    expect(monitorFrequencyLabel(86_400)).toBe("24 h");
+    expect(monitorFrequencyLabel(0)).toBe("—");
     expect(monitorResponseTimeLabel(null)).toBe("No response");
     expect(monitorResponseTimeLabel(0)).toBe("0 ms");
   });

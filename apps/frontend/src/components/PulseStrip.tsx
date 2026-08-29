@@ -14,9 +14,12 @@ export interface PulseStripProps {
 }
 
 export interface CheckPulseStripProps {
+  /** One concise accessible description for the non-interactive history. */
+  ariaLabel?: string;
   /** Oldest first; the last tick is the most recent check. */
   checks: CheckTick[];
   className?: string;
+  density?: "compact" | "prominent";
   /** Number of slots; missing history renders as quiet placeholders. */
   max?: number;
 }
@@ -76,25 +79,49 @@ interface VisualTick {
 }
 
 interface VisualPulseStripProps {
+  ariaLabel?: string;
   className?: string;
+  density?: "compact" | "prominent";
+  hideTickLabels?: boolean;
   max: number;
   ticks: VisualTick[];
 }
 
-const tickShape = "h-6 min-w-[4px] flex-1 rounded-[4px]";
+const densityClass = {
+  compact: {
+    gap: "gap-0.5",
+    tick: "h-[18px] min-w-[3px] flex-1 rounded-[2px]",
+  },
+  prominent: {
+    gap: "gap-[3px]",
+    tick: "h-6 min-w-[4px] flex-1 rounded-[4px]",
+  },
+} as const;
 
 /** Shared visual track for browser runs and uptime checks. */
-function VisualPulseStrip({ className, max, ticks }: VisualPulseStripProps) {
+function VisualPulseStrip({
+  ariaLabel,
+  className,
+  density = "prominent",
+  hideTickLabels = false,
+  max,
+  ticks,
+}: VisualPulseStripProps) {
   const recent = ticks.slice(-max);
   const placeholders = Math.max(0, max - recent.length);
+  const styles = densityClass[density];
 
   return (
-    <div className={clsx("flex w-full cursor-default items-center gap-[3px]", className)}>
+    <div
+      aria-label={ariaLabel}
+      className={clsx("flex w-full cursor-default items-center", styles.gap, className)}
+      role={ariaLabel ? "img" : undefined}
+    >
       {Array.from({ length: placeholders }, (_, index) => (
         <span
           key={`empty-${index}`}
           aria-hidden="true"
-          className={clsx(tickShape, "bg-zinc-200/70")}
+          className={clsx(styles.tick, "bg-zinc-200/70")}
         />
       ))}
       {recent.map((tick) =>
@@ -103,7 +130,7 @@ function VisualPulseStrip({ className, max, ticks }: VisualPulseStripProps) {
             key={tick.id}
             aria-label={tick.label}
             className={clsx(
-              tickShape,
+              styles.tick,
               "cursor-pointer transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2",
               tick.className,
             )}
@@ -114,9 +141,10 @@ function VisualPulseStrip({ className, max, ticks }: VisualPulseStripProps) {
         ) : (
           <span
             key={tick.id}
-            aria-label={tick.label}
-            className={clsx(tickShape, tick.className)}
-            role="img"
+            aria-hidden={hideTickLabels ? "true" : undefined}
+            aria-label={hideTickLabels ? undefined : tick.label}
+            className={clsx(styles.tick, tick.className)}
+            role={hideTickLabels ? undefined : "img"}
             title={tick.label}
           />
         ),
@@ -146,10 +174,28 @@ export function PulseStrip({ className, max = 20, runs, workspaceId }: PulseStri
 }
 
 /** Uptime history uses the same visual language without linking each check. */
-export function CheckPulseStrip({ checks, className, max = 20 }: CheckPulseStripProps) {
+export function CheckPulseStrip({
+  ariaLabel,
+  checks,
+  className,
+  density = "prominent",
+  max = 20,
+}: CheckPulseStripProps) {
+  const recent = checks.slice(-max);
+  const passed = recent.filter((check) => check.status === "PASSED").length;
+  const failed = recent.length - passed;
+  const missing = Math.max(0, max - recent.length);
+  const defaultLabel =
+    recent.length === 0
+      ? `Last ${max} check slots: no checks yet`
+      : `Last ${max} check slots: ${passed} passed, ${failed} failed, ${missing} without data; newest on the right`;
+
   return (
     <VisualPulseStrip
+      ariaLabel={ariaLabel ?? defaultLabel}
       className={className}
+      density={density}
+      hideTickLabels
       max={max}
       ticks={checks.map((check) => ({
         className: tickTone[check.status].className,

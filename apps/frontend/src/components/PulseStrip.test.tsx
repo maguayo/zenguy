@@ -119,26 +119,28 @@ describe("CheckPulseStrip", () => {
     expect(secondFailure).toBeGreaterThan(pass);
   });
 
-  it("labels checks with their result and relative check time", () => {
+  it("summarises checks once while retaining per-bar pointer titles", () => {
     const html = renderChecks([check("check_1", "PASSED")]);
-    expect(html).toMatch(/aria-label="Passed · [^"]+"/);
+    expect(html).toContain(
+      'aria-label="Last 20 check slots: 1 passed, 0 failed, 19 without data; newest on the right"',
+    );
     expect(html).toMatch(/title="Passed · [^"]+"/);
   });
 
-  it("renders labelled ticks without links", () => {
+  it("renders one aggregate graphic without interactive links", () => {
     const html = renderChecks([
       check("check_1", "PASSED"),
       check("check_2", "FAILED"),
     ]);
-    expect(html.match(/role="img"/g)).toHaveLength(2);
+    expect(html.match(/role="img"/g)).toHaveLength(1);
     expect(html).not.toContain("href=");
     expect(html).not.toContain("<a");
   });
 
   it("pads missing history with the same quiet placeholders", () => {
     const html = renderChecks([check("check_1", "PASSED")], 20);
-    expect(html.match(/aria-hidden="true"/g)).toHaveLength(19);
-    expect(html).toContain("bg-zinc-200/70");
+    expect(html.match(/bg-zinc-200\/70/g)).toHaveLength(19);
+    expect(html.match(/aria-hidden="true"/g)).toHaveLength(20);
   });
 
   it("keeps only the newest checks when history overflows", () => {
@@ -148,7 +150,16 @@ describe("CheckPulseStrip", () => {
     const html = renderChecks(checks, 20);
     expect(html).not.toContain("bg-danger-600");
     expect(html.match(/bg-ok-600/g)).toHaveLength(20);
-    expect(html.match(/role="img"/g)).toHaveLength(20);
+    expect(html.match(/role="img"/g)).toHaveLength(1);
+  });
+
+  it("has a compact density for table rows without changing the default", () => {
+    const compact = renderToStaticMarkup(
+      <CheckPulseStrip checks={[check("check_1", "PASSED")]} density="compact" />,
+    );
+    expect(compact).toContain("h-[18px]");
+    expect(compact).toContain("gap-0.5");
+    expect(renderChecks([check("check_1", "PASSED")])).toContain("h-6");
   });
 });
 

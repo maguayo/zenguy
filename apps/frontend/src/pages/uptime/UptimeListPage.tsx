@@ -1,12 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
-  Bell,
-  CalendarClock,
-  CheckCircle2,
   CircleAlert,
-  Globe2,
   MoreHorizontal,
   Plus,
 } from "lucide-react";
@@ -17,7 +12,6 @@ import { deleteMonitor, listMonitors } from "../../api/uptime";
 import type { Monitor } from "../../api/types";
 import { CheckPulseStrip, passRateLabel } from "../../components/PulseStrip";
 import { StatusBadge } from "../../components/StatusBadge";
-import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Dropdown, type DropdownItem } from "../../components/ui/Dropdown";
@@ -32,7 +26,6 @@ import { useMutationError } from "../../hooks/useMutationError";
 import { apiErrorMessage } from "../../lib/errors";
 import {
   formatDateTime,
-  formatFrequency,
   formatRelative,
 } from "../../lib/format";
 
@@ -44,13 +37,14 @@ export function monitorHost(url: string): string {
   }
 }
 
-export function monitorAlertChannelsLabel(count: number): string {
-  if (count === 0) return "No alert channels";
-  return `${count} alert ${count === 1 ? "channel" : "channels"}`;
-}
-
 export function monitorResponseTimeLabel(value: number | null): string {
   return value === null ? "No response" : `${value} ms`;
+}
+
+export function monitorFrequencyLabel(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
+  return `${seconds / 3_600} h`;
 }
 
 function MonitorActions({ monitor }: { monitor: Monitor }) {
@@ -121,25 +115,15 @@ function MonitorActions({ monitor }: { monitor: Monitor }) {
 }
 
 export const uptimeListHeaders = [
+  "Status",
   "Monitor",
-  "History",
-  "Next check",
-  "Alerts",
+  "Every",
+  "Response",
+  "Last 20 checks",
 ] as const;
 
 const uptimeListGrid =
-  "min-[1200px]:grid-cols-[minmax(175px,1fr)_minmax(240px,1.5fr)_minmax(105px,0.62fr)_minmax(110px,0.68fr)_112px]";
-
-function monitorIndicatorClass(monitor: Monitor): string {
-  if (monitor.openIncidentId || monitor.status === "DOWN") {
-    return "bg-danger-600";
-  }
-  if (monitor.checking) {
-    return "bg-info-600 motion-safe:animate-pulse";
-  }
-  if (monitor.status === "UP") return "bg-ok-600";
-  return "bg-zinc-400";
-}
+  "min-[1200px]:grid-cols-[92px_minmax(190px,1.2fr)_84px_110px_minmax(180px,1fr)_44px]";
 
 function MobileCellLabel({ children }: { children: string }) {
   return (
@@ -160,136 +144,96 @@ export function MonitorRowContent({
 }) {
   const host = monitorHost(monitor.url);
   const recentChecks = (monitor.recentChecks ?? []).slice(-20);
+  const historyLabel = passRateLabel(recentChecks) ?? "No checks yet";
 
   return (
     <>
-      <div className="min-w-0 pr-10 min-[1200px]:pr-0" role="cell">
-        <div className="flex items-start gap-3">
-          <span className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-700">
-            <Activity
-              aria-hidden="true"
-              className={clsx(
-                "size-5",
-                monitor.checking && "motion-safe:animate-pulse",
-              )}
-            />
-            <span
-              aria-hidden="true"
-              className={clsx(
-                "absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white",
-                monitorIndicatorClass(monitor),
-              )}
-            />
-          </span>
-          <div className="min-w-0 flex-1">
-            <Link
-              className="block truncate text-sm font-semibold text-zinc-950 hover:text-accent-700 hover:underline"
-              to={`/w/${workspaceId}/uptime/${monitor.id}`}
-            >
-              {monitor.name}
-            </Link>
-            <p
-              className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-zinc-500"
-              title={host}
-            >
-              <Globe2 aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="truncate">{host}</span>
-            </p>
-            <p className="mt-1.5 font-mono text-[11px] text-zinc-500">
-              {monitor.method}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
-        role="cell"
-      >
-        <MobileCellLabel>History</MobileCellLabel>
-        <div className="min-w-0 rounded-lg bg-zinc-50/90 p-2.5 ring-1 ring-inset ring-zinc-200">
-          <div className="flex min-h-6 flex-wrap items-center gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <StatusBadge status={monitor.status} />
-              {monitor.checking ? <StatusBadge status="CHECKING" /> : null}
-            </div>
-          </div>
-          <CheckPulseStrip
-            checks={recentChecks}
-            className="mt-2.5 w-full"
-          />
-          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="text-xs font-semibold tabular-nums text-zinc-700">
-              {passRateLabel(recentChecks) ?? "No checks yet"}
-            </p>
-            <span
-              className="whitespace-nowrap text-[11px] text-zinc-500"
-              title={
-                monitor.lastCheckAt
-                  ? formatDateTime(monitor.lastCheckAt, timezone)
-                  : undefined
-              }
-            >
-              {monitor.lastCheckAt
-                ? `${formatRelative(monitor.lastCheckAt)} · ${monitorResponseTimeLabel(
-                    monitor.lastResponseTimeMs,
-                  )}`
-                : "Waiting for first check"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
-        role="cell"
-      >
-        <MobileCellLabel>Next check</MobileCellLabel>
-        <div>
-          <p
-            className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-zinc-900"
-            title={formatDateTime(monitor.nextCheckAt, timezone)}
+      <div className="flex flex-col items-start gap-1.5" role="cell">
+        <StatusBadge status={monitor.status} />
+        {monitor.checking ? <StatusBadge status="CHECKING" /> : null}
+        {monitor.openIncidentId ? (
+          <Link
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-700 hover:underline"
+            to={`/w/${workspaceId}/incidents/${monitor.openIncidentId}`}
           >
-            <CalendarClock aria-hidden="true" className="size-4 text-zinc-400" />
-            {formatRelative(monitor.nextCheckAt)}
-          </p>
-          <p className="mt-1.5 text-xs text-zinc-500">
-            {formatFrequency(monitor.frequencySeconds)}
+            <CircleAlert aria-hidden="true" className="size-3" />
+            Incident
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="min-w-0 pr-10 min-[1200px]:pr-0" role="cell">
+        <div className="flex min-w-0 flex-col gap-1 min-[1200px]:flex-row min-[1200px]:items-baseline min-[1200px]:gap-2.5">
+          <Link
+            className="min-w-0 truncate text-sm font-semibold text-zinc-950 hover:text-accent-700 hover:underline min-[1200px]:max-w-[58%] min-[1200px]:shrink-0"
+            to={`/w/${workspaceId}/uptime/${monitor.id}`}
+          >
+            {monitor.name}
+          </Link>
+          <p
+            className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-zinc-500"
+            title={host}
+          >
+            <span className="min-[1200px]:hidden">{monitor.method} ·</span>
+            <span className="truncate">{host}</span>
           </p>
         </div>
       </div>
 
       <div
-        className="grid grid-cols-1 items-start gap-2 min-[400px]:grid-cols-[5.5rem_minmax(0,1fr)] min-[400px]:gap-3 min-[1200px]:block"
+        className="min-w-0"
         role="cell"
       >
-        <MobileCellLabel>Alerts</MobileCellLabel>
-        <div className="space-y-1.5">
-          {monitor.openIncidentId ? (
-            <Link
-              className="inline-flex"
-              to={`/w/${workspaceId}/incidents/${monitor.openIncidentId}`}
-            >
-              <Badge tone="danger">
-                <CircleAlert aria-hidden="true" className="size-3" />
-                Open incident
-              </Badge>
-            </Link>
-          ) : monitor.status === "UP" ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ok-700">
-              <CheckCircle2 aria-hidden="true" className="size-3.5" />
-              All clear
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
-              <CheckCircle2 aria-hidden="true" className="size-3.5 text-zinc-400" />
-              No open incident
-            </span>
-          )}
-          <p className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <Bell aria-hidden="true" className="size-3.5" />
-            {monitorAlertChannelsLabel(monitor.channelIds.length)}
-          </p>
+        <MobileCellLabel>Every</MobileCellLabel>
+        <p className="mt-1 font-mono text-sm tabular-nums text-zinc-800 min-[1200px]:mt-0">
+          {monitorFrequencyLabel(monitor.frequencySeconds)}
+        </p>
+        <p
+          className="mt-1 whitespace-nowrap text-[11px] text-zinc-500"
+          title={formatDateTime(monitor.nextCheckAt, timezone)}
+        >
+          Next {formatRelative(monitor.nextCheckAt)}
+        </p>
+      </div>
+
+      <div
+        className="min-w-0"
+        role="cell"
+      >
+        <MobileCellLabel>Response</MobileCellLabel>
+        <p className="mt-1 whitespace-nowrap font-mono text-sm tabular-nums text-zinc-800 min-[1200px]:mt-0">
+          {monitor.lastCheckAt
+            ? monitorResponseTimeLabel(monitor.lastResponseTimeMs)
+            : "—"}
+        </p>
+        <p
+          className="mt-1 whitespace-nowrap text-[11px] text-zinc-500"
+          title={
+            monitor.lastCheckAt
+              ? formatDateTime(monitor.lastCheckAt, timezone)
+              : undefined
+          }
+        >
+          {monitor.lastCheckAt
+            ? formatRelative(monitor.lastCheckAt)
+            : "Waiting for first check"}
+        </p>
+      </div>
+
+      <div
+        className="col-span-2 min-w-0 min-[1200px]:col-span-1"
+        role="cell"
+      >
+        <MobileCellLabel>Last 20 checks</MobileCellLabel>
+        <CheckPulseStrip
+          ariaLabel={`Last 20 checks for ${monitor.name}: ${historyLabel}; newest on the right`}
+          checks={recentChecks}
+          className="mt-2 min-[1200px]:mt-0"
+          density="compact"
+        />
+        <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-zinc-500 min-[1200px]:sr-only">
+          <span>{historyLabel}</span>
+          <span>Newest on right</span>
         </div>
       </div>
     </>
@@ -306,17 +250,22 @@ function UptimeListSkeleton() {
     >
       <div className="divide-y divide-zinc-200">
         {Array.from({ length: 3 }, (_, index) => (
-          <div key={index} className="flex items-center gap-4 px-5 py-5">
-            <Skeleton className="size-11 shrink-0 rounded-xl" />
+          <div
+            key={index}
+            className={clsx(
+              "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 px-5 py-4",
+              uptimeListGrid,
+            )}
+          >
+            <Skeleton className="h-6 w-16 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-4 w-44 max-w-full" />
               <Skeleton className="h-3 w-32 max-w-full" />
             </div>
-            <div className="hidden w-64 space-y-2 min-[1200px]:block">
-              <Skeleton className="h-6 w-full rounded" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-            <Skeleton className="hidden h-6 w-20 min-[1200px]:block" />
+            <Skeleton className="hidden h-5 w-14 min-[1200px]:block" />
+            <Skeleton className="hidden h-5 w-16 min-[1200px]:block" />
+            <Skeleton className="col-span-2 h-[18px] w-full min-[1200px]:col-span-1 min-[1200px]:block" />
+            <Skeleton className="hidden size-8 min-[1200px]:block" />
           </div>
         ))}
       </div>
@@ -333,13 +282,8 @@ function UptimeMonitorList({
   timezone: string;
   workspaceId: string;
 }) {
-  const navigate = useNavigate();
-  const openMonitor = (monitorId: string) => {
-    navigate(`/w/${workspaceId}/uptime/${monitorId}`);
-  };
-
   return (
-    <Card className="overflow-hidden" padding="none">
+    <Card className="overflow-hidden shadow-sm" padding="none">
       <div aria-label="Uptime monitors" role="table">
         <div
           className="sr-only min-[1200px]:not-sr-only min-[1200px]:block min-[1200px]:border-b min-[1200px]:border-zinc-200 min-[1200px]:bg-zinc-50"
@@ -348,22 +292,14 @@ function UptimeMonitorList({
           <div
             className={clsx(
               "grid items-center gap-4 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500",
+              "font-mono",
               uptimeListGrid,
             )}
             role="row"
           >
             {uptimeListHeaders.map((header) => (
               <div key={header} role="columnheader">
-                {header === "History" ? (
-                  <span className="flex items-baseline gap-1.5">
-                    <span>{header}</span>
-                    <span className="text-[10px] font-normal normal-case tracking-normal text-zinc-400">
-                      latest 20
-                    </span>
-                  </span>
-                ) : (
-                  header
-                )}
+                {header}
               </div>
             ))}
             <div className="sr-only" role="columnheader">
@@ -376,19 +312,10 @@ function UptimeMonitorList({
             <div
               key={monitor.id}
               className={clsx(
-                "relative grid cursor-pointer grid-cols-1 gap-x-4 gap-y-4 px-5 py-5 transition-colors hover:bg-zinc-50/80 min-[1200px]:items-center",
+                "relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4 px-5 py-4 transition-colors hover:bg-zinc-50/70 min-[1200px]:items-center",
                 uptimeListGrid,
               )}
               role="row"
-              onClick={(event) => {
-                if (
-                  event.target instanceof Element &&
-                  event.target.closest("a, button")
-                ) {
-                  return;
-                }
-                openMonitor(monitor.id);
-              }}
             >
               <MonitorRowContent
                 monitor={monitor}
