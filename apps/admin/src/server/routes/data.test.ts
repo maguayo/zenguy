@@ -7,6 +7,7 @@ import {
   verifiedLoginBody,
 } from "../../test/fakes";
 import type {
+  Metrics,
   Overview,
   RecentRun,
   UserSummary,
@@ -72,12 +73,27 @@ const runs: RecentRun[] = [
   },
 ];
 
+const metrics: Metrics = {
+  range: { days: 7, from: "2023-11-08", to: "2023-11-14", now: NOW },
+  users: { registered: 4, newInRange: 1, active7d: 2, danger: 1, series: [] },
+  tests: {
+    total: 5,
+    perUser: 2.5,
+    failed2h: 1,
+    retries: { first: 1, second: 1, thirdPlus: 0 },
+    spendCents: { today: 25, last7d: 250, last30d: 300 },
+    series: [],
+  },
+  uptime: { upPercent: 75, monitorsDown: 1, monitorsTotal: 2, openIncidents: 1, series: [] },
+};
+
 function fakeLoaders(): Loaders {
   return {
     overview: vi.fn(async () => overview),
     workers: vi.fn(async () => workers),
     users: vi.fn(async () => users),
     runs: vi.fn(async () => runs),
+    metrics: vi.fn(async () => metrics),
   };
 }
 
@@ -107,7 +123,13 @@ async function loggedIn(loaders: Loaders) {
   };
 }
 
-const PATHS = ["/api/overview", "/api/workers", "/api/users", "/api/runs/recent"] as const;
+const PATHS = [
+  "/api/overview",
+  "/api/workers",
+  "/api/users",
+  "/api/runs/recent",
+  "/api/metrics",
+] as const;
 
 describe("admin data routes", () => {
   it("refuses every data endpoint without a session", async () => {
@@ -170,6 +192,34 @@ describe("admin data routes", () => {
         },
       });
     }
+  });
+
+  it("serves metrics with a validated range, defaulting to 30 days", async () => {
+    const loaders = fakeLoaders();
+    const session = await loggedIn(loaders);
+
+    const defaulted = await session.get("/api/metrics");
+    expect(defaulted.status).toBe(200);
+    await expect(defaulted.json()).resolves.toEqual({ data: metrics });
+    expect(loaders.metrics).toHaveBeenLastCalledWith(expect.anything(), NOW, 30);
+
+    expect((await session.get("/api/metrics?days=7")).status).toBe(200);
+    expect(loaders.metrics).toHaveBeenLastCalledWith(expect.anything(), NOW, 7);
+    expect((await session.get("/api/metrics?days=90")).status).toBe(200);
+    expect(loaders.metrics).toHaveBeenLastCalledWith(expect.anything(), NOW, 90);
+  });
+
+  it("rejects a days value outside 7|30|90", async () => {
+    const loaders = fakeLoaders();
+    const session = await loggedIn(loaders);
+    for (const days of ["14", "0", "abc", "900"]) {
+      const response = await session.get(`/api/metrics?days=${days}`);
+      expect(response.status, days).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: { code: "VALIDATION_ERROR", message: "days must be 7, 30 or 90" },
+      });
+    }
+    expect(loaders.metrics).not.toHaveBeenCalled();
   });
 
   it("refuses a still-valid cookie once the user id leaves the allowlist", async () => {

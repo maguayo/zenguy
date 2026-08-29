@@ -2,10 +2,12 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from "../constants";
+import { loadMetrics } from "../db/metrics";
 import { loadOverview } from "../db/overview";
 import { loadRecentRuns } from "../db/runs";
 import { loadUsers } from "../db/users";
 import { loadWorkers } from "../db/workers";
+import type { MetricRangeDays } from "../../shared/types";
 import type { AppEnv, Clock } from "../env";
 import { AppError } from "../errors";
 import { requireSession } from "../require_session";
@@ -17,6 +19,7 @@ export interface Loaders {
   workers: typeof loadWorkers;
   users: typeof loadUsers;
   runs: typeof loadRecentRuns;
+  metrics: typeof loadMetrics;
 }
 
 export interface DataRoutesDependencies {
@@ -31,6 +34,19 @@ const limitSchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT),
 });
 
+const daysSchema = z.object({
+  days: z
+    .enum(["7", "30", "90"])
+    .default("30")
+    .transform((value) => Number(value) as MetricRangeDays),
+});
+
+const validateDays = zValidator("query", daysSchema, (result) => {
+  if (!result.success) {
+    throw new AppError("VALIDATION_ERROR", "days must be 7, 30 or 90");
+  }
+});
+
 const validateLimit = zValidator("query", limitSchema, (result) => {
   if (!result.success) {
     throw new AppError("VALIDATION_ERROR", "limit must be an integer between 1 and 200");
@@ -43,6 +59,7 @@ export function dataRoutes(deps: DataRoutesDependencies): Hono<AppEnv> {
     workers: loadWorkers,
     users: loadUsers,
     runs: loadRecentRuns,
+    metrics: loadMetrics,
     ...deps.loaders,
   };
   // Guarded per route on purpose: a `use("*")` here would also match unknown
@@ -67,6 +84,12 @@ export function dataRoutes(deps: DataRoutesDependencies): Hono<AppEnv> {
   app.get("/runs/recent", guard, validateLimit, async (context) =>
     context.json({
       data: { runs: await loaders.runs(deps.db, context.req.valid("query").limit) },
+    }),
+  );
+
+  app.get("/metrics", guard, validateDays, async (context) =>
+    context.json({
+      data: await loaders.metrics(deps.db, deps.clock.now(), context.req.valid("query").days),
     }),
   );
 

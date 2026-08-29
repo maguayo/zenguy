@@ -66,6 +66,68 @@ export interface UserSummary {
   lastActiveAt: number | null;
 }
 
+// --- /api/metrics (hero dashboard) ---
+
+export const METRIC_RANGES = [7, 30, 90] as const;
+export type MetricRangeDays = (typeof METRIC_RANGES)[number];
+
+export interface UsersDayPoint {
+  day: string;
+  signups: number;
+  cumulative: number;
+}
+
+export interface TestsDayPoint {
+  day: string;
+  passed: number;
+  failed: number;
+  timeout: number;
+  systemError: number;
+  /** Every run created that day, including QUEUED/RUNNING. */
+  total: number;
+  avgDurationMs: number | null;
+}
+
+export interface UptimeDayPoint {
+  day: string;
+  up: number;
+  down: number;
+  avgResponseMs: number | null;
+}
+
+export interface Metrics {
+  range: { days: MetricRangeDays; from: string; to: string; now: number };
+  users: {
+    registered: number;
+    newInRange: number;
+    /** Distinct users with a sign-in or activity event in the last 7 days. */
+    active7d: number;
+    /** Accounts older than 14 days with no sign-in nor activity event in 14 days. */
+    danger: number;
+    series: UsersDayPoint[];
+  };
+  tests: {
+    total: number;
+    /** total ÷ distinct owners of workspaces with runs in range; null without owners. */
+    perUser: number | null;
+    /** FAILED + TIMEOUT + SYSTEM_ERROR created in the last 2 hours. */
+    failed2h: number;
+    /** Passing runs split by the attempt_index that passed (0 / 1 / ≥2). */
+    retries: { first: number; second: number; thirdPlus: number };
+    /** Estimated LLM spend in USD cents (tokens × MODEL_PRICES); windows are now-relative. */
+    spendCents: { today: number; last7d: number; last30d: number };
+    series: TestsDayPoint[];
+  };
+  uptime: {
+    /** 0-100 over checks in range; null when the range has no checks. */
+    upPercent: number | null;
+    monitorsDown: number;
+    monitorsTotal: number;
+    openIncidents: number;
+    series: UptimeDayPoint[];
+  };
+}
+
 export interface RecentRun {
   id: string;
   createdAt: number;
