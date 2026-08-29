@@ -1,4 +1,10 @@
-import type { Overview, RecentRun, UserSummary, WorkersResponse } from "../shared/types";
+import type {
+  MetricRangeDays,
+  Metrics,
+  RecentRun,
+  UserSummary,
+  WorkersResponse,
+} from "../shared/types";
 
 /** A non-2xx answer from the admin API, carrying its `{ error: { code, message } }` body. */
 export class ApiError extends Error {
@@ -49,7 +55,7 @@ export const api = {
     }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   me: () => request<{ email: string }>("/api/auth/me"),
-  overview: () => request<Overview>("/api/overview"),
+  metrics: (days: MetricRangeDays) => request<Metrics>(`/api/metrics?days=${days}`),
   recentRuns: () => request<{ runs: RecentRun[] }>("/api/runs/recent?limit=50"),
   users: () => request<{ users: UserSummary[] }>("/api/users?limit=50"),
   workers: () => request<WorkersResponse>("/api/workers"),

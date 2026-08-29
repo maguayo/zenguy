@@ -2,16 +2,19 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
-import { KpiGrid } from "../components/KpiGrid";
+import { RangeSwitch } from "../components/RangeSwitch";
 import { RecentRunsTable } from "../components/RecentRunsTable";
-import { RunsWindowsSection } from "../components/RunsWindowsSection";
 import { Section } from "../components/Section";
-import { UptimeSection } from "../components/UptimeSection";
+import { TestsHero } from "../components/TestsHero";
+import { UptimeHero } from "../components/UptimeHero";
+import { UsersHero } from "../components/UsersHero";
 import { UsersTable } from "../components/UsersTable";
 import { WorkersSection } from "../components/WorkersSection";
+import { readStoredRange, storeRange } from "../lib/range";
+import type { RangeDays } from "../lib/range";
 import { relativeSeconds } from "../lib/format";
 
-const REFETCH_MS = { overview: 30_000, runs: 30_000, users: 60_000, workers: 5_000 };
+const REFETCH_MS = { metrics: 60_000, runs: 30_000, users: 60_000, workers: 5_000 };
 
 /**
  * How fresh the panel as a whole is: the age of its *oldest* section, counted on
@@ -40,10 +43,13 @@ export function Freshness({ stale, updatedAt }: { stale: boolean; updatedAt: num
 }
 
 export function DashboardPage({ email }: { email: string }) {
-  const overview = useQuery({
-    queryFn: api.overview,
-    queryKey: ["overview"],
-    refetchInterval: REFETCH_MS.overview,
+  const [range, setRange] = useState<RangeDays>(readStoredRange);
+  const metrics = useQuery({
+    queryFn: () => api.metrics(range),
+    queryKey: ["metrics", range],
+    // Switching ranges keeps the previous window on screen instead of a skeleton.
+    placeholderData: (previous) => previous,
+    refetchInterval: REFETCH_MS.metrics,
   });
   const workers = useQuery({
     queryFn: api.workers,
@@ -66,8 +72,13 @@ export function DashboardPage({ email }: { email: string }) {
     onSuccess: () => window.location.assign("/login"),
   });
 
+  const changeRange = (days: RangeDays) => {
+    setRange(days);
+    storeRange(days);
+  };
+
   const now = Date.now();
-  const sections = [overview, workers, runs, users];
+  const sections = [metrics, workers, runs, users];
   const loaded = sections.filter((query) => query.data !== undefined);
   const oldestUpdate =
     loaded.length === 0 ? 0 : Math.min(...loaded.map((query) => query.dataUpdatedAt));
@@ -86,6 +97,7 @@ export function DashboardPage({ email }: { email: string }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <RangeSwitch onChange={changeRange} value={range} />
             {signOut.isError ? (
               <span className="text-danger-700">Could not sign out — try again</span>
             ) : null}
@@ -103,20 +115,20 @@ export function DashboardPage({ email }: { email: string }) {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-6">
-        <Section now={now} query={overview} subject="platform totals" title="Platform">
-          {(data) => <KpiGrid overview={data} />}
+        <Section now={now} query={metrics} subject="metrics" title="Usuarios">
+          {(data) => <UsersHero users={data.users} />}
+        </Section>
+
+        <Section now={now} query={metrics} subject="metrics" title="Browser tests">
+          {(data) => <TestsHero tests={data.tests} />}
+        </Section>
+
+        <Section now={now} query={metrics} subject="metrics" title="Uptime">
+          {(data) => <UptimeHero uptime={data.uptime} />}
         </Section>
 
         <Section now={now} query={workers} subject="workers" title="Workers">
           {(data) => <WorkersSection workers={data} />}
-        </Section>
-
-        <Section now={now} query={overview} subject="browser runs" title="Browser runs">
-          {(data) => <RunsWindowsSection overview={data} />}
-        </Section>
-
-        <Section now={now} query={overview} subject="uptime" title="Uptime">
-          {(data) => <UptimeSection overview={data} />}
         </Section>
 
         <Section now={now} query={runs} subject="recent runs" title="Recent runs">
