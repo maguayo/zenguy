@@ -50,9 +50,13 @@ describe("app content width", () => {
     expect(appContentWidth("/w/ws_1/uptime")).toBe("fluid");
     expect(appContentWidth("/w/ws_1/overview")).toBe("wide");
     expect(appContentWidth("/w/ws_1/tests/test_1")).toBe("wide");
-    expect(appContentWidth("/w/ws_1/runs/run_1")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/alerts/sms-calls")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/status-pages/page_1")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/runs/run_1")).toBe("standard");
+    expect(appContentWidth("/w/ws_1/status-pages")).toBe("standard");
+    expect(appContentWidth("/w/ws_1/members")).toBe("standard");
     expect(appContentWidth("/w/ws_1/settings")).toBe("standard");
-    expect(appContentWidth("/w/ws_1/alerts/sms-calls")).toBe("standard");
+    expect(appContentWidth("/w/ws_1/alerts")).toBe("standard");
     expect(appContentWidth("/w/ws_1/tests/new")).toBe("narrow");
     expect(appContentWidth("/w/ws_1/tests/test_1/edit")).toBe("narrow");
     expect(appContentWidth("/w/ws_1/uptime/new")).toBe("narrow");

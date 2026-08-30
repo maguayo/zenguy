@@ -32,7 +32,14 @@ export function appContentWidth(pathname: string): AppContentWidth {
   if ((section === "tests" || section === "uptime") && resourceId === undefined) {
     return "fluid";
   }
-  if (section === "alerts" || section === "billing" || section === "settings") {
+  if (
+    section === "runs" ||
+    section === "billing" ||
+    section === "members" ||
+    section === "settings" ||
+    (section === "status-pages" && resourceId === undefined) ||
+    (section === "alerts" && resourceId !== "sms-calls")
+  ) {
     return "standard";
   }
   return "wide";
@@ -169,8 +176,8 @@ export function AppLayout() {
         </header>
 
         {subscriptionStatus === "PAST_DUE" ? (
-          <div className="border-b border-warn-600/20 bg-warn-50 px-4 py-3 text-sm text-zinc-800 md:px-6 xl:px-10">
-            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3`}>
+          <div className="border-b border-warn-600/20 bg-warn-50 text-sm text-zinc-800">
+            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 xl:px-10`}>
               <p>Your last payment failed. Update your payment method to keep runs going.</p>
               {can("billing.manage") ? (
                 <Link
@@ -187,8 +194,8 @@ export function AppLayout() {
         ) : null}
 
         {creditBanner ? (
-          <div className="border-b border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-zinc-800 md:px-6 xl:px-10">
-            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3`}>
+          <div className="border-b border-danger-600/20 bg-danger-50 text-sm text-zinc-800">
+            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 xl:px-10`}>
               <p>{creditBanner.message}</p>
               {creditBanner.showTopUp ? (
                 <Link
