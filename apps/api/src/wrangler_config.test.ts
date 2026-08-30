@@ -321,11 +321,13 @@ describe("wrangler environments", () => {
         pattern: "staging-app.zenguy.com/status/*",
         zone_name: "zenguy.com",
       },
+      { pattern: "api-staging.zenguy.com/*", zone_name: "zenguy.com" },
     ]);
     expect(production.routes).toEqual([
       { pattern: "api.zenguy.com", custom_domain: true },
       { pattern: "app.zenguy.com/api/*", zone_name: "zenguy.com" },
       { pattern: "app.zenguy.com/status/*", zone_name: "zenguy.com" },
+      { pattern: "*/*", zone_name: "zenguy.com" },
     ]);
 
     expect(staging.vars).toEqual({
