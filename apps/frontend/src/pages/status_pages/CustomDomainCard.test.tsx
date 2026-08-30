@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import type { CustomDomainCheck, StatusPageCustomDomain } from "../../api/types";
 import { ToastProvider } from "../../contexts/ToastContext";
 import {
-  CustomDomainDetails,
+  CheckDiagnostics,
   customDomainStatusLabel,
   customDomainStatusTone,
+  DnsInstructions,
+  WizardStepper,
+  wizardStep,
 } from "./CustomDomainCard";
 
 const domain: StatusPageCustomDomain = {
@@ -25,17 +28,6 @@ const check: CustomDomainCheck = {
   status: "PENDING",
 };
 
-function render(
-  input: StatusPageCustomDomain,
-  checkResult: CustomDomainCheck | null,
-): string {
-  return renderToStaticMarkup(
-    <ToastProvider>
-      <CustomDomainDetails check={checkResult} domain={input} />
-    </ToastProvider>,
-  );
-}
-
 describe("custom domain status", () => {
   it("maps statuses to labels and badge tones", () => {
     expect(customDomainStatusLabel("PENDING")).toBe("Pending");
@@ -47,44 +39,92 @@ describe("custom domain status", () => {
   });
 });
 
-describe("CustomDomainDetails", () => {
-  it("shows the CNAME instructions while pending, with diagnostics", () => {
-    const html = render(domain, check);
-    expect(html).toContain("status.example.com");
-    expect(html).toContain("Pending");
-    expect(html).toContain("CNAME");
-    expect(html).toContain("customers.zenguy.com");
-    expect(html).toContain("No CNAME record found yet");
-    expect(html).toContain("Certificate: pending_validation.");
-    expect(html).not.toContain(">Open<");
+describe("wizardStep", () => {
+  it("walks the customer through connect, dns, verify and done", () => {
+    expect(wizardStep(null, null)).toBe("connect");
+    expect(wizardStep(domain, null)).toBe("dns");
+    expect(wizardStep(domain, check)).toBe("dns");
+    expect(
+      wizardStep(domain, {
+        ...check,
+        cname: { correct: true, found: true, value: "customers.zenguy.com" },
+      }),
+    ).toBe("verify");
+    expect(wizardStep({ ...domain, status: "ACTIVE" }, null)).toBe("done");
+    expect(wizardStep({ ...domain, status: "FAILED" }, check)).toBe("failed");
+  });
+});
+
+describe("WizardStepper", () => {
+  it("marks the current step and completed steps", () => {
+    const html = renderToStaticMarkup(<WizardStepper step="dns" />);
+    expect(html).toContain("Choose domain");
+    expect(html).toContain("Add DNS record");
+    expect(html).toContain("Verification");
+    expect(html).toContain("bg-ok-600"); // step 1 completed
+    expect(html).toContain("bg-accent-600"); // step 2 current
   });
 
-  it("reports a wrong CNAME target and Cloudflare errors", () => {
-    const html = render(domain, {
-      ...check,
-      cname: { correct: false, found: true, value: "wrong.example.net" },
-      errors: ["custom hostname does not CNAME to zone"],
-    });
+  it("marks everything done at the end of the flow", () => {
+    const html = renderToStaticMarkup(<WizardStepper step="done" />);
+    expect(html.match(/bg-ok-600/gu)?.length).toBe(3);
+    expect(html).not.toContain("bg-accent-600");
+  });
+});
+
+describe("DnsInstructions", () => {
+  it("shows the exact CNAME record with copy affordances and expectations", () => {
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <DnsInstructions
+          hostname="status.example.com"
+          target="customers.zenguy.com"
+        />
+      </ToastProvider>,
+    );
+    expect(html).toContain("CNAME");
+    expect(html).toContain("status.example.com");
+    expect(html).toContain("customers.zenguy.com");
+    expect(html).toContain("Copy record name");
+    expect(html).toContain("Copy record target");
+    expect(html).toContain("We keep checking automatically.");
+  });
+});
+
+describe("CheckDiagnostics", () => {
+  it("narrates a missing CNAME and pending certificate", () => {
+    const html = renderToStaticMarkup(<CheckDiagnostics check={check} />);
+    expect(html).toContain("No CNAME record found yet.");
+    expect(html).toContain("TLS certificate: pending_validation.");
+  });
+
+  it("narrates a wrong target and surfaces Cloudflare errors", () => {
+    const html = renderToStaticMarkup(
+      <CheckDiagnostics
+        check={{
+          ...check,
+          cname: { correct: false, found: true, value: "wrong.example.net" },
+          errors: ["custom hostname does not CNAME to zone"],
+        }}
+      />,
+    );
     expect(html).toContain(
       "Your CNAME points to wrong.example.net instead of customers.zenguy.com.",
     );
     expect(html).toContain("custom hostname does not CNAME to zone");
   });
 
-  it("hides the instructions and links out once active", () => {
-    const html = render(
-      { ...domain, status: "ACTIVE" },
-      {
-        ...check,
-        cname: { correct: true, found: true, value: "customers.zenguy.com" },
-        sslStatus: "active",
-        status: "ACTIVE",
-      },
+  it("celebrates a fully verified setup", () => {
+    const html = renderToStaticMarkup(
+      <CheckDiagnostics
+        check={{
+          ...check,
+          cname: { correct: true, found: true, value: "customers.zenguy.com" },
+          sslStatus: "active",
+        }}
+      />,
     );
-    expect(html).toContain("Active");
-    expect(html).toContain("https://status.example.com/");
-    expect(html).toContain("DNS looks good");
-    expect(html).toContain("Certificate issued.");
-    expect(html).not.toContain("Create this DNS record");
+    expect(html).toContain("DNS is correct");
+    expect(html).toContain("TLS certificate issued.");
   });
 });
