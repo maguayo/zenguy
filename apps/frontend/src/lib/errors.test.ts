@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
 import {
   apiErrorMessage,
+  apiFieldErrors,
   isUnavailableItem,
   itemQueryErrorMessage,
   unavailableItemMessage,
@@ -16,6 +17,26 @@ describe("error presentation", () => {
     expect(isUnavailableItem(gone)).toBe(true);
     expect(itemQueryErrorMessage(missing)).toBe(unavailableItemMessage);
     expect(itemQueryErrorMessage(gone)).toBe(unavailableItemMessage);
+  });
+
+  it("maps validation details to field errors and nothing else", () => {
+    const validation = new ApiError("Invalid request", {
+      code: "VALIDATION_ERROR",
+      details: [
+        { field: "slug", message: "This slug is reserved" },
+        { field: "title", message: "Required" },
+      ],
+      status: 400,
+    });
+    expect(apiFieldErrors(validation)).toEqual({
+      slug: "This slug is reserved",
+      title: "Required",
+    });
+    expect(
+      apiFieldErrors(new ApiError("Conflict", { code: "CONFLICT", status: 409 })),
+    ).toEqual({});
+    expect(apiFieldErrors(new Error("boom"))).toEqual({});
+    expect(apiFieldErrors(null)).toEqual({});
   });
 
   it("leaves retryable failures on the default error-state copy", () => {

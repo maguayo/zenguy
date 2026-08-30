@@ -19,7 +19,8 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
-import { apiErrorMessage } from "../../lib/errors";
+import { ApiError } from "../../lib/api";
+import { apiErrorMessage, apiFieldErrors } from "../../lib/errors";
 
 export function suggestSlug(title: string): string {
   return title
@@ -31,6 +32,34 @@ export function suggestSlug(title: string): string {
 
 export function statusPageUrl(origin: string, slug: string): string {
   return `${origin}/status/${slug}`;
+}
+
+/** Mirror of the API's reserved list — the server stays the source of truth. */
+export const RESERVED_STATUS_PAGE_SLUGS = new Set([
+  "json",
+  "preview",
+  "assets",
+  "api",
+  "app",
+  "admin",
+  "www",
+  "status",
+  "zenguy",
+  "docs",
+  "help",
+  "staging",
+]);
+
+/** Instant client-side slug feedback; null when the slug looks fine or is empty. */
+export function slugIssue(slug: string): string | null {
+  if (slug === "") return null;
+  if (!/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u.test(slug)) {
+    return "Lowercase letters, digits and hyphens (3-63 chars).";
+  }
+  if (RESERVED_STATUS_PAGE_SLUGS.has(slug)) {
+    return "This slug is reserved — pick another one.";
+  }
+  return null;
 }
 
 export function StatusPageRowContent({
@@ -117,12 +146,15 @@ function CreateStatusPageModal({
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const create = useMutation({
     mutationFn: () => createStatusPage(workspaceId, { slug, title }),
   });
+  const liveSlugIssue = slugIssue(slug);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setFieldErrors({});
     try {
       const page = await create.mutateAsync();
       await queryClient.invalidateQueries({
@@ -131,18 +163,35 @@ function CreateStatusPageModal({
       toast.success("Status page created");
       navigate(`/w/${workspaceId}/status-pages/${page.id}`);
     } catch (error) {
-      if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
+      if (handleMutationError(error)) return;
+      const fields = apiFieldErrors(error);
+      if (Object.keys(fields).length > 0) {
+        setFieldErrors(fields);
+        return;
+      }
+      if (error instanceof ApiError && error.code === "CONFLICT") {
+        setFieldErrors({ slug: error.message });
+        return;
+      }
+      toast.error(apiErrorMessage(error));
     }
   };
 
   return (
     <Modal onClose={onClose} open={open} title="New status page">
       <form className="space-y-4" onSubmit={submit}>
-        <Field htmlFor="status-page-title" label="Title" required>
+        <Field
+          error={fieldErrors.title}
+          htmlFor="status-page-title"
+          label="Title"
+          required
+        >
           <Input
             id="status-page-title"
+            invalid={fieldErrors.title !== undefined}
             onChange={(event) => {
               setTitle(event.target.value);
+              setFieldErrors(({ title: _title, ...rest }) => rest);
               if (!slugTouched) setSlug(suggestSlug(event.target.value));
             }}
             placeholder="Acme Status"
@@ -151,6 +200,7 @@ function CreateStatusPageModal({
           />
         </Field>
         <Field
+          error={fieldErrors.slug ?? liveSlugIssue ?? undefined}
           hint="Lowercase letters, digits and hyphens. This becomes the public URL."
           htmlFor="status-page-slug"
           label="Slug"
@@ -158,11 +208,12 @@ function CreateStatusPageModal({
         >
           <Input
             id="status-page-slug"
+            invalid={fieldErrors.slug !== undefined || liveSlugIssue !== null}
             onChange={(event) => {
               setSlugTouched(true);
               setSlug(event.target.value);
+              setFieldErrors(({ slug: _slug, ...rest }) => rest);
             }}
-            pattern="[a-z0-9][a-z0-9-]{1,61}[a-z0-9]"
             placeholder="acme"
             required
             value={slug}
@@ -175,7 +226,11 @@ function CreateStatusPageModal({
           <Button onClick={onClose} type="button" variant="secondary">
             Cancel
           </Button>
-          <Button disabled={create.isPending} type="submit" variant="primary">
+          <Button
+            disabled={create.isPending || liveSlugIssue !== null}
+            type="submit"
+            variant="primary"
+          >
             Create
           </Button>
         </div>

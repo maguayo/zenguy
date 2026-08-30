@@ -12,6 +12,16 @@ export function apiErrorMessage(error: unknown): string {
   return "Something went wrong";
 }
 
+/** Field-level validation details from an API error, keyed by field name. */
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  if (error instanceof ApiError && error.details?.length) {
+    return Object.fromEntries(
+      error.details.map((detail) => [detail.field, detail.message]),
+    );
+  }
+  return {};
+}
+
 export function isUnavailableItem(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.status === 410);
 }

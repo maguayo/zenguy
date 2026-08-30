@@ -47,8 +47,9 @@ import { Textarea } from "../../components/ui/Textarea";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
-import { apiErrorMessage } from "../../lib/errors";
-import { statusPageUrl } from "./StatusPagesListPage";
+import { ApiError } from "../../lib/api";
+import { apiErrorMessage, apiFieldErrors } from "../../lib/errors";
+import { slugIssue, statusPageUrl } from "./StatusPagesListPage";
 
 export interface PageSettingsForm {
   accentColor: string;
@@ -360,9 +361,21 @@ export default function StatusPageEditorPage() {
   });
 
   const [form, setForm] = useState<PageSettingsForm | null>(null);
+  const [settingsErrors, setSettingsErrors] = useState<Record<string, string>>(
+    {},
+  );
   useEffect(() => {
     if (detail.data !== undefined) setForm(settingsFromPage(detail.data));
   }, [detail.data]);
+
+  const setFormField = (changes: Partial<PageSettingsForm>) => {
+    setForm((previous) => (previous === null ? previous : { ...previous, ...changes }));
+    setSettingsErrors((previous) => {
+      const next = { ...previous };
+      for (const key of Object.keys(changes)) delete next[key];
+      return next;
+    });
+  };
 
   const [addOpen, setAddOpen] = useState(false);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
@@ -394,6 +407,28 @@ export default function StatusPageEditorPage() {
   const publicUrl = statusPageUrl(window.location.origin, page.slug);
   const slugChanged = form.slug !== page.slug;
   const dirty = Object.keys(changedPageFields(page, form)).length > 0;
+  const liveSlugIssue = slugChanged ? slugIssue(form.slug) : null;
+
+  const saveSettings = async () => {
+    setSettingsErrors({});
+    try {
+      await updateStatusPage(current.id, pageId, changedPageFields(page, form));
+      await refresh();
+      toast.success("Settings saved");
+    } catch (error) {
+      if (handleMutationError(error)) return;
+      const fields = apiFieldErrors(error);
+      if (Object.keys(fields).length > 0) {
+        setSettingsErrors(fields);
+        return;
+      }
+      if (error instanceof ApiError && error.code === "CONFLICT") {
+        setSettingsErrors({ slug: error.message });
+        return;
+      }
+      toast.error(apiErrorMessage(error));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -461,15 +496,17 @@ export default function StatusPageEditorPage() {
         <div className="space-y-6">
           <Card className="space-y-4 p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Page settings</h2>
-            <Field htmlFor="sp-title" label="Title" required>
+            <Field error={settingsErrors.title} htmlFor="sp-title" label="Title" required>
               <Input
                 disabled={!manage}
                 id="sp-title"
-                onChange={(event) => setForm({ ...form, title: event.target.value })}
+                invalid={settingsErrors.title !== undefined}
+                onChange={(event) => setFormField({ title: event.target.value })}
                 value={form.title}
               />
             </Field>
             <Field
+              error={settingsErrors.slug ?? liveSlugIssue ?? undefined}
               hint={
                 slugChanged ? (
                   <span className="text-warn-700">
@@ -486,8 +523,10 @@ export default function StatusPageEditorPage() {
               <Input
                 disabled={!manage}
                 id="sp-slug"
-                onChange={(event) => setForm({ ...form, slug: event.target.value })}
-                pattern="[a-z0-9][a-z0-9-]{1,61}[a-z0-9]"
+                invalid={
+                  settingsErrors.slug !== undefined || liveSlugIssue !== null
+                }
+                onChange={(event) => setFormField({ slug: event.target.value })}
                 value={form.slug}
               />
             </Field>
@@ -496,7 +535,7 @@ export default function StatusPageEditorPage() {
                 disabled={!manage}
                 id="sp-description"
                 onChange={(event) =>
-                  setForm({ ...form, description: event.target.value })
+                  setFormField({ description: event.target.value })
                 }
                 placeholder="Health of our public services."
                 rows={2}
@@ -504,14 +543,19 @@ export default function StatusPageEditorPage() {
               />
             </Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field hint="Optional." htmlFor="sp-accent" label="Accent color">
+              <Field
+                error={settingsErrors.accentColor}
+                hint="Optional."
+                htmlFor="sp-accent"
+                label="Accent color"
+              >
                 <div className="flex items-center gap-2">
                   <input
                     aria-label="Accent color picker"
                     className="h-9 w-10 cursor-pointer rounded-md border border-zinc-300 bg-white"
                     disabled={!manage}
                     onChange={(event) =>
-                      setForm({ ...form, accentColor: event.target.value })
+                      setFormField({ accentColor: event.target.value })
                     }
                     type="color"
                     value={form.accentColor === "" ? "#10b981" : form.accentColor}
@@ -519,8 +563,9 @@ export default function StatusPageEditorPage() {
                   <Input
                     disabled={!manage}
                     id="sp-accent"
+                    invalid={settingsErrors.accentColor !== undefined}
                     onChange={(event) =>
-                      setForm({ ...form, accentColor: event.target.value })
+                      setFormField({ accentColor: event.target.value })
                     }
                     pattern="#[0-9a-fA-F]{6}"
                     placeholder="#10b981"
@@ -533,8 +578,7 @@ export default function StatusPageEditorPage() {
                   disabled={!manage}
                   id="sp-theme"
                   onChange={(event) =>
-                    setForm({
-                      ...form,
+                    setFormField({
                       theme: event.target.value as StatusPageTheme,
                     })
                   }
@@ -549,18 +593,8 @@ export default function StatusPageEditorPage() {
             {manage ? (
               <div className="flex justify-end">
                 <Button
-                  disabled={!dirty}
-                  onClick={() =>
-                    void runMutation(
-                      () =>
-                        updateStatusPage(
-                          current.id,
-                          pageId,
-                          changedPageFields(page, form),
-                        ),
-                      "Settings saved",
-                    )
-                  }
+                  disabled={!dirty || liveSlugIssue !== null}
+                  onClick={() => void saveSettings()}
                   variant="primary"
                 >
                   Save settings

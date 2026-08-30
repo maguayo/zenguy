@@ -5,6 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 import type { StatusPage } from "../../api/types";
 import { ToastProvider } from "../../contexts/ToastContext";
 import {
+  RESERVED_STATUS_PAGE_SLUGS,
+  slugIssue,
   StatusPageRowContent,
   statusPageUrl,
   suggestSlug,
@@ -28,6 +30,27 @@ describe("suggestSlug", () => {
     expect(suggestSlug("  --Wéird ñame--  ")).toBe("w-ird-ame");
     expect(suggestSlug("a".repeat(80))).toHaveLength(63);
     expect(suggestSlug("")).toBe("");
+  });
+});
+
+describe("slugIssue", () => {
+  it("flags reserved slugs with a specific message", () => {
+    expect(slugIssue("status")).toBe("This slug is reserved — pick another one.");
+    expect(slugIssue("zenguy")).toBe("This slug is reserved — pick another one.");
+    for (const reserved of RESERVED_STATUS_PAGE_SLUGS) {
+      expect(slugIssue(reserved), reserved).not.toBeNull();
+    }
+  });
+
+  it("flags malformed slugs and accepts valid ones", () => {
+    expect(slugIssue("Ab")).toBe(
+      "Lowercase letters, digits and hyphens (3-63 chars).",
+    );
+    expect(slugIssue("-acme")).not.toBeNull();
+    expect(slugIssue("a".repeat(64))).not.toBeNull();
+    expect(slugIssue("acme-status")).toBeNull();
+    expect(slugIssue("zenguy-status")).toBeNull();
+    expect(slugIssue("")).toBeNull();
   });
 });
 
