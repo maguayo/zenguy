@@ -182,9 +182,10 @@ describe("loadMetrics", () => {
     expect(metrics.tests.perUser).toBeCloseTo(2.5); // 5 runs ÷ owners {U1, U4}
     expect(metrics.tests.failed2h).toBe(1); // r4 TIMEOUT 1h ago; r6 is 3h old
     expect(metrics.tests.retries).toEqual({ first: 1, second: 1, thirdPlus: 0 });
-    // qwen is priced at 0; luna: r4 200k in = 25¢ today; +r3 1M in + 100k out = 225¢;
-    // r5 (10d ago) adds 400k in = 50¢ only to the 30d window.
-    expect(metrics.tests.spendCents).toEqual({ today: 25, last7d: 250, last30d: 300 });
+    // qwen is priced at 0; luna ($0.20 in / $1.20 out per MTok): r4 200k in = 4¢
+    // today; +r3 1M in (20¢) + 100k out (12¢) = 36¢ over 7d; r5 (10d ago) adds
+    // 400k in = 8¢ only to the 30d window.
+    expect(metrics.tests.spendCents).toEqual({ today: 4, last7d: 36, last30d: 44 });
     const byDay = new Map(metrics.tests.series.map((point) => [point.day, point]));
     expect(byDay.get(day(2))).toEqual({
       day: day(2),

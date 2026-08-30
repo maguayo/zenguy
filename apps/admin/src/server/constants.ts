@@ -32,13 +32,12 @@ export interface ModelPrice {
   outputCentsPerMTok: number;
 }
 export const MODEL_PRICES: Record<string, ModelPrice> = {
-  // Primary runner model, self-hosted: no per-token bill.
+  // Primary (Mac) runner model, self-hosted: no per-token bill.
   "qwen/qwen3.8-27b": { inputCentsPerMTok: 0, outputCentsPerMTok: 0 },
-  // OpenAI fallback models ($1.25 / $10 per MTok — adjust to the real invoice).
-  "gpt-5.6-luna": { inputCentsPerMTok: 125, outputCentsPerMTok: 1_000 },
-  "gpt-5.6-terra": { inputCentsPerMTok: 125, outputCentsPerMTok: 1_000 },
+  // OpenAI list prices since 2026-07-30. The Cloudflare Containers runner
+  // ("cf") uses luna for every test unless ZENGUY_FALLBACK_MODEL says otherwise.
+  // Prompt caching is not discounted here, so this is an upper bound.
+  "gpt-5.6-luna": { inputCentsPerMTok: 20, outputCentsPerMTok: 120 },
+  "gpt-5.6-terra": { inputCentsPerMTok: 200, outputCentsPerMTok: 1_200 },
 };
-export const DEFAULT_MODEL_PRICE: ModelPrice = {
-  inputCentsPerMTok: 125,
-  outputCentsPerMTok: 1_000,
-};
+export const DEFAULT_MODEL_PRICE: ModelPrice = MODEL_PRICES["gpt-5.6-luna"] as ModelPrice;

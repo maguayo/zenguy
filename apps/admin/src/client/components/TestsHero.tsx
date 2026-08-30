@@ -108,7 +108,10 @@ function SpendCard({ spendCents }: { spendCents: Metrics["tests"]["spendCents"] 
     { label: "30 días", value: spendCents.last30d },
   ];
   return (
-    <Card aside="tokens × tarifa por modelo" title="Gasto estimado (LLM)">
+    <Card
+      aside="tokens × precio de lista por modelo, sin descuento de caché (al alza)"
+      title="Gasto estimado (LLM)"
+    >
       <dl className="grid grid-cols-3 gap-3">
         {windows.map((window) => (
           <div key={window.label}>
