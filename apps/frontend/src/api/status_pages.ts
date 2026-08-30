@@ -7,6 +7,7 @@ import {
   apiPut,
 } from "../lib/api";
 import type {
+  CustomDomainCheck,
   StatusPage,
   StatusPageDetail,
   StatusPageInput,
@@ -114,4 +115,30 @@ export function fetchStatusPagePreview(
   pageId: string,
 ): Promise<string> {
   return apiGetText(`${statusPagePath(workspaceId, pageId)}/preview`);
+}
+
+export function setCustomDomain(
+  workspaceId: string,
+  pageId: string,
+  hostname: string,
+): Promise<StatusPage> {
+  return apiPut(`${statusPagePath(workspaceId, pageId)}/custom-domain`, {
+    hostname,
+  });
+}
+
+export function checkCustomDomain(
+  workspaceId: string,
+  pageId: string,
+): Promise<CustomDomainCheck> {
+  return apiPost(`${statusPagePath(workspaceId, pageId)}/custom-domain/check`);
+}
+
+export function removeCustomDomain(
+  workspaceId: string,
+  pageId: string,
+): Promise<void> {
+  return apiDelete(`${statusPagePath(workspaceId, pageId)}/custom-domain`).then(
+    () => undefined,
+  );
 }

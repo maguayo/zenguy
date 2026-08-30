@@ -488,9 +488,18 @@ export interface IncidentDetail extends Incident {
 
 export type StatusPageTheme = "LIGHT" | "DARK" | "SYSTEM";
 
+export type CustomDomainStatus = "PENDING" | "ACTIVE" | "FAILED";
+
+export interface StatusPageCustomDomain {
+  checkedAt: string | null;
+  hostname: string;
+  status: CustomDomainStatus;
+}
+
 export interface StatusPage {
   accentColor: string | null;
   createdAt: string;
+  customDomain: StatusPageCustomDomain | null;
   description: string | null;
   id: string;
   publishedAt: string | null;
@@ -498,6 +507,16 @@ export interface StatusPage {
   theme: StatusPageTheme;
   title: string;
   updatedAt: string;
+}
+
+export interface CustomDomainCheck {
+  cname: { correct: boolean; found: boolean; value: string | null };
+  cnameTarget: string;
+  domain: string;
+  errors: string[];
+  hostnameStatus: string | null;
+  sslStatus: string | null;
+  status: CustomDomainStatus;
 }
 
 export interface StatusPageItem {

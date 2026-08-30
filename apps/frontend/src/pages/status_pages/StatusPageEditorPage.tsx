@@ -49,6 +49,7 @@ import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError } from "../../lib/api";
 import { apiErrorMessage, apiFieldErrors } from "../../lib/errors";
+import { CustomDomainCard } from "./CustomDomainCard";
 import { slugIssue, statusPageUrl } from "./StatusPagesListPage";
 
 export interface PageSettingsForm {
@@ -661,6 +662,14 @@ export default function StatusPageEditorPage() {
               </div>
             )}
           </Card>
+
+          <CustomDomainCard
+            domain={page.customDomain}
+            manage={manage}
+            onChanged={refresh}
+            pageId={pageId}
+            workspaceId={current.id}
+          />
         </div>
 
         <Card className="p-5">

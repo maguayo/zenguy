@@ -25,6 +25,7 @@ import {
 const page: StatusPage = {
   accentColor: "#22c55e",
   createdAt: "2026-08-30T10:00:00.000Z",
+  customDomain: null,
   description: null,
   id: "sp_1",
   publishedAt: null,

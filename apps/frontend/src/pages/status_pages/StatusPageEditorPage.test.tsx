@@ -12,6 +12,7 @@ import {
 const page: StatusPageDetail = {
   accentColor: "#22c55e",
   createdAt: "2026-08-30T10:00:00.000Z",
+  customDomain: null,
   description: "Health of Acme services",
   id: "sp_1",
   items: [],
