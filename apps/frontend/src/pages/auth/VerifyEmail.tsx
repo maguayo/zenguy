@@ -4,7 +4,10 @@ import { useForm } from "react-hook-form";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
-import { verifyEmail as verifyEmailRequest } from "../../api/auth";
+import {
+  verifyEmail as verifyEmailRequest,
+  type AuthSession,
+} from "../../api/auth";
 import { AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
 import { ErrorState } from "../../components/ui/ErrorState";
@@ -16,6 +19,7 @@ import { fieldError } from "../../components/ui/form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { ApiError } from "../../lib/api";
+import { trackVerifiedSignUpSuccess } from "../../lib/analytics/ga4";
 import {
   parseUrlCapability,
   parseUrlCapabilityFragment,
@@ -35,6 +39,15 @@ export const verificationPasswordSchema = z.object({
 type VerificationEmailValues = z.infer<typeof verificationEmailSchema>;
 type VerificationPasswordValues = z.infer<typeof verificationPasswordSchema>;
 type VerificationState = "ready" | "loading" | "gone" | "error";
+
+export async function adoptVerifiedEmailSession(
+  session: AuthSession,
+  adoptSession: (session: AuthSession) => Promise<void>,
+  trackSignUp: typeof trackVerifiedSignUpSuccess = trackVerifiedSignUpSuccess,
+): Promise<void> {
+  await adoptSession(session);
+  await trackSignUp(session.user);
+}
 
 /** Reachable signed in or signed out: the link in the email carries no session. */
 export default function VerifyEmail() {
@@ -75,7 +88,7 @@ export default function VerifyEmail() {
     setState("loading");
     try {
       const session = await verifyEmailRequest(token, password);
-      await adoptSession(session);
+      await adoptVerifiedEmailSession(session, adoptSession);
       toast.success("Email verified");
       navigate("/", { replace: true });
     } catch (error) {

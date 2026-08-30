@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 
 export function LegalLayout({
   children,
+  lastUpdated = "27 August 2026",
   title,
 }: {
   children: ReactNode;
+  lastUpdated?: string;
   title: string;
 }) {
   return (
@@ -20,7 +22,7 @@ export function LegalLayout({
           {title}
         </h1>
         <p className="mt-2 text-sm text-zinc-500">
-          Effective and last updated: 27 August 2026
+          Effective and last updated: {lastUpdated}
         </p>
         <div className="legal-copy mt-10 space-y-8 text-[15px] leading-7">
           {children}

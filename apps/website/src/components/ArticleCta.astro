@@ -1,5 +1,5 @@
 ---
-import { APP_URL } from "../lib/site";
+import { APP_SIGNUP_URL } from "../lib/site";
 ---
 
 <aside class="card-shadow-sm flex items-center gap-10 rounded-2xl border border-line bg-surface px-10 py-10 max-md:flex-col max-md:items-start max-md:gap-6 max-md:px-6 max-md:py-8">
@@ -17,7 +17,12 @@ import { APP_URL } from "../lib/site";
     </div>
   </div>
   <div class="flex-1 max-md:hidden"></div>
-  <a href={APP_URL} class="btn btn-violet shrink-0 rounded-[10px] px-6 py-3.5 text-[15px] font-medium">
+  <a
+    href={APP_SIGNUP_URL}
+    class="btn btn-violet shrink-0 rounded-[10px] px-6 py-3.5 text-[15px] font-medium"
+    data-analytics-cta="article_signup"
+    data-analytics-destination="signup"
+  >
     Run your first test
   </a>
 </aside>

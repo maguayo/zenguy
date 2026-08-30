@@ -7,72 +7,165 @@ import { legalCompany, legalMailto } from "../lib/legal";
   title="Cookie Policy — Zenguy"
   description="Cookie policy for Zenguy under article 22.2 LSSI-CE and AEPD guidance."
   heading="Cookie Policy"
+  effective="30 August 2026"
 >
   <p>
     This policy explains how {legalCompany.legalName} uses cookies and similar
-    technologies on {legalCompany.site} and {legalCompany.app}, under article
-    22.2 of Law 34/2002 (LSSI-CE), the ePrivacy Directive, the GDPR, and the
-    AEPD cookie guidance.
+    technologies on {legalCompany.site}, www.zenguy.com and {legalCompany.app}.
+    It should be read together with our <a href="/privacy/">Privacy Policy</a>.
   </p>
 
-  <h2>1. What cookies are</h2>
+  <h2>1. What cookies and similar technologies are</h2>
   <p>
-    Cookies are small files stored on your device. Similar technologies
-    include local storage, session tokens and pixels. Some are set by us
-    (first-party), others by providers (third-party).
+    Cookies are small files stored on your device. Similar technologies include
+    local storage and session tokens. Some are set by us (first-party), while
+    others are set or read by service providers.
   </p>
 
-  <h2>2. What we use today</h2>
+  <h2>2. Necessary technologies</h2>
   <p>
-    We do <strong>not</strong> use advertising cookies, social plugins, or
-    analytics cookies such as Google Analytics.
+    The Zenguy API uses the strictly necessary first-party cookie
+    <code>zenguy_rt</code> to renew an authenticated session. It is HttpOnly,
+    SameSite=Lax, host-only, limited to <code>/api/auth</code>, Secure in
+    production, and expires after at most 30 days. The short-lived access token
+    stays only in application memory, not local storage.
   </p>
   <p>
-    On the application ({legalCompany.app}) we use a strictly necessary
-    HttpOnly session cookie (a host-prefixed refresh token) so you stay signed
-    in. It is first-party, Secure, and not accessible to scripts. Local
-    storage may hold a short-lived access token and UI preferences. These are
-    needed to provide the service you request, so they do not require prior
-    consent (art. 22.2 LSSI-CE, first indent).
+    When Google sign-in starts, the API temporarily sets
+    <code>zenguy_google_oauth</code> to validate the OAuth return. It is
+    HttpOnly, SameSite=Lax, host-only, limited to
+    <code>/api/auth/google</code>, Secure in production, and expires after at
+    most 10 minutes. Local storage may hold non-authentication UI preferences
+    needed to provide the service.
   </p>
   <p>
-    Cloudflare, which hosts the websites, may set a security cookie (for
-    example to distinguish people from bots). That cookie is used to keep the
-    service available and safe.
+    On each Zenguy website, local storage under the key
+    <code>zenguy:cookie-consent:v1</code> records the preference version, whether
+    analytics is allowed, and the date of the choice. We keep that preference
+    for up to 12 months on zenguy.com and www.zenguy.com, and for up to 24
+    months on app.zenguy.com, so the relevant site can respect it without
+    asking on every visit. Browser storage is specific to each origin: a choice
+    on zenguy.com, www.zenguy.com or app.zenguy.com is not automatically shared
+    with either of the others.
   </p>
   <p>
-    Stripe Checkout and the Stripe customer portal — which open only when you
-    start or manage a payment — set their own cookies on Stripe’s domains.
-    Those are Stripe’s responsibility and are needed to take payment.
+    If durable local storage cannot save or verify a choice, the same consent
+    record can be kept for the current tab in session storage under
+    <code>zenguy:cookie-consent-session-override:v1</code>. This fail-safe keeps
+    a withdrawal from reverting to an older choice and ends with the browser
+    session; it is not sent to Google.
   </p>
   <p>
-    The public marketing site loads the Geist typeface from Google Fonts. That
-    is a network request to Google, not a Zenguy analytics cookie. Google may
-    process technical data such as IP address as described in Google’s
-    documentation. We load the font because it is part of the site you asked
-    to see.
+    Cloudflare, which hosts the websites, may set a security cookie, for example
+    to distinguish people from bots. It is used to keep the service available
+    and safe. Stripe Checkout and the Stripe customer portal, which open only
+    when you start or manage a payment, set their own cookies on Stripe’s
+    domains to provide that payment service.
+  </p>
+  <p>
+    The public site loads Geist, Geist Mono and Caveat from Google Fonts, and
+    the application loads Inter, IBM Plex Mono and Newsreader. These are network requests to Google,
+    not Zenguy analytics cookies, and occur independently of the analytics
+    choice. Google may receive technical request data such as the IP address
+    needed to deliver the font.
   </p>
 
-  <h2>3. Consent</h2>
+  <h2>3. Optional Google Analytics</h2>
   <p>
-    Because we do not currently set non-essential cookies on the marketing
-    site, we do not show a consent banner there. If we later add analytics or
-    advertising cookies, we will ask for opt-in consent first, with an equally
-    easy reject control, in line with AEPD guidance. Pre-ticked boxes and
-    “continued browsing” are not consent.
+    We use Google Analytics 4 to produce aggregated reports about visits and
+    how Zenguy is used. On zenguy.com and www.zenguy.com it measures visits and
+    use of public pages, validated campaign categories and clicks on links to
+    the product. On app.zenguy.com it measures allow-listed, normalized route
+    categories, consented signed-in users and a small set of product milestones: completed
+    registration, subscription checkout started, and a confirmed paid
+    subscription. This helps us improve the public content and product journey.
+    We do not use it for advertising, and Google signals and advertising
+    personalisation are disabled in our tag configuration.
+  </p>
+  <p>
+    Google Analytics remains off on each origin unless you make an affirmative
+    choice to allow it there. Before a first acceptance, including after an
+    initial rejection, we do not load the Google tag or send Analytics data or
+    a consent-status ping. If you withdraw after the tag was loaded, the page
+    first sends the denial update needed to revoke Analytics storage and then
+    reloads into a tag-free state. We do not deploy this Analytics tag on
+    localhost or preview deployments.
+  </p>
+  <p>
+    Application analytics use route templates such as a page category rather
+    than workspace or resource URLs. Our analytics events exclude form
+    contents, email addresses, tokens, test URLs and workspace or resource
+    identifiers. A confirmed subscription event can include the subscription
+    product, price and currency, and the Stripe invoice identifier used as a
+    transaction identifier; it does not include card details.
+  </p>
+  <p>
+    For signed-in users who consent on app.zenguy.com, the browser derives a
+    purpose-specific pseudonymous Analytics User-ID from the opaque internal
+    account identifier. The raw identifier, email and name are not sent. The
+    derived value supports a more consistent consented-user count across
+    browsers and devices. Finite reporting categories can also describe the
+    current route section, authentication state, account-age and workspace-count
+    band, and current workspace role and subscription status; they never contain
+    a workspace identifier or name.
+  </p>
+  <p>
+    If analytics is already allowed when you start a live subscription
+    checkout, the application keeps a short-lived session-storage marker for
+    that checkout. The marker is ignored after 24 hours and removed when next
+    checked or when the browser session ends. It lets the return page match
+    the first paid invoice to a checkout initiated in the same browser tab and
+    avoid false or duplicate purchase events. The workspace identifier used to
+    key that local marker is not sent to Google.
+  </p>
+  <p>If you allow analytics, the Google Analytics tag may set these first-party cookies:</p>
+  <ul>
+    <li>
+      <code>_ga</code> — distinguishes users; Google’s default expiry is two
+      years.
+    </li>
+    <li>
+      <code>_ga_*</code> — persists session state; Google’s default expiry is
+      two years.
+    </li>
+  </ul>
+  <p>
+    The provider is <strong>Google Ireland Limited</strong>. Read Google’s
+    official information about <a href="https://support.google.com/analytics/answer/11397207">GA4 cookie use</a>,
+    <a href="https://policies.google.com/technologies/partner-sites">how Google uses information from sites that use its services</a>,
+    and <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>.
   </p>
 
-  <h2>4. How to control cookies</h2>
+  <h2 id="cookie-preferences">4. Consent and your choices</h2>
   <p>
-    You can delete or block cookies in your browser settings. Blocking the
-    session cookie will sign you out of the application. You can also use
-    private browsing.
+    The first time you visit each Zenguy origin, its banner offers
+    “Accept analytics” and “Reject analytics” at the same level. You can also
+    choose through Cookie preferences. Rejecting analytics does not restrict
+    access to the site or application.
+  </p>
+  <p>
+    You can revisit your choice at any time using <strong>Cookie settings</strong>
+    in the public-site footer, or the persistent <strong>Cookie preferences</strong>
+    control in the application. Turning analytics off updates the stored preference
+    and removes the Google Analytics cookies visible to that origin. Because
+    choices are stored independently, withdraw separately on every Zenguy
+    origin where you previously accepted. Withdrawal does not affect processing
+    that took place while your earlier consent was in effect. You can also
+    delete or block cookies, local storage and session storage in your browser.
+    Blocking or deleting the <code>zenguy_rt</code> authentication cookie will
+    prevent session renewal and ultimately sign you out.
+  </p>
+  <p>
+    Our controls follow a basic Consent Mode v2 implementation. Google’s
+    <a href="https://developers.google.com/tag-platform/security/concepts/consent-mode">official Consent Mode description</a>
+    explains the difference between basic and advanced implementations. The
+    AEPD also publishes a <a href="https://www.aepd.es/guias/guia-cookies.pdf">guide on the use of cookies</a>.
   </p>
 
   <h2>5. More information</h2>
   <p>
-    Personal data involved in these technologies is described in the{" "}
-    <a href="/privacy/">Privacy Policy</a>. Questions:{" "}
-    <a href={legalMailto}>{legalCompany.email}</a>.
+    The personal data involved in these technologies, their purposes and
+    retention are described in the <a href="/privacy/">Privacy Policy</a>.
+    Questions: <a href={legalMailto}>{legalCompany.email}</a>.
   </p>
 </Legal>

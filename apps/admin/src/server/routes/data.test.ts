@@ -77,7 +77,46 @@ const runs: RecentRun[] = [
 
 const metrics: Metrics = {
   range: { days: 7, from: "2023-11-08", to: "2023-11-14", now: NOW },
-  users: { registered: 4, newInRange: 1, active7d: 2, danger: 1, series: [] },
+  users: {
+    registered: 4,
+    newInRange: 1,
+    active7d: 2,
+    danger: 1,
+    series: [],
+    productUsage: {
+      timezone: "Europe/Madrid",
+      overall: {
+        dau: 1,
+        wau: 2,
+        mau: 3,
+        dauMau: 1 / 3,
+        activeUsers: 2,
+        visits: 8,
+        visitsPerActiveUser: 4,
+      },
+      bySource: {
+        web: {
+          dau: 1,
+          wau: 2,
+          mau: 2,
+          dauMau: 0.5,
+          activeUsers: 2,
+          visits: 7,
+          visitsPerActiveUser: 3.5,
+        },
+        app: {
+          dau: 0,
+          wau: 1,
+          mau: 1,
+          dauMau: 0,
+          activeUsers: 1,
+          visits: 1,
+          visitsPerActiveUser: 1,
+        },
+      },
+      series: [],
+    },
+  },
   tests: {
     total: 5,
     perUser: 2.5,

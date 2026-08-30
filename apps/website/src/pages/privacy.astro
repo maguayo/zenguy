@@ -7,6 +7,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
   title="Privacy Policy — Zenguy"
   description="How NIESAYO GROUP, S.L. processes personal data for Zenguy under the GDPR and Spain’s LOPDGDD."
   heading="Privacy Policy"
+  effective="30 August 2026"
 >
   <p>
     This Privacy Policy explains how {legalCompany.legalName} (“we”, “us”),
@@ -19,8 +20,8 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     It is the layered information required by articles 13 and 14 of Regulation
     (EU) 2016/679 (GDPR) and Organic Law 3/2018 (LOPDGDD). It is not a contract
     of adhesion for extra processing: account data needed to provide Zenguy
-    rest on the contract; marketing and non-essential cookies rest on separate
-    consent.
+    rest on the contract; marketing and optional analytics storage rest on
+    separate consent.
   </p>
 
   <h2>1. Controller</h2>
@@ -90,6 +91,44 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       diagnostic logs needed to secure the service.
     </li>
     <li>
+      <strong>Authenticated service activity:</strong> when a signed-in user
+      uses the web application or iOS app, our first-party service records the
+      internal account identifier, web/app source, event type and time, a
+      normalized page or screen category, and—where the action concerns one—
+      the relevant workspace or resource identifier. This operational record
+      is stored by Zenguy in Cloudflare D1; it is separate from optional Google
+      Analytics, does not use Google cookies and is used for account-level
+      activity, support, security, reliability and aggregate product-usage
+      reporting. Automated checks and test outcomes are kept separate from
+      human product-use metrics.
+    </li>
+    <li>
+      <strong>Consent-based analytics:</strong> only after you consent on the
+      relevant origin, Google Analytics processes a first-party client
+      identifier, session information, page interactions, page category and
+      title, approximate geolocation, and browser, device and language
+      information. Public-site page and referrer URLs have query parameters and
+      URL fragments removed. We may pass only validated, low-cardinality
+      campaign source, medium, name and CTA-location values separately. The
+      application sends only allow-listed route templates, not actual workspace
+      or resource URLs.
+    </li>
+    <li>
+      <strong>Application analytics milestones:</strong> completed registration,
+      subscription checkout started, and a confirmed paid subscription. The
+      confirmed subscription event includes product, price, currency and a
+      Stripe invoice identifier as the transaction identifier. Analytics events
+      exclude form contents, email addresses, tokens, test URLs, and workspace
+      or resource identifiers. For a signed-in user who has consented, the
+      browser derives a purpose-specific pseudonymous Google Analytics User-ID
+      from the opaque internal account identifier. The internal identifier is
+      not sent to Google, and the derived value is not based on an email, name
+      or other contact data. This lets consented activity be counted more
+      consistently across browsers or devices. We also send finite account-age
+      and workspace-count bands and, for the current workspace, role and
+      subscription-status categories. We do not send card details.
+    </li>
+    <li>
       <strong>Communications:</strong> emails we send (verification, password
       reset, operational alerts, and, if you opt in, product updates) and
       support messages you send us.
@@ -129,6 +168,21 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       GDPR.
     </li>
     <li>
+      <strong>Record authenticated use needed to operate the account and
+      provide support</strong> — performance of the contract (art. 6.1.b), and
+      for service reliability, abuse prevention and aggregate product
+      improvement, our legitimate interests (art. 6.1.f). This first-party
+      record is not optional Google Analytics and does not enable advertising.
+      You may object to processing based on legitimate interests under article
+      21 GDPR.
+    </li>
+    <li>
+      <strong>Deliver a consistent, readable web interface</strong> — legitimate
+      interests (art. 6.1.f). Google Fonts receives the technical request data
+      needed to deliver the configured typefaces on the public site and web
+      application. This is separate from optional Google Analytics.
+    </li>
+    <li>
       <strong>Comply with law, respond to authorities, and handle claims</strong>
       — legal obligation (art. 6.1.c) or legitimate interests (art. 6.1.f).
     </li>
@@ -138,6 +192,18 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       unchecked by default, and can be withdrawn at any time by writing to{" "}
       <a href={legalMailto}>{legalCompany.email}</a>. Consent is not a
       condition of creating an account.
+    </li>
+    <li>
+      <strong>Measure and improve Zenguy with Google Analytics</strong> — your
+      consent (art. 6.1.a GDPR and art. 22.2 LSSI-CE). On the public site this
+      means visits, page use, campaigns and CTA interactions; in the application
+      it means normalized route categories, the pseudonymous consented-account
+      identifier and the limited product milestones and categories described
+      above. Analytics remains off on an origin if you reject it or have not
+      chosen there.
+      Consent is optional and can be withdrawn using <strong>Cookie settings</strong>
+      in the public-site footer or <strong>Cookie preferences</strong> in
+      the application, without limiting access to Zenguy.
     </li>
   </ul>
   <p>
@@ -175,6 +241,13 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       updates, when you use the iOS app.
     </li>
     <li>
+      <strong>Google Ireland Limited</strong> — Google Analytics reporting for
+      the public marketing site and application, only after consent on the
+      relevant origin. We configure Google signals and advertising
+      personalisation as disabled. Google also delivers the web fonts used by
+      the public site and web application independently of Analytics consent.
+    </li>
+    <li>
       Slack, Discord or other destinations <em>you</em> choose as alert
       webhooks — those providers then process the message under their terms.
     </li>
@@ -186,12 +259,18 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
 
   <h2>6. International transfers</h2>
   <p>
-    Some providers (notably Cloudflare, Stripe, Twilio, OpenAI and Expo) may
-    process data in the United States or other countries outside the EEA.
+    Some providers (notably Cloudflare, Stripe, Twilio, OpenAI, Expo and Google)
+    may process data in the United States or other countries outside the EEA.
     Where that happens we rely on an adequacy decision, the EU–US Data Privacy
     Framework if the provider is certified, and/or the European Commission’s
     Standard Contractual Clauses, plus supplementary measures where needed
     (GDPR Chapter V).
+  </p>
+  <p>
+    Google publishes <a href="https://business.safety.google/intl/es/adsdatatransfers/">information about the transfer mechanisms</a>
+    it may use for its advertising and analytics products, including the
+    EU–US Data Privacy Framework in certain circumstances and Standard
+    Contractual Clauses for certain other transfers.
   </p>
 
   <h2>7. Retention</h2>
@@ -203,6 +282,25 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       twelve months unless a claim needs them longer.
     </li>
     <li>Run evidence (screenshots, reports, logs): 30 days.</li>
+    <li>
+      Authenticated service activity: high-volume page, screen and view events
+      for up to 90 days; other account and product activity events for up to
+      365 days, unless a shorter account-deletion flow or a longer legal or
+      security need applies.
+    </li>
+    <li>
+      Google Analytics user-level and event-level data: 14 months. Google’s
+      retention control does not affect its standard aggregated reports, which
+      may remain available for longer. See Google’s <a href="https://support.google.com/analytics/answer/7667196">data-retention documentation</a>.
+    </li>
+    <li>
+      The analytics preference: up to 12 months from your choice on zenguy.com
+      and www.zenguy.com, and up to 24 months on app.zenguy.com. Each origin
+      stores its decision independently and requests it again when that period
+      expires. Google Analytics cookies, when consented to, have a default
+      expiry of up to two years but can be removed earlier when you withdraw
+      through the relevant preference control or through your browser.
+    </li>
     <li>Marketing consent records: until you withdraw consent, plus evidence of the consent for the period we may need to demonstrate it (art. 7.1 GDPR).</li>
     <li>
       If you never verify the email, the pending account and its verification

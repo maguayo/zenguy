@@ -20,10 +20,18 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
 import { trustedBillingUrl } from "../../lib/billing-links";
+import {
+  forgetRememberedSubscriptionCheckout,
+  confirmedSubscriptionPurchaseEvent,
+  readRememberedSubscriptionCheckout,
+  rememberSubscriptionCheckout,
+  trackConfirmedSubscriptionPurchase,
+  trackSubscriptionCheckoutStarted,
+} from "../../lib/analytics/ga4";
 
 type ActivationPhase = "idle" | "opening" | "activating" | "timeout";
 
-export async function pollUntilActive(
+export async function pollUntilActiveBilling(
   fetchBilling: () => Promise<Billing>,
   {
     maxChecks = 60,
@@ -33,13 +41,64 @@ export async function pollUntilActive(
     maxChecks?: number;
     wait?: (milliseconds: number) => Promise<void>;
   } = {},
-): Promise<boolean> {
+): Promise<Billing | null> {
   for (let check = 0; check < maxChecks; check += 1) {
     const billing = await fetchBilling();
-    if (billing.subscription.status === "ACTIVE") return true;
+    if (billing.subscription.status === "ACTIVE") return billing;
     if (check < maxChecks - 1) await wait(2_000);
   }
-  return false;
+  return null;
+}
+
+export async function pollForCorrelatedPurchase(
+  initialBilling: Billing,
+  fetchBilling: () => Promise<Billing>,
+  checkoutStartedAt: number,
+  {
+    maxChecks = 15,
+    now = () => Date.now(),
+    wait = (milliseconds: number) =>
+      new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds)),
+  }: {
+    maxChecks?: number;
+    now?: () => number;
+    wait?: (milliseconds: number) => Promise<void>;
+  } = {},
+): Promise<Billing | null> {
+  let billing = initialBilling;
+  for (let check = 0; check < maxChecks; check += 1) {
+    if (
+      confirmedSubscriptionPurchaseEvent(
+        billing,
+        checkoutStartedAt,
+        now(),
+      ) !== null
+    ) {
+      return billing;
+    }
+    if (check < maxChecks - 1) {
+      await wait(2_000);
+      billing = await fetchBilling();
+    }
+  }
+  return null;
+}
+
+export async function pollUntilActive(
+  fetchBilling: () => Promise<Billing>,
+  options?: Parameters<typeof pollUntilActiveBilling>[1],
+): Promise<boolean> {
+  return (await pollUntilActiveBilling(fetchBilling, options)) !== null;
+}
+
+export function shouldCheckCheckoutActivation(
+  checkoutResult: string | null,
+  billingEnvironment: "test" | "live" | undefined,
+): boolean {
+  return (
+    checkoutResult === "success" &&
+    (billingEnvironment === "test" || billingEnvironment === "live")
+  );
 }
 
 export function PlanDetails() {
@@ -118,8 +177,12 @@ export default function BillingSetup() {
     setPhase("activating");
     setActionError(null);
     try {
-      const active = await pollUntilActive(() => getBilling(wsId));
-      if (!active) {
+      const checkoutStartedAt =
+        billingConfigQuery.data?.environment === "live"
+          ? readRememberedSubscriptionCheckout(wsId)
+          : null;
+      const confirmedBilling = await pollUntilActiveBilling(() => getBilling(wsId));
+      if (confirmedBilling === null) {
         setPhase("timeout");
         return;
       }
@@ -128,6 +191,24 @@ export default function BillingSetup() {
         queryClient.invalidateQueries({ queryKey: ["ws", wsId] }),
         queryClient.invalidateQueries({ queryKey: ["ws", wsId, "billing"] }),
       ]);
+      if (
+        billingConfigQuery.data?.environment === "live" &&
+        checkoutStartedAt !== null
+      ) {
+        // Invoice listing can lag behind subscription activation. Measurement
+        // retries in the background and never delays access to the product.
+        void pollForCorrelatedPurchase(
+          confirmedBilling,
+          () => getBilling(wsId),
+          checkoutStartedAt,
+        )
+          .then((billing) => {
+            if (billing === null) return;
+            trackConfirmedSubscriptionPurchase(billing, checkoutStartedAt);
+            forgetRememberedSubscriptionCheckout(wsId);
+          })
+          .catch(() => undefined);
+      }
       toast.success("Subscription active");
       navigate(`/w/${wsId}/overview`, { replace: true });
     } catch (error) {
@@ -138,26 +219,40 @@ export default function BillingSetup() {
     } finally {
       activationInFlight.current = false;
     }
-  }, [navigate, queryClient, toast, wsId]);
+  }, [billingConfigQuery.data?.environment, navigate, queryClient, toast, wsId]);
 
   useEffect(() => {
-    if (searchParams.get("checkout") === "success") {
+    if (
+      shouldCheckCheckoutActivation(
+        searchParams.get("checkout"),
+        billingConfigQuery.data?.environment,
+      )
+    ) {
       void checkActivation();
     }
-  }, [checkActivation, searchParams]);
+  }, [billingConfigQuery.data?.environment, checkActivation, searchParams]);
 
   const startCheckout = async () => {
+    let rememberedForAnalytics = false;
     setPhase("opening");
     setActionError(null);
     try {
-      await getBillingConfig();
+      const billingConfig = await getBillingConfig();
       const checkout = await startSubscriptionCheckout(wsId);
       const url = trustedBillingUrl(checkout.url);
       if (url === null) {
         throw new Error("The billing provider returned an untrusted link.");
       }
+      if (billingConfig.environment === "live") {
+        if (trackSubscriptionCheckoutStarted()) {
+          rememberedForAnalytics = rememberSubscriptionCheckout(wsId);
+        }
+      }
       window.location.assign(url);
     } catch (error) {
+      if (rememberedForAnalytics) {
+        forgetRememberedSubscriptionCheckout(wsId);
+      }
       setPhase("idle");
       // A blocking action reports failure inline; a transient toast is easy
       // to miss and leaves the page looking like nothing happened.

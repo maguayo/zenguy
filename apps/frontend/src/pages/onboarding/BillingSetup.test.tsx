@@ -2,7 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Billing } from "../../api/types";
-import { ActionErrorNotice, PlanDetails, pollUntilActive } from "./BillingSetup";
+import {
+  ActionErrorNotice,
+  PlanDetails,
+  pollForCorrelatedPurchase,
+  pollUntilActive,
+  shouldCheckCheckoutActivation,
+} from "./BillingSetup";
 
 function billing(status: Billing["subscription"]["status"]): Billing {
   return {
@@ -35,6 +41,13 @@ function billing(status: Billing["subscription"]["status"]): Billing {
 }
 
 describe("billing onboarding", () => {
+  it("waits for billing configuration before checking a successful checkout", () => {
+    expect(shouldCheckCheckoutActivation("success", undefined)).toBe(false);
+    expect(shouldCheckCheckoutActivation("success", "test")).toBe(true);
+    expect(shouldCheckCheckoutActivation("success", "live")).toBe(true);
+    expect(shouldCheckCheckoutActivation(null, "live")).toBe(false);
+  });
+
   it("renders the complete plan promise", () => {
     const html = renderToStaticMarkup(<PlanDetails />);
     for (const copy of [
@@ -76,5 +89,44 @@ describe("billing onboarding", () => {
       pollUntilActive(fetchBilling, { maxChecks: 2, wait: async () => undefined }),
     ).resolves.toBe(false);
     expect(fetchBilling).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries delayed invoice evidence without blocking subscription activation", async () => {
+    const checkoutStartedAt = Date.parse("2026-08-30T11:50:00.000Z");
+    const activeWithoutInvoice = {
+      ...billing("ACTIVE"),
+      subscription: {
+        ...billing("ACTIVE").subscription,
+        source: "stripe" as const,
+        periodStart: "2026-08-30T11:54:00.000Z",
+      },
+    };
+    const activeWithInvoice = {
+      ...activeWithoutInvoice,
+      invoices: [
+        {
+          billedAt: "2026-08-30T11:55:00.000Z",
+          currency: "EUR",
+          id: "in_123",
+          invoiceNumber: null,
+          status: "paid",
+          totalCents: 4_719,
+        },
+      ],
+    };
+    const fetchBilling = vi.fn(async () => activeWithInvoice);
+    await expect(
+      pollForCorrelatedPurchase(
+        activeWithoutInvoice,
+        fetchBilling,
+        checkoutStartedAt,
+        {
+          maxChecks: 2,
+          now: () => Date.parse("2026-08-30T12:00:00.000Z"),
+          wait: async () => undefined,
+        },
+      ),
+    ).resolves.toEqual(activeWithInvoice);
+    expect(fetchBilling).toHaveBeenCalledOnce();
   });
 });

@@ -25,7 +25,12 @@ const { failureHref = "#evidence" } = Astro.props;
       </p>
 
       <div class="flex flex-wrap items-center gap-3.5">
-        <a href="https://app.zenguy.com" class="btn btn-violet rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">
+        <a
+          href="https://app.zenguy.com/signup"
+          class="btn btn-violet rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium"
+          data-analytics-cta="hero_signup"
+          data-analytics-destination="signup"
+        >
           Get started
         </a>
         <a href={failureHref} class="btn btn-outline rounded-[10px] px-[26px] py-[15px] text-[16px] font-medium">

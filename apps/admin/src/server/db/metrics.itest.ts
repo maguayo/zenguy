@@ -25,6 +25,27 @@ const TABLES = [
   "users",
 ] as const;
 
+const ACTIVITY_DDL = [
+  `CREATE TABLE IF NOT EXISTS activity_events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    user_id TEXT,
+    workspace_id TEXT,
+    source TEXT NOT NULL CHECK (source IN ('web','app','api','server')),
+    resource_type TEXT,
+    resource_id TEXT,
+    properties_json TEXT,
+    occurred_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_activity_ws_time ON activity_events (workspace_id, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_ws_type_time ON activity_events (workspace_id, type, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_user_time ON activity_events (user_id, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_time ON activity_events (occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_user_type_time ON activity_events (user_id, type, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_type_time ON activity_events (type, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_activity_ws_source_time ON activity_events (workspace_id, source, occurred_at DESC)",
+] as const;
+
 function user(id: string, createdAt: number) {
   return env.DB.prepare(
     `INSERT INTO users (id, name, email, password_hash, email_verified_at, created_at, updated_at)
@@ -100,6 +121,23 @@ async function seed(): Promise<void> {
       `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
        VALUES ('ae1', 'user.logged_in', ?, 'web', ?)`,
     ).bind(U4, NOW - 3 * DAY),
+    env.DB.prepare(
+      `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+       VALUES ('ae2', 'web.page_viewed', ?, 'web', ?)`,
+    ).bind(U1, NOW - HOUR),
+    env.DB.prepare(
+      `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+       VALUES ('ae3', 'app.opened', ?, 'app', ?)`,
+    ).bind(U1, NOW - HOUR + 1),
+    env.DB.prepare(
+      `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+       VALUES ('ae4', 'app.screen_viewed', ?, 'app', ?)`,
+    ).bind(U4, NOW - 10 * DAY),
+    // Even with a malformed web source, an automatic run outcome is not product use.
+    env.DB.prepare(
+      `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+       VALUES ('ae5', 'browser_test.run_passed', ?, 'web', ?)`,
+    ).bind(U1, NOW - HOUR + 2),
     workspace("ws_one", U1),
     workspace("ws_two", U4),
 
@@ -174,6 +212,48 @@ describe("loadMetrics", () => {
     expect(byDay.get(day(2))).toEqual({ day: day(2), signups: 1, cumulative: 4 });
     expect(byDay.get(day(6))).toEqual({ day: day(6), signups: 0, cumulative: 3 });
     expect(byDay.get(day(0))).toEqual({ day: day(0), signups: 0, cumulative: 4 });
+
+    const usage = metrics.users.productUsage;
+    expect(usage).not.toHaveProperty("unavailable");
+    if ("unavailable" in usage) throw new Error("activity migration unexpectedly missing");
+    expect(usage.timezone).toBe("Europe/Madrid");
+    expect(usage.overall).toEqual({
+      dau: 1,
+      wau: 2,
+      mau: 2,
+      dauMau: 0.5,
+      activeUsers: 2,
+      visits: 2,
+      visitsPerActiveUser: 1,
+    });
+    expect(usage.bySource.web).toEqual({
+      dau: 1,
+      wau: 2,
+      mau: 2,
+      dauMau: 0.5,
+      activeUsers: 2,
+      visits: 1,
+      visitsPerActiveUser: 0.5,
+    });
+    expect(usage.bySource.app).toEqual({
+      dau: 1,
+      wau: 1,
+      mau: 2,
+      dauMau: 0.5,
+      activeUsers: 1,
+      visits: 1,
+      visitsPerActiveUser: 1,
+    });
+    expect(usage.series).toHaveLength(7);
+    expect(usage.series.at(-1)).toMatchObject({
+      day: "2023-11-14",
+      activeUsers: 1,
+      webActiveUsers: 1,
+      appActiveUsers: 1,
+      visits: 2,
+      webVisits: 1,
+      appVisits: 1,
+    });
   });
 
   it("computes the tests hero with retries and estimated spend", async () => {
@@ -235,15 +315,85 @@ describe("loadMetrics", () => {
     // U1 (40d) and U2 (30d) predate the range start; U4's signup lands 20 days back.
     expect(metrics.users.series[0]).toEqual({ day: day(29), signups: 0, cumulative: 2 });
     expect(metrics.users.series[9]).toEqual({ day: day(20), signups: 1, cumulative: 3 });
+    if ("unavailable" in metrics.users.productUsage) throw new Error("activity migration unexpectedly missing");
+    expect(metrics.users.productUsage.series).toHaveLength(30);
+  });
+
+  it("keeps a 90-day Madrid product-usage series bounded and zero-filled", async () => {
+    const metrics = await loadMetrics(env.DB, NOW, 90);
+    if ("unavailable" in metrics.users.productUsage) throw new Error("activity migration unexpectedly missing");
+    expect(metrics.users.productUsage.series).toHaveLength(90);
+    expect(metrics.users.productUsage.series[0]?.day).toBe("2023-08-17");
+    expect(metrics.users.productUsage.series.at(-1)?.day).toBe("2023-11-14");
+  });
+
+  it("assigns product activity across the CET-to-CEST boundary using Madrid midnights", async () => {
+    const dstNow = Date.parse("2026-03-30T12:00:00Z");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_dst_1', 'web.page_viewed', ?, 'web', ?)`,
+      ).bind(U1, Date.parse("2026-03-28T22:59:59.999Z")),
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_dst_2', 'web.page_viewed', ?, 'web', ?)`,
+      ).bind(U2, Date.parse("2026-03-28T23:00:00Z")),
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_dst_3', 'app.opened', ?, 'app', ?)`,
+      ).bind(U3, Date.parse("2026-03-29T21:59:59.999Z")),
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_dst_4', 'app.opened', ?, 'app', ?)`,
+      ).bind(U4, Date.parse("2026-03-29T22:00:00Z")),
+    ]);
+
+    const metrics = await loadMetrics(env.DB, dstNow, 7);
+    if ("unavailable" in metrics.users.productUsage) throw new Error("activity migration unexpectedly missing");
+    const byDay = new Map(metrics.users.productUsage.series.map((point) => [point.day, point]));
+    expect(byDay.get("2026-03-28")?.activeUsers).toBe(1);
+    expect(byDay.get("2026-03-29")?.activeUsers).toBe(2);
+    expect(byDay.get("2026-03-30")?.activeUsers).toBe(1);
+    expect(metrics.users.productUsage.overall.dau).toBe(1);
+    expect(metrics.users.productUsage.overall.wau).toBe(4);
+  });
+
+  it("excludes a new web event until it is explicitly allowlisted as human product use", async () => {
+    await env.DB.prepare(
+      `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+       VALUES ('ae_future', 'future.feature_used', ?, 'web', ?)`,
+    ).bind(U3, NOW - HOUR).run();
+
+    const metrics = await loadMetrics(env.DB, NOW, 7);
+    if ("unavailable" in metrics.users.productUsage) throw new Error("activity migration unexpectedly missing");
+    expect(metrics.users.productUsage.overall.activeUsers).toBe(2);
+    expect(metrics.users.productUsage.bySource.web.activeUsers).toBe(2);
+    expect(metrics.users.productUsage.overall.visits).toBe(2);
+    expect(metrics.users.productUsage.series.at(-1)?.activeUsers).toBe(1);
   });
 
   it("survives an empty database", async () => {
     await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
     const metrics = await loadMetrics(env.DB, NOW, 7);
     expect(metrics.users).toMatchObject({ registered: 0, newInRange: 0, active7d: 0, danger: 0 });
+    expect(metrics.users.productUsage).toMatchObject({
+      overall: { dau: 0, wau: 0, mau: 0, dauMau: null, activeUsers: 0, visits: 0, visitsPerActiveUser: null },
+    });
     expect(metrics.tests).toMatchObject({ total: 0, perUser: null, failed2h: 0 });
     expect(metrics.tests.spendCents).toEqual({ today: 0, last7d: 0, last30d: 0 });
     expect(metrics.uptime).toMatchObject({ upPercent: null, monitorsDown: 0, monitorsTotal: 0 });
     expect(metrics.uptime.series).toHaveLength(7);
+  });
+
+  it("degrades product usage while the activity_events migration is pending", async () => {
+    await env.DB.exec("DROP TABLE activity_events");
+    try {
+      const metrics = await loadMetrics(env.DB, NOW, 7);
+      expect(metrics.users.productUsage).toEqual({ unavailable: "MIGRATION_PENDING" });
+      // The pre-existing users hero still falls back to refresh-token signals.
+      expect(metrics.users.active7d).toBe(1);
+    } finally {
+      await env.DB.batch(ACTIVITY_DDL.map((sql) => env.DB.prepare(sql)));
+    }
   });
 });

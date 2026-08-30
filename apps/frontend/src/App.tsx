@@ -20,7 +20,9 @@ import {
 
 import type { Workspace } from "./api/types";
 import { ActivityTracker } from "./components/ActivityTracker";
+import { AnalyticsRouteTracker } from "./components/AnalyticsRouteTracker";
 import { AppLayout } from "./components/AppLayout";
+import { CookieConsentProvider } from "./components/CookieConsent";
 import { ErrorState } from "./components/ui/ErrorState";
 import { Spinner } from "./components/ui/Spinner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -249,13 +251,16 @@ export function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <QueryClientProvider client={queryClient}>
-          <ToastProvider>
-            <AuthProvider>
-              <AppRoutes />
-            </AuthProvider>
-          </ToastProvider>
-        </QueryClientProvider>
+        <CookieConsentProvider>
+          <QueryClientProvider client={queryClient}>
+            <ToastProvider>
+              <AuthProvider>
+                <AnalyticsRouteTracker />
+                <AppRoutes />
+              </AuthProvider>
+            </ToastProvider>
+          </QueryClientProvider>
+        </CookieConsentProvider>
       </BrowserRouter>
     </ErrorBoundary>
   );

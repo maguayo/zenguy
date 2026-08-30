@@ -1,5 +1,6 @@
 export const SITE_URL = "https://zenguy.com";
 export const APP_URL = "https://app.zenguy.com";
+export const APP_SIGNUP_URL = `${APP_URL}/signup`;
 
 export const homeNavLinks = [
   { href: "#how", label: "How it works" },

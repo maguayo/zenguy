@@ -10,9 +10,10 @@ interface Props {
   description: string;
   heading: string;
   eyebrow?: string;
+  effective?: string;
 }
 
-const { title, description, heading, eyebrow } = Astro.props;
+const { title, description, heading, eyebrow, effective = LEGAL_EFFECTIVE } = Astro.props;
 ---
 
 <Base title={title} description={description}>
@@ -25,7 +26,7 @@ const { title, description, heading, eyebrow } = Astro.props;
           {heading}
         </h1>
         <p class="m-0 mt-3 text-[14px] text-muted">
-          Effective and last updated: {LEGAL_EFFECTIVE}
+          Effective and last updated: {effective}
         </p>
         <div class="legal-body article-body mt-10">
           <slot />

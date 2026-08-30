@@ -77,6 +77,39 @@ export interface UsersDayPoint {
   cumulative: number;
 }
 
+export interface ProductUsageDayPoint {
+  /** Calendar day in Europe/Madrid. */
+  day: string;
+  activeUsers: number;
+  webActiveUsers: number;
+  appActiveUsers: number;
+  visits: number;
+  webVisits: number;
+  appVisits: number;
+}
+
+export interface ProductUsageSlice {
+  /** Unique accounts active since today's Europe/Madrid midnight. */
+  dau: number;
+  /** Unique accounts active in the current seven Europe/Madrid calendar days. */
+  wau: number;
+  /** Unique accounts active in the current 30 Europe/Madrid calendar days. */
+  mau: number;
+  /** DAU / MAU; null when MAU is zero. */
+  dauMau: number | null;
+  /** Unique accounts with qualifying activity in the selected dashboard range. */
+  activeUsers: number;
+  visits: number;
+  visitsPerActiveUser: number | null;
+}
+
+export interface ProductUsage {
+  timezone: "Europe/Madrid";
+  overall: ProductUsageSlice;
+  bySource: { web: ProductUsageSlice; app: ProductUsageSlice };
+  series: ProductUsageDayPoint[];
+}
+
 export interface TestsDayPoint {
   day: string;
   passed: number;
@@ -105,6 +138,8 @@ export interface Metrics {
     /** Accounts older than 14 days with no sign-in nor activity event in 14 days. */
     danger: number;
     series: UsersDayPoint[];
+    /** Authenticated product use from human web/app events; unavailable before migration 0038. */
+    productUsage: ProductUsage | Unavailable;
   };
   tests: {
     total: number;

@@ -1,4 +1,12 @@
-import type { MetricRangeDays, Metrics, TestsDayPoint, UptimeDayPoint } from "../../shared/types";
+import type {
+  MetricRangeDays,
+  Metrics,
+  ProductUsage,
+  ProductUsageDayPoint,
+  ProductUsageSlice,
+  TestsDayPoint,
+  UptimeDayPoint,
+} from "../../shared/types";
 import {
   ACTIVE_WINDOW_MS,
   DANGER_WINDOW_MS,
@@ -22,6 +30,135 @@ function dayKeys(now: number, days: number): string[] {
   const start = startOfUtcDay(now) - (days - 1) * DAY_MS;
   return Array.from({ length: days }, (_, index) => utcDayString(start + index * DAY_MS));
 }
+
+const PRODUCT_TIMEZONE = "Europe/Madrid" as const;
+
+interface CalendarDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export interface MadridDayWindow {
+  day: string;
+  startMs: number;
+  endMs: number;
+}
+
+const MADRID_DATE = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PRODUCT_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const MADRID_DATE_TIME = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PRODUCT_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function numericParts(formatter: Intl.DateTimeFormat, timestampMs: number): Record<string, number> {
+  return Object.fromEntries(
+    formatter
+      .formatToParts(timestampMs)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+}
+
+function madridCalendarDate(timestampMs: number): CalendarDate {
+  const parts = numericParts(MADRID_DATE, timestampMs);
+  return { year: parts.year as number, month: parts.month as number, day: parts.day as number };
+}
+
+function shiftCalendarDate(date: CalendarDate, days: number): CalendarDate {
+  const shifted = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function calendarKey(date: CalendarDate): string {
+  return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
+}
+
+/** UTC instant at Europe/Madrid midnight; iterative conversion handles CET/CEST transitions. */
+function madridMidnightMs(date: CalendarDate): number {
+  const wallClockUtc = Date.UTC(date.year, date.month - 1, date.day);
+  let candidate = wallClockUtc;
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const parts = numericParts(MADRID_DATE_TIME, candidate);
+    const renderedAsUtc = Date.UTC(
+      parts.year as number,
+      (parts.month as number) - 1,
+      parts.day as number,
+      parts.hour as number,
+      parts.minute as number,
+      parts.second as number,
+    );
+    const next = wallClockUtc - (renderedAsUtc - candidate);
+    if (next === candidate) return candidate;
+    candidate = next;
+  }
+  return candidate;
+}
+
+/** Oldest-first Madrid calendar days ending with today's partial day. */
+export function madridDayWindows(now: number, days: number): MadridDayWindow[] {
+  const today = madridCalendarDate(now);
+  return Array.from({ length: days }, (_, index) => {
+    const date = shiftCalendarDate(today, index - days + 1);
+    const startMs = madridMidnightMs(date);
+    const nextStart = madridMidnightMs(shiftCalendarDate(date, 1));
+    return {
+      day: calendarKey(date),
+      startMs,
+      endMs: Math.min(now, nextStart),
+    };
+  });
+}
+
+// Positive allowlist: a new catalog event is not product use until its human
+// semantics have been reviewed here. Mutations are deliberately absent because
+// audited mutations currently use source=server, so attributing them back to
+// web vs app would be misleading.
+const PRODUCT_VISIT_TYPES = [
+  "web.page_viewed",
+  "app.screen_viewed",
+  "app.opened",
+  "browser_test.viewed",
+  "run.viewed",
+  "uptime_monitor.viewed",
+  "incident.viewed",
+] as const;
+
+const PRODUCT_HUMAN_AUTH_TYPES = [
+  "user.registered",
+  "user.email_verified",
+  "user.logged_in",
+  "user.logged_out",
+  "user.password_reset",
+] as const;
+
+const PRODUCT_HUMAN_TYPES = [
+  ...PRODUCT_VISIT_TYPES,
+  ...PRODUCT_HUMAN_AUTH_TYPES,
+] as const;
+
+function sqlStrings(values: readonly string[]): string {
+  return values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ");
+}
+
+const PRODUCT_VISITS_SQL = sqlStrings(PRODUCT_VISIT_TYPES);
+const PRODUCT_HUMAN_SQL = sqlStrings(PRODUCT_HUMAN_TYPES);
 
 const DAY_SQL = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch')`;
 
@@ -67,6 +204,165 @@ const USER_ACTIVITY_SQL = `
         AND NOT EXISTS (
           SELECT 1 FROM activity_events ae WHERE ae.user_id = u.id AND ae.occurred_at >= ?2
         )) AS danger_combined`;
+
+type ProductUsageSource = "all" | "web" | "app";
+
+interface ProductUsageScalarRow {
+  source: ProductUsageSource;
+  dau: number;
+  wau: number;
+  mau: number;
+  active_users: number;
+  visits: number;
+}
+
+interface ProductUsageDayRow {
+  day: string;
+  source: ProductUsageSource;
+  active_users: number;
+  visits: number;
+}
+
+const PRODUCT_USAGE_SCALARS_SQL = `
+  WITH eligible AS (
+    SELECT user_id, source, type, occurred_at
+      FROM activity_events
+     WHERE occurred_at >= ?1 AND occurred_at < ?2
+       AND user_id IS NOT NULL
+       AND source IN ('web', 'app')
+       AND type IN (${PRODUCT_HUMAN_SQL})
+  ), slices AS (
+    SELECT source,
+           COUNT(DISTINCT CASE WHEN occurred_at >= ?3 THEN user_id END) AS dau,
+           COUNT(DISTINCT CASE WHEN occurred_at >= ?4 THEN user_id END) AS wau,
+           COUNT(DISTINCT CASE WHEN occurred_at >= ?5 THEN user_id END) AS mau,
+           COUNT(DISTINCT CASE WHEN occurred_at >= ?6 THEN user_id END) AS active_users,
+           COUNT(CASE WHEN occurred_at >= ?6 AND type IN (${PRODUCT_VISITS_SQL}) THEN 1 END) AS visits
+      FROM eligible
+     GROUP BY source
+  )
+  SELECT source, dau, wau, mau, active_users, visits FROM slices
+  UNION ALL
+  SELECT 'all' AS source,
+         COUNT(DISTINCT CASE WHEN occurred_at >= ?3 THEN user_id END) AS dau,
+         COUNT(DISTINCT CASE WHEN occurred_at >= ?4 THEN user_id END) AS wau,
+         COUNT(DISTINCT CASE WHEN occurred_at >= ?5 THEN user_id END) AS mau,
+         COUNT(DISTINCT CASE WHEN occurred_at >= ?6 THEN user_id END) AS active_users,
+         COUNT(CASE WHEN occurred_at >= ?6 AND type IN (${PRODUCT_VISITS_SQL}) THEN 1 END) AS visits
+    FROM eligible`;
+
+function productUsageDaySql(windows: MadridDayWindow[]): string {
+  const values = windows
+    .map((window) => `('${window.day}', ${window.startMs}, ${window.endMs})`)
+    .join(",\n      ");
+  const earliest = windows[0]?.startMs ?? 0;
+  const latest = windows[windows.length - 1]?.endMs ?? 0;
+  return `
+    WITH day_bounds(day, start_ms, end_ms) AS (
+      VALUES ${values}
+    ), sources(source) AS (
+      VALUES ('web'), ('app')
+    ), eligible AS (
+      SELECT user_id, source, type, occurred_at
+        FROM activity_events
+       WHERE occurred_at >= ${earliest} AND occurred_at < ${latest}
+         AND user_id IS NOT NULL
+         AND source IN ('web', 'app')
+         AND type IN (${PRODUCT_HUMAN_SQL})
+    )
+    SELECT bounds.day, 'all' AS source,
+           COUNT(DISTINCT event.user_id) AS active_users,
+           COUNT(CASE WHEN event.type IN (${PRODUCT_VISITS_SQL}) THEN 1 END) AS visits
+      FROM day_bounds bounds
+      LEFT JOIN eligible event
+        ON event.occurred_at >= bounds.start_ms AND event.occurred_at < bounds.end_ms
+     GROUP BY bounds.day
+    UNION ALL
+    SELECT bounds.day, sources.source,
+           COUNT(DISTINCT event.user_id) AS active_users,
+           COUNT(CASE WHEN event.type IN (${PRODUCT_VISITS_SQL}) THEN 1 END) AS visits
+      FROM day_bounds bounds
+      CROSS JOIN sources
+      LEFT JOIN eligible event
+        ON event.source = sources.source
+       AND event.occurred_at >= bounds.start_ms AND event.occurred_at < bounds.end_ms
+     GROUP BY bounds.day, sources.source`;
+}
+
+function usageSlice(row?: ProductUsageScalarRow): ProductUsageSlice {
+  const dau = row?.dau ?? 0;
+  const wau = row?.wau ?? 0;
+  const mau = row?.mau ?? 0;
+  const activeUsers = row?.active_users ?? 0;
+  const visits = row?.visits ?? 0;
+  return {
+    dau,
+    wau,
+    mau,
+    dauMau: mau > 0 ? dau / mau : null,
+    activeUsers,
+    visits,
+    visitsPerActiveUser: activeUsers > 0 ? visits / activeUsers : null,
+  };
+}
+
+async function loadProductUsage(
+  db: D1Database,
+  now: number,
+  days: MetricRangeDays,
+): Promise<ProductUsage | { unavailable: "MIGRATION_PENDING" }> {
+  const rangeWindows = madridDayWindows(now, days);
+  const monthWindows = madridDayWindows(now, 30);
+  const rangeStart = rangeWindows[0]?.startMs ?? now;
+  const dauStart = monthWindows[29]?.startMs ?? now;
+  const wauStart = monthWindows[23]?.startMs ?? now;
+  const mauStart = monthWindows[0]?.startMs ?? now;
+  const earliest = Math.min(rangeStart, mauStart);
+
+  try {
+    const [scalars, daily] = await Promise.all([
+      db
+        .prepare(PRODUCT_USAGE_SCALARS_SQL)
+        .bind(earliest, now, dauStart, wauStart, mauStart, rangeStart)
+        .all<ProductUsageScalarRow>()
+        .then((result) => result.results),
+      db
+        .prepare(productUsageDaySql(rangeWindows))
+        .all<ProductUsageDayRow>()
+        .then((result) => result.results),
+    ]);
+
+    const scalarBySource = new Map(scalars.map((row) => [row.source, row]));
+    const dailyByKey = new Map(daily.map((row) => [`${row.day}:${row.source}`, row]));
+    const series: ProductUsageDayPoint[] = rangeWindows.map((window) => {
+      const all = dailyByKey.get(`${window.day}:all`);
+      const web = dailyByKey.get(`${window.day}:web`);
+      const app = dailyByKey.get(`${window.day}:app`);
+      return {
+        day: window.day,
+        activeUsers: all?.active_users ?? 0,
+        webActiveUsers: web?.active_users ?? 0,
+        appActiveUsers: app?.active_users ?? 0,
+        visits: all?.visits ?? 0,
+        webVisits: web?.visits ?? 0,
+        appVisits: app?.visits ?? 0,
+      };
+    });
+
+    return {
+      timezone: PRODUCT_TIMEZONE,
+      overall: usageSlice(scalarBySource.get("all")),
+      bySource: {
+        web: usageSlice(scalarBySource.get("web")),
+        app: usageSlice(scalarBySource.get("app")),
+      },
+      series,
+    };
+  } catch (error) {
+    if (isMigrationPendingError(error)) return { unavailable: "MIGRATION_PENDING" };
+    throw error;
+  }
+}
 
 interface SignupsRow {
   day: string;
@@ -210,7 +506,18 @@ export async function loadMetrics(
   const activeFrom = now - ACTIVE_WINDOW_MS;
   const dangerBefore = now - DANGER_WINDOW_MS;
 
-  const [userScalars, userActivity, signups, runsByDay, testScalars, retries, spend, checksByDay, uptimeScalars] =
+  const [
+    userScalars,
+    userActivity,
+    productUsage,
+    signups,
+    runsByDay,
+    testScalars,
+    retries,
+    spend,
+    checksByDay,
+    uptimeScalars,
+  ] =
     await Promise.all([
       firstOr<UserScalarsRow>(
         { registered: 0, new_in_range: 0, users_before: 0, active_tokens: 0, danger_tokens: 0 },
@@ -220,6 +527,7 @@ export async function loadMetrics(
         null,
         db.prepare(USER_ACTIVITY_SQL).bind(activeFrom, dangerBefore),
       ),
+      loadProductUsage(db, now, days),
       db.prepare(SIGNUPS_SQL).bind(fromMs).all<SignupsRow>().then((r) => r.results),
       db.prepare(RUNS_BY_DAY_SQL).bind(fromMs).all<RunsDayRow>().then((r) => r.results),
       firstOr<TestScalarsRow>(
@@ -331,6 +639,7 @@ export async function loadMetrics(
       active7d: userActivity?.active_combined ?? userScalars.active_tokens,
       danger: userActivity?.danger_combined ?? userScalars.danger_tokens,
       series: usersSeries,
+      productUsage,
     },
     tests: {
       total: testScalars.total,

@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import AnalyticsConsent from "../components/AnalyticsConsent.astro";
 
 interface Props {
   title?: string;
@@ -7,6 +8,7 @@ interface Props {
   ogType?: "website" | "article";
   publishedTime?: Date;
   image?: string;
+  analyticsPath?: string;
 }
 
 const {
@@ -15,6 +17,7 @@ const {
   ogType = "website",
   publishedTime,
   image,
+  analyticsPath = Astro.url.pathname,
 } = Astro.props;
 
 const site = Astro.site ?? "https://zenguy.com";
@@ -57,5 +60,6 @@ const ogImage = image ? new URL(image, site).href : undefined;
   </head>
   <body>
     <slot />
+    <AnalyticsConsent pagePath={analyticsPath} />
   </body>
 </html>

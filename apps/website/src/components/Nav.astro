@@ -21,7 +21,17 @@ const { homeHref = "/", links = homeNavLinks } = Astro.props;
       ))}
     </nav>
     <div class="flex-1"></div>
-    <a href="https://app.zenguy.com" class="link-quiet text-sm max-md:hidden">Sign in</a>
-    <a href="https://app.zenguy.com" class="btn btn-violet rounded-lg px-4 py-[9px] text-sm font-medium">Get started</a>
+    <a
+      href="https://app.zenguy.com/signin"
+      class="link-quiet text-sm max-md:hidden"
+      data-analytics-cta="nav_signin"
+      data-analytics-destination="signin">Sign in</a
+    >
+    <a
+      href="https://app.zenguy.com/signup"
+      class="btn btn-violet rounded-lg px-4 py-[9px] text-sm font-medium"
+      data-analytics-cta="nav_signup"
+      data-analytics-destination="signup">Get started</a
+    >
   </div>
 </header>

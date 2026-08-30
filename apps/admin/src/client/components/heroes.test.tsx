@@ -15,6 +15,49 @@ const metrics: Metrics = {
     active7d: 17,
     danger: 5,
     series: [{ day: "2026-08-30", signups: 3, cumulative: 42 }],
+    productUsage: {
+      timezone: "Europe/Madrid",
+      overall: {
+        dau: 8,
+        wau: 17,
+        mau: 25,
+        dauMau: 0.32,
+        activeUsers: 17,
+        visits: 68,
+        visitsPerActiveUser: 4,
+      },
+      bySource: {
+        web: {
+          dau: 6,
+          wau: 14,
+          mau: 21,
+          dauMau: 6 / 21,
+          activeUsers: 14,
+          visits: 56,
+          visitsPerActiveUser: 4,
+        },
+        app: {
+          dau: 3,
+          wau: 5,
+          mau: 7,
+          dauMau: 3 / 7,
+          activeUsers: 5,
+          visits: 12,
+          visitsPerActiveUser: 2.4,
+        },
+      },
+      series: [
+        {
+          day: "2026-08-30",
+          activeUsers: 8,
+          webActiveUsers: 6,
+          appActiveUsers: 3,
+          visits: 18,
+          webVisits: 14,
+          appVisits: 4,
+        },
+      ],
+    },
   },
   tests: {
     total: 120,
@@ -140,6 +183,14 @@ describe("users hero", () => {
     expect(html).toContain("Usuarios danger");
     expect(html).toContain("14+ días sin señales");
     expect(html).toContain("Evolución de usuarios");
+    expect(html).toContain("Uso autenticado del producto");
+    expect(html).toContain("Product DAU");
+    expect(html).toContain("Product WAU");
+    expect(html).toContain("Product MAU");
+    expect(html).toContain("DAU / MAU");
+    expect(html).toContain("Visitas / cuenta");
+    expect(html).toContain("App nativa");
+    expect(html).toContain("Total deduplica las cuentas");
   });
 
   it("keeps the danger widget neutral at zero", () => {
@@ -147,6 +198,17 @@ describe("users hero", () => {
       <UsersHero users={{ ...metrics.users, danger: 0 }} />,
     );
     expect(html).not.toContain("text-danger-700");
+  });
+
+  it("explains when authenticated usage is waiting for the activity migration", () => {
+    const html = renderToStaticMarkup(
+      <UsersHero
+        users={{ ...metrics.users, productUsage: { unavailable: "MIGRATION_PENDING" } }}
+      />,
+    );
+    expect(html).toContain("Uso autenticado pendiente");
+    expect(html).toContain("migración de activity_events");
+    expect(html).not.toContain("Product DAU");
   });
 });
 
