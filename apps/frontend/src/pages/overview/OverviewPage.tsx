@@ -85,42 +85,6 @@ export const activityPresentation: Record<ActivityType, ActivityPresentation> = 
   },
 };
 
-export interface ActivityGroup {
-  count: number;
-  item: ActivityItem;
-}
-
-/** Collapse only adjacent successful runs, preserving failures and chronology. */
-export function groupActivityItems(items: ActivityItem[]): ActivityGroup[] {
-  const groups: ActivityGroup[] = [];
-  for (const item of items) {
-    const previous = groups[groups.length - 1];
-    if (
-      item.type === "TEST_PASSED" &&
-      previous?.item.type === "TEST_PASSED" &&
-      previous.item.resourceId === item.resourceId
-    ) {
-      previous.count += 1;
-    } else {
-      groups.push({ count: 1, item });
-    }
-  }
-  return groups;
-}
-
-export function activityGroupPath(workspaceId: string, group: ActivityGroup): string {
-  if (group.count > 1 && group.item.type === "TEST_PASSED") {
-    return `/w/${workspaceId}/tests/${group.item.resourceId}`;
-  }
-  return activityPath(workspaceId, group.item);
-}
-
-export function activityStatusLabel(group: ActivityGroup): string {
-  return group.count > 1 && group.item.type === "TEST_PASSED"
-    ? `Passed ×${group.count}`
-    : activityPresentation[group.item.type].label;
-}
-
 export function activityResourceLabel(resourceType: string): string {
   if (resourceType === "BROWSER_TEST") return "Browser test";
   if (resourceType === "UPTIME_MONITOR") return "Uptime monitor";
@@ -231,8 +195,6 @@ export default function OverviewPage() {
   if (overview.isError) return <ErrorState onRetry={() => void overview.refetch()} />;
 
   const data = overview.data;
-  const activityGroups = groupActivityItems(data.activity);
-
   return (
     <div className="space-y-6">
       <OverviewHero
@@ -368,23 +330,16 @@ export default function OverviewPage() {
           />
         ) : (
           <ul className="divide-y divide-zinc-100">
-            {activityGroups.map((group) => {
-              const item = group.item;
+            {data.activity.map((item) => {
               const presentation = activityPresentation[item.type];
               const Icon = presentation.icon;
-              const statusLabel = activityStatusLabel(group);
               const relative = formatRelative(item.occurredAt);
-              const relativeLabel = group.count > 1 ? `Latest ${relative}` : relative;
               return (
                 <li key={activityKey(item)}>
                   <Link
-                    aria-label={`${item.resourceName}: ${
-                      group.count > 1
-                        ? `${group.count} successful runs`
-                        : presentation.label
-                    }, ${relativeLabel}`}
+                    aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
                     className="group grid min-h-16 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50/70 focus-visible:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
-                    to={activityGroupPath(current.id, group)}
+                    to={activityPath(current.id, item)}
                   >
                     <span
                       className={clsx(
@@ -402,7 +357,7 @@ export default function OverviewPage() {
                         >
                           {item.resourceName}
                         </span>
-                        <Badge tone={presentation.tone}>{statusLabel}</Badge>
+                        <Badge tone={presentation.tone}>{presentation.label}</Badge>
                       </span>
                       <span className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
                         <span>{activityResourceLabel(item.resourceType)}</span>
@@ -414,7 +369,7 @@ export default function OverviewPage() {
                           dateTime={item.occurredAt}
                           title={formatDateTime(item.occurredAt, timezone)}
                         >
-                          {relativeLabel}
+                          {relative}
                         </time>
                       </span>
                     </span>
@@ -424,7 +379,7 @@ export default function OverviewPage() {
                         dateTime={item.occurredAt}
                         title={formatDateTime(item.occurredAt, timezone)}
                       >
-                        {relativeLabel}
+                        {relative}
                       </time>
                       <ChevronRight
                         aria-hidden="true"

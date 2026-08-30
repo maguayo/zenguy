@@ -69,19 +69,15 @@ describe("workspace navigation", () => {
 
 describe("account menu", () => {
   const menu = ({
-    canIssueComplimentaryGrants = false,
     cookiePreferencesAvailable = false,
     cookiePreferencesDecided = false,
-    navigateToComplimentary = vi.fn(),
     onNavigate = vi.fn(),
     openCookiePreferences = vi.fn(),
     signOut = vi.fn(),
   } = {}) =>
     accountMenuItems({
-      canIssueComplimentaryGrants,
       cookiePreferencesAvailable,
       cookiePreferencesDecided,
-      navigateToComplimentary,
       onNavigate,
       openCookiePreferences,
       signOut,
@@ -94,14 +90,6 @@ describe("account menu", () => {
         cookiePreferencesDecided: true,
       }).map((item) => item.label),
     ).toEqual(["Cookie preferences", "Sign out"]);
-
-    expect(
-      menu({
-        canIssueComplimentaryGrants: true,
-        cookiePreferencesAvailable: true,
-        cookiePreferencesDecided: true,
-      }).map((item) => item.label),
-    ).toEqual(["Complimentary links", "Cookie preferences", "Sign out"]);
   });
 
   it("omits cookie preferences when there is no decided production choice", () => {

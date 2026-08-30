@@ -14,10 +14,8 @@ import {
   Users,
 } from "lucide-react";
 import clsx from "clsx";
-import { useQuery } from "@tanstack/react-query";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
-import { getBillingConfig } from "../api/billing";
 import { useAuth } from "../contexts/AuthContext";
 import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Action } from "../lib/permissions";
@@ -57,31 +55,19 @@ export function visibleNavigationItems(
 }
 
 export function accountMenuItems({
-  canIssueComplimentaryGrants,
   cookiePreferencesAvailable,
   cookiePreferencesDecided,
-  navigateToComplimentary,
   onNavigate,
   openCookiePreferences,
   signOut,
 }: {
-  canIssueComplimentaryGrants: boolean;
   cookiePreferencesAvailable: boolean;
   cookiePreferencesDecided: boolean;
-  navigateToComplimentary: () => void;
   onNavigate?: () => void;
   openCookiePreferences: () => void;
   signOut: () => void | Promise<void>;
 }): DropdownItem[] {
   return [
-    ...(canIssueComplimentaryGrants
-      ? [
-          {
-            label: "Complimentary links",
-            onSelect: navigateToComplimentary,
-          },
-        ]
-      : []),
     ...(cookiePreferencesAvailable && cookiePreferencesDecided
       ? [
           {
@@ -104,7 +90,6 @@ export function accountMenuItems({
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const {
     available: cookiePreferencesAvailable,
@@ -112,10 +97,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     openPreferences: openCookiePreferences,
   } = useCookiePreferencesMenu();
   const { can, current } = useWorkspace();
-  const billingConfig = useQuery({
-    queryFn: getBillingConfig,
-    queryKey: ["billing-config"],
-  });
   const base = `/w/${current.id}`;
 
   return (
@@ -165,11 +146,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <Dropdown
           align="start"
           items={accountMenuItems({
-            canIssueComplimentaryGrants:
-              billingConfig.data?.canIssueComplimentaryGrants === true,
             cookiePreferencesAvailable,
             cookiePreferencesDecided,
-            navigateToComplimentary: () => navigate("/complimentary"),
             onNavigate,
             openCookiePreferences,
             signOut,
