@@ -161,6 +161,64 @@ describe("queue routing", () => {
     alert.mockRestore();
   });
 
+  it("routes local queues configured by Wrangler", async () => {
+    const runMessage = new RecordingMessage("msg_local_run", {
+      kind: "attempt",
+      runId: "run_local",
+      attemptId: "att_local",
+      attemptIndex: 0,
+      executionGeneration: 1,
+    });
+    const checkBody: CheckMessage = {
+      kind: "check",
+      monitorId: "mon_local",
+      workspaceId: "ws_local",
+      cycleId: "cyc_local",
+      attemptIndex: 0,
+    };
+    const checkMessage = new RecordingMessage("msg_local_check", checkBody);
+    const notifyMessage = new RecordingMessage("msg_local_notify", NOTIFY);
+    const checkExecute = vi.fn(async () => undefined);
+    const notifyExecute = vi.fn(async (_message, control: Pick<Message, "ack">) => {
+      control.ack();
+    });
+    const configured = consumers({
+      checks: { execute: checkExecute },
+      notifications: { execute: notifyExecute },
+    });
+    const alert = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await processQueueBatch(
+      batch("zenguy-local-runs", [runMessage]),
+      configured,
+      CONTEXT,
+    );
+    await processQueueBatch(
+      batch("zenguy-local-checks", [checkMessage]),
+      configured,
+      CONTEXT,
+    );
+    await processQueueBatch(
+      batch("zenguy-local-notify", [notifyMessage]),
+      configured,
+      CONTEXT,
+    );
+
+    expect(runMessage.ackCount).toBe(0);
+    expect(runMessage.retryOptions).toEqual([{ delaySeconds: 60 }]);
+    expect(checkExecute).toHaveBeenCalledWith(checkBody, CONTEXT);
+    expect(checkMessage.ackCount).toBe(1);
+    expect(notifyExecute).toHaveBeenCalledWith(NOTIFY, notifyMessage);
+    expect(notifyMessage.ackCount).toBe(1);
+    expect(alert.mock.calls.join(" ")).toContain(
+      '"event":"run_push_consumer_disabled"',
+    );
+    expect(alert.mock.calls.join(" ")).not.toContain(
+      '"event":"unsupported_queue"',
+    );
+    alert.mockRestore();
+  });
+
   it("routes staging queues and retries their dead letters when the redriver is unavailable", async () => {
     const attemptBody = {
       kind: "attempt",

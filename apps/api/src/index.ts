@@ -147,12 +147,15 @@ type QueueKind = "runs" | "checks" | "notify";
 
 export function classifyQueue(queueName: string): QueueKind | undefined {
   switch (queueName) {
+    case "zenguy-local-runs":
     case "zenguy-runs":
     case "zenguy-staging-runs":
       return "runs";
+    case "zenguy-local-checks":
     case "zenguy-checks":
     case "zenguy-staging-checks":
       return "checks";
+    case "zenguy-local-notify":
     case "zenguy-notify":
     case "zenguy-staging-notify":
       return "notify";
