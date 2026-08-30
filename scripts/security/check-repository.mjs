@@ -2712,8 +2712,16 @@ for (const line of runnerImageWorkflow.split(/\r?\n/u)) {
 }
 
 const frontendHeaders = readFileSync("apps/frontend/public/_headers", "utf8");
+// Script trust is pinned to an exact allowlist: bare 'self', or 'self' plus the
+// consented GA4 loader (added 2026-08-30 with the analytics/cookie-consent
+// feature). Any additional origin — above all a payment provider's — must fail
+// this gate and be reviewed here, not slipped into the CSP.
+const PINNED_SCRIPT_SRC = [
+  "script-src 'self';",
+  "script-src 'self' https://www.googletagmanager.com;",
+];
 if (
-  !frontendHeaders.includes("script-src 'self';") ||
+  !PINNED_SCRIPT_SRC.some((literal) => frontendHeaders.includes(literal)) ||
   /(?:cdn\.paddle\.com|js\.stripe\.com|checkout\.stripe\.com|billing\.stripe\.com)/u.test(
     frontendHeaders,
   )
