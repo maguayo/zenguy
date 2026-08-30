@@ -1,23 +1,24 @@
 import { Feather } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 
+import type { BillingPlanPrice } from "@/api/types";
 import { colors, radius, spacing } from "@/theme";
 import { Caption, Eyebrow, Muted, Small, Text } from "@/ui";
 import { planFeatures, planPriceLabel, planPriceSuffix, planRetriesNote } from "./billing-setup";
 
 /** The plan promise shown during billing setup (same copy as the web). */
-export function PlanDetails() {
+export function PlanDetails({ plan }: { plan: BillingPlanPrice }) {
   return (
     <View>
       <View style={styles.header}>
         <Eyebrow>Zenguy</Eyebrow>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>{planPriceLabel}</Text>
+          <Text style={styles.price}>{planPriceLabel(plan)}</Text>
           <Muted> {planPriceSuffix}</Muted>
         </View>
       </View>
       <View style={styles.features}>
-        {planFeatures.map((feature) => (
+        {planFeatures(plan).map((feature) => (
           <View key={feature} style={styles.feature}>
             <View style={styles.check}>
               <Feather color={colors.okDark} name="check" size={13} />

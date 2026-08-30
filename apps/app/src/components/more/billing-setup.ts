@@ -1,14 +1,19 @@
-import type { SubscriptionStatus, Workspace } from "@/api/types";
+import type { BillingPlanPrice, SubscriptionStatus, Workspace } from "@/api/types";
+import { formatCurrency } from "@/lib/format";
 
-export const planFeatures = [
-  "300 browser test runs included",
-  "0,20 € per additional run",
-  "Unlimited team members",
-  "Uptime checks — free, unlimited",
-  "30-day run history & evidence",
-];
+export function planFeatures(plan: BillingPlanPrice): string[] {
+  return [
+    "300 browser test runs included",
+    `${formatCurrency(plan.overagePerRunCents, plan.currency)} per additional run`,
+    "Unlimited team members",
+    "Uptime checks — free, unlimited",
+    "30-day run history & evidence",
+  ];
+}
 
-export const planPriceLabel = "39 €";
+export function planPriceLabel(plan: BillingPlanPrice): string {
+  return formatCurrency(plan.pricePerMonthCents, plan.currency);
+}
 export const planPriceSuffix = "/ month per workspace";
 export const planRetriesNote = "Retries don't consume runs.";
 

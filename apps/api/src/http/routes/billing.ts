@@ -19,7 +19,12 @@ import type { Clock } from "../../shared/clock";
 import type { IdGenerator } from "../../shared/ids";
 import { IssueStripeCheckoutIntent } from "../../application/billing/stripe_checkout_intent";
 import type { AppConfig } from "../../shared/config";
+import {
+  OVERAGE_CENTS_PER_RUN,
+  PLAN_PRICE_CENTS,
+} from "../../shared/constants";
 import { unavailable } from "../../shared/errors";
+import { billingCurrencyForRequest } from "../billing_currency";
 import type { AppEnv } from "../env";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireAction, withWorkspace } from "../middleware/workspace";
@@ -79,6 +84,7 @@ export function billingRoutes(
 
   app.get("/billing/config", auth, (context) => {
     const stripe = dependencies.config.stripe;
+    const currency = billingCurrencyForRequest(context.req.raw);
     const canIssueComplimentaryGrants =
       dependencies.config.complimentaryIssuerEmails.includes(
         context.get("user").email.trim().toLowerCase(),
@@ -89,6 +95,11 @@ export function billingRoutes(
         mode: "stripe" as const,
         environment: stripe.environment,
         canIssueComplimentaryGrants,
+        plan: {
+          currency,
+          pricePerMonthCents: PLAN_PRICE_CENTS,
+          overagePerRunCents: OVERAGE_CENTS_PER_RUN,
+        },
       },
     });
   });
@@ -103,6 +114,7 @@ export function billingRoutes(
       const result = await getBilling.execute({
         workspaceId: context.get("workspace").id,
         role: context.get("role"),
+        regionalCurrency: billingCurrencyForRequest(context.req.raw),
       });
       return context.json({ data: presentBilling(result) });
     },
@@ -123,6 +135,7 @@ export function billingRoutes(
         actor: context.get("user"),
         actorRole: context.get("role"),
         purpose: "subscription",
+        currencyCode: billingCurrencyForRequest(context.req.raw),
       });
       return context.json({ data: result }, 201);
     },

@@ -2,7 +2,10 @@ import type {
   OverageReportRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
-import type { OverageReport } from "../../domain/billing/types";
+import type {
+  BillingCurrency,
+  OverageReport,
+} from "../../domain/billing/types";
 import type { BillingProviderClient } from "../../infrastructure/billing/provider";
 import type { Clock } from "../../shared/clock";
 import {
@@ -45,6 +48,7 @@ export class ReportOverageForPeriod {
     periodStart: number;
     periodEnd: number;
     providerSubscriptionId: string | null;
+    currencyCode?: BillingCurrency;
   }): Promise<OverageReportResult> {
     const requestedProviderSubscriptionId = input.providerSubscriptionId;
     if (
@@ -58,6 +62,7 @@ export class ReportOverageForPeriod {
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       providerSubscriptionId: requestedProviderSubscriptionId,
+      currencyCode: input.currencyCode ?? "EUR",
     };
     let report = await this.reports.findFor(
       input.workspaceId,
@@ -127,6 +132,7 @@ export class ReportOverageForPeriod {
       this.overagePriceId,
       report.overageRuns,
       providerMarker,
+      report.currencyCode ?? "EUR",
     );
     await this.reports.markCompleted(report.id, transactionId, this.clock.now());
     logEvent("overage_reported", {
@@ -141,6 +147,7 @@ export class ReportOverageForPeriod {
     periodStart: number;
     periodEnd: number;
     providerSubscriptionId: string;
+    currencyCode: BillingCurrency;
   }): Promise<OverageReport> {
     const billable = await this.usageEvents.countBillable(
       input.workspaceId,
@@ -166,6 +173,7 @@ export class ReportOverageForPeriod {
       attemptStartedAt: null,
       completedAt: overage === 0 ? now : null,
       providerSubscriptionId: input.providerSubscriptionId,
+      currencyCode: input.currencyCode,
     };
   }
 

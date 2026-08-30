@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BellOff,
@@ -16,22 +16,19 @@ import { Link } from "react-router-dom";
 
 import { listIncidents } from "../../api/incidents";
 import { getOverview } from "../../api/overview";
-import type { ActivityItem, ActivityType, Incident } from "../../api/types";
-import { UsageMeter } from "../../components/UsageMeter";
-import { Badge, type BadgeProps } from "../../components/ui/Badge";
+import type { ActivityItem, ActivityType, Incident, Usage } from "../../api/types";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
-import { formatDateTime, formatRelative } from "../../lib/format";
+import { formatCurrency, formatDateTime, formatRelative } from "../../lib/format";
 import { OverviewHero } from "./OverviewHero";
 
 interface ActivityPresentation {
   className: string;
   icon: ComponentType<{ "aria-hidden"?: boolean | "true"; className?: string }>;
   label: string;
-  tone: NonNullable<BadgeProps["tone"]>;
 }
 
 export const activityPresentation: Record<ActivityType, ActivityPresentation> = {
@@ -39,49 +36,41 @@ export const activityPresentation: Record<ActivityType, ActivityPresentation> = 
     className: "bg-ok-50 text-ok-700",
     icon: CheckCircle2,
     label: "Passed",
-    tone: "ok",
   },
   TEST_FAILED: {
     className: "bg-danger-50 text-danger-700",
     icon: XCircle,
     label: "Failed",
-    tone: "danger",
   },
   TEST_TIMEOUT: {
     className: "bg-warn-50 text-warn-600",
     icon: Clock,
     label: "Timed out",
-    tone: "warn",
   },
   TEST_SYSTEM_ERROR: {
     className: "bg-zinc-100 text-zinc-600",
     icon: Wrench,
     label: "System error",
-    tone: "neutral",
   },
   TEST_RECOVERED: {
     className: "bg-ok-50 text-ok-700",
     icon: HeartPulse,
     label: "Recovered",
-    tone: "ok",
   },
   MONITOR_DOWN: {
     className: "bg-danger-50 text-danger-700",
     icon: Siren,
     label: "Down",
-    tone: "danger",
   },
   MONITOR_RECOVERED: {
     className: "bg-ok-50 text-ok-700",
     icon: HeartPulse,
     label: "Recovered",
-    tone: "ok",
   },
   CHANNEL_DELIVERY_FAILED: {
     className: "bg-warn-50 text-warn-600",
     icon: BellOff,
     label: "Delivery failed",
-    tone: "warn",
   },
 };
 
@@ -104,28 +93,114 @@ export function activityKey(item: ActivityItem): string {
   return `${item.id}:${item.type}:${item.occurredAt}`;
 }
 
-function StatRow({
-  danger = false,
+export function uptimeMetric(value: number | null | undefined): {
+  unit: "%" | null;
+  value: string;
+} {
+  if (value === null || value === undefined) return { unit: null, value: "—" };
+  return {
+    unit: "%",
+    value: new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value),
+  };
+}
+
+type MetricTone = "danger" | "neutral" | "ok" | "warn";
+
+const metricSupportClass: Record<MetricTone, string> = {
+  danger: "text-danger-700",
+  neutral: "text-zinc-500",
+  ok: "text-ok-700",
+  warn: "text-warn-600",
+};
+
+function MetricCard({
   label,
+  support,
+  tone = "neutral",
+  unit,
   value,
 }: {
-  danger?: boolean;
   label: string;
-  value: React.ReactNode;
+  support: ReactNode;
+  tone?: MetricTone;
+  unit?: string | null;
+  value: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="flex items-center gap-2 text-zinc-500">
-        <span
-          aria-hidden="true"
-          className={clsx("size-2 rounded-full", danger ? "bg-danger-600" : "bg-zinc-300")}
+    <Card className="min-h-30 rounded-xl">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-2 flex items-baseline gap-1.5 tabular-nums">
+        <span className="text-3xl font-semibold tracking-tight text-zinc-950">{value}</span>
+        {unit ? <span className="text-xs font-medium text-zinc-500">{unit}</span> : null}
+      </p>
+      <p className={clsx("mt-1.5 text-xs font-medium", metricSupportClass[tone])}>{support}</p>
+    </Card>
+  );
+}
+
+function shortCycleDate(value: string, timezone: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: timezone,
+  }).format(date);
+}
+
+function OverviewUsage({ timezone, usage }: { timezone: string; usage: Usage }) {
+  const percentage = Math.min(
+    100,
+    Math.max(0, (usage.billableRuns / usage.includedRuns) * 100),
+  );
+  const barClass =
+    usage.overageRuns > 0
+      ? "bg-danger-600"
+      : percentage >= 80
+        ? "bg-warn-600"
+        : "bg-accent-600";
+
+  return (
+    <Card className="rounded-xl" title="Usage this cycle">
+      <p className="flex items-baseline gap-2 tabular-nums">
+        <span className="text-3xl font-semibold tracking-tight text-zinc-950">
+          {usage.billableRuns}
+        </span>
+        <span className="text-sm font-medium text-zinc-500">of {usage.includedRuns} runs</span>
+      </p>
+      <div
+        aria-label={`${usage.billableRuns} of ${usage.includedRuns} runs used`}
+        aria-valuemax={usage.includedRuns}
+        aria-valuemin={0}
+        aria-valuenow={Math.min(usage.billableRuns, usage.includedRuns)}
+        className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100"
+        role="progressbar"
+      >
+        <div
+          className={clsx("h-full rounded-full transition-[width]", barClass)}
+          style={{ width: `${percentage}%` }}
         />
-        {label}
-      </span>
-      <span className={clsx("font-medium", danger ? "text-danger-700" : "text-zinc-900")}>
-        {value}
-      </span>
-    </div>
+      </div>
+      <dl className="mt-2.5 flex items-center justify-between gap-4 text-xs text-zinc-500">
+        <div>
+          <dt className="sr-only">Remaining runs</dt>
+          <dd>{usage.remainingRuns} remaining</dd>
+        </div>
+        <div className="text-right">
+          <dt className="sr-only">Cycle renewal</dt>
+          <dd>Renews {shortCycleDate(usage.periodEnd, timezone)}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
+        Projected total{" "}
+        <strong className="font-semibold text-zinc-900">
+          {formatCurrency(usage.projectedTotalCents, usage.currency)}
+        </strong>
+        {usage.overageRuns > 0
+          ? ` · ${usage.overageRuns} extra ${usage.overageRuns === 1 ? "run" : "runs"}`
+          : null}
+      </p>
+    </Card>
   );
 }
 
@@ -135,35 +210,28 @@ function heroIncident(page: { items: Incident[] } | undefined): Incident | null 
 
 function OverviewSkeleton() {
   return (
-    <div aria-label="Loading overview" className="space-y-6" role="status">
-      <Skeleton className="h-48 rounded-lg" />
-      <div className="grid gap-4 lg:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <Card key={index}>
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="mt-5 h-8 w-36" />
-            <div className="mt-5 space-y-3">
-              <Skeleton className="h-4" />
-              <Skeleton className="h-4" />
-              <Skeleton className="h-4" />
-            </div>
+    <div aria-label="Loading overview" className="space-y-5" role="status">
+      <Skeleton className="h-21 rounded-xl" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Card className="min-h-30 rounded-xl" key={index}>
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="mt-4 h-8 w-24" />
+            <Skeleton className="mt-3 h-3 w-32" />
           </Card>
         ))}
       </div>
-      <Card>
-        <Skeleton className="h-4 w-32" />
-        <div className="mt-5 space-y-4">
-          <Skeleton className="h-10" />
-          <Skeleton className="h-10" />
-          <Skeleton className="h-10" />
-        </div>
-      </Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-72 rounded-xl" />
+      </div>
     </div>
   );
 }
 
 export default function OverviewPage() {
   const { can, current, timezone } = useWorkspace();
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const overview = useQuery({
     queryFn: () => getOverview(current.id),
     queryKey: ["ws", current.id, "overview"],
@@ -195,8 +263,20 @@ export default function OverviewPage() {
   if (overview.isError) return <ErrorState onRetry={() => void overview.refetch()} />;
 
   const data = overview.data;
+  const monitorCount = data.uptime.up + data.uptime.down + data.uptime.unknown;
+  const uptime = uptimeMetric(data.uptime.uptime30d);
+  const uptimeTone: MetricTone =
+    data.uptime.uptime30d === null || data.uptime.uptime30d === undefined
+      ? "neutral"
+      : data.uptime.uptime30d >= 99.9
+        ? "ok"
+        : data.uptime.uptime30d >= 99
+          ? "warn"
+          : "danger";
+  const visibleActivity = showAllActivity ? data.activity : data.activity.slice(0, 4);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <OverviewHero
         canManageTests={can("tests.manage")}
         lastIncident={heroIncident(lastIncidentQuery.data)}
@@ -205,194 +285,153 @@ export default function OverviewPage() {
         workspaceId={current.id}
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Usage this cycle">
-          <UsageMeter timezone={timezone} usage={data.usage} />
-        </Card>
-
-        <Card className="flex flex-col" title="Browser tests">
-          <p className="text-3xl font-semibold tracking-tight text-zinc-950">
-            {data.browserTests.total}
-            <span className="ml-2 text-sm font-normal text-zinc-500">
-              {` ${browserTestNoun(data.browserTests.total)}`}
-            </span>
-          </p>
-          <div className="mt-5 flex-1 space-y-3">
-            <StatRow label="Running now" value={data.browserTests.runningRuns} />
-            <StatRow
-              danger={data.browserTests.openIncidents > 0}
-              label="Open incidents"
-              value={
-                data.browserTests.openIncidents > 0 ? (
-                  <Link
-                    className="hover:underline"
-                    to={`/w/${current.id}/incidents?status=open&type=browser`}
-                  >
-                    {data.browserTests.openIncidents}
-                  </Link>
-                ) : (
-                  0
-                )
-              }
-            />
-            <StatRow
-              danger={data.browserTests.failed24h > 0}
-              label="Failures (24 h)"
-              value={data.browserTests.failed24h}
-            />
-          </div>
-          <Link
-            className="mt-4 border-t border-zinc-200 pt-3 text-sm font-medium text-accent-700 hover:underline"
-            to={`/w/${current.id}/tests`}
-          >
-            View tests →
-          </Link>
-        </Card>
-
-        <Card className="flex flex-col" title="Uptime">
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              ["UP", data.uptime.up, "text-ok-700"],
-              ["DOWN", data.uptime.down, "text-danger-700"],
-              ["UNKNOWN", data.uptime.unknown, "text-zinc-600"],
-            ].map(([label, value, className]) => (
-              <div key={label} className="rounded-md bg-zinc-50 p-2 text-center">
-                <p className={clsx("text-lg font-semibold", className)}>{value}</p>
-                <p className="text-[11px] font-medium text-zinc-500">{label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 flex-1 space-y-3">
-            <StatRow
-              danger={data.uptime.openIncidents > 0}
-              label="Open incidents"
-              value={
-                data.uptime.openIncidents > 0 ? (
-                  <Link
-                    className="hover:underline"
-                    to={`/w/${current.id}/incidents?status=open&type=uptime`}
-                  >
-                    {data.uptime.openIncidents}
-                  </Link>
-                ) : (
-                  0
-                )
-              }
-            />
-            <StatRow
-              label="Avg response (24 h)"
-              value={
-                data.uptime.avgResponseTimeMs24h === null
-                  ? "—"
-                  : `${Math.round(data.uptime.avgResponseTimeMs24h)} ms`
-              }
-            />
-          </div>
-          <Link
-            className="mt-4 border-t border-zinc-200 pt-3 text-sm font-medium text-accent-700 hover:underline"
-            to={`/w/${current.id}/uptime`}
-          >
-            View monitors →
-          </Link>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Uptime · 30 days"
+          support={
+            monitorCount === 0
+              ? "No monitors yet"
+              : data.uptime.uptime30d === null || data.uptime.uptime30d === undefined
+                ? "Collecting availability data"
+                : `${monitorCount} ${monitorCount === 1 ? "monitor" : "monitors"} measured`
+          }
+          tone={uptimeTone}
+          unit={uptime.unit}
+          value={uptime.value}
+        />
+        <MetricCard
+          label="Avg response · 24 h"
+          support={
+            data.uptime.avgResponseTimeMs24h === null
+              ? "No response data yet"
+              : "Across all uptime monitors"
+          }
+          unit={data.uptime.avgResponseTimeMs24h === null ? null : "ms"}
+          value={
+            data.uptime.avgResponseTimeMs24h === null
+              ? "—"
+              : Math.round(data.uptime.avgResponseTimeMs24h)
+          }
+        />
+        <MetricCard
+          label="Failures · 24 h"
+          support={data.browserTests.failed24h === 0 ? "No failed runs" : "Review recent failures"}
+          tone={data.browserTests.failed24h === 0 ? "ok" : "danger"}
+          value={data.browserTests.failed24h}
+        />
+        <MetricCard
+          label="Open incidents"
+          support={openIncidents === 0 ? "All clear" : "Needs attention"}
+          tone={openIncidents === 0 ? "ok" : "danger"}
+          value={openIncidents}
+        />
       </div>
 
-      <Card className="overflow-hidden" padding="none">
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4">
-          <div>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+        <OverviewUsage timezone={timezone} usage={data.usage} />
+
+        <Card className="overflow-hidden rounded-xl" padding="none">
+          <div className="flex min-h-13 items-center justify-between gap-4 border-b border-zinc-200 px-5 py-3.5">
             <h2 className="text-sm font-semibold text-zinc-900">Recent activity</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Latest checks, incidents and deliveries.
-            </p>
+            {data.activity.length > 4 ? (
+              <button
+                aria-controls="overview-activity-list"
+                aria-expanded={showAllActivity}
+                className="text-xs font-medium text-accent-700 underline-offset-4 hover:underline"
+                type="button"
+                onClick={() => setShowAllActivity((visible) => !visible)}
+              >
+                {showAllActivity ? "Show less" : "View all"}
+              </button>
+            ) : data.activity.length > 0 ? (
+              <span className="text-xs text-zinc-400">
+                {data.activity.length} {data.activity.length === 1 ? "event" : "events"}
+              </span>
+            ) : null}
           </div>
-          {data.activity.length > 0 ? (
-            <span className="shrink-0 text-xs text-zinc-400">
-              {data.activity.length} {data.activity.length === 1 ? "event" : "events"}
-            </span>
-          ) : null}
-        </div>
-        {data.activity.length === 0 ? (
-          <EmptyState
-            action={
-              can("tests.manage") ? (
-                <Link
-                  className="inline-flex h-9 items-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
-                  to={`/w/${current.id}/tests/new`}
-                >
-                  Create your first test
-                </Link>
-              ) : undefined
-            }
-            className="m-4"
-            description="Create your first browser test to see activity here."
-            icon={<Globe aria-hidden="true" className="size-6" />}
-            title="No activity yet"
-          />
-        ) : (
-          <ul className="divide-y divide-zinc-100">
-            {data.activity.map((item) => {
-              const presentation = activityPresentation[item.type];
-              const Icon = presentation.icon;
-              const relative = formatRelative(item.occurredAt);
-              return (
-                <li key={activityKey(item)}>
+          {data.activity.length === 0 ? (
+            <EmptyState
+              action={
+                can("tests.manage") ? (
                   <Link
-                    aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
-                    className="group grid min-h-16 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50/70 focus-visible:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
-                    to={activityPath(current.id, item)}
+                    className="inline-flex h-9 items-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
+                    to={`/w/${current.id}/tests/new`}
                   >
-                    <span
-                      className={clsx(
-                        "grid size-9 shrink-0 place-items-center rounded-lg",
-                        presentation.className,
-                      )}
+                    Create your first test
+                  </Link>
+                ) : undefined
+              }
+              className="m-4"
+              description="Create your first browser test to see activity here."
+              icon={<Globe aria-hidden="true" className="size-6" />}
+              title="No activity yet"
+            />
+          ) : (
+            <ul className="divide-y divide-zinc-100" id="overview-activity-list">
+              {visibleActivity.map((item) => {
+                const presentation = activityPresentation[item.type];
+                const Icon = presentation.icon;
+                const relative = formatRelative(item.occurredAt);
+                return (
+                  <li key={activityKey(item)}>
+                    <Link
+                      aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
+                      className="group grid min-h-14 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50/70 focus-visible:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
+                      to={activityPath(current.id, item)}
                     >
-                      <Icon aria-hidden="true" className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span
-                          className="truncate text-sm font-semibold text-zinc-900 group-hover:text-accent-700 group-hover:underline"
-                          title={item.resourceName}
-                        >
-                          {item.resourceName}
-                        </span>
-                        <Badge tone={presentation.tone}>{presentation.label}</Badge>
+                      <span
+                        className={clsx(
+                          "grid size-7 shrink-0 place-items-center rounded-full",
+                          presentation.className,
+                        )}
+                      >
+                        <Icon aria-hidden="true" className="size-3.5" />
                       </span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
-                        <span>{activityResourceLabel(item.resourceType)}</span>
-                        <span aria-hidden="true" className="sm:hidden">
-                          ·
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm text-zinc-700">
+                          <strong
+                            className="font-semibold text-zinc-900 group-hover:text-accent-700"
+                            title={item.resourceName}
+                          >
+                            {item.resourceName}
+                          </strong>
+                          <span> · {presentation.label}</span>
                         </span>
+                        <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                          {activityResourceLabel(item.resourceType)}
+                          <span aria-hidden="true" className="sm:hidden">
+                            {" "}·{" "}
+                          </span>
+                          <time
+                            className="sm:hidden"
+                            dateTime={item.occurredAt}
+                            title={formatDateTime(item.occurredAt, timezone)}
+                          >
+                            {relative}
+                          </time>
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
                         <time
-                          className="sm:hidden"
+                          className="hidden text-xs text-zinc-500 sm:block"
                           dateTime={item.occurredAt}
                           title={formatDateTime(item.occurredAt, timezone)}
                         >
                           {relative}
                         </time>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-3.5 text-zinc-400 transition-transform group-hover:translate-x-0.5"
+                        />
                       </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <time
-                        className="hidden text-xs text-zinc-500 sm:block"
-                        dateTime={item.occurredAt}
-                        title={formatDateTime(item.occurredAt, timezone)}
-                      >
-                        {relative}
-                      </time>
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="size-4 text-zinc-400 transition-transform group-hover:translate-x-0.5"
-                      />
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

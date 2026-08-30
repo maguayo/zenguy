@@ -33,7 +33,7 @@ Outside-in, on purpose:
 - English browser tests on isolated Chromium;
 - unlimited HTTP uptime that does not consume runs;
 - screenshots, steps, expected vs actual, Markdown;
-- 39 €, 300 runs, unlimited members;
+- <span data-pricing-amount="monthly">39 €</span>, 300 runs, unlimited members;
 - no agents in your processes, no ingest bill.
 
 When checkout fails, you see the total. You do not get a distributed trace. If you needed the trace, you needed New Relic (or Datadog, or Grafana) anyway.

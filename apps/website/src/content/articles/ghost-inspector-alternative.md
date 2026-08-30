@@ -37,7 +37,7 @@ If the flows are short and stable, a recorder is still a legitimate tool. Confir
 - Expected vs actual as text, plus screenshots.
 - Markdown for humans and coding agents.
 - Unlimited HTTP uptime in the same workspace.
-- 39 €, 300 runs, unlimited members.
+- <span data-pricing-amount="monthly">39 €</span>, 300 runs, unlimited members.
 
 The agent can leave your domain (Shopify, Stripe, OAuth). Recorders often struggle there unless you taught them every iframe.
 

@@ -68,7 +68,7 @@ Zenguy includes unlimited HTTP uptime (5-minute fastest check). That is not why 
 **Take it** if silent functional failure is the outage you actually have.
 **Skip it** if you need 15-second pings, a status page, or Playwright-as-code. We do not sell those.
 
-Plan: 39 € per workspace, 300 browser runs, 0,20 € extra, unlimited teammates.
+Plan: <span data-pricing-amount="monthly">39 €</span> per workspace, 300 browser runs, <span data-pricing-amount="overage">0,20 €</span> extra, unlimited teammates.
 
 ### Also in the mix
 

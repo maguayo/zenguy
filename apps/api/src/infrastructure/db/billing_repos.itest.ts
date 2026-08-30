@@ -22,6 +22,7 @@ function subscription(
     source: "paddle",
     providerCustomerId: `ctm_${id}`,
     providerSubscriptionId: `provider_${id}`,
+    currencyCode: "EUR",
     status: "ACTIVE",
     periodStart: periodEnd === null ? null : periodEnd - 1_000,
     periodEnd,
@@ -109,6 +110,7 @@ describe("D1 billing repositories", () => {
       source: "free",
       providerCustomerId: null,
       providerSubscriptionId: null,
+      currencyCode: "EUR",
       status: "ACTIVE",
       periodStart: null,
       periodEnd: null,
@@ -152,6 +154,7 @@ describe("D1 billing repositories", () => {
       attemptStartedAt: null,
       completedAt: 1_100,
       providerSubscriptionId: completed.providerSubscriptionId,
+      currencyCode: completed.currencyCode,
     });
     await pendingPeriods.insertIfAbsent({
       workspaceId: queued.workspaceId,
@@ -159,6 +162,7 @@ describe("D1 billing repositories", () => {
       periodEnd: queued.periodEnd ?? 0,
       createdAt: 2_100,
       providerSubscriptionId: queued.providerSubscriptionId,
+      currencyCode: queued.currencyCode,
       nextAttemptAt: 5_000,
       attemptCount: 0,
     });
@@ -231,6 +235,7 @@ describe("D1 billing repositories", () => {
       attemptStartedAt: null,
       completedAt: null,
       providerSubscriptionId: "provider_sub_overage",
+      currencyCode: "USD",
     };
 
     await expect(repo.findFor("ws_overage", 1_000)).resolves.toBeNull();
@@ -270,6 +275,7 @@ describe("D1 billing repositories", () => {
       periodEnd: 2_000,
       createdAt: 2_100,
       providerSubscriptionId: "provider_sub_pending",
+      currencyCode: "USD",
       nextAttemptAt: 2_500,
       attemptCount: 0,
     };

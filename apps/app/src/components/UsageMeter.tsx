@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
 import type { Usage } from "@/api/types";
-import { formatDateTime, formatEuros } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import { colors, radius, spacing, toneSolid } from "@/theme";
 import { Caption, Divider, Mono, Muted, Text } from "@/ui";
 
@@ -59,7 +59,10 @@ export function UsageMeter({
         {usage.overageRuns > 0 ? (
           <>
             <UsageRow label="Extra runs" value={usage.overageRuns} />
-            <UsageRow label="Extra cost" value={formatEuros(usage.overageAmountCents)} />
+            <UsageRow
+              label="Extra cost"
+              value={formatCurrency(usage.overageAmountCents, usage.currency)}
+            />
           </>
         ) : null}
       </View>
@@ -67,7 +70,7 @@ export function UsageMeter({
         <>
           <Divider />
           <Caption>
-            Projected total {formatEuros(usage.projectedTotalCents)} · resets{" "}
+            Projected total {formatCurrency(usage.projectedTotalCents, usage.currency)} · resets{" "}
             {formatDateTime(usage.periodEnd, timezone)}
           </Caption>
         </>

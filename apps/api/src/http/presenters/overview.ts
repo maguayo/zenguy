@@ -1,4 +1,5 @@
 import type { Overview } from "../../application/overview/get_overview";
+import { PLAN_PRICE_CENTS } from "../../shared/constants";
 
 function iso(timestamp: number): string {
   return new Date(timestamp).toISOString();
@@ -9,6 +10,10 @@ export function presentOverview(overview: Overview) {
     ...overview,
     usage: {
       ...overview.usage,
+      projectedTotalCents: Math.max(
+        PLAN_PRICE_CENTS,
+        overview.usage.projectedTotalCents,
+      ),
       periodStart: iso(overview.usage.periodStart),
       periodEnd: iso(overview.usage.periodEnd),
     },

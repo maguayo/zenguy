@@ -20,6 +20,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Action } from "../lib/permissions";
 import { useCookiePreferencesMenu } from "./CookieConsent";
+import { LogoMark } from "./LogoMark";
 import { Dropdown, type DropdownItem } from "./ui/Dropdown";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
@@ -103,11 +104,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="px-4 pb-4 pt-5">
         <NavLink
-          className="inline-flex text-xl font-bold tracking-tight text-zinc-950"
+          className="inline-flex items-center gap-2 text-xl font-bold tracking-tight text-zinc-950"
           to={`${base}/overview`}
           onClick={onNavigate}
         >
-          zenguy<span className="text-accent-600">.</span>
+          <LogoMark className="size-6 shrink-0" />
+          <span>
+            zenguy<span className="text-accent-600">.</span>
+          </span>
         </NavLink>
         <div className="mt-5">
           <WorkspaceSwitcher onNavigate={onNavigate} />

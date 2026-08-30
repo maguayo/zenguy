@@ -40,7 +40,7 @@ It is a good fit for “we need to look professional when we go down, and we nee
 - Evidence: screenshots, steps, expected vs observed, Markdown.
 - Alerts after retries, including iOS push, Slack, SMS, WhatsApp, voice.
 - No status pages.
-- 39 €, 300 runs, unlimited members.
+- <span data-pricing-amount="monthly">39 €</span>, 300 runs, unlimited members.
 
 The browser test is the product. Uptime is included so you do not need a second bill for `/health`.
 

@@ -1,3 +1,5 @@
+import type { BillingCurrency } from "../../domain/billing/types";
+
 export interface BilledTransaction {
   id: string;
   billedAt: string | null;
@@ -27,6 +29,7 @@ export interface BillingProviderClient {
     priceId: string,
     quantity: number,
     marker: string,
+    currencyCode?: BillingCurrency,
   ): Promise<{ transactionId: string | null }>;
   findSubscriptionChargeByMarker(
     subscriptionId: string,

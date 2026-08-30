@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 
-import type { SubscriptionStatus, Workspace } from "@/api/types";
+import type { BillingPlanPrice, SubscriptionStatus, Workspace } from "@/api/types";
 import {
   planFeatures,
   planPriceLabel,
@@ -18,17 +18,26 @@ const workspace = (id: string, subscriptionStatus: SubscriptionStatus): Workspac
   subscriptionStatus,
   timezone: "UTC",
 });
+const eurPlan: BillingPlanPrice = {
+  currency: "EUR",
+  overagePerRunCents: 20,
+  pricePerMonthCents: 3_900,
+};
 
 describe("billing setup", () => {
   it("keeps the complete plan promise", () => {
-    expect(planPriceLabel).toBe("39 €");
-    expect(planFeatures).toEqual([
+    expect(planPriceLabel(eurPlan)).toBe("39,00 €");
+    expect(planFeatures(eurPlan)).toEqual([
       "300 browser test runs included",
-      "0,20 € per additional run",
+      "0,20 € per additional run",
       "Unlimited team members",
       "Uptime checks — free, unlimited",
       "30-day run history & evidence",
     ]);
+    expect(planPriceLabel({ ...eurPlan, currency: "USD" })).toBe("$39.00");
+    expect(planFeatures({ ...eurPlan, currency: "USD" })[1]).toBe(
+      "$0.20 per additional run",
+    );
     expect(planRetriesNote).toBe("Retries don't consume runs.");
   });
 

@@ -8,6 +8,7 @@ import { AccessDenied } from "@/components/more/AccessDenied";
 import {
   invoiceNumberLabel,
   invoiceStatus,
+  invoiceTotalLabel,
   paymentOwnerOnlyNote,
   paymentWebNote,
   planPresentation,
@@ -16,7 +17,7 @@ import {
 } from "@/components/more/billing";
 import { UsageMeter } from "@/components/UsageMeter";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { formatDateTime, formatEuros } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { colors, palette, radius, spacing } from "@/theme";
 import {
   Badge,
@@ -56,7 +57,11 @@ function BillingSkeleton() {
 function PlanCard({ billing, timezone }: { billing: Billing; timezone: string }) {
   const router = useRouter();
   const { current } = useWorkspace();
-  const plan = planPresentation(billing.subscription.source, billing.subscription.status);
+  const plan = planPresentation(
+    billing.subscription.source,
+    billing.subscription.status,
+    billing.plan,
+  );
   const period = subscriptionPeriod(billing);
   const needsSetup =
     plan.paid &&
@@ -73,7 +78,7 @@ function PlanCard({ billing, timezone }: { billing: Billing; timezone: string })
       <Muted style={styles.planDescription}>{plan.description}</Muted>
       <DescriptionList
         items={[
-          { label: "Price", value: <Mono>{planPrice(plan, billing.plan.pricePerMonthCents)}</Mono> },
+          { label: "Price", value: <Mono>{planPrice(plan, billing.plan)}</Mono> },
           { label: "Included runs", value: <Mono>{`${billing.plan.includedRuns} runs per month`}</Mono> },
           {
             label: "Period",
@@ -129,7 +134,9 @@ function InvoicesCard({ billing, timezone }: { billing: Billing; timezone: strin
               meta={invoice.billedAt ? formatDateTime(invoice.billedAt, timezone) : "—"}
               right={
                 <View style={styles.invoiceRight}>
-                  <Mono style={styles.invoiceTotal}>{formatEuros(invoice.totalCents)}</Mono>
+                  <Mono style={styles.invoiceTotal}>
+                    {invoiceTotalLabel(invoice)}
+                  </Mono>
                   <Badge tone={display.tone}>{display.label}</Badge>
                 </View>
               }
@@ -177,7 +184,11 @@ export default function BillingScreen() {
           <View style={styles.stack}>
             <PlanCard billing={billing.data} timezone={timezone} />
             <UsageCard billing={billing.data} timezone={timezone} />
-            {planPresentation(billing.data.subscription.source, billing.data.subscription.status)
+            {planPresentation(
+              billing.data.subscription.source,
+              billing.data.subscription.status,
+              billing.data.plan,
+            )
               .paid ? (
               <>
                 <InvoicesCard billing={billing.data} timezone={timezone} />

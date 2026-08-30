@@ -23,6 +23,9 @@ import {
   workspaceCountBucketFor,
 } from "./ga4";
 
+const EUR_PRICE = { currency: "EUR" as const, pricePerMonthCents: 3_900 };
+const USD_PRICE = { currency: "USD" as const, pricePerMonthCents: 3_900 };
+
 function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
   const values = new Map<string, string>();
   return {
@@ -114,6 +117,7 @@ function activeBilling(overrides: Partial<Billing> = {}): Billing {
     },
     usage: {
       billableRuns: 0,
+      currency: "EUR",
       includedRuns: 300,
       overageAmountCents: 0,
       overageRuns: 0,
@@ -303,7 +307,7 @@ describe("GA4 basic consent client", () => {
         workspaceRole: "OWNER",
       }),
     ).toBe(true);
-    expect(client.track(subscriptionCheckoutEvent())).toBe(true);
+    expect(client.track(subscriptionCheckoutEvent(EUR_PRICE))).toBe(true);
 
     const queued = commands(scope);
     expect(
@@ -360,7 +364,14 @@ describe("GA4 basic consent client", () => {
         params: { email: "person@example.com", method: "email" },
       }),
     ).toBe(false);
-    expect(isAllowedAnalyticsEvent(subscriptionCheckoutEvent())).toBe(true);
+    expect(isAllowedAnalyticsEvent(subscriptionCheckoutEvent(EUR_PRICE))).toBe(true);
+    expect(isAllowedAnalyticsEvent(subscriptionCheckoutEvent(USD_PRICE))).toBe(true);
+    expect(
+      isAllowedAnalyticsEvent({
+        ...subscriptionCheckoutEvent(USD_PRICE),
+        params: { ...subscriptionCheckoutEvent(USD_PRICE).params, currency: "GBP" },
+      }),
+    ).toBe(false);
   });
 
   it("denies consent and requires a clean reload after a loaded tag is revoked", () => {
@@ -547,6 +558,25 @@ describe("confirmed purchase event", () => {
           },
         ],
         transaction_id: "in_123",
+        value: 39,
+      },
+    });
+  });
+
+  it("uses the persisted USD plan and invoice currency", () => {
+    const eur = activeBilling();
+    const usd = activeBilling({
+      invoices: eur.invoices.map((invoice) => ({ ...invoice, currency: "USD" })),
+      plan: { ...eur.plan, currency: "USD" },
+      usage: { ...eur.usage, currency: "USD" },
+    });
+
+    expect(
+      confirmedSubscriptionPurchaseEvent(usd, checkoutStartedAt, now),
+    ).toMatchObject({
+      params: {
+        currency: "USD",
+        items: [{ price: 39 }],
         value: 39,
       },
     });

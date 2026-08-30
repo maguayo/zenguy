@@ -9,6 +9,7 @@ interface SubscriptionRow {
   source: string | null;
   provider_customer_id: string | null;
   provider_subscription_id: string | null;
+  currency_code: string | null;
   status: Subscription["status"];
   period_start: number | null;
   period_end: number | null;
@@ -45,6 +46,7 @@ function toSubscription(row: SubscriptionRow): Subscription {
     source,
     providerCustomerId: row.provider_customer_id,
     providerSubscriptionId: row.provider_subscription_id,
+    currencyCode: row.currency_code === "USD" ? "USD" : "EUR",
     status: row.status,
     periodStart: row.period_start,
     periodEnd: row.period_end,
@@ -74,13 +76,15 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
             (id, workspace_id, provider, source, provider_customer_id,
              provider_subscription_id, status, period_start, period_end,
              cancel_at_period_end, update_payment_url, cancel_url,
-             created_at, updated_at, past_due_since, last_provider_event_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_at, updated_at, past_due_since, last_provider_event_at,
+             currency_code)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id) DO UPDATE SET
              provider = excluded.provider,
              source = excluded.source,
              provider_customer_id = excluded.provider_customer_id,
              provider_subscription_id = excluded.provider_subscription_id,
+             currency_code = excluded.currency_code,
              status = excluded.status,
              period_start = excluded.period_start,
              period_end = excluded.period_end,
@@ -132,6 +136,7 @@ export class D1SubscriptionRepo implements SubscriptionRepo {
             ? (subscription.pastDueSince ?? subscription.updatedAt)
             : null,
           subscription.lastProviderEventAt ?? null,
+          subscription.currencyCode ?? "EUR",
       ),
     );
     if ((result.meta.changes ?? 0) === 0 && subscription.providerSubscriptionId !== null) {

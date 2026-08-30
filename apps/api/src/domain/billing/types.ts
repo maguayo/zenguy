@@ -6,6 +6,7 @@ export type SubscriptionStatus =
 
 export type SubscriptionProvider = "internal" | "paddle" | "stripe";
 export type SubscriptionSource = "free" | "grant" | "paddle" | "stripe";
+export type BillingCurrency = "EUR" | "USD";
 
 export interface Subscription {
   id: string;
@@ -14,6 +15,8 @@ export interface Subscription {
   source?: SubscriptionSource;
   providerCustomerId: string | null;
   providerSubscriptionId: string | null;
+  /** Currency selected when the provider subscription was created. */
+  currencyCode?: BillingCurrency | null;
   status: SubscriptionStatus;
   periodStart: number | null;
   periodEnd: number | null;
@@ -56,6 +59,8 @@ export interface OverageReport {
   completedAt: number | null;
   /** Provider subscription pinned before the first external charge attempt. */
   providerSubscriptionId: string | null;
+  /** Currency pinned with the subscription for this immutable report. */
+  currencyCode?: BillingCurrency | null;
 }
 
 export interface PendingOveragePeriod {
@@ -65,6 +70,8 @@ export interface PendingOveragePeriod {
   createdAt: number;
   /** Provider subscription that owned this billing period at rollover time. */
   providerSubscriptionId: string | null;
+  /** Currency pinned with the subscription at rollover time. */
+  currencyCode?: BillingCurrency | null;
   nextAttemptAt: number;
   attemptCount: number;
 }
@@ -90,7 +97,7 @@ export interface CheckoutIntent {
   productId: string;
   priceId: string;
   quantity: number;
-  currencyCode: "EUR";
+  currencyCode: BillingCurrency;
   amountCents: number;
   createdAt: number;
   expiresAt: number;

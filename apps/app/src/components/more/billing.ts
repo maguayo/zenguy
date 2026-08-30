@@ -1,6 +1,12 @@
-import type { Billing, Invoice, SubscriptionSource, SubscriptionStatus } from "@/api/types";
+import type {
+  Billing,
+  BillingPlanPrice,
+  Invoice,
+  SubscriptionSource,
+  SubscriptionStatus,
+} from "@/api/types";
 import { APP_WEB_URL } from "@/lib/config";
-import { formatEuros } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type { Tone } from "@/theme";
 
 export interface SubscriptionPresentation {
@@ -44,6 +50,7 @@ export interface PlanPresentation extends SubscriptionPresentation {
 export function planPresentation(
   source: SubscriptionSource | undefined,
   status: SubscriptionStatus,
+  price: BillingPlanPrice,
 ): PlanPresentation {
   if (source === "free") {
     return {
@@ -67,8 +74,8 @@ export function planPresentation(
   const subscription = subscriptionPresentation(status);
   return {
     ...subscription,
-    description: "300 runs included · 0,20 € per extra run · Unlimited members",
-    name: "Zenguy — 39 €/month",
+    description: `300 runs included · ${formatCurrency(price.overagePerRunCents, price.currency)} per extra run · Unlimited members`,
+    name: `Zenguy — ${formatCurrency(price.pricePerMonthCents, price.currency)}/month`,
     paid: true,
   };
 }
@@ -81,8 +88,10 @@ export const paymentWebNote = `Manage payment methods and cancellation from the 
 
 export const paymentOwnerOnlyNote = "Only the owner can manage the subscription.";
 
-export function planPrice(plan: PlanPresentation, pricePerMonthCents: number): string {
-  return plan.paid ? `${formatEuros(pricePerMonthCents)} / month` : "Included";
+export function planPrice(plan: PlanPresentation, price: BillingPlanPrice): string {
+  return plan.paid
+    ? `${formatCurrency(price.pricePerMonthCents, price.currency)} / month`
+    : "Included";
 }
 
 export interface BillingPeriod {
@@ -102,6 +111,10 @@ export function subscriptionPeriod(billing: Billing): BillingPeriod {
 
 export function invoiceNumberLabel(invoice: Invoice): string {
   return invoice.invoiceNumber ?? "—";
+}
+
+export function invoiceTotalLabel(invoice: Invoice): string {
+  return formatCurrency(invoice.totalCents, invoice.currency);
 }
 
 export interface PastDueBanner {

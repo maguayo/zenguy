@@ -8,6 +8,7 @@ import { getBilling, getInvoiceUrl } from "../../api/billing";
 import type {
   AlertsOverview,
   Billing,
+  BillingPlanPrice,
   Invoice,
   SubscriptionSource,
   SubscriptionStatus,
@@ -28,7 +29,7 @@ import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { apiErrorMessage } from "../../lib/errors";
 import { openTrustedBillingUrl } from "../../lib/billing-links";
-import { formatDateTime, formatEuros } from "../../lib/format";
+import { formatCurrency, formatDateTime, formatEuros } from "../../lib/format";
 
 export interface SubscriptionPresentation {
   label: string;
@@ -73,6 +74,7 @@ export interface PlanPresentation extends SubscriptionPresentation {
 export function planPresentation(
   source: SubscriptionSource | undefined,
   status: SubscriptionStatus,
+  price: BillingPlanPrice,
 ): PlanPresentation {
   if (source === "free") {
     return {
@@ -98,8 +100,8 @@ export function planPresentation(
   return {
     ...subscription,
     description:
-      "300 runs included · 0,20 € per extra run · Unlimited members",
-    name: "Zenguy — 39 €/month",
+      `300 runs included · ${formatCurrency(price.overagePerRunCents, price.currency)} per extra run · Unlimited members`,
+    name: `Zenguy — ${formatCurrency(price.pricePerMonthCents, price.currency)}/month`,
     paid: true,
   };
 }
@@ -123,7 +125,11 @@ export function invoiceColumns(
     {
       header: "Total",
       key: "total",
-      render: (invoice) => <span className="whitespace-nowrap font-medium">{formatEuros(invoice.totalCents)}</span>,
+      render: (invoice) => (
+        <span className="whitespace-nowrap font-medium">
+          {formatCurrency(invoice.totalCents, invoice.currency)}
+        </span>
+      ),
     },
     {
       header: "Status",
@@ -212,6 +218,7 @@ function PlanCard({ billing }: { billing: Billing }) {
   const plan = planPresentation(
     billing.subscription.source,
     billing.subscription.status,
+    billing.plan,
   );
   const needsSetup =
     plan.paid &&
@@ -390,6 +397,7 @@ export default function BillingPage() {
           {planPresentation(
             billing.data.subscription.source,
             billing.data.subscription.status,
+            billing.data.plan,
           ).paid ? (
             <>
               <InvoicesCard billing={billing.data} />

@@ -60,9 +60,11 @@ function overview(overrides: {
       openIncidents: overrides.openUptimeIncidents ?? 0,
       unknown: monitors.unknown ?? 0,
       up: monitors.up ?? 0,
+      uptime30d: null,
     },
     usage: {
       billableRuns: 0,
+      currency: "EUR",
       includedRuns: 300,
       overageAmountCents: 0,
       overageRuns: 0,
@@ -132,7 +134,7 @@ describe("tickTone", () => {
 });
 
 describe("pulseSlots", () => {
-  it("pads sparse history with leading empty slots up to twenty", () => {
+  it("pads sparse history with leading empty slots up to thirty-two", () => {
     const slots = pulseSlots(
       [
         activity({ id: "a_new", occurredAt: iso(HOUR_MS), title: "Checkout passed" }),
@@ -146,10 +148,10 @@ describe("pulseSlots", () => {
       [],
     );
 
-    expect(slots).toHaveLength(20);
-    expect(slots.slice(0, 18).every((slot) => slot.tone === "empty")).toBe(true);
-    expect(slots[18]).toMatchObject({ label: "Search failed · 2h ago", tone: "fail" });
-    expect(slots[19]).toMatchObject({ label: "Checkout passed · 1h ago", tone: "ok" });
+    expect(slots).toHaveLength(32);
+    expect(slots.slice(0, 30).every((slot) => slot.tone === "empty")).toBe(true);
+    expect(slots[30]).toMatchObject({ label: "Search failed · 2h ago", tone: "fail" });
+    expect(slots[31]).toMatchObject({ label: "Checkout passed · 1h ago", tone: "ok" });
   });
 
   it("appends running runs after the newest result", () => {
@@ -158,21 +160,21 @@ describe("pulseSlots", () => {
       [{ browserTestId: "bt_1", id: "run_live", startedAt: iso(30_000), testName: "Add to cart" }],
     );
 
-    expect(slots[19]).toMatchObject({ label: "Add to cart · running", tone: "run" });
-    expect(slots[18]).toMatchObject({ tone: "ok" });
+    expect(slots[31]).toMatchObject({ label: "Add to cart · running", tone: "run" });
+    expect(slots[30]).toMatchObject({ tone: "ok" });
   });
 
-  it("drops the oldest results when history plus running overflow twenty", () => {
-    const history = Array.from({ length: 20 }, (_, index) =>
+  it("drops the oldest results when history plus running overflow thirty-two", () => {
+    const history = Array.from({ length: 32 }, (_, index) =>
       activity({ id: `a_${index}`, occurredAt: iso((index + 1) * HOUR_MS) }),
     );
     const slots = pulseSlots(history, [
       { browserTestId: "bt_1", id: "run_live", startedAt: iso(0), testName: "Add to cart" },
     ]);
 
-    expect(slots).toHaveLength(20);
-    expect(slots[0]).toMatchObject({ label: "Checkout passed · 19h ago", tone: "ok" });
-    expect(slots[19]).toMatchObject({ tone: "run" });
+    expect(slots).toHaveLength(32);
+    expect(slots[0]).toMatchObject({ tone: "ok" });
+    expect(slots[31]).toMatchObject({ tone: "run" });
   });
 });
 

@@ -16,6 +16,7 @@ interface OverageReportRow {
   attempt_started_at: number | null;
   completed_at: number | null;
   provider_subscription_id: string | null;
+  currency_code: string | null;
 }
 
 function toOverageReport(row: OverageReportRow): OverageReport {
@@ -33,6 +34,7 @@ function toOverageReport(row: OverageReportRow): OverageReport {
     attemptStartedAt: row.attempt_started_at,
     completedAt: row.completed_at,
     providerSubscriptionId: row.provider_subscription_id,
+    currencyCode: row.currency_code === "USD" ? "USD" : "EUR",
   };
 }
 
@@ -50,8 +52,8 @@ export class D1OverageReportRepo implements OverageReportRepo {
               (id, workspace_id, period_start, period_end, overage_runs,
                amount_cents, paddle_transaction_id, reported_at, state,
                provider_marker, attempt_started_at, completed_at,
-               provider_subscription_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               provider_subscription_id, currency_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             report.id,
@@ -67,6 +69,7 @@ export class D1OverageReportRepo implements OverageReportRepo {
             report.attemptStartedAt,
             report.completedAt,
             report.providerSubscriptionId,
+            report.currencyCode ?? "EUR",
           ),
       );
       return "inserted";

@@ -49,7 +49,7 @@ Zenguy watches the deployed product the way a customer uses it.
 - Tests run on a schedule between 1 and 24 hours. Each attempt has a 5-minute timeout and up to three courtesy retries that do not consume extra runs.
 - HTTP uptime monitors are unlimited and free of the run allowance. The fastest interval is 5 minutes, then 10, 15, 30 minutes, and longer.
 - Alerts go out once, after retries fail: email, Slack, Discord, iOS push, SMS, WhatsApp, or a voice call.
-- One plan: **39 € per workspace per month**, 300 browser runs included, 0,20 € per extra run, unlimited teammates, 30 days of evidence.
+- One plan: **<span data-pricing-amount="monthly">39 €</span> per workspace per month**, 300 browser runs included, <span data-pricing-amount="overage">0,20 €</span> per extra run, unlimited teammates, 30 days of evidence.
 
 The sentence we care about is not “the server is up”. It is “a customer can still add this product to the cart, and the total is still 149,00 €”.
 

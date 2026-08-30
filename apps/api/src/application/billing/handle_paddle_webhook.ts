@@ -11,6 +11,7 @@ import type {
   SubscriptionRepo,
 } from "../../domain/billing/repo";
 import type {
+  BillingCurrency,
   PaddleCheckoutIntent,
   Subscription,
   SubscriptionStatus,
@@ -117,6 +118,7 @@ export interface PeriodOverageReporter {
     periodStart: number;
     periodEnd: number;
     providerSubscriptionId: string;
+    currencyCode?: BillingCurrency;
   }): Promise<unknown>;
 }
 

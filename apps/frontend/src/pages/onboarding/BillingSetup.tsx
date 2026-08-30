@@ -9,7 +9,7 @@ import {
   startSubscriptionCheckout,
 } from "../../api/billing";
 import { listMembers } from "../../api/members";
-import type { Billing } from "../../api/types";
+import type { Billing, BillingPlanPrice } from "../../api/types";
 import { getWorkspace } from "../../api/workspaces";
 import { AuthShell } from "../../components/AuthShell";
 import { SignOutButton } from "../../components/SignOutButton";
@@ -19,6 +19,7 @@ import { Spinner } from "../../components/ui/Spinner";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/errors";
+import { formatCurrency } from "../../lib/format";
 import { trustedBillingUrl } from "../../lib/billing-links";
 import {
   forgetRememberedSubscriptionCheckout,
@@ -101,10 +102,10 @@ export function shouldCheckCheckoutActivation(
   );
 }
 
-export function PlanDetails() {
+export function PlanDetails({ plan }: { plan: BillingPlanPrice }) {
   const features = [
     "300 browser test runs included",
-    "0,20 € per additional run",
+    `${formatCurrency(plan.overagePerRunCents, plan.currency)} per additional run`,
     "Unlimited team members",
     "Uptime checks — free, unlimited",
     "30-day run history & evidence",
@@ -115,7 +116,8 @@ export function PlanDetails() {
       <div className="text-center">
         <p className="text-sm font-semibold text-zinc-900">Zenguy</p>
         <p className="mt-2 text-4xl font-semibold tracking-tight text-zinc-950">
-          39 € <span className="text-sm font-normal text-zinc-500">/ month per workspace</span>
+          {formatCurrency(plan.pricePerMonthCents, plan.currency)}{" "}
+          <span className="text-sm font-normal text-zinc-500">/ month per workspace</span>
         </p>
       </div>
       <ul className="mt-6 space-y-3">
@@ -244,7 +246,12 @@ export default function BillingSetup() {
         throw new Error("The billing provider returned an untrusted link.");
       }
       if (billingConfig.environment === "live") {
-        if (trackSubscriptionCheckoutStarted()) {
+        if (
+          trackSubscriptionCheckoutStarted({
+            currency: checkout.currencyCode,
+            pricePerMonthCents: checkout.amountCents,
+          })
+        ) {
           rememberedForAnalytics = rememberSubscriptionCheckout(wsId);
         }
       }
@@ -322,7 +329,7 @@ export default function BillingSetup() {
       footer={<SignOutButton onSignOut={() => void signOut()} />}
       title={reactivating ? "Reactivate your workspace" : "Set up billing"}
     >
-      <PlanDetails />
+      <PlanDetails plan={billingConfigQuery.data.plan} />
 
       <div className="mt-6">
         {actionError ? <ActionErrorNotice message={actionError} /> : null}

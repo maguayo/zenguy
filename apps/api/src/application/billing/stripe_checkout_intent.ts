@@ -8,7 +8,10 @@ import type {
   CheckoutIntentRepo,
   SubscriptionRepo,
 } from "../../domain/billing/repo";
-import type { CheckoutPurpose } from "../../domain/billing/types";
+import type {
+  BillingCurrency,
+  CheckoutPurpose,
+} from "../../domain/billing/types";
 import type { User } from "../../domain/users/types";
 import { can } from "../../domain/workspaces/permissions";
 import type { Role } from "../../domain/workspaces/types";
@@ -28,7 +31,7 @@ export const STRIPE_CHECKOUT_INTENT_TTL_MS = 24 * 60 * 60 * 1_000;
 export interface StripeCheckout {
   url: string;
   amountCents: number;
-  currencyCode: "EUR";
+  currencyCode: BillingCurrency;
 }
 
 export class IssueStripeCheckoutIntent {
@@ -49,6 +52,7 @@ export class IssueStripeCheckoutIntent {
     actorRole: Role;
     purpose: CheckoutPurpose;
     quantity?: number;
+    currencyCode?: BillingCurrency;
   }): Promise<StripeCheckout> {
     if (!can(input.actorRole, "billing.manage")) throw forbidden();
     if (this.stripeConfig === null) throw unavailable("Billing is not configured");
@@ -90,6 +94,10 @@ export class IssueStripeCheckoutIntent {
       (input.purpose === "subscription"
         ? PLAN_PRICE_CENTS
         : ALERT_CREDIT_PACK_CENTS) * quantity;
+    // Alert credits remain on their existing EUR-only catalog. Only the
+    // subscription Price is configured with EUR/USD currency options.
+    const currencyCode: BillingCurrency =
+      input.purpose === "subscription" ? (input.currencyCode ?? "EUR") : "EUR";
     const now = this.clock.now();
     const expiresAt = now + STRIPE_CHECKOUT_INTENT_TTL_MS;
     const sessionExpiresAt = now + STRIPE_CHECKOUT_SESSION_TTL_MS;
@@ -102,7 +110,7 @@ export class IssueStripeCheckoutIntent {
       productId,
       priceId,
       quantity,
-      currencyCode: "EUR",
+      currencyCode,
       amountCents,
       createdAt: now,
       expiresAt,
@@ -133,6 +141,7 @@ export class IssueStripeCheckoutIntent {
       successUrl: successUrl.toString(),
       cancelUrl: cancelUrl.toString(),
       expiresAt: sessionExpiresAt,
+      currencyCode,
     });
     await this.track?.execute({
       type: ACTIVITY_EVENTS.billingCheckoutStarted,
@@ -141,6 +150,6 @@ export class IssueStripeCheckoutIntent {
       source: "server",
       properties: { kind: input.purpose },
     });
-    return { url: session.url, amountCents, currencyCode: "EUR" };
+    return { url: session.url, amountCents, currencyCode };
   }
 }

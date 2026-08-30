@@ -60,7 +60,7 @@ That report is factual. It does not invent a root cause. It is meant to be hande
 
 ## What a run costs
 
-A **run** is one requested execution: scheduled, `Run now`, or `Test it`. It costs one unit whether it passed, failed, or timed out. Internal retries are free. HTTP uptime is free. The plan is 39 € a month per workspace, 300 runs included, 0,20 € after that. Members are unlimited.
+A **run** is one requested execution: scheduled, `Run now`, or `Test it`. It costs one unit whether it passed, failed, or timed out. Internal retries are free. HTTP uptime is free. The plan is <span data-pricing-amount="monthly">39 €</span> a month per workspace, 300 runs included, <span data-pricing-amount="overage">0,20 €</span> after that. Members are unlimited.
 
 ## What it is not
 

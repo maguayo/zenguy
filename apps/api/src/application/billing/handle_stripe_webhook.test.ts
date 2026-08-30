@@ -97,10 +97,11 @@ function topupSession() {
   };
 }
 
-function subscription(status = "active") {
+function subscription(status = "active", currency = "eur") {
   return {
     id: "sub_1",
     customer: "cus_1",
+    currency,
     status,
     metadata: {
       checkout_intent_id: "pci_subscription",
@@ -243,6 +244,7 @@ describe("HandleStripeWebhook", () => {
       providerCustomerId: "cus_1",
       providerSubscriptionId: "sub_1",
       status: "ACTIVE",
+      currencyCode: "EUR",
     });
 
     const stale = event(
@@ -255,6 +257,75 @@ describe("HandleStripeWebhook", () => {
     await expect(subscriptions.findByWorkspace("ws_1")).resolves.toMatchObject({
       status: "ACTIVE",
     });
+  });
+
+  it("persists the selected USD subscription currency from Stripe", async () => {
+    const { handler, checkoutIntents, subscriptions } = setup();
+    await subscriptions.upsertByWorkspace({
+      id: "sub_free",
+      workspaceId: "ws_1",
+      provider: "internal",
+      source: "free",
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      currencyCode: "EUR",
+      status: "ACTIVE",
+      periodStart: null,
+      periodEnd: null,
+      cancelAtPeriodEnd: false,
+      updatePaymentUrl: null,
+      cancelUrl: null,
+      createdAt: NOW - 10_000,
+      updatedAt: NOW - 10_000,
+    });
+    checkoutIntents.intents.set("pci_subscription", {
+      id: "pci_subscription",
+      workspaceId: "ws_1",
+      actorUserId: "usr_owner",
+      purpose: "subscription",
+      productId: "prod_monthly",
+      priceId: "price_monthly",
+      quantity: 1,
+      currencyCode: "USD",
+      amountCents: 3_900,
+      createdAt: NOW - 1_000,
+      expiresAt: NOW + 60_000,
+      consumedAt: null,
+      providerReference: null,
+    });
+
+    await deliver(
+      handler,
+      event("customer.subscription.created", subscription("active", "usd")),
+    );
+
+    await expect(subscriptions.findByWorkspace("ws_1")).resolves.toMatchObject({
+      currencyCode: "USD",
+    });
+  });
+
+  it("rejects a subscription currency that differs from its checkout intent", async () => {
+    const { handler, checkoutIntents } = setup();
+    checkoutIntents.intents.set("pci_subscription", {
+      id: "pci_subscription",
+      workspaceId: "ws_1",
+      actorUserId: "usr_owner",
+      purpose: "subscription",
+      productId: "prod_monthly",
+      priceId: "price_monthly",
+      quantity: 1,
+      currencyCode: "EUR",
+      amountCents: 3_900,
+      createdAt: NOW - 1_000,
+      expiresAt: NOW + 60_000,
+      consumedAt: null,
+      providerReference: null,
+    });
+
+    await expect(deliver(
+      handler,
+      event("customer.subscription.created", subscription("active", "usd")),
+    )).rejects.toThrow("Stripe checkout does not match the server intent");
   });
 
   it("rejects an invalid Stripe signature before parsing or writing", async () => {

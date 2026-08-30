@@ -23,6 +23,11 @@ class RecordingOverviewRepo implements OverviewRepo {
   failedDeliveries: OverviewFailedDelivery[] = [];
   requestedRunLimit: number | null = null;
   requestedRunningLimit: number | null = null;
+  requestedUptimeWindow: {
+    from24hMs: number;
+    from30dMs: number;
+    toMs: number;
+  } | null = null;
 
   async getBrowserCounts() {
     return {
@@ -33,13 +38,20 @@ class RecordingOverviewRepo implements OverviewRepo {
     };
   }
 
-  async getUptimeCounts() {
+  async getUptimeCounts(
+    _workspaceId: string,
+    from24hMs: number,
+    from30dMs: number,
+    toMs: number,
+  ) {
+    this.requestedUptimeWindow = { from24hMs, from30dMs, toMs };
     return {
       up: 2,
       down: 1,
       unknown: 3,
       openIncidents: 1,
       avgResponseTimeMs24h: 125.5,
+      uptime30d: 98.75,
     };
   }
 
@@ -73,6 +85,7 @@ class RecordingOverviewRepo implements OverviewRepo {
 const usage = {
   periodStart: Date.parse("2026-08-01T00:00:00.000Z"),
   periodEnd: Date.parse("2026-09-01T00:00:00.000Z"),
+  currency: "EUR" as const,
   billableRuns: 7,
   includedRuns: 300,
   remainingRuns: 293,
@@ -183,9 +196,15 @@ describe("GetOverview", () => {
         unknown: 3,
         openIncidents: 1,
         avgResponseTimeMs24h: 125.5,
+        uptime30d: 98.75,
       },
     });
-    expect(repo.requestedRunLimit).toBe(15);
+    expect(repo.requestedUptimeWindow).toEqual({
+      from24hMs: NOW - 24 * HOUR_MS,
+      from30dMs: NOW - 30 * 24 * HOUR_MS,
+      toMs: NOW,
+    });
+    expect(repo.requestedRunLimit).toBe(32);
     expect(repo.requestedRunningLimit).toBe(3);
     expect(result.running).toEqual([
       {
@@ -247,9 +266,9 @@ describe("GetOverview", () => {
     );
   });
 
-  it("uses deterministic tie ordering and caps merged activity at twenty", async () => {
+  it("uses deterministic tie ordering and caps merged activity at thirty-two", async () => {
     const repo = new RecordingOverviewRepo();
-    repo.finishedRuns = Array.from({ length: 15 }, (_, index) => ({
+    repo.finishedRuns = Array.from({ length: 32 }, (_, index) => ({
       id: `run_${String(index).padStart(2, "0")}`,
       browserTestId: "bt_limit",
       status: "PASSED" as const,
@@ -274,12 +293,12 @@ describe("GetOverview", () => {
 
     const result = await service.execute({ workspaceId: "ws_overview" });
 
-    expect(result.activity).toHaveLength(20);
+    expect(result.activity).toHaveLength(32);
     expect(result.activity.map((item) => item.id)).toEqual(
       [...repo.finishedRuns, ...repo.openedUptimeIncidents]
         .map((item) => item.id)
         .sort((left, right) => right.localeCompare(left))
-        .slice(0, 20),
+        .slice(0, 32),
     );
   });
 });

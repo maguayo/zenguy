@@ -46,9 +46,17 @@ export interface PublicInvitation {
 }
 
 export type SubscriptionSource = "free" | "grant" | "paddle" | "stripe";
+export type BillingCurrency = "EUR" | "USD";
+
+export interface BillingPlanPrice {
+  currency: BillingCurrency;
+  overagePerRunCents: number;
+  pricePerMonthCents: number;
+}
 
 interface BillingConfigBase {
   canIssueComplimentaryGrants?: boolean;
+  plan: BillingPlanPrice;
 }
 
 export interface StripeBillingConfig extends BillingConfigBase {
@@ -60,6 +68,7 @@ export type BillingConfig = StripeBillingConfig;
 
 export interface Usage {
   billableRuns: number;
+  currency: BillingCurrency;
   includedRuns: 300;
   overageAmountCents: number;
   overageRuns: number;
@@ -71,7 +80,7 @@ export interface Usage {
 
 export interface Invoice {
   billedAt: string | null;
-  currency: string;
+  currency: BillingCurrency;
   id: string;
   invoiceNumber: string | null;
   status: string;
@@ -80,11 +89,8 @@ export interface Invoice {
 
 export interface Billing {
   invoices: Invoice[];
-  plan: {
-    currency: "EUR";
+  plan: BillingPlanPrice & {
     includedRuns: 300;
-    overagePerRunCents: number;
-    pricePerMonthCents: number;
   };
   subscription: {
     cancelAtPeriodEnd: boolean;
@@ -598,6 +604,7 @@ export interface Overview {
     openIncidents: number;
     unknown: number;
     up: number;
+    uptime30d: number | null;
   };
   usage: Usage;
 }
@@ -672,7 +679,7 @@ export interface CreditEntry {
 
 export interface StripeCheckoutIntent {
   amountCents: number;
-  currencyCode: "EUR";
+  currencyCode: BillingCurrency;
   url: string;
 }
 

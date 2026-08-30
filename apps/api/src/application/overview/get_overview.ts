@@ -14,8 +14,8 @@ import type {
 } from "../billing/get_cycle_usage";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
-const ACTIVITY_LIMIT = 20;
-const RECENT_RUN_LIMIT = 15;
+const ACTIVITY_LIMIT = 32;
+const RECENT_RUN_LIMIT = ACTIVITY_LIMIT;
 const RUNNING_RUN_LIMIT = 3;
 
 export type OverviewActivityType =
@@ -134,6 +134,7 @@ export class GetOverview {
   async execute(input: { workspaceId: string }): Promise<Overview> {
     const now = this.clock.now();
     const from24h = now - DAY_MS;
+    const from30d = now - 30 * DAY_MS;
     const [
       usage,
       browserTests,
@@ -146,7 +147,12 @@ export class GetOverview {
     ] = await Promise.all([
       this.getCycleUsage.execute(input),
       this.overview.getBrowserCounts(input.workspaceId, from24h, now),
-      this.overview.getUptimeCounts(input.workspaceId, from24h, now),
+      this.overview.getUptimeCounts(
+        input.workspaceId,
+        from24h,
+        from30d,
+        now,
+      ),
       this.overview.listFinishedRuns(
         input.workspaceId,
         now,

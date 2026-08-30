@@ -12,6 +12,21 @@ pnpm --filter @zenguy/website build    # outputs dist/
 pnpm --filter @zenguy/website preview  # serve the built site on :4400
 ```
 
+## Localized pricing
+
+The static HTML keeps EUR as its no-JavaScript and local-development fallback.
+On Cloudflare Pages, `/api/pricing` reads `request.cf.isEUCountry` and returns
+EUR pricing for EU visitors and USD pricing for visitors with non-EU country
+metadata. If that flag is unavailable, the endpoint falls back to the ISO
+country code; requests with no geolocation metadata keep EUR. A CSP-compatible
+external script updates every marked monthly and overage amount.
+`public/_routes.json` limits Pages Functions invocations to the pricing
+endpoint.
+
+Astro's development server does not execute Pages Functions. To exercise the
+edge endpoint locally, build the site and run `pnpm exec wrangler pages dev dist`
+from `apps/website`.
+
 ## Deploys
 
 Git-connected **Cloudflare Pages** project `zenguy` — every push to `main`

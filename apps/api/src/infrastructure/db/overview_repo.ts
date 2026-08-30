@@ -26,6 +26,11 @@ interface UptimeCountsRow {
   avg_response_time_ms_24h: number | null;
 }
 
+interface UptimeWindowRow {
+  created_at: number;
+  downtime_ms_30d: number;
+}
+
 interface FinishedRunRow {
   id: string;
   browser_test_id: string;
@@ -84,6 +89,31 @@ function toIncidentEvent(row: IncidentEventRow): OverviewIncidentEvent {
   };
 }
 
+function uptimeForObservedWindows(
+  rows: UptimeWindowRow[],
+  fromMs: number,
+  toMs: number,
+): number | null {
+  let observableMs = 0;
+  let downtimeMs = 0;
+  for (const row of rows) {
+    const monitorObservableMs = Math.max(
+      0,
+      toMs - Math.max(fromMs, row.created_at),
+    );
+    observableMs += monitorObservableMs;
+    downtimeMs += Math.min(
+      monitorObservableMs,
+      Math.max(0, row.downtime_ms_30d),
+    );
+  }
+  if (observableMs === 0) return null;
+  return (
+    Math.round((100 * (observableMs - downtimeMs) * 100) / observableMs) /
+    100
+  );
+}
+
 export class D1OverviewRepo implements OverviewRepo {
   constructor(private readonly database: D1Database) {}
 
@@ -129,11 +159,12 @@ export class D1OverviewRepo implements OverviewRepo {
 
   async getUptimeCounts(
     workspaceId: string,
-    fromMs: number,
+    from24hMs: number,
+    from30dMs: number,
     toMs: number,
   ): Promise<OverviewUptimeCounts> {
-    const row = requiredRow(
-      await one<UptimeCountsRow>(
+    const [countsRow, windowRows] = await Promise.all([
+      one<UptimeCountsRow>(
         this.database
           .prepare(
             `SELECT
@@ -159,17 +190,74 @@ export class D1OverviewRepo implements OverviewRepo {
             workspaceId,
             workspaceId,
             workspaceId,
-            fromMs,
+            from24hMs,
             toMs,
           ),
       ),
-    );
+      all<UptimeWindowRow>(
+        this.database
+          .prepare(
+            `SELECT m.created_at,
+                    COALESCE(SUM(
+                      CASE WHEN i.id IS NULL THEN 0 ELSE
+                        MAX(
+                          0,
+                          MIN(COALESCE(i.resolved_at, ?), ?) -
+                          MAX(i.opened_at, MAX(m.created_at, ?))
+                        )
+                      END
+                    ), 0) AS downtime_ms_30d
+             FROM uptime_monitors m
+             LEFT JOIN incidents i
+               ON i.workspace_id = m.workspace_id
+              AND i.uptime_monitor_id = m.id
+              AND i.resource_type = 'UPTIME_MONITOR'
+              AND i.opened_at < ?
+              AND (i.resolved_at IS NULL OR
+                   i.resolved_at > MAX(m.created_at, ?))
+             WHERE m.workspace_id = ? AND m.deleted_at IS NULL
+               AND m.created_at < ?
+               AND (
+                 EXISTS (
+                   SELECT 1 FROM uptime_checks c
+                   WHERE c.workspace_id = m.workspace_id
+                     AND c.uptime_monitor_id = m.id
+                     AND c.checked_at >= ? AND c.checked_at <= ?
+                 ) OR EXISTS (
+                   SELECT 1 FROM incidents observed_i
+                   WHERE observed_i.workspace_id = m.workspace_id
+                     AND observed_i.uptime_monitor_id = m.id
+                     AND observed_i.resource_type = 'UPTIME_MONITOR'
+                     AND observed_i.opened_at < ?
+                     AND (observed_i.resolved_at IS NULL OR
+                          observed_i.resolved_at > MAX(m.created_at, ?))
+                 )
+               )
+             GROUP BY m.id, m.created_at`,
+          )
+          .bind(
+            toMs,
+            toMs,
+            from30dMs,
+            toMs,
+            from30dMs,
+            workspaceId,
+            toMs,
+            from30dMs,
+            toMs,
+            toMs,
+            from30dMs,
+          ),
+      ),
+    ]);
+    const row = requiredRow(countsRow);
     return {
       up: row.up,
       down: row.down,
       unknown: row.unknown,
       openIncidents: row.open_incidents,
       avgResponseTimeMs24h: row.avg_response_time_ms_24h,
+      uptime30d: uptimeForObservedWindows(windowRows, from30dMs, toMs),
     };
   }
 

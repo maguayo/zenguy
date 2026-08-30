@@ -354,6 +354,30 @@ describe("overview route", () => {
 
     const monitors = new D1MonitorRepo(bindings.DB);
     for (const value of Object.values(MONITORS)) await monitors.insert(value);
+    await monitors.insert({
+      ...MONITORS.docs,
+      id: "mon_overview_old_unobserved",
+      name: "Never observed",
+      lastCheckAt: null,
+      lastResponseTimeMs: null,
+      createdAt: NOW - 31 * 24 * HOUR_MS,
+    });
+
+    const token = await issueAccessToken(
+      loadConfig(bindings),
+      USER,
+      systemClock,
+    );
+    const app = buildApp(bindings, { clock });
+    const unobservedResponse = await app.request(
+      `/api/workspaces/${WORKSPACE.id}/overview`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(unobservedResponse.status).toBe(200);
+    await expect(unobservedResponse.json()).resolves.toMatchObject({
+      data: { uptime: { uptime30d: null } },
+    });
+
     const checks = new D1CheckRepo(bindings.DB);
     for (const value of [
       check("check_overview_fast", MONITORS.api.id, NOW - HOUR_MS, 100),
@@ -448,12 +472,6 @@ describe("overview route", () => {
       await deliveries.insert(value);
     }
 
-    const token = await issueAccessToken(
-      loadConfig(bindings),
-      USER,
-      systemClock,
-    );
-    const app = buildApp(bindings, { clock });
     const unauthorized = await app.request(
       `/api/workspaces/${WORKSPACE.id}/overview`,
     );
@@ -491,9 +509,10 @@ describe("overview route", () => {
         uptime: {
           up: 1,
           down: 1,
-          unknown: 1,
+          unknown: 2,
           openIncidents: 1,
           avgResponseTimeMs24h: 200,
+          uptime30d: 83.33,
         },
         running: [
           {

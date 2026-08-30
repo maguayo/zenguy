@@ -68,7 +68,7 @@ Use **Datadog Synthetics** for the instrumented services. Add Zenguy only if the
 
 Zenguy is built for this team shape on purpose:
 
-- one plan, 39 €, unlimited members;
+- one plan, <span data-pricing-amount="monthly">39 €</span>, unlimited members;
 - 300 browser runs — enough for several hourly tests;
 - uptime included, not another SKU;
 - retries so a slow third party does not wake you;

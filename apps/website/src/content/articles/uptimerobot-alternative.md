@@ -56,7 +56,7 @@ That is the gap Zenguy is built for.
 | Multi-step user flows | Not the product | Natural-language browser tests |
 | Evidence | Status, response time, keyword | Screenshots, steps, expected vs actual, Markdown |
 | Teammates | Plan-gated seats on some tiers | Unlimited |
-| Price shape | Monitor count + interval + seats + credits | 39 €, 300 browser runs, uptime included |
+| Price shape | Monitor count + interval + seats + credits | <span data-pricing-amount="monthly">39 €</span>, 300 browser runs, uptime included |
 
 ## When to keep UptimeRobot
 

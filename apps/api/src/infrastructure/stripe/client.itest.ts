@@ -28,7 +28,23 @@ const CHECKOUT_INPUT = {
   successUrl: "https://app.zenguy.com/w/ws_1/setup/billing?checkout=success",
   cancelUrl: "https://app.zenguy.com/w/ws_1/setup/billing?checkout=canceled",
   expiresAt: Date.parse("2026-08-28T18:00:00Z"),
+  currencyCode: "EUR" as const,
 };
+
+function subscriptionPriceResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      id: CONFIG.priceId,
+      product: CONFIG.productId,
+      currency: "eur",
+      unit_amount: 3_900,
+      currency_options: { usd: { unit_amount: 3_900 } },
+      type: "recurring",
+      recurring: { interval: "month" },
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
 
 function clientReplying(
   respond: (request: Request) => Response,
@@ -51,14 +67,19 @@ describe("HttpStripeClient RequestInit on the workers runtime", () => {
   it("builds a checkout request that workerd accepts and parses the session", async () => {
     const seen: Request[] = [];
     const client = clientReplying(
-      () =>
-        new Response(
-          JSON.stringify({
-            id: "cs_test_itest",
-            url: "https://checkout.stripe.com/c/pay/cs_test_itest",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
+      (request) =>
+        request.url.includes("/v1/prices/")
+          ? subscriptionPriceResponse()
+          : new Response(
+              JSON.stringify({
+                id: "cs_test_itest",
+                url: "https://checkout.stripe.com/c/pay/cs_test_itest",
+              }),
+              {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              },
+            ),
       seen,
     );
 
@@ -68,8 +89,9 @@ describe("HttpStripeClient RequestInit on the workers runtime", () => {
       id: "cs_test_itest",
       url: "https://checkout.stripe.com/c/pay/cs_test_itest",
     });
-    expect(seen).toHaveLength(1);
-    const request = seen[0]!;
+    expect(seen).toHaveLength(2);
+    expect(seen[0]!.url).toContain("/v1/prices/price_itest?");
+    const request = seen[1]!;
     expect(request.url).toBe("https://api.stripe.com/v1/checkout/sessions");
     expect(request.headers.get("authorization")).toBe(
       `Bearer ${CONFIG.secretKey}`,
@@ -103,11 +125,13 @@ describe("HttpStripeClient RequestInit on the workers runtime", () => {
 
   it("treats a redirect response as a failed request, not a hop to follow", async () => {
     const client = clientReplying(
-      () =>
-        new Response(null, {
-          status: 302,
-          headers: { location: "https://evil.example/steal" },
-        }),
+      (request) =>
+        request.url.includes("/v1/prices/")
+          ? subscriptionPriceResponse()
+          : new Response(null, {
+              status: 302,
+              headers: { location: "https://evil.example/steal" },
+            }),
     );
 
     await expect(client.createCheckoutSession(CHECKOUT_INPUT)).rejects.toThrow(

@@ -61,10 +61,11 @@ describe("IssueStripeCheckoutIntent", () => {
       actor: OWNER,
       actorRole: "OWNER",
       purpose: "subscription",
+      currencyCode: "USD",
     })).resolves.toEqual({
       url: "https://checkout.stripe.com/c/pay/cs_test_1",
       amountCents: 3_900,
-      currencyCode: "EUR",
+      currencyCode: "USD",
     });
 
     const intent = [...intents.intents.values()][0];
@@ -75,12 +76,14 @@ describe("IssueStripeCheckoutIntent", () => {
       productId: "prod_monthly",
       priceId: "price_monthly",
       quantity: 1,
+      currencyCode: "USD",
       amountCents: 3_900,
       expiresAt: NOW + STRIPE_CHECKOUT_INTENT_TTL_MS,
     });
     expect(calls).toEqual([expect.objectContaining({
       intentId: intent?.id,
       purpose: "subscription",
+      currencyCode: "USD",
       customerEmail: OWNER.email,
       expiresAt: NOW + STRIPE_CHECKOUT_SESSION_TTL_MS,
       successUrl: "https://app.zenguy.com/w/ws_1/setup/billing?checkout=success",
@@ -119,6 +122,7 @@ describe("IssueStripeCheckoutIntent", () => {
 
     expect(calls[0]).toMatchObject({
       purpose: "alert_credit",
+      currencyCode: "EUR",
       priceId: "price_alert",
       quantity: 3,
       successUrl: "https://app.zenguy.com/w/ws_1/alerts/sms-calls?topup=success",

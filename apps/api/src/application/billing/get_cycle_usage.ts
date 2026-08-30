@@ -2,7 +2,10 @@ import type {
   SubscriptionRepo,
   UsageEventRepo,
 } from "../../domain/billing/repo";
-import { isComplimentarySubscription } from "../../domain/billing/types";
+import {
+  type BillingCurrency,
+  isComplimentarySubscription,
+} from "../../domain/billing/types";
 import type { Clock } from "../../shared/clock";
 import {
   INCLUDED_RUNS,
@@ -11,6 +14,7 @@ import {
 } from "../../shared/constants";
 
 export interface CycleUsage {
+  currency: BillingCurrency;
   periodStart: number;
   periodEnd: number;
   billableRuns: number;
@@ -39,7 +43,10 @@ export class GetCycleUsage {
     private readonly clock: Clock,
   ) {}
 
-  async execute(input: { workspaceId: string }): Promise<CycleUsage> {
+  async execute(input: {
+    workspaceId: string;
+    fallbackCurrency?: BillingCurrency;
+  }): Promise<CycleUsage> {
     const subscription = await this.subscriptions.findByWorkspace(
       input.workspaceId,
     );
@@ -65,6 +72,7 @@ export class GetCycleUsage {
     const overageAmountCents = overageRuns * OVERAGE_CENTS_PER_RUN;
     return {
       ...period,
+      currency: subscription?.currencyCode ?? input.fallbackCurrency ?? "EUR",
       billableRuns,
       includedRuns: INCLUDED_RUNS,
       remainingRuns,

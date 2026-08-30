@@ -1,5 +1,6 @@
 import type { SubscriptionRepo } from "../../domain/billing/repo";
 import type {
+  BillingCurrency,
   SubscriptionSource,
   SubscriptionStatus,
 } from "../../domain/billing/types";
@@ -23,7 +24,7 @@ import type { CycleUsage, GetCycleUsage } from "./get_cycle_usage";
 export interface BillingDetails {
   plan: {
     pricePerMonthCents: number;
-    currency: "EUR";
+    currency: BillingCurrency;
     includedRuns: number;
     overagePerRunCents: number;
   };
@@ -50,6 +51,7 @@ export class GetBilling {
   async execute(input: {
     workspaceId: string;
     role: Role;
+    regionalCurrency?: BillingCurrency;
   }): Promise<BillingDetails> {
     if (!can(input.role, "billing.view")) throw forbidden();
     const subscription = await this.subscriptions.findByWorkspace(
@@ -58,6 +60,7 @@ export class GetBilling {
     const complimentary = isComplimentarySubscription(subscription);
     const usage = await this.getCycleUsage.execute({
       workspaceId: input.workspaceId,
+      fallbackCurrency: input.regionalCurrency,
     });
     const providerSubscriptionId = subscription?.providerSubscriptionId;
     let invoices: BilledTransaction[] = [];
@@ -96,7 +99,7 @@ export class GetBilling {
     return {
       plan: {
         pricePerMonthCents: complimentary ? 0 : PLAN_PRICE_CENTS,
-        currency: "EUR",
+        currency: usage.currency,
         includedRuns: INCLUDED_RUNS,
         overagePerRunCents: complimentary ? 0 : OVERAGE_CENTS_PER_RUN,
       },

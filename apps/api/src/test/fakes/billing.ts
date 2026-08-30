@@ -9,6 +9,7 @@ import type {
   CreateStripeCheckoutInput,
   StripeCheckoutSession,
 } from "../../infrastructure/stripe/client";
+import type { BillingCurrency } from "../../domain/billing/types";
 
 export class RecordingStripeClient {
   readonly sessions: CreateStripeCheckoutInput[] = [];
@@ -39,6 +40,7 @@ export class RecordingPaddleClient implements PaddleClient {
     priceId: string;
     quantity: number;
     marker: string;
+    currencyCode: BillingCurrency;
   }[] = [];
   readonly cancellations: string[] = [];
   readonly transactionLists: { subscriptionId: string; limit: number }[] = [];
@@ -77,8 +79,15 @@ export class RecordingPaddleClient implements PaddleClient {
     priceId: string,
     quantity: number,
     marker: string,
+    currencyCode: BillingCurrency = "EUR",
   ): Promise<{ transactionId: string | null }> {
-    this.charges.push({ subscriptionId, priceId, quantity, marker });
+    this.charges.push({
+      subscriptionId,
+      priceId,
+      quantity,
+      marker,
+      currencyCode,
+    });
     this.failIfConfigured();
     if (this.acceptChargeBeforeFailure) {
       this.subscriptionCharges.set(

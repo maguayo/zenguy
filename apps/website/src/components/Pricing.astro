@@ -1,16 +1,17 @@
 ---
 import Icon from "./Icon.astro";
 import Logo from "./Logo.astro";
+import Price from "./Price.astro";
 
 const noCost = ["Retries inside a run cost nothing", "Uptime checks cost nothing", "Extra members cost nothing"];
 const included = [
-  "300 browser test runs a month",
-  "0,20 € per run after that",
-  "Unlimited uptime monitors",
-  "Unlimited members and invitations",
-  "Desktop and mobile viewports",
-  "30 days of screenshots, reports and logs",
-  "Every alert channel, no message fees",
+  { text: "300 browser test runs a month" },
+  { price: "overage" as const, suffix: " per run after that" },
+  { text: "Unlimited uptime monitors" },
+  { text: "Unlimited members and invitations" },
+  { text: "Desktop and mobile viewports" },
+  { text: "30 days of screenshots, reports and logs" },
+  { text: "Every alert channel, no message fees" },
 ];
 ---
 
@@ -43,15 +44,17 @@ const included = [
         <Logo iconSize={26} textSize={15} dark />
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-[46px] font-semibold leading-none tracking-[-0.03em] text-surface">39 €</span>
+        <span class="text-[46px] font-semibold leading-none tracking-[-0.03em] text-surface"><Price kind="monthly" /></span>
         <span class="text-sm text-parch">per month, per workspace</span>
       </div>
       <div class="h-px bg-white/8"></div>
       <div class="flex flex-col gap-[11px]">
-        {included.map((t) => (
+        {included.map((item) => (
           <div class="flex items-start gap-[11px]">
             <Icon name="check" size={15} color="#FAF8F4" class="mt-[3px] opacity-75" />
-            <span class="text-sm leading-normal text-parch">{t}</span>
+            <span class="text-sm leading-normal text-parch">
+              {"price" in item ? <><Price kind={item.price} />{item.suffix}</> : item.text}
+            </span>
           </div>
         ))}
       </div>

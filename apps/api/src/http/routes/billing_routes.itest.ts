@@ -179,7 +179,22 @@ describe("billing routes", () => {
         mode: "stripe",
         environment: "test",
         canIssueComplimentaryGrants: false,
+        plan: {
+          currency: "EUR",
+          pricePerMonthCents: 3900,
+          overagePerRunCents: 20,
+        },
       },
+    });
+
+    const usConfig = await app.request("/api/billing/config", {
+      headers: {
+        ...headers("owner"),
+        "CF-IPCountry": "US",
+      },
+    });
+    await expect(usConfig.json()).resolves.toMatchObject({
+      data: { plan: { currency: "USD", pricePerMonthCents: 3900 } },
     });
 
     const workspaces = await app.request("/api/workspaces", {
@@ -252,6 +267,7 @@ describe("billing routes", () => {
           cancelUrl: "https://paddle.test/fresh-cancel",
         },
         usage: {
+          currency: "EUR",
           periodStart: "2026-08-01T00:00:00.000Z",
           periodEnd: "2026-09-01T00:00:00.000Z",
           billableRuns: 301,

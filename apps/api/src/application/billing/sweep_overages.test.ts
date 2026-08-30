@@ -88,6 +88,7 @@ describe("SweepOverages", () => {
       "ws_unreported",
       NOW - 2 * OVERAGE_SETTLEMENT_DELAY_MS,
     );
+    unreported.currencyCode = "USD";
     const reported = subscription(
       "sub_reported",
       "ws_reported",
@@ -126,6 +127,7 @@ describe("SweepOverages", () => {
         periodStart: unreported.periodStart,
         periodEnd: unreported.periodEnd,
         providerSubscriptionId: "provider_sub_unreported",
+        currencyCode: "USD",
       },
     ]);
     await expect(pendingPeriods.list(10)).resolves.toEqual([]);

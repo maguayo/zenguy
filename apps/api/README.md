@@ -293,12 +293,16 @@ refund and dispute smoke test passes. Stripe-hosted Checkout collects billing
 addresses, tax IDs and automatic tax; no publishable or secret Stripe key is
 sent to the browser.
 
-1. Create product **Zenguy** and a recurring monthly EUR 39.00 price. Use
-   inclusive tax behavior so the advertised amount, credit/refund accounting,
-   and Stripe total remain aligned. Set its IDs as `STRIPE_PRODUCT_ID` and
+1. Create product **Zenguy** and one recurring monthly multi-currency Price.
+   Keep EUR 39.00 as its default currency and add a manual USD 39.00
+   `currency_options` entry to that same Price. Set inclusive tax behavior for
+   both currencies so the advertised amount, credit/refund accounting, and
+   Stripe total remain aligned. Set its IDs as `STRIPE_PRODUCT_ID` and
    `STRIPE_PRICE_ID`.
-2. Create product **Zenguy extra runs** and a one-time EUR 0.20 price with the
-   same inclusive tax behavior. Set its price ID as `STRIPE_OVERAGE_PRICE_ID`.
+2. Create product **Zenguy extra runs** and one multi-currency one-time Price:
+   EUR 0.20 by default plus a manual USD 0.20 `currency_options` entry, both
+   with the same inclusive tax behavior. Set its price ID as
+   `STRIPE_OVERAGE_PRICE_ID`.
 3. Create product **Zenguy alert credit pack** and a one-time EUR 10.00 price
    with inclusive tax behavior.
    Set `STRIPE_ALERT_CREDIT_PRODUCT_ID` and
@@ -327,12 +331,19 @@ succeeded refunds debit only that transaction, and disputes debit once and
 restore funds only when won. The periodic reconciliation lists succeeded
 refunds with the same ledger idempotency keys as the webhook path.
 
+Checkout receives an explicit currency selected from Cloudflare's request
+location: EUR inside the EU and USD elsewhere. The selected currency is pinned
+in the checkout intent and then persisted from Stripe's Subscription webhook,
+so later UI, invoices and overage settlement do not change when the customer
+travels or uses a different network. Existing subscriptions migrate as EUR.
+
 The overage price is re-read immediately before charging and must remain a
-one-time EUR 0.20 price. Settlement starts only at `period_end + 1 hour` and
-pins the subscription that owned that period. Stripe receives the deterministic
-overage marker as the idempotency key for invoice creation, invoice-item
-creation and finalization; retries reconcile the same invoice instead of
-creating a second charge.
+one-time EUR/USD 0.20 multi-currency Price. Settlement reads the real Stripe
+subscription currency, starts only at `period_end + 1 hour`, and pins the
+subscription that owned that period. Stripe receives the deterministic overage
+marker as the idempotency key for invoice creation, invoice-item creation and
+finalization; retries reconcile the same invoice instead of creating a second
+charge.
 
 ### Cloudflare Email Service
 

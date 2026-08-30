@@ -48,7 +48,7 @@ Page speed going from 1.2s to 1.9s is a useful graph. It is not an incident abou
 | Page speed | Yes | No |
 | User flows | Not the centre | Natural-language browser tests |
 | Evidence | Status and speed | Screenshots, steps, Markdown |
-| Price | Tiers by monitors | 39 € + runs |
+| Price | Tiers by monitors | <span data-pricing-amount="monthly">39 €</span> + runs |
 
 ## When to keep StatusCake
 

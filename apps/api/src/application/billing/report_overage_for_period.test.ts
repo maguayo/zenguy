@@ -150,7 +150,10 @@ describe("ReportOverageForPeriod", () => {
     paddle.chargeResult = { transactionId: "txn_overage" };
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
-    await expect(reporter.execute(INPUT)).resolves.toEqual({
+    await expect(reporter.execute({
+      ...INPUT,
+      currencyCode: "USD",
+    })).resolves.toEqual({
       status: "charged",
       overage: 50,
     });
@@ -161,6 +164,7 @@ describe("ReportOverageForPeriod", () => {
         priceId: "pri_overage",
         quantity: 50,
         marker: overageProviderMarker("ws_primary", PERIOD_START),
+        currencyCode: "USD",
       },
     ]);
     expect([...reports.reports.values()]).toEqual([
@@ -170,6 +174,7 @@ describe("ReportOverageForPeriod", () => {
         paddleTransactionId: "txn_overage",
         state: "COMPLETED",
         providerSubscriptionId: "sub_provider_old",
+        currencyCode: "USD",
       }),
     ]);
     expect(String(log.mock.calls[0]?.[0])).toContain(

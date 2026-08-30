@@ -42,7 +42,7 @@ Zenguy is only the outside-in watch:
 - Scheduled every 1–24 hours, with up to three free retries.
 - Screenshots, steps, expected vs actual, Markdown report.
 - Unlimited HTTP uptime that does not consume the 300 monthly runs.
-- 39 € per workspace, unlimited members, 30-day evidence.
+- <span data-pricing-amount="monthly">39 €</span> per workspace, unlimited members, 30-day evidence.
 
 There is no host agent, no APM, no log ingest. A failure in Zenguy is explained by what the browser saw, not by a distributed trace.
 
@@ -54,7 +54,7 @@ There is no host agent, no APM, no log ingest. A failure in Zenguy is explained 
 | Authoring | Recorder / script in Datadog | English instructions |
 | Correlation | Traces, logs, RUM, metrics | Attempt evidence only |
 | Cadence | Minutes, many locations | Hours, one clean browser per attempt |
-| Bill | Per-run, plus the rest of Datadog | Flat 39 € + run overage |
+| Bill | Per-run, plus the rest of Datadog | Flat <span data-pricing-amount="monthly">39 €</span> + run overage |
 | Who it fits | Teams already on Datadog | Teams who need the watch, not the platform |
 
 ## When Datadog is the right synthetic tool

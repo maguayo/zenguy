@@ -41,7 +41,7 @@ You do not need to become an SRE. You need a robot that does the click you would
 - Schedule it hourly. Invite whoever answers email — members are free.
 - Turn on push on the phone you already pick up at night.
 
-39 € is less than one missed-checkout morning if the store is real. If the site is a brochure, skip the browser test and keep a free ping.
+<span data-pricing-amount="monthly">39 €</span> is less than one missed-checkout morning if the store is real. If the site is a brochure, skip the browser test and keep a free ping.
 
 ## What to ignore on day one
 

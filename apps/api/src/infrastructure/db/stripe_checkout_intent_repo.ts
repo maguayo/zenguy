@@ -13,7 +13,7 @@ interface IntentRow {
   product_id: string;
   price_id: string;
   quantity: number;
-  currency_code: "EUR";
+  currency_code: string;
   amount_cents: number;
   created_at: number;
   expires_at: number;
@@ -30,7 +30,7 @@ function toIntent(row: IntentRow): CheckoutIntent {
     productId: row.product_id,
     priceId: row.price_id,
     quantity: row.quantity,
-    currencyCode: row.currency_code,
+    currencyCode: row.currency_code === "USD" ? "USD" : "EUR",
     amountCents: row.amount_cents,
     createdAt: row.created_at,
     expiresAt: row.expires_at,

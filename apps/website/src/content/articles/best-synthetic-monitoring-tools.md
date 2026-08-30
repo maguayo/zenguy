@@ -58,7 +58,7 @@ A click-through is recorded, then replayed. Fast to start, expensive to keep, we
 
 You describe the goal. An isolated Chrome session tries to complete it. You get steps, screenshots, expected vs actual, and a Markdown report.
 
-Cadence is hours, not seconds. Timeout is 5 minutes per attempt. Retries are free. 39 €, 300 runs, unlimited HTTP uptime on the side.
+Cadence is hours, not seconds. Timeout is 5 minutes per attempt. Retries are free. <span data-pricing-amount="monthly">39 €</span>, 300 runs, unlimited HTTP uptime on the side.
 
 **Choose Zenguy** when the author is a founder or support lead, or when the valuable path crosses Shopify, Stripe, or OAuth.
 **Skip it** when you need Playwright parity or 30-second multi-region coverage.

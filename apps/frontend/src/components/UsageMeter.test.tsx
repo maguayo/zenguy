@@ -6,6 +6,7 @@ import { UsageMeter, usageTone } from "./UsageMeter";
 
 const baseUsage: Usage = {
   billableRuns: 12,
+  currency: "EUR",
   includedRuns: 300,
   overageAmountCents: 0,
   overageRuns: 0,
@@ -32,12 +33,20 @@ describe("UsageMeter", () => {
 
   it("renders accessible usage details and hides zero overage", () => {
     const html = renderToStaticMarkup(
-      <UsageMeter timezone="Europe/Madrid" usage={baseUsage} />,
+      <UsageMeter
+        timezone="Europe/Madrid"
+        usage={{
+          ...baseUsage,
+          periodEnd: "2026-09-01T00:00:00.000Z",
+        }}
+      />,
     );
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-valuenow="12"');
     expect(html).toContain("12 of 300 runs used");
-    expect(html).toContain("Projected total");
+    expect(html).toContain(
+      "Projected total 39,00 € · resets 01 Sept 2026, 02:00",
+    );
     expect(html).not.toContain("Extra runs");
   });
 
@@ -56,5 +65,25 @@ describe("UsageMeter", () => {
     );
     expect(html).toContain("Extra runs");
     expect(html).toContain("Extra cost");
+  });
+
+  it("formats USD projections and overage without changing alert-credit formatting", () => {
+    const html = renderToStaticMarkup(
+      <UsageMeter
+        timezone="UTC"
+        usage={{
+          ...baseUsage,
+          billableRuns: 302,
+          currency: "USD",
+          overageAmountCents: 40,
+          overageRuns: 2,
+          projectedTotalCents: 3_940,
+          remainingRuns: 0,
+        }}
+      />,
+    );
+    expect(html).toContain("Extra cost");
+    expect(html).toContain("$0.40");
+    expect(html).toContain("Projected total $39.40");
   });
 });

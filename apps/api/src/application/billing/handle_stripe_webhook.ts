@@ -8,6 +8,7 @@ import type {
   SubscriptionRepo,
 } from "../../domain/billing/repo";
 import type {
+  BillingCurrency,
   CheckoutIntent,
   Subscription,
   SubscriptionStatus,
@@ -57,6 +58,7 @@ const subscriptionItemSchema = z.object({
 const subscriptionSchema = z.object({
   id: z.string().min(1),
   customer: expandableIdSchema,
+  currency: z.string().length(3),
   status: z.string().min(1),
   metadata: metadataSchema,
   items: z.object({ data: z.array(subscriptionItemSchema).min(1) }),
@@ -182,6 +184,14 @@ function secondsToMilliseconds(value: number): number {
     throw new Error("Invalid Stripe timestamp");
   }
   return timestamp;
+}
+
+function stripeBillingCurrency(value: string): BillingCurrency {
+  const normalized = value.toUpperCase();
+  if (normalized !== "EUR" && normalized !== "USD") {
+    throw new Error("Unsupported Stripe subscription currency");
+  }
+  return normalized;
 }
 
 export class HandleStripeWebhook {
@@ -519,7 +529,6 @@ export class HandleStripeWebhook {
       item.quantity !== 1 ||
       item.price.id !== this.dependencies.subscriptionPriceId ||
       item.price.product !== this.dependencies.subscriptionProductId ||
-      item.price.currency.toUpperCase() !== "EUR" ||
       item.price.unit_amount !== PLAN_PRICE_CENTS ||
       item.price.recurring?.interval !== "month"
     ) {
@@ -536,6 +545,7 @@ export class HandleStripeWebhook {
   ): Promise<"processed" | "ignored"> {
     const data = subscriptionSchema.parse(rawData);
     const item = this.assertSubscriptionCatalog(data);
+    const currencyCode = stripeBillingCurrency(data.currency);
     const byProvider =
       await this.dependencies.subscriptions.findByProviderSubscriptionId(
         data.id,
@@ -551,7 +561,7 @@ export class HandleStripeWebhook {
           priceId: this.dependencies.subscriptionPriceId,
         },
         amountCents: PLAN_PRICE_CENTS,
-        currency: item.price.currency,
+        currency: currencyCode,
       });
       workspaceId = intent.workspaceId;
       if (byProvider !== null && byProvider.workspaceId !== workspaceId) {
@@ -586,6 +596,14 @@ export class HandleStripeWebhook {
       stored.providerCustomerId !== data.customer
     ) {
       throw new Error("Workspace already belongs to a different Stripe customer");
+    }
+    if (
+      stored?.providerSubscriptionId === data.id &&
+      stored?.currencyCode !== null &&
+      stored?.currencyCode !== undefined &&
+      stored.currencyCode !== currencyCode
+    ) {
+      throw new Error("Stripe subscription currency changed unexpectedly");
     }
     const providerEventAt = secondsToMilliseconds(eventCreated);
     if (
@@ -622,6 +640,7 @@ export class HandleStripeWebhook {
         periodStart: stored.periodStart,
         periodEnd: stored.periodEnd,
         providerSubscriptionId: stored.providerSubscriptionId,
+        currencyCode: stored.currencyCode ?? currencyCode,
         createdAt: now,
         nextAttemptAt: stored.periodEnd + OVERAGE_SETTLEMENT_DELAY_MS,
         attemptCount: 0,
@@ -632,6 +651,7 @@ export class HandleStripeWebhook {
           periodStart: stored.periodStart,
           periodEnd: stored.periodEnd,
           providerSubscriptionId: stored.providerSubscriptionId,
+          currencyCode: stored.currencyCode ?? currencyCode,
         });
       } catch {
         logEvent("overage_rollover_failed", { workspaceId });
@@ -646,6 +666,7 @@ export class HandleStripeWebhook {
       source: "stripe",
       providerCustomerId: data.customer,
       providerSubscriptionId: data.id,
+      currencyCode,
       status,
       periodStart,
       periodEnd,

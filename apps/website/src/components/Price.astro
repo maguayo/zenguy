@@ -1,0 +1,13 @@
+---
+import { pricingForCurrency } from "../lib/pricing.mjs";
+
+interface Props {
+  kind: "monthly" | "overage";
+}
+
+const { kind } = Astro.props;
+const fallback = pricingForCurrency("EUR");
+const label = kind === "monthly" ? fallback.monthlyDisplay : fallback.overageDisplay;
+---
+
+<span data-pricing-amount={kind}>{label}</span>

@@ -19,7 +19,7 @@ export interface PulseSlot {
   tone: TickTone;
 }
 
-const PULSE_SIZE = 20;
+const PULSE_SIZE = 32;
 
 const TONE_BY_TYPE: Record<ActivityType, Exclude<TickTone, "empty" | "run">> = {
   CHANNEL_DELIVERY_FAILED: "warn",
@@ -107,11 +107,17 @@ export function heroHeadline(state: HeroState, openIncidents: number): string {
 }
 
 const TICK_CLASS: Record<TickTone, string> = {
-  empty: "bg-zinc-800",
-  fail: "bg-red-500",
-  ok: "bg-emerald-500",
+  empty: "bg-zinc-200",
+  fail: "bg-red-400",
+  ok: "bg-emerald-400",
   run: "hero-breathe bg-indigo-400",
-  warn: "bg-amber-500",
+  warn: "bg-amber-400",
+};
+
+const HERO_TONE: Record<HeroState, { halo: string; dot: string }> = {
+  calm: { halo: "bg-ok-50", dot: "bg-ok-600" },
+  empty: { halo: "bg-accent-50", dot: "bg-accent-600" },
+  incident: { halo: "bg-danger-50", dot: "bg-danger-600" },
 };
 
 function incidentStory(
@@ -124,7 +130,7 @@ function incidentStory(
   const others = openIncidents - 1;
   return (
     <>
-      <strong className="font-medium text-white">{openIncident.resourceName}</strong>{" "}
+      <strong className="font-medium text-zinc-900">{openIncident.resourceName}</strong>{" "}
       {verb} {formatRelative(openIncident.openedAt)}.
       {others > 0
         ? ` ${others} more ${others === 1 ? "incident is" : "incidents are"} open.`
@@ -147,7 +153,8 @@ function calmStory(
   } else if (lastIncident) {
     memory = (
       <>
-        Last incident: <strong className="font-medium text-white">{lastIncident.resourceName}</strong>,{" "}
+        Last incident:{" "}
+        <strong className="font-medium text-zinc-900">{lastIncident.resourceName}</strong>,{" "}
         {formatRelative(lastIncident.openedAt)}
         {lastIncident.status === "RESOLVED"
           ? ` — resolved in ${formatDuration(lastIncident.durationMs)}.`
@@ -186,6 +193,7 @@ export function OverviewHero({
   const monitors = data.uptime.up + data.uptime.down + data.uptime.unknown;
   const slots = pulseSlots(data.activity, data.running);
   const chip = liveChip(data.running, data.browserTests.runningRuns);
+  const tone = HERO_TONE[state];
 
   const story: ReactNode =
     state === "incident"
@@ -204,64 +212,79 @@ export function OverviewHero({
           : { label: "View tests", to: `/w/${workspaceId}/tests` };
 
   const chipClass =
-    "inline-flex items-center gap-2 rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300";
+    "inline-flex items-center gap-2 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700";
   const chipDot = (
-    <span aria-hidden="true" className="hero-breathe size-1.5 rounded-full bg-indigo-400" />
+    <span aria-hidden="true" className="hero-breathe size-1.5 rounded-full bg-accent-600" />
   );
 
   return (
-    <section aria-labelledby="overview-hero-title" className="rounded-lg bg-zinc-950 p-6 sm:p-7">
-      <h1
-        className="text-3xl font-semibold tracking-tight text-white sm:text-4xl"
-        id="overview-hero-title"
-      >
-        {heroHeadline(state, openIncidents)}
-      </h1>
-      {state === "empty" ? null : (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-xs text-zinc-400">
-          <span>
-            {data.browserTests.total} {data.browserTests.total === 1 ? "test" : "tests"} ·{" "}
-            {monitors} {monitors === 1 ? "monitor" : "monitors"}
-          </span>
-          {chip === null ? null : chip.runId === null ? (
-            <span className={chipClass}>
-              {chipDot}
-              {chip.label}
-            </span>
-          ) : (
-            <Link
-              className={clsx(chipClass, "hover:bg-indigo-500/25 hover:text-indigo-200")}
-              to={`/w/${workspaceId}/runs/${chip.runId}`}
-            >
-              {chipDot}
-              {chip.label}
-            </Link>
-          )}
-        </div>
-      )}
-      <div
-        aria-label={pulseLabel(slots)}
-        className="mt-6 flex h-[18px] items-center gap-[3px]"
-        role="img"
-      >
-        {slots.map((slot, index) => (
+    <section
+      aria-labelledby="overview-hero-title"
+      className="rounded-xl border border-zinc-200 bg-white px-5 py-3.5 sm:px-6"
+    >
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
           <span
-            key={index}
-            className={clsx("h-full min-w-1 max-w-3 flex-1 rounded-[3px]", TICK_CLASS[slot.tone])}
-            title={slot.label === "" ? undefined : slot.label}
-          />
-        ))}
-      </div>
-      <div className="mt-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        {story === null ? <span /> : (
-          <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">{story}</p>
-        )}
-        <Link
-          className="shrink-0 text-sm font-medium text-white underline-offset-4 hover:underline"
-          to={footer.to}
-        >
-          {footer.label} →
-        </Link>
+            aria-hidden="true"
+            className={clsx("grid size-10 shrink-0 place-items-center rounded-full", tone.halo)}
+          >
+            <span className={clsx("size-3 rounded-full", tone.dot)} />
+          </span>
+
+          <div className="min-w-0">
+            <h1
+              className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl"
+              id="overview-hero-title"
+            >
+              {heroHeadline(state, openIncidents)}
+            </h1>
+            {state === "empty" ? (
+              <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-zinc-500">{story}</p>
+            ) : (
+              <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+                {data.browserTests.total} {data.browserTests.total === 1 ? "test" : "tests"} ·{" "}
+                {monitors} {monitors === 1 ? "monitor" : "monitors"}
+                {story === null ? null : <> · {story}</>}
+              </p>
+            )}
+            {chip === null ? null : chip.runId === null ? (
+              <span className={clsx(chipClass, "mt-2.5")}>
+                {chipDot}
+                {chip.label}
+              </span>
+            ) : (
+              <Link
+                className={clsx(chipClass, "mt-2.5 hover:bg-accent-100")}
+                to={`/w/${workspaceId}/runs/${chip.runId}`}
+              >
+                {chipDot}
+                {chip.label}
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-4 lg:shrink-0">
+          <div
+            aria-label={pulseLabel(slots)}
+            className="grid h-6 min-w-0 flex-1 grid-flow-col auto-cols-fr items-stretch gap-[3px] lg:w-56 lg:flex-none 2xl:w-72"
+            role="img"
+          >
+            {slots.map((slot, index) => (
+              <span
+                key={index}
+                className={clsx("min-w-0 rounded-[2px]", TICK_CLASS[slot.tone])}
+                title={slot.label === "" ? undefined : slot.label}
+              />
+            ))}
+          </div>
+          <Link
+            className="shrink-0 text-sm font-medium text-accent-700 underline-offset-4 hover:underline"
+            to={footer.to}
+          >
+            {footer.label} →
+          </Link>
+        </div>
       </div>
     </section>
   );

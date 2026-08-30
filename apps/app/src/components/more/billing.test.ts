@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 
 import type { Billing } from "@/api/types";
-import { formatEuros } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import {
   invoiceNumberLabel,
   invoiceStatus,
+  invoiceTotalLabel,
   pastDueBanner,
   paymentWebNote,
   planPresentation,
@@ -30,6 +31,7 @@ function billing(overrides: Partial<Billing["subscription"]> = {}): Billing {
     },
     usage: {
       billableRuns: 12,
+      currency: "EUR",
       includedRuns: 300,
       overageAmountCents: 0,
       overageRuns: 0,
@@ -57,7 +59,7 @@ describe("billing presentation", () => {
   });
 
   it("presents grandfathered access without payment controls", () => {
-    expect(planPresentation("free", "ACTIVE")).toEqual({
+    expect(planPresentation("free", "ACTIVE", billing().plan)).toEqual({
       description:
         "Grandfathered workspace access · 300 browser runs each month · Unlimited members",
       label: "Legacy",
@@ -65,17 +67,22 @@ describe("billing presentation", () => {
       paid: false,
       tone: "ok",
     });
-    expect(planPresentation("grant", "ACTIVE")).toMatchObject({
+    expect(planPresentation("grant", "ACTIVE", billing().plan)).toMatchObject({
       label: "Complimentary",
       name: "Zenguy — complimentary",
       paid: false,
     });
-    expect(planPresentation("stripe", "ACTIVE")).toMatchObject({
+    expect(planPresentation("stripe", "ACTIVE", billing().plan)).toMatchObject({
       label: "Active",
-      name: "Zenguy — 39 €/month",
+      name: "Zenguy — 39,00 €/month",
       paid: true,
     });
-    expect(planPresentation(undefined, "CANCELED")).toMatchObject({ label: "Canceled", paid: true });
+    expect(
+      planPresentation(undefined, "CANCELED", {
+        ...billing().plan,
+        currency: "USD",
+      }),
+    ).toMatchObject({ label: "Canceled", name: "Zenguy — $39.00/month", paid: true });
   });
 
   it("maps common invoice states", () => {
@@ -96,13 +103,27 @@ describe("billing presentation", () => {
         totalCents: 4_140,
       }),
     ).toBe("—");
+    expect(
+      invoiceTotalLabel({
+        billedAt: null,
+        currency: "USD",
+        id: "in_usd",
+        invoiceNumber: "US-1",
+        status: "paid",
+        totalCents: 4_140,
+      }),
+    ).toBe("$41.40");
   });
 
   it("prices paid plans and labels included legacy access", () => {
-    expect(planPrice(planPresentation("stripe", "ACTIVE"), 3_900)).toBe(`${formatEuros(3_900)} / month`);
-    expect(planPrice(planPresentation("stripe", "ACTIVE"), 3_900)).toMatch(/^39,00\s€ \/ month$/u);
-    expect(planPrice(planPresentation("free", "ACTIVE"), 3_900)).toBe("Included");
-    expect(planPrice(planPresentation("grant", "ACTIVE"), 3_900)).toBe("Included");
+    const eur = billing().plan;
+    const usd = { ...eur, currency: "USD" as const };
+    expect(planPrice(planPresentation("stripe", "ACTIVE", eur), eur)).toBe(
+      `${formatCurrency(3_900, "EUR")} / month`,
+    );
+    expect(planPrice(planPresentation("stripe", "ACTIVE", usd), usd)).toBe("$39.00 / month");
+    expect(planPrice(planPresentation("free", "ACTIVE", eur), eur)).toBe("Included");
+    expect(planPrice(planPresentation("grant", "ACTIVE", eur), eur)).toBe("Included");
   });
 
   it("falls back to the usage cycle when the subscription has no provider period", () => {

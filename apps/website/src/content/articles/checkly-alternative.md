@@ -68,7 +68,7 @@ The cost of that choice is also honest: you do not get Checkly's Playwright pari
 | Cadence | Seconds to minutes, many regions | 1–24 hours |
 | Failure artifact | Traces, screenshots, code context | Screenshots, steps, expected vs actual, Markdown |
 | Uptime / API | First-class, metered | Unlimited HTTP monitors, 5 minutes and up |
-| Pricing unit | Browser runs, API runs, plan tier | 39 € / 300 runs / 0,20 € extra |
+| Pricing unit | Browser runs, API runs, plan tier | <span data-pricing-amount="monthly">39 €</span> / 300 runs / <span data-pricing-amount="overage">0,20 €</span> extra |
 
 ## When to stay with Checkly
 

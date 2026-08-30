@@ -67,6 +67,7 @@ describe("GetCycleUsage", () => {
       projectedTotalCents,
     ) => {
       await expect(usageFor(billableRuns)).resolves.toEqual({
+        currency: "EUR",
         periodStart: PERIOD_START,
         periodEnd: PERIOD_END,
         billableRuns,
@@ -107,6 +108,7 @@ describe("GetCycleUsage", () => {
     );
 
     await expect(getUsage.execute({ workspaceId: "ws_primary" })).resolves.toEqual({
+      currency: "EUR",
       periodStart: PERIOD_START,
       periodEnd: PERIOD_END,
       billableRuns: 350,
@@ -149,6 +151,7 @@ describe("GetCycleUsage", () => {
     );
 
     await expect(getUsage.execute({ workspaceId: "ws_primary" })).resolves.toEqual({
+      currency: "EUR",
       periodStart: Date.parse("2026-08-01T00:00:00Z"),
       periodEnd: Date.parse("2026-09-01T00:00:00Z"),
       billableRuns: 350,
@@ -194,5 +197,21 @@ describe("GetCycleUsage", () => {
         billableRuns: 4,
       },
     );
+  });
+
+  it("returns the currency pinned to the subscription", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      currencyCode: "USD",
+    });
+    const usage = new GetCycleUsage(
+      subscriptions,
+      new FakeUsageEventRepo(),
+      new FixedClock(PERIOD_START),
+    );
+
+    await expect(usage.execute({ workspaceId: "ws_primary" })).resolves
+      .toMatchObject({ currency: "USD" });
   });
 });

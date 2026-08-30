@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
 import type { Usage } from "../api/types";
-import { formatDateTime, formatEuros } from "../lib/format";
+import { formatCurrency, formatDateTime } from "../lib/format";
 
 export type UsageTone = "accent" | "warn" | "danger";
 
@@ -56,13 +56,16 @@ export function UsageMeter({ timezone, usage }: { timezone: string; usage: Usage
         {usage.overageRuns > 0 ? (
           <>
             <UsageRow label="Extra runs" value={usage.overageRuns} />
-            <UsageRow label="Extra cost" value={formatEuros(usage.overageAmountCents)} />
+            <UsageRow
+              label="Extra cost"
+              value={formatCurrency(usage.overageAmountCents, usage.currency)}
+            />
           </>
         ) : null}
       </dl>
 
       <p className="mt-4 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
-        Projected total {formatEuros(usage.projectedTotalCents)} · resets{" "}
+        Projected total {formatCurrency(usage.projectedTotalCents, usage.currency)} · resets{" "}
         {formatDateTime(usage.periodEnd, timezone)}
       </p>
     </div>

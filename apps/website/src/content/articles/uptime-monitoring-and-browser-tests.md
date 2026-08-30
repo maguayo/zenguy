@@ -62,4 +62,4 @@ A downed origin and a failed checkout are different incidents. They can still la
 
 Secrets, members, and billing are workspace-scoped. Support can see both tiles on Overview. The iOS app shows tests and monitors on the same home screen. You do not need a second vendor account to invite the person who answers customers.
 
-39 € covers that pairing. Unlimited uptime, 300 browser runs, extra runs at 0,20 €. If you outgrow the ping side, add a specialist. If you outgrow the browser side, you are running a lot of hourly walks — which usually means the product is doing its job.
+<span data-pricing-amount="monthly">39 €</span> covers that pairing. Unlimited uptime, 300 browser runs, extra runs at <span data-pricing-amount="overage">0,20 €</span>. If you outgrow the ping side, add a specialist. If you outgrow the browser side, you are running a lot of hourly walks — which usually means the product is doing its job.

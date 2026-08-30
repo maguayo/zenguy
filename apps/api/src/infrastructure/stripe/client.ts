@@ -1,6 +1,12 @@
-import type { CheckoutPurpose } from "../../domain/billing/types";
+import type {
+  BillingCurrency,
+  CheckoutPurpose,
+} from "../../domain/billing/types";
 import type { StripeConfig } from "../../shared/config";
-import { OVERAGE_CENTS_PER_RUN } from "../../shared/constants";
+import {
+  OVERAGE_CENTS_PER_RUN,
+  PLAN_PRICE_CENTS,
+} from "../../shared/constants";
 import {
   cancelResponseBody,
   externalProviderSignal,
@@ -34,6 +40,7 @@ export interface CreateStripeCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   expiresAt: number;
+  currencyCode: BillingCurrency;
 }
 
 export interface StripeCheckoutSession {
@@ -77,6 +84,23 @@ function requiredInteger(
 ): number {
   const value = record[key];
   return Number.isSafeInteger(value) ? (value as number) : invalidResponse();
+}
+
+function priceUnitAmountForCurrency(
+  price: Record<string, unknown>,
+  currencyCode: BillingCurrency,
+): number {
+  if (requiredString(price, "currency").toUpperCase() === currencyCode) {
+    return requiredInteger(price, "unit_amount");
+  }
+  const options = asRecord(price.currency_options);
+  const option = asRecord(options[currencyCode.toLowerCase()]);
+  return requiredInteger(option, "unit_amount");
+}
+
+function expandedPricePath(priceId: string): string {
+  const query = new URLSearchParams({ "expand[]": "currency_options" });
+  return `/prices/${encodeURIComponent(priceId)}?${query.toString()}`;
 }
 
 function expandableId(value: unknown): string {
@@ -204,8 +228,30 @@ export class HttpStripeClient implements BillingProviderClient {
   async createCheckoutSession(
     input: CreateStripeCheckoutInput,
   ): Promise<StripeCheckoutSession> {
+    if (input.purpose === "subscription") {
+      const price = await this.requestJson(
+        "prices.retrieve_subscription",
+        expandedPricePath(input.priceId),
+        { method: "GET" },
+      );
+      let valid = false;
+      try {
+        valid =
+          input.priceId === this.config.priceId &&
+          requiredString(price, "id") === input.priceId &&
+          expandableId(price.product) === this.config.productId &&
+          price.type === "recurring" &&
+          requiredString(asRecord(price.recurring), "interval") === "month" &&
+          priceUnitAmountForCurrency(price, input.currencyCode) ===
+            PLAN_PRICE_CENTS;
+      } catch {
+        // Collapse missing/malformed currency options into a fixed failure.
+      }
+      if (!valid) throw new Error("stripe subscription price misconfigured");
+    }
     const entries: FormEntry[] = [
       ["mode", input.purpose === "subscription" ? "subscription" : "payment"],
+      ["currency", input.currencyCode.toLowerCase()],
       ["line_items[0][price]", input.priceId],
       ["line_items[0][quantity]", input.quantity],
       ["success_url", input.successUrl],
@@ -259,20 +305,26 @@ export class HttpStripeClient implements BillingProviderClient {
     priceId: string,
     quantity: number,
     marker: string,
+    currencyCode: BillingCurrency = "EUR",
   ): Promise<{ transactionId: string | null }> {
     const price = await this.requestJson(
       "prices.retrieve_overage",
-      `/prices/${encodeURIComponent(priceId)}`,
+      expandedPricePath(priceId),
       { method: "GET" },
     );
     if (
-      requiredString(price, "currency").toUpperCase() !== "EUR" ||
-      requiredInteger(price, "unit_amount") !== OVERAGE_CENTS_PER_RUN ||
+      priceUnitAmountForCurrency(price, currencyCode) !==
+        OVERAGE_CENTS_PER_RUN ||
       price.type !== "one_time"
     ) {
       throw new Error("stripe overage price misconfigured");
     }
     const subscription = await this.subscription(subscriptionId);
+    if (
+      requiredString(subscription, "currency").toUpperCase() !== currencyCode
+    ) {
+      throw new Error("stripe subscription currency mismatch");
+    }
     const customerId = expandableId(subscription.customer);
     const invoice = await this.requestJson(
       "invoices.create_overage",
@@ -286,6 +338,7 @@ export class HttpStripeClient implements BillingProviderClient {
           ["auto_advance", false],
           ["pending_invoice_items_behavior", "exclude"],
           ["automatic_tax[enabled]", true],
+          ["currency", currencyCode.toLowerCase()],
           [`metadata[${STRIPE_OVERAGE_MARKER_KEY}]`, marker],
         ]),
         idempotencyKey: `${marker}:invoice`,
@@ -302,6 +355,7 @@ export class HttpStripeClient implements BillingProviderClient {
           ["invoice", invoiceId],
           ["pricing[price]", priceId],
           ["quantity", quantity],
+          ["currency", currencyCode.toLowerCase()],
           [`metadata[${STRIPE_OVERAGE_MARKER_KEY}]`, marker],
         ]),
         idempotencyKey: `${marker}:item`,

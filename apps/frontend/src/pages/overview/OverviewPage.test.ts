@@ -7,6 +7,7 @@ import {
   activityPresentation,
   activityResourceLabel,
   browserTestNoun,
+  uptimeMetric,
 } from "./OverviewPage";
 
 const item: ActivityItem = {
@@ -25,6 +26,12 @@ describe("overview activity", () => {
     expect(browserTestNoun(1)).toBe("test");
     expect(browserTestNoun(0)).toBe("tests");
     expect(browserTestNoun(2)).toBe("tests");
+  });
+
+  it("formats the 30-day uptime without inventing missing data", () => {
+    expect(uptimeMetric(99.987)).toEqual({ value: "99.99", unit: "%" });
+    expect(uptimeMetric(null)).toEqual({ value: "—", unit: null });
+    expect(uptimeMetric(undefined)).toEqual({ value: "—", unit: null });
   });
 
   it("maps every activity type to a presentation", () => {

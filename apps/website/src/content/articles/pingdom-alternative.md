@@ -41,7 +41,7 @@ Zenguy does not sell page-speed waterfalls or RUM. It sells:
 - **HTTP uptime**, unlimited, not counted against the 300 monthly browser runs, from 5 minutes up.
 - **Evidence**: step timeline, screenshots, expected vs observed, console/network summaries, Markdown on failure.
 - **Alerts** after retries: email, Slack, Discord, iOS push, SMS, WhatsApp, voice.
-- **One price**: 39 € / month / workspace, unlimited members.
+- **One price**: <span data-pricing-amount="monthly">39 €</span> / month / workspace, unlimited members.
 
 The test does not live in a recorder. It lives in a paragraph. When the UI copy changes, you edit the paragraph.
 

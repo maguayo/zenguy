@@ -1,5 +1,6 @@
 ---
 import { APP_SIGNUP_URL } from "../lib/site";
+import Price from "./Price.astro";
 ---
 
 <aside class="card-shadow-sm flex items-center gap-10 rounded-2xl border border-line bg-surface px-10 py-10 max-md:flex-col max-md:items-start max-md:gap-6 max-md:px-6 max-md:py-8">
@@ -11,7 +12,7 @@ import { APP_SIGNUP_URL } from "../lib/site";
       Write it in a sentence, run it once, and see the screenshots come back.
     </p>
     <div class="flex flex-wrap items-center gap-x-[22px] gap-y-1.5 pt-1 font-mono text-sm text-stone">
-      <span>39 € a month</span>
+      <span><Price kind="monthly" /> a month</span>
       <span>300 runs</span>
       <span>uptime free</span>
     </div>

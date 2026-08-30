@@ -19,6 +19,8 @@ export interface OverviewUptimeCounts {
   unknown: number;
   openIncidents: number;
   avgResponseTimeMs24h: number | null;
+  /** Incident-based availability, weighted by observable live-monitor time. */
+  uptime30d: number | null;
 }
 
 export interface OverviewFinishedRun {
@@ -59,7 +61,8 @@ export interface OverviewRepo {
   ): Promise<OverviewBrowserCounts>;
   getUptimeCounts(
     workspaceId: string,
-    fromMs: number,
+    from24hMs: number,
+    from30dMs: number,
     toMs: number,
   ): Promise<OverviewUptimeCounts>;
   listFinishedRuns(

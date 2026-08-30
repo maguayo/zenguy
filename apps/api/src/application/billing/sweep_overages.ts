@@ -80,6 +80,7 @@ export class SweepOverages {
           periodStart: subscription.periodStart,
           periodEnd: subscription.periodEnd,
           providerSubscriptionId: subscription.providerSubscriptionId,
+          currencyCode: subscription.currencyCode ?? "EUR",
           createdAt: now,
           nextAttemptAt:
             subscription.periodEnd + OVERAGE_SETTLEMENT_DELAY_MS,
@@ -113,6 +114,7 @@ export class SweepOverages {
         periodStart: period.periodStart,
         periodEnd: period.periodEnd,
         providerSubscriptionId: period.providerSubscriptionId,
+        currencyCode: period.currencyCode ?? "EUR",
       });
       if (result.status === "reconciling" || result.status === "settling") {
         await this.reschedule(period, now);

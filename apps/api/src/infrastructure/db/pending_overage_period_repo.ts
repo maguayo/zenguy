@@ -8,6 +8,7 @@ interface PendingOveragePeriodRow {
   period_end: number;
   created_at: number;
   provider_subscription_id: string | null;
+  currency_code: string | null;
   next_attempt_at: number;
   attempt_count: number;
 }
@@ -21,6 +22,7 @@ function toPendingOveragePeriod(
     periodEnd: row.period_end,
     createdAt: row.created_at,
     providerSubscriptionId: row.provider_subscription_id,
+    currencyCode: row.currency_code === "USD" ? "USD" : "EUR",
     nextAttemptAt: row.next_attempt_at,
     attemptCount: row.attempt_count,
   };
@@ -38,8 +40,9 @@ export class D1PendingOveragePeriodRepo implements PendingOveragePeriodRepo {
           .prepare(
             `INSERT INTO pending_overage_periods
               (workspace_id, period_start, period_end, created_at,
-               provider_subscription_id, next_attempt_at, attempt_count)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+               provider_subscription_id, next_attempt_at, attempt_count,
+               currency_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             period.workspaceId,
@@ -49,6 +52,7 @@ export class D1PendingOveragePeriodRepo implements PendingOveragePeriodRepo {
             period.providerSubscriptionId,
             period.nextAttemptAt,
             period.attemptCount,
+            period.currencyCode ?? "EUR",
           ),
       );
       return "inserted";

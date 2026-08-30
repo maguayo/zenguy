@@ -125,7 +125,7 @@ export default function BillingSetupScreen() {
       title={reactivating ? "Reactivate your workspace" : "Set up billing"}
     >
       <Card elevated padding="lg">
-        <PlanDetails />
+        <PlanDetails plan={billingConfig.data.plan} />
       </Card>
       <Card style={styles.webNote} tone="accent">
         {isOwner ? (

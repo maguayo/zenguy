@@ -93,6 +93,7 @@ describe("GetBilling", () => {
         cancelUrl: "https://paddle.test/cancel",
       },
       usage: {
+        currency: "EUR",
         periodStart: PERIOD_START,
         periodEnd: PERIOD_END,
         billableRuns: 350,
@@ -203,6 +204,39 @@ describe("GetBilling", () => {
     });
     expect(paddle.transactionLists).toEqual([]);
     expect(paddle.managementUrlRequests).toEqual([]);
+  });
+
+  it("uses regional currency before checkout and stored currency afterwards", async () => {
+    const subscriptions = new FakeSubscriptionRepo();
+    const usageEvents = new FakeUsageEventRepo();
+    const paddle = new RecordingPaddleClient();
+    const getBilling = new GetBilling(
+      subscriptions,
+      new GetCycleUsage(subscriptions, usageEvents, new FixedClock(PERIOD_START)),
+      paddle,
+    );
+
+    await expect(getBilling.execute({
+      workspaceId: "ws_primary",
+      role: "OWNER",
+      regionalCurrency: "USD",
+    })).resolves.toMatchObject({
+      plan: { currency: "USD" },
+      usage: { currency: "USD" },
+    });
+
+    await subscriptions.upsertByWorkspace({
+      ...SUBSCRIPTION,
+      currencyCode: "EUR",
+    });
+    await expect(getBilling.execute({
+      workspaceId: "ws_primary",
+      role: "OWNER",
+      regionalCurrency: "USD",
+    })).resolves.toMatchObject({
+      plan: { currency: "EUR" },
+      usage: { currency: "EUR" },
+    });
   });
 
   it("returns free launch access without contacting Paddle", async () => {

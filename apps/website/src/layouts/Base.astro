@@ -61,5 +61,6 @@ const ogImage = image ? new URL(image, site).href : undefined;
   <body>
     <slot />
     <AnalyticsConsent pagePath={analyticsPath} />
+    <script src="../scripts/pricing.mjs"></script>
   </body>
 </html>

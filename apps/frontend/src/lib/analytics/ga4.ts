@@ -1,4 +1,11 @@
-import type { Billing, Role, SubscriptionStatus, User } from "../../api/types";
+import type {
+  Billing,
+  BillingCurrency,
+  BillingPlanPrice,
+  Role,
+  SubscriptionStatus,
+  User,
+} from "../../api/types";
 import {
   analyticsClassificationFor,
   analyticsRoutePatternFor,
@@ -13,7 +20,6 @@ export const GA4_MEASUREMENT_ID = "G-P2HSMZMWVB";
 export const GA4_SCRIPT_ID = "zenguy-ga4";
 export const GA4_SCRIPT_URL = `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`;
 
-const SUBSCRIPTION_PRICE = 39;
 const RECENT_INVOICE_WINDOW_MS = 24 * 60 * 60 * 1_000;
 const CHECKOUT_CLOCK_TOLERANCE_MS = 5 * 60 * 1_000;
 const INITIAL_INVOICE_TOLERANCE_MS = 60 * 60 * 1_000;
@@ -165,7 +171,7 @@ interface BeginCheckoutEvent {
   name: "begin_checkout";
   params: {
     billing_purpose: "subscription";
-    currency: "EUR";
+    currency: BillingCurrency;
     items: AnalyticsItem[];
     value: number;
   };
@@ -175,7 +181,7 @@ interface PurchaseEvent {
   name: "purchase";
   params: {
     billing_purpose: "subscription";
-    currency: "EUR";
+    currency: BillingCurrency;
     items: AnalyticsItem[];
     transaction_id: string;
     value: number;
@@ -451,7 +457,7 @@ function validSubscriptionParams(
   if (!exactKeys(value, keys)) return false;
   if (
     value.billing_purpose !== "subscription" ||
-    value.currency !== "EUR" ||
+    (value.currency !== "EUR" && value.currency !== "USD") ||
     !isMoney(value.value) ||
     !Array.isArray(value.items) ||
     value.items.length !== 1 ||
@@ -494,14 +500,17 @@ function subscriptionItem(price: number): AnalyticsItem {
   };
 }
 
-export function subscriptionCheckoutEvent(): BeginCheckoutEvent {
+export function subscriptionCheckoutEvent(
+  price: Pick<BillingPlanPrice, "currency" | "pricePerMonthCents">,
+): BeginCheckoutEvent {
+  const value = price.pricePerMonthCents / 100;
   return {
     name: "begin_checkout",
     params: {
       billing_purpose: "subscription",
-      currency: "EUR",
-      items: [subscriptionItem(SUBSCRIPTION_PRICE)],
-      value: SUBSCRIPTION_PRICE,
+      currency: price.currency,
+      items: [subscriptionItem(value)],
+      value,
     },
   };
 }
@@ -519,7 +528,6 @@ export function confirmedSubscriptionPurchaseEvent(
   if (
     billing.subscription.status !== "ACTIVE" ||
     billing.subscription.source !== "stripe" ||
-    billing.plan.currency !== "EUR" ||
     billing.plan.pricePerMonthCents <= 0
   ) {
     return null;
@@ -547,7 +555,7 @@ export function confirmedSubscriptionPurchaseEvent(
     .filter(({ billedAt, candidate }) => {
     return (
       candidate.status.toLowerCase() === "paid" &&
-      candidate.currency.toUpperCase() === "EUR" &&
+      candidate.currency === billing.plan.currency &&
       candidate.totalCents > 0 &&
       /^[A-Za-z0-9_-]{1,100}$/.test(candidate.id) &&
       Number.isFinite(billedAt) &&
@@ -569,7 +577,7 @@ export function confirmedSubscriptionPurchaseEvent(
     name: "purchase",
     params: {
       billing_purpose: "subscription",
-      currency: "EUR",
+      currency: billing.plan.currency,
       items: [subscriptionItem(value)],
       transaction_id: invoice.id,
       value,
@@ -1046,9 +1054,11 @@ export function trackVerifiedSignUpSuccess(
   return trackVerifiedSignUp(user);
 }
 
-export function trackSubscriptionCheckoutStarted(): boolean {
+export function trackSubscriptionCheckoutStarted(
+  price: Pick<BillingPlanPrice, "currency" | "pricePerMonthCents">,
+): boolean {
   try {
-    return analyticsClient.track(subscriptionCheckoutEvent());
+    return analyticsClient.track(subscriptionCheckoutEvent(price));
   } catch {
     return false;
   }

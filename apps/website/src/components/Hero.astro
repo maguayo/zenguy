@@ -1,5 +1,6 @@
 ---
 import Icon from "./Icon.astro";
+import Price from "./Price.astro";
 
 interface Props {
   failureHref?: string;
@@ -39,7 +40,7 @@ const { failureHref = "#evidence" } = Astro.props;
       </div>
 
       <div class="flex flex-wrap items-center gap-x-[22px] gap-y-1.5 font-mono text-sm text-stone">
-        <span>39 € a month</span>
+        <span><Price kind="monthly" /> a month</span>
         <span>300 runs</span>
         <span>uptime free</span>
       </div>

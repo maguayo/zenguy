@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { Invoice } from "../../api/types";
+import type { BillingPlanPrice, Invoice } from "../../api/types";
 import {
   invoiceColumns,
   invoiceStatus,
@@ -16,6 +16,11 @@ const invoice: Invoice = {
   invoiceNumber: "INV-001",
   status: "paid",
   totalCents: 4_140,
+};
+const eurPlan: BillingPlanPrice = {
+  currency: "EUR",
+  overagePerRunCents: 20,
+  pricePerMonthCents: 3_900,
 };
 
 describe("billing page", () => {
@@ -34,7 +39,7 @@ describe("billing page", () => {
   });
 
   it("presents grandfathered access without payment controls", () => {
-    expect(planPresentation("free", "ACTIVE")).toEqual({
+    expect(planPresentation("free", "ACTIVE", eurPlan)).toEqual({
       description:
         "Grandfathered workspace access · 300 browser runs each month · Unlimited members",
       label: "Legacy",
@@ -42,9 +47,15 @@ describe("billing page", () => {
       paid: false,
       tone: "ok",
     });
-    expect(planPresentation("paddle", "ACTIVE")).toMatchObject({
-      name: "Zenguy — 39 €/month",
+    expect(planPresentation("paddle", "ACTIVE", eurPlan)).toMatchObject({
+      name: "Zenguy — 39,00 €/month",
       paid: true,
+    });
+    expect(
+      planPresentation("stripe", "ACTIVE", { ...eurPlan, currency: "USD" }),
+    ).toMatchObject({
+      description: "300 runs included · $0.20 per extra run · Unlimited members",
+      name: "Zenguy — $39.00/month",
     });
   });
 
@@ -67,5 +78,13 @@ describe("billing page", () => {
     expect(html).toContain("INV-001");
     expect(html).toContain("41,40");
     expect(html).toContain("Paid");
+
+    const usdColumns = invoiceColumns("UTC");
+    const usdHtml = renderToStaticMarkup(
+      <>{usdColumns.map((column) => (
+        <div key={column.key}>{column.render({ ...invoice, currency: "USD" })}</div>
+      ))}</>,
+    );
+    expect(usdHtml).toContain("$41.40");
   });
 });

@@ -22,6 +22,7 @@ const billing: Billing = {
   },
   usage: {
     billableRuns: 10,
+    currency: "EUR",
     includedRuns: 300,
     overageAmountCents: 0,
     overageRuns: 0,
@@ -49,6 +50,11 @@ describe("billing API", () => {
           canIssueComplimentaryGrants: false,
           environment: "test",
           mode: "stripe",
+          plan: {
+            currency: "USD",
+            overagePerRunCents: 20,
+            pricePerMonthCents: 3_900,
+          },
         });
       }
       if (path.includes("/invoices/")) return response({ url: "https://invoice.stripe.com/i/in_1.pdf" });
@@ -59,6 +65,11 @@ describe("billing API", () => {
     await expect(getBillingConfig()).resolves.toMatchObject({
       environment: "test",
       mode: "stripe",
+      plan: {
+        currency: "USD",
+        overagePerRunCents: 20,
+        pricePerMonthCents: 3_900,
+      },
     });
     await expect(getBilling("ws/one")).resolves.toEqual(billing);
     await expect(getInvoiceUrl("ws/one", "txn two")).resolves.toBe(

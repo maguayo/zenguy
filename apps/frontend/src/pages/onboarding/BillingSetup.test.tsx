@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Billing } from "../../api/types";
+import type { Billing, BillingPlanPrice } from "../../api/types";
 import {
   ActionErrorNotice,
   PlanDetails,
@@ -29,6 +29,7 @@ function billing(status: Billing["subscription"]["status"]): Billing {
     },
     usage: {
       billableRuns: 0,
+      currency: "EUR",
       includedRuns: 300,
       overageAmountCents: 0,
       overageRuns: 0,
@@ -49,11 +50,16 @@ describe("billing onboarding", () => {
   });
 
   it("renders the complete plan promise", () => {
-    const html = renderToStaticMarkup(<PlanDetails />);
+    const eurPlan: BillingPlanPrice = {
+      currency: "EUR",
+      overagePerRunCents: 20,
+      pricePerMonthCents: 3_900,
+    };
+    const html = renderToStaticMarkup(<PlanDetails plan={eurPlan} />);
     for (const copy of [
-      "39 €",
+      "39,00 €",
       "300 browser test runs included",
-      "0,20 € per additional run",
+      "0,20 € per additional run",
       "Unlimited team members",
       "Uptime checks — free, unlimited",
       "30-day run history &amp; evidence",
@@ -61,6 +67,12 @@ describe("billing onboarding", () => {
     ]) {
       expect(html).toContain(copy);
     }
+
+    const usd = renderToStaticMarkup(
+      <PlanDetails plan={{ ...eurPlan, currency: "USD" }} />,
+    );
+    expect(usd).toContain("$39.00");
+    expect(usd).toContain("$0.20 per additional run");
   });
 
   it("announces a failed action inline instead of relying on a toast", () => {
@@ -106,7 +118,7 @@ describe("billing onboarding", () => {
       invoices: [
         {
           billedAt: "2026-08-30T11:55:00.000Z",
-          currency: "EUR",
+          currency: "EUR" as const,
           id: "in_123",
           invoiceNumber: null,
           status: "paid",
