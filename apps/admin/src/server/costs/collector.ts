@@ -36,9 +36,9 @@ export function cloudflareGraphql(fetchImpl: typeof fetch, token: string): Graph
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = (await response.json()) as {
       data?: unknown;
-      errors?: { message?: string }[];
+      errors?: { message?: string }[] | null;
     };
-    if (payload.errors !== undefined && payload.errors.length > 0) {
+    if (Array.isArray(payload.errors) && payload.errors.length > 0) {
       throw new Error(payload.errors.map((error) => error.message ?? "GraphQL error").join("; "));
     }
     return { data: payload.data ?? null };

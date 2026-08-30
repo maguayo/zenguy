@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyCookieConsentChoice,
   CookieConsentBanner,
+  shouldShowFloatingCookiePreferences,
+  updateCookiePreferencesMenuCount,
 } from "./CookieConsent";
 
 describe("cookie consent banner", () => {
@@ -68,5 +70,41 @@ describe("cookie consent banner", () => {
     });
     expect(revoke).toHaveBeenCalledOnce();
     expect(reload).not.toHaveBeenCalled();
+  });
+});
+
+describe("cookie preferences placement", () => {
+  it("tracks simultaneous menu placements without underflowing", () => {
+    let count = 0;
+    const deltas: Array<1 | -1> = [1, 1, -1, -1, -1];
+    const counts = deltas.map((delta) => {
+      count = updateCookiePreferencesMenuCount(count, delta);
+      return count;
+    });
+
+    expect(counts).toEqual([1, 2, 1, 0, 0]);
+  });
+
+  it("shows the floating fallback only when no menu placement is mounted", () => {
+    const state = {
+      available: true,
+      decided: true,
+      menuPlacementCount: 0,
+      preferencesOpen: false,
+    };
+
+    expect(shouldShowFloatingCookiePreferences(state)).toBe(true);
+    expect(
+      shouldShowFloatingCookiePreferences({ ...state, menuPlacementCount: 1 }),
+    ).toBe(false);
+    expect(
+      shouldShowFloatingCookiePreferences({ ...state, available: false }),
+    ).toBe(false);
+    expect(
+      shouldShowFloatingCookiePreferences({ ...state, decided: false }),
+    ).toBe(false);
+    expect(
+      shouldShowFloatingCookiePreferences({ ...state, preferencesOpen: true }),
+    ).toBe(false);
   });
 });

@@ -123,7 +123,7 @@ describe("cloudflareGraphql", () => {
         JSON.stringify(
           body.query.includes("bad")
             ? { data: null, errors: [{ message: "field not found" }] }
-            : { data: { ok: true } },
+            : { data: { ok: true }, errors: null },
         ),
         { status: 200, headers: { "content-type": "application/json" } },
       );

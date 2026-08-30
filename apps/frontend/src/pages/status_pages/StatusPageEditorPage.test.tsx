@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { StatusPageDetail, StatusPageItem } from "../../api/types";
 import {
   changedPageFields,
+  EditorSectionStack,
   EditorItemRow,
   moveId,
   settingsFromPage,
@@ -70,6 +71,25 @@ describe("moveId", () => {
     expect(moveId(["a", "b", "c"], 0, 1)).toEqual(["b", "a", "c"]);
     expect(moveId(["a", "b", "c"], 0, -1)).toEqual(["a", "b", "c"]);
     expect(moveId(["a", "b", "c"], 2, 1)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("EditorSectionStack", () => {
+  it("renders the custom domain before page settings and systems", () => {
+    const html = renderToStaticMarkup(
+      <EditorSectionStack customDomain={<section>Custom domain</section>}>
+        <section>Page settings</section>
+        <section>Systems</section>
+      </EditorSectionStack>,
+    );
+
+    const customDomain = html.indexOf("Custom domain");
+    const pageSettings = html.indexOf("Page settings");
+    const systems = html.indexOf("Systems");
+
+    expect(customDomain).toBeGreaterThanOrEqual(0);
+    expect(customDomain).toBeLessThan(pageSettings);
+    expect(pageSettings).toBeLessThan(systems);
   });
 });
 

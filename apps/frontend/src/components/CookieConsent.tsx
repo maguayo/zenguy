@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -32,6 +33,7 @@ interface CookieConsentContextValue {
   available: boolean;
   decided: boolean;
   openPreferences: () => void;
+  registerMenuPlacement: () => () => void;
 }
 
 const CookieConsentContext = createContext<CookieConsentContextValue>({
@@ -39,10 +41,46 @@ const CookieConsentContext = createContext<CookieConsentContextValue>({
   available: false,
   decided: false,
   openPreferences: () => undefined,
+  registerMenuPlacement: () => () => undefined,
 });
 
 export function useCookieConsent(): CookieConsentContextValue {
   return useContext(CookieConsentContext);
+}
+
+export function useCookiePreferencesMenu(): Pick<
+  CookieConsentContextValue,
+  "available" | "decided" | "openPreferences"
+> {
+  const context = useCookieConsent();
+
+  useLayoutEffect(
+    () => context.registerMenuPlacement(),
+    [context.registerMenuPlacement],
+  );
+
+  return context;
+}
+
+export function updateCookiePreferencesMenuCount(
+  count: number,
+  delta: 1 | -1,
+): number {
+  return Math.max(0, count + delta);
+}
+
+export function shouldShowFloatingCookiePreferences({
+  available,
+  decided,
+  menuPlacementCount,
+  preferencesOpen,
+}: {
+  available: boolean;
+  decided: boolean;
+  menuPlacementCount: number;
+  preferencesOpen: boolean;
+}): boolean {
+  return available && decided && !preferencesOpen && menuPlacementCount === 0;
 }
 
 export interface CookieConsentBannerProps {
@@ -206,6 +244,17 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     available ? readCookieConsent() : null,
   );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [menuPlacementCount, setMenuPlacementCount] = useState(0);
+
+  const registerMenuPlacement = useCallback(() => {
+    setMenuPlacementCount((count) =>
+      updateCookiePreferencesMenuCount(count, 1),
+    );
+    return () =>
+      setMenuPlacementCount((count) =>
+        updateCookiePreferencesMenuCount(count, -1),
+      );
+  }, []);
 
   const choose = useCallback((analytics: boolean) => {
     const next = applyCookieConsentChoice(analytics);
@@ -236,6 +285,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     available,
     decided: available && record !== null,
     openPreferences: () => setPreferencesOpen(true),
+    registerMenuPlacement,
   };
 
   return (
@@ -248,7 +298,12 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
           onReject={() => choose(false)}
         />
       ) : null}
-      {available && record !== null && !preferencesOpen ? (
+      {shouldShowFloatingCookiePreferences({
+        available,
+        decided: record !== null,
+        menuPlacementCount,
+        preferencesOpen,
+      }) ? (
         <Button
           aria-haspopup="dialog"
           className="fixed bottom-3 left-3 z-40 shadow-sm"

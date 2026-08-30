@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BellOff,
   CheckCircle2,
+  ChevronRight,
   Clock,
   Globe,
   HeartPulse,
@@ -17,29 +18,115 @@ import { listIncidents } from "../../api/incidents";
 import { getOverview } from "../../api/overview";
 import type { ActivityItem, ActivityType, Incident } from "../../api/types";
 import { UsageMeter } from "../../components/UsageMeter";
+import { Badge, type BadgeProps } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
-import { formatRelative } from "../../lib/format";
+import { formatDateTime, formatRelative } from "../../lib/format";
 import { OverviewHero } from "./OverviewHero";
 
 interface ActivityPresentation {
   className: string;
   icon: ComponentType<{ "aria-hidden"?: boolean | "true"; className?: string }>;
+  label: string;
+  tone: NonNullable<BadgeProps["tone"]>;
 }
 
 export const activityPresentation: Record<ActivityType, ActivityPresentation> = {
-  TEST_PASSED: { className: "bg-ok-50 text-ok-700", icon: CheckCircle2 },
-  TEST_FAILED: { className: "bg-danger-50 text-danger-700", icon: XCircle },
-  TEST_TIMEOUT: { className: "bg-warn-50 text-warn-600", icon: Clock },
-  TEST_SYSTEM_ERROR: { className: "bg-zinc-100 text-zinc-600", icon: Wrench },
-  TEST_RECOVERED: { className: "bg-ok-50 text-ok-700", icon: HeartPulse },
-  MONITOR_DOWN: { className: "bg-danger-50 text-danger-700", icon: Siren },
-  MONITOR_RECOVERED: { className: "bg-ok-50 text-ok-700", icon: HeartPulse },
-  CHANNEL_DELIVERY_FAILED: { className: "bg-warn-50 text-warn-600", icon: BellOff },
+  TEST_PASSED: {
+    className: "bg-ok-50 text-ok-700",
+    icon: CheckCircle2,
+    label: "Passed",
+    tone: "ok",
+  },
+  TEST_FAILED: {
+    className: "bg-danger-50 text-danger-700",
+    icon: XCircle,
+    label: "Failed",
+    tone: "danger",
+  },
+  TEST_TIMEOUT: {
+    className: "bg-warn-50 text-warn-600",
+    icon: Clock,
+    label: "Timed out",
+    tone: "warn",
+  },
+  TEST_SYSTEM_ERROR: {
+    className: "bg-zinc-100 text-zinc-600",
+    icon: Wrench,
+    label: "System error",
+    tone: "neutral",
+  },
+  TEST_RECOVERED: {
+    className: "bg-ok-50 text-ok-700",
+    icon: HeartPulse,
+    label: "Recovered",
+    tone: "ok",
+  },
+  MONITOR_DOWN: {
+    className: "bg-danger-50 text-danger-700",
+    icon: Siren,
+    label: "Down",
+    tone: "danger",
+  },
+  MONITOR_RECOVERED: {
+    className: "bg-ok-50 text-ok-700",
+    icon: HeartPulse,
+    label: "Recovered",
+    tone: "ok",
+  },
+  CHANNEL_DELIVERY_FAILED: {
+    className: "bg-warn-50 text-warn-600",
+    icon: BellOff,
+    label: "Delivery failed",
+    tone: "warn",
+  },
 };
+
+export interface ActivityGroup {
+  count: number;
+  item: ActivityItem;
+}
+
+/** Collapse only adjacent successful runs, preserving failures and chronology. */
+export function groupActivityItems(items: ActivityItem[]): ActivityGroup[] {
+  const groups: ActivityGroup[] = [];
+  for (const item of items) {
+    const previous = groups[groups.length - 1];
+    if (
+      item.type === "TEST_PASSED" &&
+      previous?.item.type === "TEST_PASSED" &&
+      previous.item.resourceId === item.resourceId
+    ) {
+      previous.count += 1;
+    } else {
+      groups.push({ count: 1, item });
+    }
+  }
+  return groups;
+}
+
+export function activityGroupPath(workspaceId: string, group: ActivityGroup): string {
+  if (group.count > 1 && group.item.type === "TEST_PASSED") {
+    return `/w/${workspaceId}/tests/${group.item.resourceId}`;
+  }
+  return activityPath(workspaceId, group.item);
+}
+
+export function activityStatusLabel(group: ActivityGroup): string {
+  return group.count > 1 && group.item.type === "TEST_PASSED"
+    ? `Passed ×${group.count}`
+    : activityPresentation[group.item.type].label;
+}
+
+export function activityResourceLabel(resourceType: string): string {
+  if (resourceType === "BROWSER_TEST") return "Browser test";
+  if (resourceType === "UPTIME_MONITOR") return "Uptime monitor";
+  if (resourceType === "NOTIFICATION_CHANNEL") return "Notification channel";
+  return "Workspace activity";
+}
 
 export function activityPath(workspaceId: string, item: ActivityItem): string {
   if (item.link.runId) return `/w/${workspaceId}/runs/${item.link.runId}`;
@@ -144,6 +231,7 @@ export default function OverviewPage() {
   if (overview.isError) return <ErrorState onRetry={() => void overview.refetch()} />;
 
   const data = overview.data;
+  const activityGroups = groupActivityItems(data.activity);
 
   return (
     <div className="space-y-6">
@@ -247,7 +335,20 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <Card padding="none" title="Recent activity" className="overflow-hidden [&>div:first-child]:px-4 [&>div:first-child]:pt-4">
+      <Card className="overflow-hidden" padding="none">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-900">Recent activity</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Latest checks, incidents and deliveries.
+            </p>
+          </div>
+          {data.activity.length > 0 ? (
+            <span className="shrink-0 text-xs text-zinc-400">
+              {data.activity.length} {data.activity.length === 1 ? "event" : "events"}
+            </span>
+          ) : null}
+        </div>
         {data.activity.length === 0 ? (
           <EmptyState
             action={
@@ -266,34 +367,69 @@ export default function OverviewPage() {
             title="No activity yet"
           />
         ) : (
-          <ul className="divide-y divide-zinc-200">
-            {data.activity.map((item) => {
+          <ul className="divide-y divide-zinc-100">
+            {activityGroups.map((group) => {
+              const item = group.item;
               const presentation = activityPresentation[item.type];
               const Icon = presentation.icon;
+              const statusLabel = activityStatusLabel(group);
+              const relative = formatRelative(item.occurredAt);
+              const relativeLabel = group.count > 1 ? `Latest ${relative}` : relative;
               return (
                 <li key={activityKey(item)}>
                   <Link
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-50"
-                    to={activityPath(current.id, item)}
+                    aria-label={`${item.resourceName}: ${
+                      group.count > 1
+                        ? `${group.count} successful runs`
+                        : presentation.label
+                    }, ${relativeLabel}`}
+                    className="group grid min-h-16 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50/70 focus-visible:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
+                    to={activityGroupPath(current.id, group)}
                   >
                     <span
                       className={clsx(
-                        "grid size-8 shrink-0 place-items-center rounded-full",
+                        "grid size-9 shrink-0 place-items-center rounded-lg",
                         presentation.className,
                       )}
                     >
                       <Icon aria-hidden="true" className="size-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-zinc-900">
-                        {item.title}
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span
+                          className="truncate text-sm font-semibold text-zinc-900 group-hover:text-accent-700 group-hover:underline"
+                          title={item.resourceName}
+                        >
+                          {item.resourceName}
+                        </span>
+                        <Badge tone={presentation.tone}>{statusLabel}</Badge>
                       </span>
-                      <span className="block truncate text-xs text-zinc-500">
-                        {item.resourceName}
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
+                        <span>{activityResourceLabel(item.resourceType)}</span>
+                        <span aria-hidden="true" className="sm:hidden">
+                          ·
+                        </span>
+                        <time
+                          className="sm:hidden"
+                          dateTime={item.occurredAt}
+                          title={formatDateTime(item.occurredAt, timezone)}
+                        >
+                          {relativeLabel}
+                        </time>
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs text-zinc-500">
-                      {formatRelative(item.occurredAt)}
+                    <span className="flex shrink-0 items-center gap-2">
+                      <time
+                        className="hidden text-xs text-zinc-500 sm:block"
+                        dateTime={item.occurredAt}
+                        title={formatDateTime(item.occurredAt, timezone)}
+                      >
+                        {relativeLabel}
+                      </time>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 text-zinc-400 transition-transform group-hover:translate-x-0.5"
+                      />
                     </span>
                   </Link>
                 </li>

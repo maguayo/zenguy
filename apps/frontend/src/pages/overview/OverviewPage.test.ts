@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { ActivityItem } from "../../api/types";
 import {
+  activityGroupPath,
   activityKey,
   activityPath,
   activityPresentation,
+  activityResourceLabel,
+  activityStatusLabel,
   browserTestNoun,
+  groupActivityItems,
 } from "./OverviewPage";
 
 const item: ActivityItem = {
@@ -39,6 +43,63 @@ describe("overview activity", () => {
         "CHANNEL_DELIVERY_FAILED",
       ].sort(),
     );
+    expect(
+      Object.fromEntries(
+        Object.entries(activityPresentation).map(([type, value]) => [type, value.label]),
+      ),
+    ).toEqual({
+      CHANNEL_DELIVERY_FAILED: "Delivery failed",
+      MONITOR_DOWN: "Down",
+      MONITOR_RECOVERED: "Recovered",
+      TEST_FAILED: "Failed",
+      TEST_PASSED: "Passed",
+      TEST_RECOVERED: "Recovered",
+      TEST_SYSTEM_ERROR: "System error",
+      TEST_TIMEOUT: "Timed out",
+    });
+  });
+
+  it("uses readable resource labels", () => {
+    expect(activityResourceLabel("BROWSER_TEST")).toBe("Browser test");
+    expect(activityResourceLabel("UPTIME_MONITOR")).toBe("Uptime monitor");
+    expect(activityResourceLabel("NOTIFICATION_CHANNEL")).toBe(
+      "Notification channel",
+    );
+    expect(activityResourceLabel("UNKNOWN")).toBe("Workspace activity");
+  });
+
+  it("groups adjacent successful runs from the same test", () => {
+    const older = {
+      ...item,
+      id: "activity_2",
+      occurredAt: "2026-08-19T09:00:00.000Z",
+    };
+    const groups = groupActivityItems([item, older]);
+
+    expect(groups).toEqual([{ count: 2, item }]);
+    expect(activityStatusLabel(groups[0]!)).toBe("Passed ×2");
+    expect(activityGroupPath("ws_1", groups[0]!)).toBe(
+      "/w/ws_1/tests/resource_1",
+    );
+  });
+
+  it("does not group passes across failures or across different tests", () => {
+    const failure = {
+      ...item,
+      id: "activity_2",
+      type: "TEST_FAILED" as const,
+    };
+    const otherTest = {
+      ...item,
+      id: "activity_3",
+      resourceId: "resource_2",
+      resourceName: "Search",
+    };
+    const groups = groupActivityItems([item, failure, item, otherTest]);
+
+    expect(groups.map((group) => group.count)).toEqual([1, 1, 1, 1]);
+    expect(activityStatusLabel(groups[1]!)).toBe("Failed");
+    expect(activityGroupPath("ws_1", groups[1]!)).toBe("/w/ws_1/overview");
   });
 
   it("routes activity using the most specific linked resource", () => {

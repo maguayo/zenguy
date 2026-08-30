@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Activity,
   Bell,
+  Cookie,
   Gauge,
   Globe,
   KeyRound,
@@ -20,7 +21,8 @@ import { getBillingConfig } from "../api/billing";
 import { useAuth } from "../contexts/AuthContext";
 import { useWorkspace } from "../contexts/WorkspaceContext";
 import type { Action } from "../lib/permissions";
-import { Dropdown } from "./ui/Dropdown";
+import { useCookiePreferencesMenu } from "./CookieConsent";
+import { Dropdown, type DropdownItem } from "./ui/Dropdown";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface NavigationItem {
@@ -54,10 +56,61 @@ export function visibleNavigationItems(
   return navigationItems.filter((item) => !item.permission || can(item.permission));
 }
 
+export function accountMenuItems({
+  canIssueComplimentaryGrants,
+  cookiePreferencesAvailable,
+  cookiePreferencesDecided,
+  navigateToComplimentary,
+  onNavigate,
+  openCookiePreferences,
+  signOut,
+}: {
+  canIssueComplimentaryGrants: boolean;
+  cookiePreferencesAvailable: boolean;
+  cookiePreferencesDecided: boolean;
+  navigateToComplimentary: () => void;
+  onNavigate?: () => void;
+  openCookiePreferences: () => void;
+  signOut: () => void | Promise<void>;
+}): DropdownItem[] {
+  return [
+    ...(canIssueComplimentaryGrants
+      ? [
+          {
+            label: "Complimentary links",
+            onSelect: navigateToComplimentary,
+          },
+        ]
+      : []),
+    ...(cookiePreferencesAvailable && cookiePreferencesDecided
+      ? [
+          {
+            icon: <Cookie className="size-4" />,
+            label: "Cookie preferences",
+            onSelect: () => {
+              onNavigate?.();
+              openCookiePreferences();
+            },
+          },
+        ]
+      : []),
+    {
+      icon: <LogOut className="size-4" />,
+      label: "Sign out",
+      onSelect: () => void signOut(),
+    },
+  ];
+}
+
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const {
+    available: cookiePreferencesAvailable,
+    decided: cookiePreferencesDecided,
+    openPreferences: openCookiePreferences,
+  } = useCookiePreferencesMenu();
   const { can, current } = useWorkspace();
   const billingConfig = useQuery({
     queryFn: getBillingConfig,
@@ -111,23 +164,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="border-t border-zinc-200 p-3">
         <Dropdown
           align="start"
-          items={[
-            ...(billingConfig.data?.canIssueComplimentaryGrants
-              ? [
-                  {
-                    label: "Complimentary links",
-                    onSelect: () => {
-                      navigate("/complimentary");
-                    },
-                  },
-                ]
-              : []),
-            {
-              icon: <LogOut className="size-4" />,
-              label: "Sign out",
-              onSelect: () => void signOut(),
-            },
-          ]}
+          items={accountMenuItems({
+            canIssueComplimentaryGrants:
+              billingConfig.data?.canIssueComplimentaryGrants === true,
+            cookiePreferencesAvailable,
+            cookiePreferencesDecided,
+            navigateToComplimentary: () => navigate("/complimentary"),
+            onNavigate,
+            openCookiePreferences,
+            signOut,
+          })}
           triggerWrapperClassName="w-full"
           trigger={
             <button

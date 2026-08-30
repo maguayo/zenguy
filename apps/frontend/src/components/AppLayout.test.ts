@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AlertsOverview } from "../api/types";
 import { alertCreditBanner } from "./AppLayout";
-import { navigationItems, visibleNavigationItems } from "./Sidebar";
+import {
+  accountMenuItems,
+  navigationItems,
+  visibleNavigationItems,
+} from "./Sidebar";
 
 const overview: AlertsOverview = {
   credit: null,
@@ -60,5 +64,72 @@ describe("workspace navigation", () => {
 
   it("shows billing when the role can view it", () => {
     expect(visibleNavigationItems(() => true)).toEqual(navigationItems);
+  });
+});
+
+describe("account menu", () => {
+  const menu = ({
+    canIssueComplimentaryGrants = false,
+    cookiePreferencesAvailable = false,
+    cookiePreferencesDecided = false,
+    navigateToComplimentary = vi.fn(),
+    onNavigate = vi.fn(),
+    openCookiePreferences = vi.fn(),
+    signOut = vi.fn(),
+  } = {}) =>
+    accountMenuItems({
+      canIssueComplimentaryGrants,
+      cookiePreferencesAvailable,
+      cookiePreferencesDecided,
+      navigateToComplimentary,
+      onNavigate,
+      openCookiePreferences,
+      signOut,
+    });
+
+  it("places cookie preferences immediately above sign out", () => {
+    expect(
+      menu({
+        cookiePreferencesAvailable: true,
+        cookiePreferencesDecided: true,
+      }).map((item) => item.label),
+    ).toEqual(["Cookie preferences", "Sign out"]);
+
+    expect(
+      menu({
+        canIssueComplimentaryGrants: true,
+        cookiePreferencesAvailable: true,
+        cookiePreferencesDecided: true,
+      }).map((item) => item.label),
+    ).toEqual(["Complimentary links", "Cookie preferences", "Sign out"]);
+  });
+
+  it("omits cookie preferences when there is no decided production choice", () => {
+    expect(menu().map((item) => item.label)).toEqual(["Sign out"]);
+    expect(
+      menu({ cookiePreferencesAvailable: true }).map((item) => item.label),
+    ).toEqual(["Sign out"]);
+    expect(
+      menu({ cookiePreferencesDecided: true }).map((item) => item.label),
+    ).toEqual(["Sign out"]);
+  });
+
+  it("closes mobile navigation before opening cookie preferences", () => {
+    const onNavigate = vi.fn();
+    const openCookiePreferences = vi.fn();
+    const items = menu({
+      cookiePreferencesAvailable: true,
+      cookiePreferencesDecided: true,
+      onNavigate,
+      openCookiePreferences,
+    });
+
+    items.find((item) => item.label === "Cookie preferences")?.onSelect();
+
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(openCookiePreferences).toHaveBeenCalledOnce();
+    expect(onNavigate.mock.invocationCallOrder[0]).toBeLessThan(
+      openCookiePreferences.mock.invocationCallOrder[0] ?? 0,
+    );
   });
 });

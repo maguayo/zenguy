@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -95,6 +101,21 @@ export function moveId(ids: string[], index: number, delta: -1 | 1): string[] {
   next[index] = other;
   next[target] = current;
   return next;
+}
+
+export function EditorSectionStack({
+  children,
+  customDomain,
+}: {
+  children: ReactNode;
+  customDomain: ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      {customDomain}
+      {children}
+    </div>
+  );
 }
 
 export function EditorItemRow({
@@ -494,7 +515,17 @@ export default function StatusPageEditorPage() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
+        <EditorSectionStack
+          customDomain={
+            <CustomDomainCard
+              domain={page.customDomain}
+              manage={manage}
+              onChanged={refresh}
+              pageId={pageId}
+              workspaceId={current.id}
+            />
+          }
+        >
           <Card className="space-y-4 p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Page settings</h2>
             <Field error={settingsErrors.title} htmlFor="sp-title" label="Title" required>
@@ -662,15 +693,7 @@ export default function StatusPageEditorPage() {
               </div>
             )}
           </Card>
-
-          <CustomDomainCard
-            domain={page.customDomain}
-            manage={manage}
-            onChanged={refresh}
-            pageId={pageId}
-            workspaceId={current.id}
-          />
-        </div>
+        </EditorSectionStack>
 
         <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">
