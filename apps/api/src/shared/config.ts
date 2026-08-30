@@ -44,6 +44,9 @@ interface OptionalBindings {
   COMPLIMENTARY_ISSUER_EMAILS?: string;
   IOS_APP_STORE_URL?: string;
   EXPO_PUSH_ACCESS_TOKEN?: string;
+  CF_SAAS_ZONE_ID?: string;
+  CF_SAAS_API_TOKEN?: string;
+  STATUS_CNAME_TARGET?: string;
 }
 
 interface WidenedConfigBindings {
@@ -102,6 +105,12 @@ export interface GoogleOAuthConfig {
   stateSecret: string;
 }
 
+export interface CustomHostnamesConfig {
+  zoneId: string;
+  apiToken: string;
+  cnameTarget: string;
+}
+
 export interface AppConfig {
   appUrl: string;
   environment: "development" | "staging" | "production";
@@ -126,6 +135,8 @@ export interface AppConfig {
   paddle: PaddleConfig | null;
   stripe: StripeConfig | null;
   googleOAuth: GoogleOAuthConfig;
+  /** Cloudflare for SaaS wiring for status-page custom domains; null = feature off. */
+  customHostnames: CustomHostnamesConfig | null;
   complimentaryIssuerEmails: string[];
   iosAppStoreUrl: string | null;
   /** Expo push "enhanced security" token; null sends without one. */
@@ -227,6 +238,9 @@ const envSchema = z.object({
   TWILIO_FROM_WHATSAPP: optionalNonEmptyString(),
   TWILIO_FROM_CALL: z.string().min(1),
   EXPO_PUSH_ACCESS_TOKEN: optionalNonEmptyString(),
+  CF_SAAS_ZONE_ID: optionalNonEmptyString(),
+  CF_SAAS_API_TOKEN: optionalNonEmptyString(),
+  STATUS_CNAME_TARGET: optionalNonEmptyString(),
 });
 
 const paddleEnvSchema = z.object({
@@ -517,6 +531,19 @@ export function loadConfig(env: Bindings): AppConfig {
     },
     paddle,
     stripe,
+    // A placeholder zone id (anything but 32 hex chars) keeps the feature
+    // off instead of producing confusing Cloudflare API failures at runtime.
+    customHostnames:
+      parsed.CF_SAAS_ZONE_ID !== undefined &&
+      /^[0-9a-f]{32}$/iu.test(parsed.CF_SAAS_ZONE_ID) &&
+      parsed.CF_SAAS_API_TOKEN !== undefined &&
+      parsed.STATUS_CNAME_TARGET !== undefined
+        ? {
+            zoneId: parsed.CF_SAAS_ZONE_ID,
+            apiToken: parsed.CF_SAAS_API_TOKEN,
+            cnameTarget: parsed.STATUS_CNAME_TARGET,
+          }
+        : null,
     expoPushAccessToken: parsed.EXPO_PUSH_ACCESS_TOKEN ?? null,
     complimentaryIssuerEmails: parseComplimentaryIssuerEmails(
       env.COMPLIMENTARY_ISSUER_EMAILS,

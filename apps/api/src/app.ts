@@ -109,7 +109,18 @@ import { D1IncidentUpdateRepo } from "./infrastructure/db/incident_update_repo";
 import { GetPublicStatusPage } from "./application/status_pages/get_public_status_page";
 import { statusPageRoutes } from "./http/routes/status_pages";
 import { incidentUpdateRoutes } from "./http/routes/incident_updates";
-import { statusPublicRoutes } from "./http/routes/status_public";
+import {
+  customDomainGate,
+  statusPublicRoutes,
+} from "./http/routes/status_public";
+import {
+  HttpCustomHostnameClient,
+  type CustomHostnameClient,
+} from "./infrastructure/cloudflare/custom_hostnames";
+import {
+  DohCnameResolver,
+  type CnameResolver,
+} from "./infrastructure/dns/doh";
 import {
   D1StatusPageItemRepo,
   D1StatusPageRepo,
@@ -229,6 +240,9 @@ export interface AppOverrides {
   statusPageItems?: StatusPageItemRepo;
   incidentUpdates?: IncidentUpdateRepo;
   statusCache?: Pick<Cache, "match" | "put">;
+  customHostnames?: CustomHostnameClient | null;
+  cnameResolver?: CnameResolver;
+  statusCnameTarget?: string;
   monitors?: MonitorRepo;
   checks?: CheckRepo;
   overview?: OverviewRepo;
@@ -348,6 +362,32 @@ export function buildApp(
     overrides.incidentUpdates ?? new D1IncidentUpdateRepo(env.DB);
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
+  const customHostnames =
+    overrides.customHostnames !== undefined
+      ? overrides.customHostnames
+      : config.customHostnames === null
+        ? null
+        : new HttpCustomHostnameClient(config.customHostnames);
+  const cnameResolver = overrides.cnameResolver ?? new DohCnameResolver();
+  const statusEdgeCache =
+    overrides.statusCache ?? {
+      match: async (key: Request) =>
+        (await caches.open("status-pages")).match(key),
+      put: async (key: Request, response: Response) =>
+        (await caches.open("status-pages")).put(key, response),
+    };
+  const getPublicStatusPage = new GetPublicStatusPage(
+    statusPages,
+    statusPageItems,
+    monitors,
+    browserTests,
+    runs,
+    incidents,
+    incidentUpdates,
+    clock,
+  );
+  const statusCnameTarget =
+    overrides.statusCnameTarget ?? config.customHostnames?.cnameTarget ?? null;
   const apiKeys = overrides.apiKeys ?? new D1ApiKeyRepo(env.DB);
   const alerts = overrides.alerts ?? new D1AlertRepo(env.DB);
   const charger = new ChargePaidDelivery(
@@ -578,6 +618,16 @@ export function buildApp(
       : spaCors(context, next),
   );
   app.onError(errorHandler);
+  // Cloudflare for SaaS traffic (customer status-page domains) enters through
+  // the zone-wide route with its original Host; nothing else may answer there.
+  app.use(
+    "*",
+    customDomainGate({
+      getPublicStatusPage,
+      rateLimiter,
+      cache: statusEdgeCache,
+    }),
+  );
 
   app.get("/api/health", (context) => context.json({ data: { ok: true } }));
   app.route("/api/app", appVersionRoutes(config));
@@ -806,16 +856,6 @@ export function buildApp(
     "/api/workspaces",
     auditRoutes({ users, workspaces, members, audits, config }),
   );
-  const getPublicStatusPage = new GetPublicStatusPage(
-    statusPages,
-    statusPageItems,
-    monitors,
-    browserTests,
-    runs,
-    incidents,
-    incidentUpdates,
-    clock,
-  );
   app.route(
     "/api/workspaces",
     statusPageRoutes({
@@ -828,6 +868,9 @@ export function buildApp(
       monitors,
       tests: browserTests,
       getPublicStatusPage,
+      customHostnames,
+      cnameResolver,
+      statusCnameTarget,
       rateLimiter,
       audit,
       clock,
@@ -858,13 +901,7 @@ export function buildApp(
       rateLimiter,
       clock,
       config,
-      cache:
-        overrides.statusCache ?? {
-          match: async (key: Request) =>
-            (await caches.open("status-pages")).match(key),
-          put: async (key: Request, response: Response) =>
-            (await caches.open("status-pages")).put(key, response),
-        },
+      cache: statusEdgeCache,
     }),
   );
   app.route(

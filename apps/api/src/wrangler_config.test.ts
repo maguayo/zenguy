@@ -354,6 +354,8 @@ describe("wrangler environments", () => {
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
       RUNNER_DISPATCH: "container",
       RUNNER_ENVIRONMENT: "production",
+      CF_SAAS_ZONE_ID: "REPLACE-WITH-ZENGUY-ZONE-ID",
+      STATUS_CNAME_TARGET: "customers.zenguy.com",
       PUBLIC_API_URL: "https://app.zenguy.com",
       RUNNER_UNRESTRICTED_ACTIONS: "true",
     });

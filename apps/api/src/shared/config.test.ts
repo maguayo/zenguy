@@ -166,6 +166,37 @@ describe("loadConfig", () => {
     );
   });
 
+  it("enables custom hostnames only with a real zone id, token and target", () => {
+    expect(loadConfig(completeBindings()).customHostnames).toBeNull();
+
+    const configured = loadConfig({
+      ...completeBindings(),
+      CF_SAAS_ZONE_ID: "a".repeat(32),
+      CF_SAAS_API_TOKEN: "cf-saas-token",
+      STATUS_CNAME_TARGET: "customers.zenguy.com",
+    });
+    expect(configured.customHostnames).toEqual({
+      zoneId: "a".repeat(32),
+      apiToken: "cf-saas-token",
+      cnameTarget: "customers.zenguy.com",
+    });
+
+    const placeholder = loadConfig({
+      ...completeBindings(),
+      CF_SAAS_ZONE_ID: "REPLACE-WITH-ZENGUY-ZONE-ID",
+      CF_SAAS_API_TOKEN: "cf-saas-token",
+      STATUS_CNAME_TARGET: "customers.zenguy.com",
+    });
+    expect(placeholder.customHostnames).toBeNull();
+
+    const missingToken = loadConfig({
+      ...completeBindings(),
+      CF_SAAS_ZONE_ID: "a".repeat(32),
+      STATUS_CNAME_TARGET: "customers.zenguy.com",
+    });
+    expect(missingToken.customHostnames).toBeNull();
+  });
+
   it("parses Stripe as the exclusive billing provider", () => {
     const config = loadConfig(stripeBindings());
 
