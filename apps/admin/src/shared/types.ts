@@ -128,6 +128,60 @@ export interface Metrics {
   };
 }
 
+// --- /api/costs (Cloudflare platform usage collected daily) ---
+
+export interface UsageProbeResult {
+  probe: string;
+  ok: boolean;
+  rows: number;
+  error?: string;
+}
+
+export interface UsageCollection {
+  id: string;
+  source: "cron" | "manual";
+  status: "OK" | "PARTIAL" | "FAILED";
+  fromDay: string;
+  toDay: string;
+  startedAt: number;
+  finishedAt: number;
+  probes: UsageProbeResult[];
+}
+
+export interface CostLine {
+  key: string;
+  label: string;
+  /** Human unit of `monthToDate` / `included` (e.g. "M requests", "GB-month"). */
+  unit: string;
+  monthToDate: number;
+  included: number;
+  overage: number;
+  /** USD cents per `unit` of overage. */
+  unitPriceCents: number;
+  costCents: number;
+}
+
+export interface CostDayPoint {
+  day: string;
+  /** Marginal cost that day per line (cents), after the month's included quota. */
+  byLine: Record<string, number>;
+  totalCents: number;
+}
+
+export interface Costs {
+  month: { key: string; from: string; to: string; daysElapsed: number; daysInMonth: number };
+  baseFeeCents: number;
+  totalCents: number;
+  /** Linear projection of `totalCents` to the end of the month. */
+  projectedCents: number;
+  topLine: { key: string; label: string; costCents: number } | null;
+  lastCollection: UsageCollection | null;
+  /** True when no analytics token is configured, so nothing can be collected. */
+  collectorConfigured: boolean;
+  lines: CostLine[];
+  series: CostDayPoint[];
+}
+
 export interface RecentRun {
   id: string;
   createdAt: number;

@@ -152,6 +152,11 @@ export function buildApp(env: Bindings, overrides: AppOverrides = {}): Hono<AppE
       clock,
       adminUserIds,
       sessions,
+      analytics: {
+        fetch: fetchImpl,
+        token: env.CF_ANALYTICS_API_TOKEN,
+        accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      },
       loaders: overrides.loaders,
     }),
   );

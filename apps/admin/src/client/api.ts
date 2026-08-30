@@ -1,7 +1,9 @@
 import type {
+  Costs,
   MetricRangeDays,
   Metrics,
   RecentRun,
+  UsageCollection,
   UserSummary,
   WorkersResponse,
 } from "../shared/types";
@@ -56,6 +58,9 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   me: () => request<{ email: string }>("/api/auth/me"),
   metrics: (days: MetricRangeDays) => request<Metrics>(`/api/metrics?days=${days}`),
+  costs: (days: MetricRangeDays) => request<Costs>(`/api/costs?days=${days}`),
+  refreshCosts: () =>
+    request<{ collection: UsageCollection }>("/api/costs/refresh", { method: "POST" }),
   recentRuns: () => request<{ runs: RecentRun[] }>("/api/runs/recent?limit=50"),
   users: () => request<{ users: UserSummary[] }>("/api/users?limit=50"),
   workers: () => request<WorkersResponse>("/api/workers"),

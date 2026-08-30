@@ -219,6 +219,17 @@ export function PlotPair({
   );
 }
 
+/** A single plot with its own axis labels — no companion rail. */
+export function SinglePlot({ chart, label }: { chart: ReactElement; label: string }) {
+  return (
+    <div aria-label={label} role="img">
+      <ResponsiveContainer height={PLOT.singleHeight} width="100%">
+        {chart}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export interface ChartCardProps {
   aside?: ReactNode;
   children: ReactNode;

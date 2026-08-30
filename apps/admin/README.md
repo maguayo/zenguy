@@ -35,6 +35,27 @@ Cloudflare Worker (`zenguy-admin`):
 | `ZENGUY_API_ORIGIN` | var | `https://api.zenguy.com` |
 | `CF_ACCESS_TEAM_DOMAIN` | var | exact `https://<team>.cloudflareaccess.com` origin; not a secret |
 | `CF_ACCESS_AUD` | var | audience tag of the Access application protecting this Worker; not a secret |
+| `CLOUDFLARE_ACCOUNT_ID` | var | account scope for the GraphQL Analytics API; not a secret |
+| `CF_ANALYTICS_API_TOKEN` | secret, **optional** | read-only API token with `Account · Account Analytics · Read`; enables the costs collector |
+
+## Costs collector
+
+The panel's only scheduled job (`triggers.crons`, 02:15 UTC) reads the account's
+usage from the Cloudflare GraphQL Analytics API — Workers requests/CPU, D1 rows
+and storage, Durable Objects, Containers, KV, R2, Queues — and upserts one row
+per day and metric into `platform_usage_daily`, logging each run in
+`platform_usage_collections` (migration `0052`). Both tables are **admin-owned**,
+like `admin_sessions`: the product API never touches them and they are the only
+rows the panel writes besides sessions. The first run backfills 30 days; nightly
+runs re-read the last 3 so late analytics settle. "Actualizar ahora" in the
+Costes section triggers the same collection on demand and shows every probe's
+outcome, which is how a renamed GraphQL field gets noticed.
+
+Costs are **estimates**: usage × the Workers Paid list prices and included
+quotas in `src/server/costs/pricing.ts`, plus the plan's base fee. Cloudflare's
+own docs say these datasets are not the billing source of truth; the invoice
+lives in the dashboard. The token is deliberately optional so a deploy never
+blocks on it — until it is installed the section explains the two setup steps.
 
 `ADMIN_USER_IDS` is intentionally absent from versioned `vars`. Install it as
 an encrypted Worker binding with `wrangler secret put ADMIN_USER_IDS`; enter the

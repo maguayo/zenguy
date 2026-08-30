@@ -17,6 +17,9 @@
   "routes": [{ "pattern": "admin.zenguy.com", "custom_domain": true }],
   "workers_dev": false,
   "preview_urls": false,
+  // Daily Cloudflare usage collection (see src/server/costs). 02:15 UTC so the
+  // previous UTC day is complete in the GraphQL Analytics API.
+  "triggers": { "crons": ["15 2 * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
@@ -29,6 +32,10 @@
   },
   "vars": {
     "ZENGUY_API_ORIGIN": "https://api.zenguy.com",
+    // Account scope for the GraphQL Analytics API; an account id is not a secret.
+    // The read-only token CF_ANALYTICS_API_TOKEN is an OPTIONAL encrypted binding
+    // (`wrangler secret put`): without it the costs section explains it is unconfigured.
+    "CLOUDFLARE_ACCOUNT_ID": "ec11e46fe3c39a5eac9951db9c91244a",
     "CF_ACCESS_TEAM_DOMAIN": "https://bugfer.cloudflareaccess.com",
     "CF_ACCESS_AUD": "d17d9dd9175eddbde9658c1c4d1005921e1d54b41b19d81c1a14f02f70e0fb65"
   }

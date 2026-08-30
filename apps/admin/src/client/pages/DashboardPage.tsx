@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
+import { CostsHero } from "../components/CostsHero";
 import { RangeSwitch } from "../components/RangeSwitch";
 import { RecentRunsTable } from "../components/RecentRunsTable";
 import { Section } from "../components/Section";
@@ -14,7 +15,7 @@ import { readStoredRange, storeRange } from "../lib/range";
 import type { RangeDays } from "../lib/range";
 import { relativeSeconds } from "../lib/format";
 
-const REFETCH_MS = { metrics: 60_000, runs: 30_000, users: 60_000, workers: 5_000 };
+const REFETCH_MS = { costs: 300_000, metrics: 60_000, runs: 30_000, users: 60_000, workers: 5_000 };
 
 /**
  * How fresh the panel as a whole is: the age of its *oldest* section, counted on
@@ -66,6 +67,17 @@ export function DashboardPage({ email }: { email: string }) {
     queryKey: ["users"],
     refetchInterval: REFETCH_MS.users,
   });
+  const costs = useQuery({
+    queryFn: () => api.costs(range),
+    queryKey: ["costs", range],
+    placeholderData: (previous) => previous,
+    refetchInterval: REFETCH_MS.costs,
+  });
+  const queryClient = useQueryClient();
+  const refreshCosts = useMutation({
+    mutationFn: api.refreshCosts,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["costs"] }),
+  });
   // A full reload on sign-out: it drops every cached production number from memory.
   const signOut = useMutation({
     mutationFn: api.logout,
@@ -78,7 +90,7 @@ export function DashboardPage({ email }: { email: string }) {
   };
 
   const now = Date.now();
-  const sections = [metrics, workers, runs, users];
+  const sections = [metrics, costs, workers, runs, users];
   const loaded = sections.filter((query) => query.data !== undefined);
   const oldestUpdate =
     loaded.length === 0 ? 0 : Math.min(...loaded.map((query) => query.dataUpdatedAt));
@@ -125,6 +137,24 @@ export function DashboardPage({ email }: { email: string }) {
 
         <Section now={now} query={metrics} subject="metrics" title="Uptime">
           {(data) => <UptimeHero uptime={data.uptime} />}
+        </Section>
+
+        <Section now={now} query={costs} subject="costs" title="Costes (Cloudflare)">
+          {(data) => (
+            <CostsHero
+              costs={data}
+              now={now}
+              onRefresh={() => refreshCosts.mutate()}
+              refreshError={
+                refreshCosts.isError
+                  ? refreshCosts.error instanceof Error
+                    ? refreshCosts.error.message
+                    : "La recogida ha fallado"
+                  : null
+              }
+              refreshing={refreshCosts.isPending}
+            />
+          )}
         </Section>
 
         <Section now={now} query={workers} subject="workers" title="Workers">

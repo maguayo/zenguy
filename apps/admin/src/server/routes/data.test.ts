@@ -7,9 +7,11 @@ import {
   verifiedLoginBody,
 } from "../../test/fakes";
 import type {
+  Costs,
   Metrics,
   Overview,
   RecentRun,
+  UsageCollection,
   UserSummary,
   WorkersResponse,
 } from "../../shared/types";
@@ -87,6 +89,29 @@ const metrics: Metrics = {
   uptime: { upPercent: 75, monitorsDown: 1, monitorsTotal: 2, openIncidents: 1, series: [] },
 };
 
+const collection: UsageCollection = {
+  id: "col_1",
+  source: "manual",
+  status: "OK",
+  fromDay: "2023-10-16",
+  toDay: "2023-11-14",
+  startedAt: NOW,
+  finishedAt: NOW + 900,
+  probes: [{ probe: "workers", ok: true, rows: 90 }],
+};
+
+const costs: Costs = {
+  month: { key: "2023-11", from: "2023-11-01", to: "2023-11-30", daysElapsed: 14, daysInMonth: 30 },
+  baseFeeCents: 500,
+  totalCents: 590,
+  projectedCents: 693,
+  topLine: { key: "workers.requests", label: "Workers requests", costCents: 90 },
+  lastCollection: collection,
+  collectorConfigured: true,
+  lines: [],
+  series: [],
+};
+
 function fakeLoaders(): Loaders {
   return {
     overview: vi.fn(async () => overview),
@@ -94,6 +119,8 @@ function fakeLoaders(): Loaders {
     users: vi.fn(async () => users),
     runs: vi.fn(async () => runs),
     metrics: vi.fn(async () => metrics),
+    costs: vi.fn(async () => costs),
+    refreshUsage: vi.fn(async () => collection),
   };
 }
 
@@ -119,7 +146,9 @@ async function loggedIn(loaders: Loaders) {
     sessions,
     cookie,
     get: (path: string) => app.request(path, { headers: { Cookie: cookie } }),
+    post: (path: string) => app.request(path, { method: "POST", headers: { Cookie: cookie } }),
     anonymous: (path: string) => app.request(path),
+    anonymousPost: (path: string) => app.request(path, { method: "POST" }),
   };
 }
 
@@ -129,6 +158,7 @@ const PATHS = [
   "/api/users",
   "/api/runs/recent",
   "/api/metrics",
+  "/api/costs",
 ] as const;
 
 describe("admin data routes", () => {
@@ -220,6 +250,41 @@ describe("admin data routes", () => {
       });
     }
     expect(loaders.metrics).not.toHaveBeenCalled();
+  });
+
+  it("serves costs for the validated range and refreshes usage on demand", async () => {
+    const loaders = fakeLoaders();
+    const session = await loggedIn(loaders);
+
+    const response = await session.get("/api/costs?days=90");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: costs });
+    expect(loaders.costs).toHaveBeenLastCalledWith(expect.anything(), NOW, 90);
+    expect((await session.get("/api/costs?days=5")).status).toBe(400);
+
+    const refresh = await session.post("/api/costs/refresh");
+    expect(refresh.status).toBe(200);
+    await expect(refresh.json()).resolves.toEqual({ data: { collection } });
+    expect(loaders.refreshUsage).toHaveBeenCalledWith("manual");
+  });
+
+  it("answers 503 when a refresh is requested without an analytics token", async () => {
+    const loaders = fakeLoaders();
+    loaders.refreshUsage = vi.fn(async () => null);
+    const session = await loggedIn(loaders);
+    const refresh = await session.post("/api/costs/refresh");
+    expect(refresh.status).toBe(503);
+    await expect(refresh.json()).resolves.toEqual({
+      error: { code: "SERVICE_UNAVAILABLE", message: "CF_ANALYTICS_API_TOKEN is not configured" },
+    });
+  });
+
+  it("refuses an anonymous refresh", async () => {
+    const loaders = fakeLoaders();
+    const session = await loggedIn(loaders);
+    const refresh = await session.anonymousPost("/api/costs/refresh");
+    expect(refresh.status).toBe(401);
+    expect(loaders.refreshUsage).not.toHaveBeenCalled();
   });
 
   it("refuses a still-valid cookie once the user id leaves the allowlist", async () => {

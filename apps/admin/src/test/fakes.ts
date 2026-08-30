@@ -74,6 +74,7 @@ export function fakeBindings(overrides: Partial<Bindings> = {}): Bindings {
     } as unknown as Fetcher,
     ADMIN_USER_IDS: `${ADMIN_USER_ID},usr_00000000000000000000000002`,
     ZENGUY_API_ORIGIN: "https://api.zenguy.com",
+    CLOUDFLARE_ACCOUNT_ID: "test-account-id",
     CF_ACCESS_TEAM_DOMAIN: "https://zenguy-test.cloudflareaccess.com",
     CF_ACCESS_AUD: "test-access-audience-tag-000000000000",
     ...overrides,
