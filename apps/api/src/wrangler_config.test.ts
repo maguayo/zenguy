@@ -189,6 +189,9 @@ function expectQueueTopology(queues: QueueConfig, prefix: string): void {
 describe("wrangler environments", () => {
   const coreRequiredSecrets = [
     "JWT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_OAUTH_STATE_SECRET",
     "ENCRYPTION_KEY",
     "ARTIFACT_URL_SECRET",
     "RUNNER_API_TOKEN",
@@ -314,10 +317,15 @@ describe("wrangler environments", () => {
         pattern: "staging-app.zenguy.com/api/*",
         zone_name: "zenguy.com",
       },
+      {
+        pattern: "staging-app.zenguy.com/status/*",
+        zone_name: "zenguy.com",
+      },
     ]);
     expect(production.routes).toEqual([
       { pattern: "api.zenguy.com", custom_domain: true },
       { pattern: "app.zenguy.com/api/*", zone_name: "zenguy.com" },
+      { pattern: "app.zenguy.com/status/*", zone_name: "zenguy.com" },
     ]);
 
     expect(staging.vars).toEqual({

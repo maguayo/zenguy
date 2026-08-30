@@ -33,6 +33,9 @@ function completeBindings(): Bindings {
     ENVIRONMENT: "development",
     APP_URL: "http://localhost:5173",
     JWT_SECRET: "j".repeat(32),
+    GOOGLE_CLIENT_ID: "google-client-id.apps.googleusercontent.com",
+    GOOGLE_CLIENT_SECRET: "short",
+    GOOGLE_OAUTH_STATE_SECRET: "g".repeat(32),
     ENCRYPTION_KEY: encryptionKey(),
     ENCRYPTION_KEY_ID: "key-current",
     KEY_WRAPPING: keyWrappingService(),
@@ -95,6 +98,9 @@ describe("loadConfig", () => {
       "APP_URL",
       "ENVIRONMENT",
       "JWT_SECRET",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_OAUTH_STATE_SECRET",
       "ENCRYPTION_KEY",
       "ENCRYPTION_KEY_ID",
       "ARTIFACT_URL_SECRET",
@@ -128,6 +134,11 @@ describe("loadConfig", () => {
     expect(config.runnerApiToken).toBe("r".repeat(32));
     expect(config.runnerFallbackApiToken).toBe("f".repeat(32));
     expect(config.runnerCapabilitySecret).toBe("c".repeat(32));
+    expect(config.googleOAuth).toEqual({
+      clientId: "google-client-id.apps.googleusercontent.com",
+      clientSecret: "short",
+      stateSecret: "g".repeat(32),
+    });
     expect(config.llmModel).toBe("gpt-5-mini");
     expect(config.paddle).toMatchObject({
       environment: "sandbox",
@@ -137,6 +148,22 @@ describe("loadConfig", () => {
       overagePriceId: "pri_overage",
     });
     expect(config.complimentaryIssuerEmails).toEqual([]);
+  });
+
+  it("validates the Google client ID and requires an independent state secret", () => {
+    const invalidClient = completeBindings();
+    invalidClient.GOOGLE_CLIENT_ID = "not-a-google-client.example";
+    expect(() => loadConfig(invalidClient)).toThrow();
+
+    const short = completeBindings();
+    short.GOOGLE_OAUTH_STATE_SECRET = "too-short";
+    expect(() => loadConfig(short)).toThrow();
+
+    const reused = completeBindings();
+    reused.GOOGLE_OAUTH_STATE_SECRET = reused.JWT_SECRET;
+    expect(() => loadConfig(reused)).toThrow(
+      "GOOGLE_OAUTH_STATE_SECRET must be independent from JWT_SECRET",
+    );
   });
 
   it("parses Stripe as the exclusive billing provider", () => {

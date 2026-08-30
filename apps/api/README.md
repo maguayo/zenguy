@@ -41,11 +41,13 @@ whole group without printing values:
 
     pnpm --filter @zenguy/api secrets:verify
 
-For a fresh setup, generate six independent values in a password manager:
-JWT_SECRET, ENCRYPTION_KEY (canonical base64 for exactly 32 bytes),
-ARTIFACT_URL_SECRET, RUNNER_API_TOKEN, RUNNER_FALLBACK_API_TOKEN and
-RUNNER_CAPABILITY_SECRET. The five non-encryption values need at least 32
-characters. Use a unique `ENCRYPTION_KEY_ID`, local-only Twilio credentials and
+For a fresh setup, obtain the local Google Web OAuth client ID/secret and
+generate seven independent values in a password manager: JWT_SECRET,
+GOOGLE_OAUTH_STATE_SECRET, ENCRYPTION_KEY (canonical base64 for exactly 32
+bytes), ARTIFACT_URL_SECRET, RUNNER_API_TOKEN, RUNNER_FALLBACK_API_TOKEN and
+RUNNER_CAPABILITY_SECRET. The six non-encryption generated values need at least
+32 characters; Google's provider-issued client secret only needs to be
+non-empty. Use a unique `ENCRYPTION_KEY_ID`, local-only Twilio credentials and
 senders, and never reuse any value in staging or production. Stripe's five core
 items are optional but all-or-none; the alert-credit product/price IDs are also
 a pair.
@@ -248,6 +250,41 @@ row fails closed instead of silently truncating the file. Transfer files remain
 limited to 200 entries and imports retain the 2 MB request/body ceiling.
 
 ## Provider setup
+
+### Google OAuth
+
+Zenguy uses a server-side OAuth authorization-code flow. The Google client
+secret and the state-signing secret never enter the Vite bundle; all three
+Google bindings belong to the API Worker. Create distinct Web application
+clients for local development, staging, and production under the reviewed
+Google Auth Platform project, and register only the callback URI used by each
+environment:
+
+| Environment | Authorized redirect URI |
+|---|---|
+| Local | `http://localhost:5173/api/auth/google/callback` |
+| Staging | `https://staging-app.zenguy.com/api/auth/google/callback` |
+| Production | `https://app.zenguy.com/api/auth/google/callback` |
+
+Do not use `api.zenguy.com` or `api-staging.zenguy.com` as browser callbacks.
+Authentication deliberately returns through the Pages application origin so
+the host-only refresh cookie remains on the same origin used by subsequent
+`/api/auth/*` requests. Authorized JavaScript origins are not required for this
+server-side flow.
+
+Store `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+`GOOGLE_OAUTH_STATE_SECRET` in the local Keychain workflow and in each matching
+named Worker environment. The client ID and provider-issued client secret must
+be non-empty. The state secret must contain at least 32 characters and must not
+reuse JWT, encryption, artifact, runner, or Google client-secret material.
+Never commit any of these values or expose them through a `VITE_*` variable.
+
+Google sign-in deliberately does not create a Zenguy account or bypass the
+existing terms/privacy acceptance flow. On the first use it may link only an
+existing verified account when Google is authoritative for the address: a
+Gmail address or an account carrying Google's signed Workspace `hd` claim.
+Other third-party Google identities must continue with the Zenguy email and
+password flow; a mutable email alone is never treated as a durable identity.
 
 ### Stripe Billing
 
@@ -502,7 +539,8 @@ HMAC remains denied. Do not configure a wildcard webhook bypass.
 
 The canonical remote release inventory is
 `security/required-worker-secrets.json`. Its `core` group covers boot-critical
-auth, encryption, runner and Twilio bindings; `releaseFeatures` additionally
+JWT and Google OAuth auth, encryption, runner and Twilio bindings;
+`releaseFeatures` additionally
 requires all five `TWILIO_*` values, the complete Stripe catalog/API/webhook
 set (including both alert-credit IDs), and `EXPO_PUSH_ACCESS_TOKEN`. Staging
 also requires `CF_ACCESS_AUD`; production additionally requires
@@ -659,6 +697,10 @@ Environment variables are fixed as follows:
 | `STRIPE_ENVIRONMENT` | `test` | `live` |
 | `LLM_MODEL` | `qwen/qwen3.8-27b` | `qwen/qwen3.8-27b` |
 | `EMAIL_FROM` | `Zenguy <notifications@zenguy.com>` | `Zenguy <notifications@zenguy.com>` |
+
+The three required Google OAuth bindings are environment-specific secrets, not
+Wrangler vars. Production, staging, and local development must use their
+matching client credentials and independent state-signing secret.
 
 Staging uses only Stripe test keys, price IDs, customers, and its verified
 staging webhook secret. Production must use only Stripe live

@@ -54,6 +54,9 @@ describe("API client", () => {
 
     const fresh = await import("./api");
     await expect(fresh.apiGet<{ ok: boolean }>("/api/health")).resolves.toEqual({ ok: true });
+    expect(fresh.apiUrl("/api/auth/google/start")).toBe(
+      "https://api-staging.zenguy.com/api/auth/google/start",
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api-staging.zenguy.com/api/health",
       expect.objectContaining({ credentials: "include", method: "GET" }),

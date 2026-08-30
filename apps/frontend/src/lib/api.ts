@@ -71,7 +71,8 @@ export function confirmTerminalLogout(): void {
   }
 }
 
-function apiUrl(path: string): string {
+export function apiUrl(path: string): string {
+  if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
   return `${API_ORIGIN}${path}`;
 }
 
@@ -336,4 +337,37 @@ async function requestBlob(
 
 export function apiGetBlob(path: string): Promise<{ blob: Blob; filename: string }> {
   return requestBlob(path);
+}
+
+async function requestText(
+  path: string,
+  retried = false,
+  epoch = sessionEpoch,
+): Promise<string> {
+  if (!path.startsWith("/api/")) throw new Error("API paths must start with /api/");
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
+    headers: requestHeaders(false),
+    method: "GET",
+    signal: sessionController.signal,
+  });
+  throwIfSessionChanged(epoch);
+  const isAuthPath = path.startsWith("/api/auth/");
+  if (response.status === 401 && !isAuthPath && !retried) {
+    await refreshOrSignOut();
+    throwIfSessionChanged(epoch);
+    return requestText(path, true, epoch);
+  }
+  if (!response.ok) {
+    if (response.status === 401 && !isAuthPath && retried) signOutAfterAuthFailure();
+    throw await parseApiError(response);
+  }
+  const text = await response.text();
+  throwIfSessionChanged(epoch);
+  return text;
+}
+
+/** GET a non-JSON API response (e.g. server-rendered HTML previews). */
+export function apiGetText(path: string): Promise<string> {
+  return requestText(path);
 }

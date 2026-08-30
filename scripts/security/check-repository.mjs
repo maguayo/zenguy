@@ -434,6 +434,9 @@ const apiWranglerConfig = readFileSync("apps/api/wrangler.jsonc", "utf8");
 const parsedApiWranglerConfig = JSON.parse(apiWranglerConfig);
 const coreRequiredRemoteSecrets = [
   "JWT_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_OAUTH_STATE_SECRET",
   "ENCRYPTION_KEY",
   "ARTIFACT_URL_SECRET",
   "RUNNER_API_TOKEN",

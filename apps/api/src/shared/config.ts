@@ -96,6 +96,12 @@ export interface StripeConfig {
   apiBase: "https://api.stripe.com";
 }
 
+export interface GoogleOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  stateSecret: string;
+}
+
 export interface AppConfig {
   appUrl: string;
   environment: "development" | "staging" | "production";
@@ -119,6 +125,7 @@ export interface AppConfig {
   };
   paddle: PaddleConfig | null;
   stripe: StripeConfig | null;
+  googleOAuth: GoogleOAuthConfig;
   complimentaryIssuerEmails: string[];
   iosAppStoreUrl: string | null;
   /** Expo push "enhanced security" token; null sends without one. */
@@ -129,6 +136,9 @@ const requiredEnvKeys = [
   "APP_URL",
   "ENVIRONMENT",
   "JWT_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_OAUTH_STATE_SECRET",
   "ENCRYPTION_KEY",
   "ENCRYPTION_KEY_ID",
   "ARTIFACT_URL_SECRET",
@@ -188,6 +198,14 @@ const envSchema = z.object({
   APP_URL: z.url(),
   ENVIRONMENT: z.enum(["development", "staging", "production"]),
   JWT_SECRET: z.string().min(32),
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1_024)
+    .refine((value) => value.endsWith(".apps.googleusercontent.com")),
+  GOOGLE_CLIENT_SECRET: z.string().trim().min(1),
+  GOOGLE_OAUTH_STATE_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(1),
   ENCRYPTION_KEY_ID: z.string().min(1),
   ENCRYPTION_PREVIOUS_KEYS: optionalNonEmptyString(),
@@ -369,6 +387,19 @@ export function loadConfig(env: Bindings): AppConfig {
   ) {
     throw new Error("Runner capability signing secret must be independent");
   }
+  for (const [name, value] of [
+    ["JWT_SECRET", parsed.JWT_SECRET],
+    ["GOOGLE_CLIENT_SECRET", parsed.GOOGLE_CLIENT_SECRET],
+    ["ENCRYPTION_KEY", parsed.ENCRYPTION_KEY],
+    ["ARTIFACT_URL_SECRET", parsed.ARTIFACT_URL_SECRET],
+    ["RUNNER_API_TOKEN", parsed.RUNNER_API_TOKEN],
+    ["RUNNER_FALLBACK_API_TOKEN", parsed.RUNNER_FALLBACK_API_TOKEN],
+    ["RUNNER_CAPABILITY_SECRET", parsed.RUNNER_CAPABILITY_SECRET],
+  ] as const) {
+    if (parsed.GOOGLE_OAUTH_STATE_SECRET === value) {
+      throw new Error(`GOOGLE_OAUTH_STATE_SECRET must be independent from ${name}`);
+    }
+  }
   if (
     parsed.RUNNER_CF_API_TOKEN !== undefined &&
     (parsed.RUNNER_CF_API_TOKEN === parsed.RUNNER_API_TOKEN ||
@@ -464,6 +495,11 @@ export function loadConfig(env: Bindings): AppConfig {
     appUrl: parsed.APP_URL,
     environment: parsed.ENVIRONMENT,
     jwtSecret: parsed.JWT_SECRET,
+    googleOAuth: {
+      clientId: parsed.GOOGLE_CLIENT_ID,
+      clientSecret: parsed.GOOGLE_CLIENT_SECRET,
+      stateSecret: parsed.GOOGLE_OAUTH_STATE_SECRET,
+    },
     encryptionKeys,
     artifactUrlSecret: parsed.ARTIFACT_URL_SECRET,
     runnerApiToken: parsed.RUNNER_API_TOKEN,

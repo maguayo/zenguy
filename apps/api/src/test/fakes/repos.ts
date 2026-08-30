@@ -3,6 +3,11 @@ import type {
   LegalAcceptanceRepo,
 } from "../../domain/users/legal_acceptance";
 import type {
+  OAuthIdentity,
+  OAuthIdentityRepo,
+  OAuthProvider,
+} from "../../domain/users/oauth_identity";
+import type {
   EmailTokenRepo,
   RefreshTokenRepo,
   SessionRevocationReason,
@@ -165,6 +170,38 @@ export class FakeLegalAcceptanceRepo implements LegalAcceptanceRepo {
       throw new Error("legal acceptance constraint violation");
     }
     this.rows.set(row.userId, { ...row });
+  }
+}
+
+export class FakeOAuthIdentityRepo implements OAuthIdentityRepo {
+  readonly identities = new Map<string, OAuthIdentity>();
+
+  private key(provider: OAuthProvider, subject: string): string {
+    return `${provider}:${subject}`;
+  }
+
+  async findByProviderSubject(
+    provider: OAuthProvider,
+    subject: string,
+  ): Promise<OAuthIdentity | null> {
+    const identity = this.identities.get(this.key(provider, subject));
+    return identity === undefined ? null : clone(identity);
+  }
+
+  async insertIfAbsent(identity: OAuthIdentity): Promise<boolean> {
+    const key = this.key(identity.provider, identity.subject);
+    if (
+      this.identities.has(key) ||
+      [...this.identities.values()].some(
+        (candidate) =>
+          candidate.provider === identity.provider &&
+          candidate.userId === identity.userId,
+      )
+    ) {
+      return false;
+    }
+    this.identities.set(key, clone(identity));
+    return true;
   }
 }
 

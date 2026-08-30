@@ -41,6 +41,12 @@ import type {
 } from "./domain/billing/repo";
 import type { PeriodOverageReporter } from "./application/billing/handle_paddle_webhook";
 import type { LegalAcceptanceRepo } from "./domain/users/legal_acceptance";
+import type { OAuthIdentityRepo } from "./domain/users/oauth_identity";
+import type {
+  IncidentUpdateRepo,
+  StatusPageItemRepo,
+  StatusPageRepo,
+} from "./domain/status_pages/repo";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -58,7 +64,7 @@ import { WorkspaceDeletionSaga } from "./application/workspaces/workspace_deleti
 import { errorHandler } from "./http/middleware/error_handler";
 import { requestId } from "./http/middleware/request_id";
 import { securityHeaders } from "./http/middleware/security_headers";
-import { authRoutes } from "./http/routes/auth";
+import { authRoutes, type AuthRoutesDependencies } from "./http/routes/auth";
 import { workspaceRoutes } from "./http/routes/workspaces";
 import {
   publicInvitationRoutes,
@@ -72,6 +78,7 @@ import { D1AuditRepo } from "./infrastructure/db/audit_repo";
 import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
 import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
 import { D1LegalAcceptanceRepo } from "./infrastructure/db/legal_acceptance_repo";
+import { D1OAuthIdentityRepo } from "./infrastructure/db/oauth_identity_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { D1SessionSecurityRepo } from "./infrastructure/db/session_security_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
@@ -98,9 +105,19 @@ import { D1StepRepo } from "./infrastructure/db/step_repo";
 import { D1ArtifactRepo } from "./infrastructure/db/artifact_repo";
 import { D1IncidentEventRepo } from "./infrastructure/db/incident_event_repo";
 import { D1IncidentRepo } from "./infrastructure/db/incident_repo";
+import { D1IncidentUpdateRepo } from "./infrastructure/db/incident_update_repo";
+import { GetPublicStatusPage } from "./application/status_pages/get_public_status_page";
+import { statusPageRoutes } from "./http/routes/status_pages";
+import { incidentUpdateRoutes } from "./http/routes/incident_updates";
+import { statusPublicRoutes } from "./http/routes/status_public";
+import {
+  D1StatusPageItemRepo,
+  D1StatusPageRepo,
+} from "./infrastructure/db/status_page_repo";
 import { D1MonitorRepo } from "./infrastructure/db/monitor_repo";
 import { D1CheckRepo } from "./infrastructure/db/check_repo";
 import { D1OverviewRepo } from "./infrastructure/db/overview_repo";
+import { GoogleOAuthProvider } from "./infrastructure/auth/google_oauth";
 import { D1DurableWorkflowRepo } from "./infrastructure/db/durable_workflow_repo";
 import { ArtifactStorage } from "./infrastructure/storage/artifacts";
 import { PaddleBillingCanceller } from "./infrastructure/paddle/billing_canceller";
@@ -177,6 +194,8 @@ export interface AppOverrides {
   ids?: IdGenerator;
   users?: UserRepo;
   legalAcceptances?: LegalAcceptanceRepo;
+  oauthIdentities?: OAuthIdentityRepo;
+  googleOAuth?: AuthRoutesDependencies["googleOAuth"];
   emailTokens?: EmailTokenRepo;
   refreshTokens?: RefreshTokenRepo;
   sessionSecurity?: SessionSecurityRepo;
@@ -206,6 +225,10 @@ export interface AppOverrides {
   artifactStorage?: Pick<ArtifactStorage, "put" | "get" | "delete">;
   incidents?: IncidentRepo;
   incidentEvents?: IncidentEventRepo;
+  statusPages?: StatusPageRepo;
+  statusPageItems?: StatusPageItemRepo;
+  incidentUpdates?: IncidentUpdateRepo;
+  statusCache?: Pick<Cache, "match" | "put">;
   monitors?: MonitorRepo;
   checks?: CheckRepo;
   overview?: OverviewRepo;
@@ -247,6 +270,11 @@ export function buildApp(
   const users = overrides.users ?? new D1UserRepo(env.DB);
   const legalAcceptances =
     overrides.legalAcceptances ?? new D1LegalAcceptanceRepo(env.DB);
+  const oauthIdentities =
+    overrides.oauthIdentities ?? new D1OAuthIdentityRepo(env.DB);
+  const googleOAuth =
+    overrides.googleOAuth ??
+    new GoogleOAuthProvider(config.googleOAuth, { clock });
   const emailTokens =
     overrides.emailTokens ?? new D1EmailTokenRepo(env.DB);
   const refreshTokens =
@@ -313,6 +341,11 @@ export function buildApp(
   const incidentEvents =
     overrides.incidentEvents ?? new D1IncidentEventRepo(env.DB);
   const monitors = overrides.monitors ?? new D1MonitorRepo(env.DB);
+  const statusPages = overrides.statusPages ?? new D1StatusPageRepo(env.DB);
+  const statusPageItems =
+    overrides.statusPageItems ?? new D1StatusPageItemRepo(env.DB);
+  const incidentUpdates =
+    overrides.incidentUpdates ?? new D1IncidentUpdateRepo(env.DB);
   const checks = overrides.checks ?? new D1CheckRepo(env.DB);
   const overview = overrides.overview ?? new D1OverviewRepo(env.DB);
   const apiKeys = overrides.apiKeys ?? new D1ApiKeyRepo(env.DB);
@@ -605,6 +638,8 @@ export function buildApp(
     "/api/auth",
     authRoutes({
       users,
+      oauthIdentities,
+      googleOAuth,
       legalAcceptances,
       emailTokens,
       refreshTokens,
@@ -771,6 +806,67 @@ export function buildApp(
     "/api/workspaces",
     auditRoutes({ users, workspaces, members, audits, config }),
   );
+  const getPublicStatusPage = new GetPublicStatusPage(
+    statusPages,
+    statusPageItems,
+    monitors,
+    browserTests,
+    runs,
+    incidents,
+    incidentUpdates,
+    clock,
+  );
+  app.route(
+    "/api/workspaces",
+    statusPageRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      statusPages,
+      statusPageItems,
+      monitors,
+      tests: browserTests,
+      getPublicStatusPage,
+      rateLimiter,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    incidentUpdateRoutes({
+      users,
+      workspaces,
+      members,
+      subscriptions,
+      incidents,
+      incidentUpdates,
+      audit,
+      clock,
+      ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  // Anonymous SSR surface for published status pages (app.zenguy.com/status/*).
+  app.route(
+    "/status",
+    statusPublicRoutes({
+      getPublicStatusPage,
+      rateLimiter,
+      clock,
+      config,
+      cache:
+        overrides.statusCache ?? {
+          match: async (key: Request) =>
+            (await caches.open("status-pages")).match(key),
+          put: async (key: Request, response: Response) =>
+            (await caches.open("status-pages")).put(key, response),
+        },
+    }),
+  );
   app.route(
     "/api/workspaces",
     apiKeyRoutes({
@@ -828,6 +924,7 @@ export function buildApp(
       checks,
       incidents,
       incidentEvents,
+      statusPageItems,
       rateLimiter,
       audit,
       track,
@@ -852,6 +949,7 @@ export function buildApp(
       artifacts,
       artifactStorage,
       incidents: incidentCloserOnTestDelete,
+      statusPageItems,
       durableWorkflows,
       outboxPublisher,
       rateLimiter,

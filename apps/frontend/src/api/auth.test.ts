@@ -4,10 +4,13 @@ import { clearToken, getToken, setToken } from "../lib/auth-token";
 import { confirmTerminalLogout, isTerminalLogoutPending, supersedeSession } from "../lib/api";
 import {
   activateSession,
+  authReturnPath,
   forgotPassword,
+  googleSignInUrl,
   login,
   logout,
   me,
+  prepareGoogleSignInUrl,
   refresh,
   register,
   resendVerification,
@@ -89,6 +92,28 @@ describe("auth API", () => {
     expect(getToken().accessToken).toBe("login-token");
     await refresh();
     expect(getToken().accessToken).toBe("refresh-token");
+  });
+
+  it("builds Google sign-in URLs with only local continuation paths", async () => {
+    expect(
+      authReturnPath(
+        "https://evil.example/path",
+        "//evil.example",
+        "/w/ws_1/overview?tab=runs#latest",
+      ),
+    ).toBe("/w/ws_1/overview?tab=runs#latest");
+    expect(authReturnPath("/\\\\evil.example", "javascript:alert(1)")).toBe("/");
+    expect(authReturnPath("/%2e%2e//evil.example/x")).toBe("/");
+    expect(authReturnPath("/foo/.%2e//evil.example/x")).toBe("/");
+    expect(authReturnPath("/search?q=foo%2Ebar")).toBe(
+      "/search?q=foo%2Ebar",
+    );
+    expect(googleSignInUrl("/w/ws_1/overview?tab=runs")).toBe(
+      "/api/auth/google/start?next=%2Fw%2Fws_1%2Foverview%3Ftab%3Druns",
+    );
+    await expect(prepareGoogleSignInUrl("//evil.example")).resolves.toBe(
+      "/api/auth/google/start?next=%2F",
+    );
   });
 
   it("clears the token even when logout fails", async () => {

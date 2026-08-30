@@ -2,6 +2,7 @@ import {
   ApiError,
   apiGet,
   apiPost,
+  apiUrl,
   beginTerminalLogout,
   confirmTerminalLogout,
   ensureFreshToken,
@@ -26,6 +27,53 @@ export interface RegistrationPending {
   email: string;
 }
 
+const LOCAL_RETURN_ORIGIN = "https://app.zenguy.invalid";
+const UNSAFE_ENCODED_RETURN_PATH =
+  /%(?:0[0-9a-f]|1[0-9a-f]|2f|5c|7f)/iu;
+
+function localAuthReturnPath(value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    /[\\\u0000-\u001f\u007f]/.test(value) ||
+    UNSAFE_ENCODED_RETURN_PATH.test(value)
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value, LOCAL_RETURN_ORIGIN);
+    if (parsed.origin !== LOCAL_RETURN_ORIGIN) return null;
+    const normalized = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (
+      !normalized.startsWith("/") ||
+      normalized.startsWith("//") ||
+      /[\\\u0000-\u001f\u007f]/.test(normalized) ||
+      UNSAFE_ENCODED_RETURN_PATH.test(normalized)
+    ) {
+      return null;
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the first safe local continuation, falling back to the app root. */
+export function authReturnPath(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    const path = localAuthReturnPath(candidate);
+    if (path !== null) return path;
+  }
+  return "/";
+}
+
+export function googleSignInUrl(next: unknown): string {
+  const params = new URLSearchParams({ next: authReturnPath(next) });
+  return apiUrl(`/api/auth/google/start?${params.toString()}`);
+}
+
 function keepSession<T extends AuthSession>(session: T): T {
   setToken(session.accessToken, session.expiresIn);
   return session;
@@ -46,6 +94,12 @@ async function retryPendingLogout(): Promise<void> {
 
 async function prepareForNewSession(): Promise<void> {
   if (isTerminalLogoutPending()) await retryPendingLogout();
+}
+
+/** Clears any unfinished logout before handing the browser to Google. */
+export async function prepareGoogleSignInUrl(next: unknown): Promise<string> {
+  await prepareForNewSession();
+  return googleSignInUrl(next);
 }
 
 export interface RegistrationConsent {

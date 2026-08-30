@@ -8,6 +8,9 @@ export const KEYCHAIN_SERVICE = "com.zenguy.api.local-development.v1";
 
 export const DEVELOPMENT_SECRET_NAMES = Object.freeze([
   "JWT_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_OAUTH_STATE_SECRET",
   "ENCRYPTION_KEY",
   "ENCRYPTION_KEY_ID",
   "ENCRYPTION_PREVIOUS_KEYS",
@@ -32,6 +35,9 @@ export const DEVELOPMENT_SECRET_NAMES = Object.freeze([
 
 export const REQUIRED_DEVELOPMENT_SECRET_NAMES = Object.freeze([
   "JWT_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_OAUTH_STATE_SECRET",
   "ENCRYPTION_KEY",
   "ENCRYPTION_KEY_ID",
   "ARTIFACT_URL_SECRET",
@@ -60,6 +66,8 @@ const STRIPE_REQUIRED_NAMES = Object.freeze([
 ]);
 const INDEPENDENT_SECRET_NAMES = Object.freeze([
   "JWT_SECRET",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_OAUTH_STATE_SECRET",
   "ENCRYPTION_KEY",
   "ARTIFACT_URL_SECRET",
   "RUNNER_API_TOKEN",
@@ -388,6 +396,7 @@ export function validateSecretSet(values, target = "dev") {
   if (target === "dev") {
     for (const name of [
       "JWT_SECRET",
+      "GOOGLE_OAUTH_STATE_SECRET",
       "ARTIFACT_URL_SECRET",
       "RUNNER_API_TOKEN",
       "RUNNER_FALLBACK_API_TOKEN",

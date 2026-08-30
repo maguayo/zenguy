@@ -33,6 +33,9 @@ function validSeedValues() {
 function validDevelopmentValues() {
   return new Map([
     ["JWT_SECRET", "j".repeat(32)],
+    ["GOOGLE_CLIENT_ID", "google-client-id.apps.googleusercontent.com"],
+    ["GOOGLE_CLIENT_SECRET", "short"],
+    ["GOOGLE_OAUTH_STATE_SECRET", "g".repeat(32)],
     ["ENCRYPTION_KEY", encryptionKey],
     ["ENCRYPTION_KEY_ID", "local-test-v1"],
     ["ARTIFACT_URL_SECRET", "a".repeat(32)],
@@ -64,6 +67,9 @@ test("the Keychain namespace and accepted names are fixed", () => {
   assert.equal(new Set(DEVELOPMENT_SECRET_NAMES).size, DEVELOPMENT_SECRET_NAMES.length);
   assert.ok(DEVELOPMENT_SECRET_NAMES.includes("ENCRYPTION_PREVIOUS_KEYS"));
   assert.ok(DEVELOPMENT_SECRET_NAMES.includes("STRIPE_WEBHOOK_SECRET"));
+  assert.ok(DEVELOPMENT_SECRET_NAMES.includes("GOOGLE_CLIENT_ID"));
+  assert.ok(DEVELOPMENT_SECRET_NAMES.includes("GOOGLE_CLIENT_SECRET"));
+  assert.ok(DEVELOPMENT_SECRET_NAMES.includes("GOOGLE_OAUTH_STATE_SECRET"));
 });
 
 test("audits local secret files using metadata only and rejects unsafe nodes", () => {
@@ -178,6 +184,17 @@ test("rejects placeholders, duplicate independent secrets, and NUL bytes", () =>
   const duplicate = validDevelopmentValues();
   duplicate.set("RUNNER_FALLBACK_API_TOKEN", duplicate.get("RUNNER_API_TOKEN"));
   assert.throws(() => validateSecretSet(duplicate), /must be independent/u);
+
+  const reusedState = validDevelopmentValues();
+  reusedState.set("GOOGLE_OAUTH_STATE_SECRET", reusedState.get("JWT_SECRET"));
+  assert.throws(() => validateSecretSet(reusedState), /must be independent/u);
+
+  const shortState = validDevelopmentValues();
+  shortState.set("GOOGLE_OAUTH_STATE_SECRET", "g".repeat(31));
+  assert.throws(
+    () => validateSecretSet(shortState),
+    /GOOGLE_OAUTH_STATE_SECRET must contain at least 32 characters/u,
+  );
 
   const nul = validDevelopmentValues();
   nul.set("TWILIO_AUTH_TOKEN", "bad\0value");

@@ -11,12 +11,14 @@ import { Login } from "../../application/auth/login";
 import { Logout } from "../../application/auth/logout";
 import { Refresh } from "../../application/auth/refresh";
 import { Register } from "../../application/auth/register";
+import { GoogleLogin } from "../../application/auth/google_login";
 import { ResendVerification } from "../../application/auth/resend_verification";
 import { ResetPassword } from "../../application/auth/reset_password";
 import type { AuthSession } from "../../application/auth/session";
 import { VerifyEmail } from "../../application/auth/verify_email";
 import type { EmailSender } from "../../domain/email/sender";
 import type { LegalAcceptanceRepo } from "../../domain/users/legal_acceptance";
+import type { OAuthIdentityRepo } from "../../domain/users/oauth_identity";
 import type {
   EmailTokenRepo,
   RefreshTokenRepo,
@@ -24,6 +26,11 @@ import type {
   UserRepo,
 } from "../../domain/users/repo";
 import type { WorkspaceRepo } from "../../domain/workspaces/repo";
+import {
+  GoogleOAuthError,
+  type GoogleOAuthProvider,
+  safeOAuthNext,
+} from "../../infrastructure/auth/google_oauth";
 import type { TrackEvent } from "../../application/activity/track_event";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import type { AuthClient } from "../../application/auth/session";
@@ -36,13 +43,17 @@ import {
 } from "../../shared/constants";
 import { AppError, validation } from "../../shared/errors";
 import type { IdGenerator } from "../../shared/ids";
+import { logEvent } from "../../shared/log";
 import {
   enforceRateLimitScopes,
   normalizeRateLimitAddress,
   type RateLimiter,
 } from "../../shared/ratelimit";
 import {
+  clearGoogleOAuthCookieHeader,
   clearRefreshCookieHeader,
+  googleOAuthCookieHeader,
+  readGoogleOAuthCookie,
   readRefreshCookie,
   refreshCookieHeader,
 } from "../cookies";
@@ -53,6 +64,13 @@ import { zjson } from "../validate";
 
 export interface AuthRoutesDependencies {
   users: UserRepo;
+  oauthIdentities: OAuthIdentityRepo;
+  googleOAuth: Pick<
+    GoogleOAuthProvider,
+    | "createAuthorization"
+    | "readAuthorizationState"
+    | "completeAuthorization"
+  >;
   legalAcceptances: LegalAcceptanceRepo;
   emailTokens: EmailTokenRepo;
   refreshTokens: RefreshTokenRepo;
@@ -107,6 +125,50 @@ const resetPasswordSchema = z.object({
   token: z.string().min(1).max(512),
   password: newPasswordSchema,
 });
+
+const GOOGLE_OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
+const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
+
+type GoogleRedirectError = "cancelled" | "failed" | "link_required";
+
+function googleCallbackUrl(config: Pick<AppConfig, "appUrl">): string {
+  return new URL(GOOGLE_CALLBACK_PATH, config.appUrl).toString();
+}
+
+function appDestination(
+  config: Pick<AppConfig, "appUrl">,
+  next: string,
+): string {
+  return new URL(safeOAuthNext(next), config.appUrl).toString();
+}
+
+function googleErrorDestination(
+  config: Pick<AppConfig, "appUrl">,
+  error: GoogleRedirectError,
+  next: string,
+): string {
+  const destination = new URL("/signin", config.appUrl);
+  destination.searchParams.set("oauth_error", error);
+  const safeNext = safeOAuthNext(next);
+  if (safeNext !== "/") destination.searchParams.set("next", safeNext);
+  return destination.toString();
+}
+
+function googleFailureKind(error: unknown): GoogleRedirectError {
+  if (
+    error instanceof AppError &&
+    (error.code === "INVALID_CREDENTIALS" || error.code === "CONFLICT")
+  ) {
+    return "link_required";
+  }
+  return "failed";
+}
+
+function googleFailureReason(error: unknown): string {
+  if (error instanceof GoogleOAuthError) return error.code;
+  if (error instanceof AppError) return `app_${error.code.toLowerCase()}`;
+  return "unexpected";
+}
 
 function clientIp(context: { req: { header(name: string): string | undefined } }) {
   return normalizeRateLimitAddress(context.req.header("CF-Connecting-IP"));
@@ -190,6 +252,7 @@ export function authRoutes(
   const verifyEmail = new VerifyEmail(dependencies);
   const resendVerification = new ResendVerification(dependencies);
   const login = new Login(dependencies);
+  const googleLogin = new GoogleLogin(dependencies);
   const refresh = new Refresh(dependencies);
   const logout = new Logout(dependencies);
   const forgotPassword = new ForgotPassword(dependencies);
@@ -225,6 +288,115 @@ export function authRoutes(
     );
     return sessionPayload(session);
   }
+
+  app.get("/google/start", async (context) => {
+    context.header("Referrer-Policy", "no-referrer");
+    const next = safeOAuthNext(context.req.query("next"));
+    try {
+      await enforceRateLimitScopes(
+        dependencies.rateLimiter,
+        [`google-start:ip:${await privateScope(clientIp(context))}`],
+        RATE_LIMITS.login,
+      );
+      const authorization =
+        await dependencies.googleOAuth.createAuthorization({
+          redirectUri: googleCallbackUrl(dependencies.config),
+          next,
+        });
+      context.header(
+        "Set-Cookie",
+        googleOAuthCookieHeader(
+          authorization.stateCookie,
+          GOOGLE_OAUTH_COOKIE_TTL_SECONDS,
+          secureCookies,
+        ),
+      );
+      return context.redirect(authorization.authorizationUrl, 302);
+    } catch (error) {
+      context.header(
+        "Set-Cookie",
+        clearGoogleOAuthCookieHeader(secureCookies),
+      );
+      logEvent("google_oauth_start_failed", {
+        requestId: context.get("requestId"),
+        reason: googleFailureReason(error),
+      });
+      return context.redirect(
+        googleErrorDestination(dependencies.config, "failed", next),
+        302,
+      );
+    }
+  });
+
+  app.get("/google/callback", async (context) => {
+    context.header("Referrer-Policy", "no-referrer");
+    const stateCookie = readGoogleOAuthCookie(context);
+    context.header(
+      "Set-Cookie",
+      clearGoogleOAuthCookieHeader(secureCookies),
+      { append: true },
+    );
+
+    let next = "/";
+    try {
+      await enforceRateLimitScopes(
+        dependencies.rateLimiter,
+        [`google-callback:ip:${await privateScope(clientIp(context))}`],
+        RATE_LIMITS.login,
+      );
+      const returnedState = context.req.query("state") ?? "";
+      if (stateCookie === null) {
+        throw new GoogleOAuthError(
+          "invalid_state",
+          "Missing OAuth transaction cookie",
+        );
+      }
+      const authorizationState =
+        await dependencies.googleOAuth.readAuthorizationState({
+          stateCookie,
+          returnedState,
+        });
+      next = authorizationState.next;
+
+      const providerError = context.req.query("error");
+      if (providerError !== undefined) {
+        const kind = providerError === "access_denied" ? "cancelled" : "failed";
+        return context.redirect(
+          googleErrorDestination(dependencies.config, kind, next),
+          302,
+        );
+      }
+
+      const code = context.req.query("code") ?? "";
+      const identity = await dependencies.googleOAuth.completeAuthorization({
+        redirectUri: googleCallbackUrl(dependencies.config),
+        stateCookie,
+        returnedState,
+        code,
+      });
+      const session = await googleLogin.execute({ ...identity, client: "web" });
+      context.header(
+        "Set-Cookie",
+        refreshCookieHeader(
+          session.refreshTokenPlain,
+          refreshMaxAge,
+          secureCookies,
+        ),
+        { append: true },
+      );
+      return context.redirect(appDestination(dependencies.config, next), 302);
+    } catch (error) {
+      const kind = googleFailureKind(error);
+      logEvent("google_oauth_failed", {
+        requestId: context.get("requestId"),
+        reason: googleFailureReason(error),
+      });
+      return context.redirect(
+        googleErrorDestination(dependencies.config, kind, next),
+        302,
+      );
+    }
+  });
 
   app.post("/register", zjson(registerSchema), async (context) => {
     const input = context.req.valid("json");
