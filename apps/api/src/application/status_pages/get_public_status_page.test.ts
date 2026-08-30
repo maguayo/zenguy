@@ -330,4 +330,28 @@ describe("GetPublicStatusPage", () => {
     expect(draft.overall).toBe("MAJOR_OUTAGE");
     expect(await useCase.byId("ws_2", "sp_1")).toBeNull();
   });
+
+  it("serves byCustomDomain only for published pages with an ACTIVE domain", async () => {
+    const { pages, useCase } = build();
+    await pages.insert(page());
+    await pages.setCustomDomain(
+      "sp_1",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: "ch_1",
+        status: "PENDING",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+    expect(await useCase.byCustomDomain("status.example.com")).toBeNull();
+
+    await pages.updateCustomDomainStatus("sp_1", "ACTIVE", NOW, NOW);
+    const view = await useCase.byCustomDomain("status.example.com");
+    expect(view?.title).toBe("Acme Status");
+    expect(await useCase.byCustomDomain("unknown.example.com")).toBeNull();
+
+    await pages.setPublished("sp_1", null, NOW);
+    expect(await useCase.byCustomDomain("status.example.com")).toBeNull();
+  });
 });

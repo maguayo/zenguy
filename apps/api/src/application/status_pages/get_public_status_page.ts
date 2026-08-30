@@ -65,6 +65,19 @@ export class GetPublicStatusPage {
     return this.build(page);
   }
 
+  /** Published pages behind a verified custom domain only. */
+  async byCustomDomain(hostname: string): Promise<PublicStatusPageView | null> {
+    const page = await this.pages.findByCustomDomain(hostname);
+    if (
+      page === null ||
+      page.publishedAt === null ||
+      page.customDomainStatus !== "ACTIVE"
+    ) {
+      return null;
+    }
+    return this.build(page);
+  }
+
   private async build(page: StatusPage): Promise<PublicStatusPageView> {
     const now = this.clock.now();
     const items = await this.items.listForPage(page.id);

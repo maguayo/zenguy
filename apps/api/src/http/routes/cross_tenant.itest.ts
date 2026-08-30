@@ -401,6 +401,25 @@ describe("cross-tenant route isolation", () => {
         },
       },
       {
+        label: "custom domain connected cross-tenant",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}/custom-domain`,
+        init: {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ hostname: "stolen.example.com" }),
+        },
+      },
+      {
+        label: "custom domain checked cross-tenant",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}/custom-domain/check`,
+        init: { method: "POST" },
+      },
+      {
+        label: "custom domain removed cross-tenant",
+        path: `/api/workspaces/${WORKSPACE_B.id}/status-pages/${statusPage.id}/custom-domain`,
+        init: { method: "DELETE" },
+      },
+      {
         label: "incident updates listing",
         path: `/api/workspaces/${WORKSPACE_B.id}/incidents/${incident.id}/updates`,
       },

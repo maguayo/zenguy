@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { conflict } from "../../shared/errors";
+import type { CustomDomainStatus } from "./types";
 
 /** Slugs the public /status/* namespace keeps for itself. */
 export const RESERVED_STATUS_PAGE_SLUGS = new Set([
@@ -67,6 +68,43 @@ export const statusPageItemUpdateSchema = z.object({
 export type StatusPageItemConfigUpdate = z.infer<
   typeof statusPageItemUpdateSchema
 >;
+
+const HOSTNAME_PATTERN =
+  /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u;
+
+export const customDomainSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine((value) => HOSTNAME_PATTERN.test(value), {
+    message: "Enter a hostname like status.example.com",
+  })
+  .refine(
+    (value) => value !== "zenguy.com" && !value.endsWith(".zenguy.com"),
+    { message: "zenguy.com hostnames cannot be used as custom domains" },
+  );
+
+/** Maps a Cloudflare custom hostname record onto our persisted status. */
+export function customDomainStatusFromHostname(
+  status: string,
+  sslStatus: string | null,
+): CustomDomainStatus {
+  if (status === "active" && sslStatus === "active") return "ACTIVE";
+  if (["blocked", "deleted", "moved", "test_failed"].includes(status)) {
+    return "FAILED";
+  }
+  return "PENDING";
+}
+
+export function throwIfDomainTaken(error: unknown): void {
+  if (
+    error instanceof Error &&
+    /UNIQUE/iu.test(error.message) &&
+    /custom_domain/iu.test(error.message)
+  ) {
+    throw conflict("This domain is already connected to another status page");
+  }
+}
 
 export function throwIfSlugTaken(error: unknown): void {
   if (

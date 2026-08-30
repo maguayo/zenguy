@@ -17,6 +17,14 @@ export function presentStatusPage(page: StatusPage) {
     accentColor: page.accentColor,
     theme: page.theme,
     publishedAt: nullableIso(page.publishedAt),
+    customDomain:
+      page.customDomain === null
+        ? null
+        : {
+            hostname: page.customDomain,
+            status: page.customDomainStatus ?? "PENDING",
+            checkedAt: nullableIso(page.customDomainCheckedAt),
+          },
     createdAt: new Date(page.createdAt).toISOString(),
     updatedAt: new Date(page.updatedAt).toISOString(),
   };

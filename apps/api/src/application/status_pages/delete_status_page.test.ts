@@ -4,6 +4,7 @@ import type { Subscription } from "../../domain/billing/types";
 import type { StatusPage } from "../../domain/status_pages/types";
 import type { User } from "../../domain/users/types";
 import { FixedClock } from "../../shared/clock";
+import { FakeCustomHostnameClient } from "../../test/fakes/custom_hostnames";
 import { FakeSubscriptionRepo } from "../../test/fakes/repos";
 import { FakeStatusPageRepo } from "../../test/fakes/status_page_repos";
 import { DeleteStatusPage } from "./delete_status_page";
@@ -63,14 +64,16 @@ function build() {
   const pages = new FakeStatusPageRepo();
   const subscriptions = new FakeSubscriptionRepo();
   subscriptions.subscriptions.set("ws_1", subscription("ws_1"));
+  const client = new FakeCustomHostnameClient();
   const audits: WriteAuditInput[] = [];
   const useCase = new DeleteStatusPage(
     pages,
     subscriptions,
+    client,
     { execute: async (entry) => void audits.push(entry) },
     new FixedClock(NOW + 1_000),
   );
-  return { pages, audits, useCase };
+  return { pages, client, audits, useCase };
 }
 
 describe("DeleteStatusPage", () => {
@@ -86,6 +89,30 @@ describe("DeleteStatusPage", () => {
     expect(await pages.findById("ws_1", "sp_1")).toBeNull();
     expect(await pages.findBySlug("slug-sp_1")).toBeNull();
     expect(audits[0]?.action).toBe(AUDIT_ACTIONS.statusPageDeleted);
+  });
+
+  it("removes the Cloudflare custom hostname when the page had one", async () => {
+    const { pages, client, useCase } = build();
+    const record = await client.create("status.example.com");
+    await pages.insert(page("sp_1"));
+    await pages.setCustomDomain(
+      "sp_1",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: record.id,
+        status: "ACTIVE",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+    await useCase.execute({
+      workspaceId: "ws_1",
+      actor: ACTOR,
+      actorRole: "OWNER",
+      pageId: "sp_1",
+    });
+    expect(client.removed).toContain(record.id);
+    expect(await pages.findById("ws_1", "sp_1")).toBeNull();
   });
 
   it("rejects MEMBER role and cross-workspace pages", async () => {

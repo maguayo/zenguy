@@ -2,14 +2,17 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { WriteAudit } from "../../application/audit/write_audit";
 import { AddStatusPageItem } from "../../application/status_pages/add_item";
+import { CheckCustomDomain } from "../../application/status_pages/check_custom_domain";
 import { CreateStatusPage } from "../../application/status_pages/create_status_page";
 import { DeleteStatusPage } from "../../application/status_pages/delete_status_page";
 import type { GetPublicStatusPage } from "../../application/status_pages/get_public_status_page";
 import { GetStatusPage } from "../../application/status_pages/get_status_page";
 import { ListStatusPages } from "../../application/status_pages/list_status_pages";
 import { PublishStatusPage } from "../../application/status_pages/publish_status_page";
+import { RemoveCustomDomain } from "../../application/status_pages/remove_custom_domain";
 import { RemoveStatusPageItem } from "../../application/status_pages/remove_item";
 import { ReorderStatusPageItems } from "../../application/status_pages/reorder_items";
+import { SetCustomDomain } from "../../application/status_pages/set_custom_domain";
 import { UpdateStatusPageItem } from "../../application/status_pages/update_item";
 import { UpdateStatusPage } from "../../application/status_pages/update_status_page";
 import type { SubscriptionRepo } from "../../domain/billing/repo";
@@ -25,6 +28,8 @@ import {
   statusPageUpdateSchema,
 } from "../../domain/status_pages/rules";
 import type { MonitorRepo } from "../../domain/uptime/repo";
+import type { CustomHostnameClient } from "../../infrastructure/cloudflare/custom_hostnames";
+import type { CnameResolver } from "../../infrastructure/dns/doh";
 import type { UserRepo } from "../../domain/users/repo";
 import type {
   MemberRepo,
@@ -57,6 +62,10 @@ export interface StatusPageRoutesDependencies {
   monitors: MonitorRepo;
   tests: BrowserTestRepo;
   getPublicStatusPage: GetPublicStatusPage;
+  customHostnames: CustomHostnameClient | null;
+  cnameResolver: CnameResolver;
+  /** CNAME target customers point at; null when custom domains are off. */
+  statusCnameTarget: string | null;
   rateLimiter: RateLimiter;
   audit: Pick<WriteAudit, "execute">;
   clock: Clock;
@@ -109,6 +118,29 @@ export function statusPageRoutes(
   const deleteStatusPage = new DeleteStatusPage(
     dependencies.statusPages,
     dependencies.subscriptions,
+    dependencies.customHostnames,
+    dependencies.audit,
+    dependencies.clock,
+  );
+  const setCustomDomain = new SetCustomDomain(
+    dependencies.statusPages,
+    dependencies.subscriptions,
+    dependencies.customHostnames,
+    dependencies.audit,
+    dependencies.clock,
+  );
+  const checkCustomDomain = new CheckCustomDomain(
+    dependencies.statusPages,
+    dependencies.subscriptions,
+    dependencies.customHostnames,
+    dependencies.cnameResolver,
+    dependencies.statusCnameTarget,
+    dependencies.clock,
+  );
+  const removeCustomDomain = new RemoveCustomDomain(
+    dependencies.statusPages,
+    dependencies.subscriptions,
+    dependencies.customHostnames,
     dependencies.audit,
     dependencies.clock,
   );
@@ -250,6 +282,64 @@ export function statusPageRoutes(
     active,
     async (context) => {
       await deleteStatusPage.execute({
+        workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        pageId: context.req.param("pageId"),
+        ip: requestIp(context),
+      });
+      return context.json({ data: { ok: true } });
+    },
+  );
+
+  app.put(
+    "/:workspaceId/status-pages/:pageId/custom-domain",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    manage,
+    active,
+    zjson(z.object({ hostname: z.string().min(1).max(300) })),
+    async (context) => {
+      const page = await setCustomDomain.execute({
+        workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        pageId: context.req.param("pageId"),
+        hostname: context.req.valid("json").hostname,
+        ip: requestIp(context),
+      });
+      return context.json({ data: presentStatusPage(page) });
+    },
+  );
+
+  app.post(
+    "/:workspaceId/status-pages/:pageId/custom-domain/check",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    manage,
+    active,
+    async (context) => {
+      const result = await checkCustomDomain.execute({
+        workspaceId: context.get("workspace").id,
+        actor: context.get("user"),
+        actorRole: context.get("role"),
+        pageId: context.req.param("pageId"),
+      });
+      return context.json({ data: result });
+    },
+  );
+
+  app.delete(
+    "/:workspaceId/status-pages/:pageId/custom-domain",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    manage,
+    active,
+    async (context) => {
+      await removeCustomDomain.execute({
         workspaceId: context.get("workspace").id,
         actor: context.get("user"),
         actorRole: context.get("role"),

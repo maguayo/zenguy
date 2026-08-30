@@ -1,4 +1,5 @@
 import {
+  customDomainSchema,
   statusPageConfigSchema,
   statusPageItemConfigSchema,
   statusPageItemUpdateSchema,
@@ -45,6 +46,11 @@ export function parseStatusPageItemConfig(
   value: unknown,
 ): StatusPageItemConfig {
   const result = statusPageItemConfigSchema.safeParse(value);
+  return result.success ? result.data : configValidation(result.error);
+}
+
+export function parseCustomDomain(value: unknown): string {
+  const result = customDomainSchema.safeParse(value);
   return result.success ? result.data : configValidation(result.error);
 }
 

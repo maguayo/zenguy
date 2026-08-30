@@ -56,6 +56,10 @@ import {
   RecordingPaddleClient,
   RecordingStripeClient,
 } from "../../test/fakes/billing";
+import {
+  FakeCnameResolver,
+  FakeCustomHostnameClient,
+} from "../../test/fakes/custom_hostnames";
 import { RecordingEmailSender } from "../../test/fakes/email";
 import { FakeIds } from "../../test/fakes/ids";
 import { freshDb, freshKv, stripeTestEnv } from "../../test/helpers";
@@ -183,6 +187,20 @@ const INCIDENT_ID = "inc_rbac_matrix";
 const STATUS_PAGE_ID = "sp_rbac_matrix";
 const STATUS_PAGE_ITEM_ID = "spi_rbac_matrix";
 const INCIDENT_UPDATE_ID = "iu_rbac_matrix";
+const STATUS_PAGE_DOMAIN_ID = "sp_rbac_domain";
+const STATUS_PAGE_HOSTNAME_ID = "ch_rbac_domain";
+
+function matrixCustomHostnames(): FakeCustomHostnameClient {
+  const client = new FakeCustomHostnameClient();
+  client.records.set(STATUS_PAGE_HOSTNAME_ID, {
+    id: STATUS_PAGE_HOSTNAME_ID,
+    hostname: "matrix-status.example.com",
+    status: "active",
+    sslStatus: "active",
+    verificationErrors: [],
+  });
+  return client;
+}
 const INVITATION_ID = "inv_rbac_matrix";
 const PUBLIC_INVITATION_ID = "inv_rbac_public";
 const PUBLIC_INVITATION_TOKEN = "rbac-public-invitation-token";
@@ -620,6 +638,24 @@ async function seedFixture(
     createdBy: USERS.owner.id,
     createdAt: NOW,
   });
+  await new D1StatusPageRepo(bindings.DB).insert({
+    id: STATUS_PAGE_DOMAIN_ID,
+    workspaceId: WORKSPACE.id,
+    slug: "rbac-matrix-domain",
+    title: "Matrix Domain Status",
+    description: null,
+    accentColor: null,
+    theme: "SYSTEM",
+    publishedAt: NOW,
+    customDomain: "matrix-status.example.com",
+    customHostnameId: STATUS_PAGE_HOSTNAME_ID,
+    customDomainStatus: "ACTIVE",
+    customDomainCheckedAt: NOW,
+    createdBy: USERS.owner.id,
+    createdAt: NOW,
+    updatedAt: NOW,
+    deletedAt: null,
+  });
 
   const paddle = new RecordingPaddleClient();
   paddle.transactions = [
@@ -637,6 +673,9 @@ async function seedFixture(
   const app = buildApp(bindings, {
     clock,
     ids,
+    customHostnames: matrixCustomHostnames(),
+    cnameResolver: new FakeCnameResolver(),
+    statusCnameTarget: "customers.zenguy.com",
     emailSender: new RecordingEmailSender(),
     paddleClient: paddle,
     stripeClient: new RecordingStripeClient() as unknown as HttpStripeClient,
@@ -1215,6 +1254,30 @@ const ROUTES: RouteCase[] = [
     "OWNER_ADMIN",
     200,
     `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/items/${STATUS_PAGE_ITEM_ID}`,
+    { method: "DELETE" },
+    true,
+  ),
+  route(
+    "PUT .../status-pages/:id/custom-domain",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_ID}/custom-domain`,
+    json("PUT", { hostname: "matrix-new.example.com" }),
+    true,
+  ),
+  route(
+    "POST .../status-pages/:id/custom-domain/check",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_DOMAIN_ID}/custom-domain/check`,
+    { method: "POST" },
+    true,
+  ),
+  route(
+    "DELETE .../status-pages/:id/custom-domain",
+    "OWNER_ADMIN",
+    200,
+    `/api/workspaces/${WORKSPACE.id}/status-pages/${STATUS_PAGE_DOMAIN_ID}/custom-domain`,
     { method: "DELETE" },
     true,
   ),

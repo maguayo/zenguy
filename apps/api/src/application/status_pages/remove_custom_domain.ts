@@ -11,7 +11,7 @@ import type { Clock } from "../../shared/clock";
 import { forbidden, notFound } from "../../shared/errors";
 import { logEvent } from "../../shared/log";
 
-export class DeleteStatusPage {
+export class RemoveCustomDomain {
   constructor(
     private readonly pages: StatusPageRepo,
     private readonly subscriptions: SubscriptionRepo,
@@ -35,6 +35,10 @@ export class DeleteStatusPage {
     );
     const page = await this.pages.findById(input.workspaceId, input.pageId);
     if (page === null) throw notFound("Status page");
+    if (page.customDomain === null) throw notFound("Custom domain");
+
+    // Best-effort external cleanup: the local columns clear either way, so a
+    // Cloudflare hiccup never wedges the page. Orphans go inert once DNS moves.
     if (this.customHostnames !== null && page.customHostnameId !== null) {
       await this.customHostnames.remove(page.customHostnameId).catch((error) => {
         logEvent("custom_domain.cleanup_failed", {
@@ -43,14 +47,14 @@ export class DeleteStatusPage {
         });
       });
     }
-    await this.pages.softDelete(page.id, this.clock.now());
+    await this.pages.clearCustomDomain(page.id, this.clock.now());
     await this.audit.execute({
       workspaceId: input.workspaceId,
       actorUserId: input.actor.id,
-      action: AUDIT_ACTIONS.statusPageDeleted,
+      action: AUDIT_ACTIONS.statusPageUpdated,
       resourceType: "status_page",
       resourceId: page.id,
-      metadata: { title: page.title, slug: page.slug },
+      metadata: { changed: "customDomain", domain: page.customDomain, removed: true },
       ip: input.ip,
     });
   }

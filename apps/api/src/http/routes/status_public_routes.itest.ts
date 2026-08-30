@@ -256,6 +256,81 @@ describe("public status routes", () => {
     expect(cache.putCalls).toBe(1);
   });
 
+  it("serves a verified custom domain at / and /json, and nothing else", async () => {
+    const pages = new D1StatusPageRepo(testEnv().DB);
+    await pages.setCustomDomain(
+      "sp_pub",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: "ch_pub",
+        status: "ACTIVE",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+
+    const html = await app.request("https://status.example.com/");
+    expect(html.status).toBe(200);
+    const body = await html.text();
+    expect(body).toContain("Acme Status");
+    expect(body).toContain("Public API");
+    expect(body).toContain('<link rel="canonical" href="https://status.example.com/">');
+    assertSanitized(body);
+
+    const json = await app.request("https://status.example.com/json");
+    expect(json.status).toBe(200);
+    expect(json.headers.get("access-control-allow-origin")).toBe("*");
+    assertSanitized(await json.text());
+
+    for (const blocked of [
+      "https://status.example.com/status/acme",
+      "https://status.example.com/api/health",
+      "https://status.example.com/anything",
+    ]) {
+      const response = await app.request(blocked);
+      expect(response.status, blocked).toBe(404);
+      if (response.body !== null) await response.body.cancel();
+    }
+    const post = await app.request("https://status.example.com/", {
+      method: "POST",
+    });
+    expect(post.status).toBe(404);
+    if (post.body !== null) await post.body.cancel();
+  });
+
+  it("hides custom domains that are not verified or belong to unpublished pages", async () => {
+    const pages = new D1StatusPageRepo(testEnv().DB);
+    await pages.setCustomDomain(
+      "sp_pub",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: "ch_pub",
+        status: "PENDING",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+    const pending = await app.request("https://status.example.com/");
+    expect(pending.status).toBe(404);
+    if (pending.body !== null) await pending.body.cancel();
+
+    const unknown = await app.request("https://unknown.example.net/");
+    expect(unknown.status).toBe(404);
+    if (unknown.body !== null) await unknown.body.cancel();
+
+    await pages.updateCustomDomainStatus("sp_pub", "ACTIVE", NOW, NOW);
+    await pages.setPublished("sp_pub", null, NOW);
+    const unpublished = await app.request("https://status.example.com/");
+    expect(unpublished.status).toBe(404);
+    if (unpublished.body !== null) await unpublished.body.cancel();
+  });
+
+  it("keeps first-party hosts on the normal routing table", async () => {
+    const health = await app.request("https://app.zenguy.com/api/health");
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toEqual({ data: { ok: true } });
+  });
+
   it("rate limits by IP on cache misses", async () => {
     await build(true);
     let lastStatus = 0;
