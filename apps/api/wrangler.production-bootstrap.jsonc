@@ -54,7 +54,7 @@
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
     "RUNNER_DISPATCH": "container",
     "RUNNER_ENVIRONMENT": "production",
-    "CF_SAAS_ZONE_ID": "REPLACE-WITH-ZENGUY-ZONE-ID",
+    "CF_SAAS_ZONE_ID": "69d739c681934e28848e8d8294f06eac",
     "STATUS_CNAME_TARGET": "customers.zenguy.com",
     "PUBLIC_API_URL": "https://app.zenguy.com",
     "RUNNER_UNRESTRICTED_ACTIONS": "true"
