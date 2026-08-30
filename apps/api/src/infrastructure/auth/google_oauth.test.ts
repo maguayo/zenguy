@@ -140,10 +140,12 @@ async function sha256Base64Url(value: string): Promise<string> {
 function expectOAuthError(
   promise: Promise<unknown>,
   code: GoogleOAuthError["code"],
+  diagnostic?: GoogleOAuthError["diagnostic"],
 ): Promise<void> {
   return expect(promise).rejects.toMatchObject({
     name: "GoogleOAuthError",
     code,
+    ...(diagnostic === undefined ? {} : { diagnostic }),
   }) as Promise<void>;
 }
 
@@ -302,7 +304,7 @@ describe("GoogleOAuthProvider callback", () => {
       cache: "no-store",
       credentials: "omit",
       method: "POST",
-      redirect: "error",
+      redirect: "manual",
     });
     const headers = new Headers(init?.headers);
     expect(headers.get("accept")).toBe("application/json");
@@ -434,11 +436,33 @@ describe("GoogleOAuthProvider callback", () => {
   );
 
   it.each([
-    ["a provider error", new Response('{"error":"invalid_grant"}', { status: 400 })],
-    ["malformed JSON", new Response("not json", { status: 200 })],
-    ["a missing ID token", new Response("{}", { status: 200 })],
-    ["an oversized body", new Response("x".repeat(32 * 1_024 + 1), { status: 200 })],
-  ])("bounds and rejects %s from the token endpoint", async (_name, response) => {
+    [
+      "a provider error",
+      new Response('{"error":"invalid_grant","error_description":"secret detail"}', {
+        status: 400,
+      }),
+      "token_exchange_rejected_invalid_grant",
+    ],
+    [
+      "malformed JSON",
+      new Response("not json", { status: 200 }),
+      "token_exchange_invalid_response",
+    ],
+    [
+      "a missing ID token",
+      new Response("{}", { status: 200 }),
+      "token_exchange_invalid_response",
+    ],
+    [
+      "an oversized body",
+      new Response("x".repeat(32 * 1_024 + 1), { status: 200 }),
+      "token_exchange_invalid_response",
+    ],
+  ] as const)("bounds and rejects %s from the token endpoint", async (
+    _name,
+    response,
+    diagnostic,
+  ) => {
     const fetchFn = vi.fn<typeof fetch>(async () => response);
     const oauth = provider({ fetchFn });
     const authorization = await startAuthorization(oauth);
@@ -451,6 +475,26 @@ describe("GoogleOAuthProvider callback", () => {
         stateCookie: authorization.stateCookie,
       }),
       "token_exchange_failed",
+      diagnostic,
+    );
+  });
+
+  it("does not expose fetch failure details in its diagnostic", async () => {
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      throw new Error(`client_secret=${CLIENT_SECRET}`);
+    });
+    const oauth = provider({ fetchFn });
+    const authorization = await startAuthorization(oauth);
+
+    await expectOAuthError(
+      oauth.completeAuthorization({
+        code: "valid-code",
+        redirectUri: REDIRECT_URI,
+        returnedState: authorization.returnedState,
+        stateCookie: authorization.stateCookie,
+      }),
+      "token_exchange_failed",
+      "token_exchange_fetch_error",
     );
   });
 
@@ -476,6 +520,7 @@ describe("GoogleOAuthProvider callback", () => {
         stateCookie: authorization.stateCookie,
       }),
       "token_exchange_failed",
+      "token_exchange_timeout",
     );
     expect(fetchFn).toHaveBeenCalledOnce();
   });

@@ -316,9 +316,11 @@ describe("Google OAuth routes", () => {
   });
 
   it("maps provider failures to failed after preserving a validated next", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     googleOAuth.completionError = new GoogleOAuthError(
       "token_exchange_failed",
-      "Provider unavailable",
+      "Provider unavailable: authorization-code-sensitive client-secret-sensitive",
+      "token_exchange_rejected_invalid_grant",
     );
     const next = "/grants/redeem";
     const started = await startGoogle(app, next);
@@ -335,6 +337,31 @@ describe("Google OAuth routes", () => {
 
     expectErrorRedirect(callback, "failed", next);
     expect(findCookie(callback, "zenguy_rt")).toBeUndefined();
+
+    const oauthFailure = log.mock.calls
+      .map(([value]) =>
+        typeof value === "string"
+          ? (JSON.parse(value) as Record<string, unknown>)
+          : {},
+      )
+      .find((entry) => entry.event === "google_oauth_failed");
+    expect(oauthFailure).toMatchObject({
+      event: "google_oauth_failed",
+      reason: "token_exchange_failed",
+      diagnostic: "token_exchange_rejected_invalid_grant",
+      requestId: expect.any(String),
+      t: expect.any(Number),
+    });
+    expect(Object.keys(oauthFailure ?? {}).sort()).toEqual(
+      ["diagnostic", "event", "reason", "requestId", "t"].sort(),
+    );
+    expect(JSON.stringify(oauthFailure)).not.toContain(
+      "authorization-code-sensitive",
+    );
+    expect(JSON.stringify(oauthFailure)).not.toContain(
+      "client-secret-sensitive",
+    );
+    log.mockRestore();
   });
 
   it("blocks an open redirect throughout start and callback", async () => {

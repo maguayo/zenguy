@@ -164,10 +164,21 @@ function googleFailureKind(error: unknown): GoogleRedirectError {
   return "failed";
 }
 
-function googleFailureReason(error: unknown): string {
-  if (error instanceof GoogleOAuthError) return error.code;
-  if (error instanceof AppError) return `app_${error.code.toLowerCase()}`;
-  return "unexpected";
+function googleFailureFields(
+  error: unknown,
+): { reason: string; diagnostic?: string } {
+  if (error instanceof GoogleOAuthError) {
+    return {
+      reason: error.code,
+      ...(error.diagnostic === undefined
+        ? {}
+        : { diagnostic: error.diagnostic }),
+    };
+  }
+  if (error instanceof AppError) {
+    return { reason: `app_${error.code.toLowerCase()}` };
+  }
+  return { reason: "unexpected" };
 }
 
 function clientIp(context: { req: { header(name: string): string | undefined } }) {
@@ -319,7 +330,7 @@ export function authRoutes(
       );
       logEvent("google_oauth_start_failed", {
         requestId: context.get("requestId"),
-        reason: googleFailureReason(error),
+        ...googleFailureFields(error),
       });
       return context.redirect(
         googleErrorDestination(dependencies.config, "failed", next),
@@ -389,7 +400,7 @@ export function authRoutes(
       const kind = googleFailureKind(error);
       logEvent("google_oauth_failed", {
         requestId: context.get("requestId"),
-        reason: googleFailureReason(error),
+        ...googleFailureFields(error),
       });
       return context.redirect(
         googleErrorDestination(dependencies.config, kind, next),

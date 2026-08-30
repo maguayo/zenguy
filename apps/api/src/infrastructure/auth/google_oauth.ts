@@ -67,6 +67,21 @@ export type GoogleOAuthErrorCode =
   | "token_exchange_failed"
   | "invalid_id_token";
 
+export type GoogleOAuthDiagnostic =
+  | "token_exchange_fetch_error"
+  | "token_exchange_invalid_response"
+  | "token_exchange_rejected"
+  | "token_exchange_rejected_4xx"
+  | "token_exchange_rejected_5xx"
+  | "token_exchange_rejected_invalid_client"
+  | "token_exchange_rejected_invalid_grant"
+  | "token_exchange_rejected_invalid_request"
+  | "token_exchange_rejected_server_error"
+  | "token_exchange_rejected_temporarily_unavailable"
+  | "token_exchange_rejected_unauthorized_client"
+  | "token_exchange_rejected_unsupported_grant_type"
+  | "token_exchange_timeout";
+
 /** A stable, non-sensitive error that HTTP routes can map to a safe redirect. */
 export class GoogleOAuthError extends Error {
   override readonly name = "GoogleOAuthError";
@@ -74,6 +89,7 @@ export class GoogleOAuthError extends Error {
   constructor(
     readonly code: GoogleOAuthErrorCode,
     message: string,
+    readonly diagnostic?: GoogleOAuthDiagnostic,
   ) {
     super(message);
   }
@@ -393,6 +409,44 @@ function parseTokenResponse(value: string): TokenResponse {
   return { idToken: parsed.id_token };
 }
 
+function tokenEndpointDiagnostic(
+  response: Response,
+  responseBody: string,
+): GoogleOAuthDiagnostic {
+  let providerError: unknown;
+  try {
+    const parsed: unknown = JSON.parse(responseBody);
+    providerError = isPlainObject(parsed) ? parsed.error : undefined;
+  } catch {
+    providerError = undefined;
+  }
+
+  switch (providerError) {
+    case "invalid_client":
+      return "token_exchange_rejected_invalid_client";
+    case "invalid_grant":
+      return "token_exchange_rejected_invalid_grant";
+    case "invalid_request":
+      return "token_exchange_rejected_invalid_request";
+    case "server_error":
+      return "token_exchange_rejected_server_error";
+    case "temporarily_unavailable":
+      return "token_exchange_rejected_temporarily_unavailable";
+    case "unauthorized_client":
+      return "token_exchange_rejected_unauthorized_client";
+    case "unsupported_grant_type":
+      return "token_exchange_rejected_unsupported_grant_type";
+    default:
+      if (response.status >= 400 && response.status < 500) {
+        return "token_exchange_rejected_4xx";
+      }
+      if (response.status >= 500 && response.status < 600) {
+        return "token_exchange_rejected_5xx";
+      }
+      return "token_exchange_rejected";
+  }
+}
+
 function cleanOptionalName(value: unknown): string | null {
   if (value === undefined) return null;
   if (typeof value !== "string") throw new Error("invalid name");
@@ -481,7 +535,10 @@ export class GoogleOAuthProvider {
   ) {
     this.config = validateConfig(config);
     this.stateKey = textEncoder.encode(this.config.stateSecret);
-    this.fetchFn = options.fetchFn ?? fetch;
+    // Keep the Worker global behind an arrow. Workerd can enforce the receiver
+    // on global fetch, while `this.fetchFn(...)` would otherwise invoke an
+    // unbound reference with the provider instance as `this`.
+    this.fetchFn = options.fetchFn ?? ((input, init) => fetch(input, init));
     this.keyResolver = options.keyResolver ?? productionGoogleJwks;
     this.clock = options.clock ?? { now: () => Date.now() };
     this.randomBytes =
@@ -697,37 +754,75 @@ export class GoogleOAuthProvider {
       redirect_uri: redirectUri,
     });
     const controller = new AbortController();
+    let timedOut = false;
     const timeout = setTimeout(
-      () => controller.abort("Google token exchange timed out"),
+      () => {
+        timedOut = true;
+        controller.abort("Google token exchange timed out");
+      },
       this.tokenExchangeTimeoutMs,
     );
 
     try {
-      const response = await this.fetchFn(GOOGLE_TOKEN_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Cache-Control": "no-store",
-          "Content-Type": "application/x-www-form-urlencoded",
-          Pragma: "no-cache",
-        },
-        body,
-        cache: "no-store",
-        credentials: "omit",
-        redirect: "error",
-        signal: controller.signal,
-      });
-      const responseBody = await readBoundedText(
-        response,
-        MAX_TOKEN_RESPONSE_BYTES,
-      );
-      if (!response.ok) throw new Error("token endpoint rejected the code");
-      return parseTokenResponse(responseBody).idToken;
-    } catch {
-      throw new GoogleOAuthError(
-        "token_exchange_failed",
-        "Google token exchange failed",
-      );
+      let response: Response;
+      try {
+        response = await this.fetchFn(GOOGLE_TOKEN_ENDPOINT, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Cache-Control": "no-store",
+            "Content-Type": "application/x-www-form-urlencoded",
+            Pragma: "no-cache",
+          },
+          body,
+          cache: "no-store",
+          credentials: "omit",
+          // Workerd does not implement `redirect: "error"`. Manual preserves
+          // fail-closed behavior because every 3xx is rejected by !response.ok.
+          redirect: "manual",
+          signal: controller.signal,
+        });
+      } catch {
+        throw new GoogleOAuthError(
+          "token_exchange_failed",
+          "Google token exchange failed",
+          timedOut ? "token_exchange_timeout" : "token_exchange_fetch_error",
+        );
+      }
+
+      let responseBody: string;
+      try {
+        responseBody = await readBoundedText(
+          response,
+          MAX_TOKEN_RESPONSE_BYTES,
+        );
+      } catch {
+        throw new GoogleOAuthError(
+          "token_exchange_failed",
+          "Google token exchange failed",
+          timedOut
+            ? "token_exchange_timeout"
+            : "token_exchange_invalid_response",
+        );
+      }
+
+      if (!response.ok) {
+        throw new GoogleOAuthError(
+          "token_exchange_failed",
+          "Google token exchange failed",
+          tokenEndpointDiagnostic(response, responseBody),
+        );
+      }
+
+      try {
+        return parseTokenResponse(responseBody).idToken;
+      } catch {
+        throw new GoogleOAuthError(
+          "token_exchange_failed",
+          "Google token exchange failed",
+          "token_exchange_invalid_response",
+        );
+      }
     } finally {
       clearTimeout(timeout);
     }
