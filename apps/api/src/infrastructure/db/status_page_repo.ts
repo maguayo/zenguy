@@ -4,6 +4,7 @@ import type {
   StatusPageUpdateFields,
 } from "../../domain/status_pages/repo";
 import type {
+  CustomDomainStatus,
   StatusPage,
   StatusPageItem,
   StatusPageResourceType,
@@ -20,6 +21,10 @@ interface StatusPageRow {
   accent_color: string | null;
   theme: StatusPageTheme;
   published_at: number | null;
+  custom_domain: string | null;
+  custom_hostname_id: string | null;
+  custom_domain_status: CustomDomainStatus | null;
+  custom_domain_checked_at: number | null;
   created_by: string | null;
   created_at: number;
   updated_at: number;
@@ -36,6 +41,10 @@ function toStatusPage(row: StatusPageRow): StatusPage {
     accentColor: row.accent_color,
     theme: row.theme,
     publishedAt: row.published_at,
+    customDomain: row.custom_domain,
+    customHostnameId: row.custom_hostname_id,
+    customDomainStatus: row.custom_domain_status,
+    customDomainCheckedAt: row.custom_domain_checked_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -80,8 +89,10 @@ export class D1StatusPageRepo implements StatusPageRepo {
         .prepare(
           `INSERT INTO status_pages
             (id, workspace_id, slug, title, description, accent_color, theme,
-             published_at, created_by, created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             published_at, custom_domain, custom_hostname_id,
+             custom_domain_status, custom_domain_checked_at, created_by,
+             created_at, updated_at, deleted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           page.id,
@@ -92,6 +103,10 @@ export class D1StatusPageRepo implements StatusPageRepo {
           page.accentColor,
           page.theme,
           page.publishedAt,
+          page.customDomain,
+          page.customHostnameId,
+          page.customDomainStatus,
+          page.customDomainCheckedAt,
           page.createdBy,
           page.createdAt,
           page.updatedAt,
@@ -119,6 +134,17 @@ export class D1StatusPageRepo implements StatusPageRepo {
           "SELECT * FROM status_pages WHERE slug = ? AND deleted_at IS NULL",
         )
         .bind(slug),
+    );
+    return row === null ? null : toStatusPage(row);
+  }
+
+  async findByCustomDomain(hostname: string): Promise<StatusPage | null> {
+    const row = await one<StatusPageRow>(
+      this.database
+        .prepare(
+          "SELECT * FROM status_pages WHERE custom_domain = ? AND deleted_at IS NULL",
+        )
+        .bind(hostname),
     );
     return row === null ? null : toStatusPage(row);
   }
@@ -187,6 +213,68 @@ export class D1StatusPageRepo implements StatusPageRepo {
            WHERE id = ? AND deleted_at IS NULL`,
         )
         .bind(publishedAt, at, id),
+    );
+  }
+
+  async setCustomDomain(
+    id: string,
+    domain: {
+      customDomain: string;
+      customHostnameId: string;
+      status: CustomDomainStatus;
+      checkedAt: number;
+    },
+    at: number,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE status_pages
+           SET custom_domain = ?, custom_hostname_id = ?,
+               custom_domain_status = ?, custom_domain_checked_at = ?,
+               updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL`,
+        )
+        .bind(
+          domain.customDomain,
+          domain.customHostnameId,
+          domain.status,
+          domain.checkedAt,
+          at,
+          id,
+        ),
+    );
+  }
+
+  async updateCustomDomainStatus(
+    id: string,
+    status: CustomDomainStatus,
+    checkedAt: number,
+    at: number,
+  ): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE status_pages
+           SET custom_domain_status = ?, custom_domain_checked_at = ?,
+               updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL AND custom_domain IS NOT NULL`,
+        )
+        .bind(status, checkedAt, at, id),
+    );
+  }
+
+  async clearCustomDomain(id: string, at: number): Promise<void> {
+    await run(
+      this.database
+        .prepare(
+          `UPDATE status_pages
+           SET custom_domain = NULL, custom_hostname_id = NULL,
+               custom_domain_status = NULL, custom_domain_checked_at = NULL,
+               updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL`,
+        )
+        .bind(at, id),
     );
   }
 

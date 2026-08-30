@@ -5,6 +5,7 @@ import type {
   StatusPageUpdateFields,
 } from "../../domain/status_pages/repo";
 import type {
+  CustomDomainStatus,
   IncidentUpdate,
   StatusPage,
   StatusPageItem,
@@ -48,6 +49,13 @@ export class FakeStatusPageRepo implements StatusPageRepo {
   async findBySlug(slug: string): Promise<StatusPage | null> {
     const page = [...this.pages.values()].find(
       (entry) => entry.slug === slug && entry.deletedAt === null,
+    );
+    return page === undefined ? null : { ...page };
+  }
+
+  async findByCustomDomain(hostname: string): Promise<StatusPage | null> {
+    const page = [...this.pages.values()].find(
+      (entry) => entry.customDomain === hostname && entry.deletedAt === null,
     );
     return page === undefined ? null : { ...page };
   }
@@ -101,6 +109,72 @@ export class FakeStatusPageRepo implements StatusPageRepo {
     const page = this.pages.get(id);
     if (page === undefined || page.deletedAt !== null) return;
     this.pages.set(id, { ...page, publishedAt, updatedAt: at });
+  }
+
+  async setCustomDomain(
+    id: string,
+    domain: {
+      customDomain: string;
+      customHostnameId: string;
+      status: CustomDomainStatus;
+      checkedAt: number;
+    },
+    at: number,
+  ): Promise<void> {
+    const page = this.pages.get(id);
+    if (page === undefined || page.deletedAt !== null) return;
+    const taken = [...this.pages.values()].some(
+      (entry) =>
+        entry.id !== id &&
+        entry.deletedAt === null &&
+        entry.customDomain === domain.customDomain,
+    );
+    if (taken) {
+      throw new Error("UNIQUE constraint failed: status_pages.custom_domain");
+    }
+    this.pages.set(id, {
+      ...page,
+      customDomain: domain.customDomain,
+      customHostnameId: domain.customHostnameId,
+      customDomainStatus: domain.status,
+      customDomainCheckedAt: domain.checkedAt,
+      updatedAt: at,
+    });
+  }
+
+  async updateCustomDomainStatus(
+    id: string,
+    status: CustomDomainStatus,
+    checkedAt: number,
+    at: number,
+  ): Promise<void> {
+    const page = this.pages.get(id);
+    if (
+      page === undefined ||
+      page.deletedAt !== null ||
+      page.customDomain === null
+    ) {
+      return;
+    }
+    this.pages.set(id, {
+      ...page,
+      customDomainStatus: status,
+      customDomainCheckedAt: checkedAt,
+      updatedAt: at,
+    });
+  }
+
+  async clearCustomDomain(id: string, at: number): Promise<void> {
+    const page = this.pages.get(id);
+    if (page === undefined || page.deletedAt !== null) return;
+    this.pages.set(id, {
+      ...page,
+      customDomain: null,
+      customHostnameId: null,
+      customDomainStatus: null,
+      customDomainCheckedAt: null,
+      updatedAt: at,
+    });
   }
 
   async softDelete(id: string, at: number): Promise<void> {

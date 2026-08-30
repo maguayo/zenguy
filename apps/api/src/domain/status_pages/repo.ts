@@ -1,4 +1,5 @@
 import type {
+  CustomDomainStatus,
   IncidentUpdate,
   StatusPage,
   StatusPageItem,
@@ -17,9 +18,28 @@ export interface StatusPageRepo {
   insert(page: StatusPage): Promise<void>;
   findById(workspaceId: string, id: string): Promise<StatusPage | null>;
   findBySlug(slug: string): Promise<StatusPage | null>;
+  /** Live page owning this custom domain, whatever its verification status. */
+  findByCustomDomain(hostname: string): Promise<StatusPage | null>;
   list(workspaceId: string): Promise<StatusPage[]>;
   update(id: string, changes: StatusPageUpdateFields, at: number): Promise<void>;
   setPublished(id: string, publishedAt: number | null, at: number): Promise<void>;
+  setCustomDomain(
+    id: string,
+    domain: {
+      customDomain: string;
+      customHostnameId: string;
+      status: CustomDomainStatus;
+      checkedAt: number;
+    },
+    at: number,
+  ): Promise<void>;
+  updateCustomDomainStatus(
+    id: string,
+    status: CustomDomainStatus,
+    checkedAt: number,
+    at: number,
+  ): Promise<void>;
+  clearCustomDomain(id: string, at: number): Promise<void>;
   softDelete(id: string, at: number): Promise<void>;
 }
 

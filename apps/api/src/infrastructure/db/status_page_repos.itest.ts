@@ -26,6 +26,10 @@ function page(
     accentColor: null,
     theme: "SYSTEM",
     publishedAt: null,
+    customDomain: null,
+    customHostnameId: null,
+    customDomainStatus: null,
+    customDomainCheckedAt: null,
     createdBy: "usr_1",
     createdAt: NOW,
     updatedAt: NOW,
@@ -119,6 +123,61 @@ describe("D1StatusPageRepo", () => {
     expect(await repo.findById("ws_1", "sp_a")).toBeNull();
     await repo.insert(page("sp_new", "acme", { workspaceId: "ws_2" }));
     expect((await repo.findBySlug("acme"))?.id).toBe("sp_new");
+  });
+
+  it("sets, finds, updates and clears custom domains with global uniqueness", async () => {
+    const repo = new D1StatusPageRepo(testEnv().DB);
+    await repo.insert(page("sp_a", "acme"));
+    await repo.insert(page("sp_b", "other", { workspaceId: "ws_2" }));
+
+    await repo.setCustomDomain(
+      "sp_a",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: "ch_cf_1",
+        status: "PENDING",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+    const withDomain = await repo.findByCustomDomain("status.example.com");
+    expect(withDomain?.id).toBe("sp_a");
+    expect(withDomain?.customDomainStatus).toBe("PENDING");
+    expect(withDomain?.customHostnameId).toBe("ch_cf_1");
+
+    await expect(
+      repo.setCustomDomain(
+        "sp_b",
+        {
+          customDomain: "status.example.com",
+          customHostnameId: "ch_cf_2",
+          status: "PENDING",
+          checkedAt: NOW,
+        },
+        NOW,
+      ),
+    ).rejects.toThrow(/UNIQUE/u);
+
+    await repo.updateCustomDomainStatus("sp_a", "ACTIVE", NOW + 1_000, NOW + 1_000);
+    expect(
+      (await repo.findByCustomDomain("status.example.com"))?.customDomainStatus,
+    ).toBe("ACTIVE");
+
+    await repo.clearCustomDomain("sp_a", NOW + 2_000);
+    expect(await repo.findByCustomDomain("status.example.com")).toBeNull();
+    expect((await repo.findById("ws_1", "sp_a"))?.customDomain).toBeNull();
+    // Freed for someone else.
+    await repo.setCustomDomain(
+      "sp_b",
+      {
+        customDomain: "status.example.com",
+        customHostnameId: "ch_cf_2",
+        status: "PENDING",
+        checkedAt: NOW,
+      },
+      NOW,
+    );
+    expect((await repo.findByCustomDomain("status.example.com"))?.id).toBe("sp_b");
   });
 
   it("caps pages per workspace at 5", async () => {

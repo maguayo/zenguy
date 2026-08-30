@@ -1,5 +1,6 @@
 export type StatusPageTheme = "LIGHT" | "DARK" | "SYSTEM";
 export type StatusPageResourceType = "BROWSER_TEST" | "UPTIME_MONITOR";
+export type CustomDomainStatus = "PENDING" | "ACTIVE" | "FAILED";
 
 export interface StatusPage {
   id: string;
@@ -10,6 +11,10 @@ export interface StatusPage {
   accentColor: string | null;
   theme: StatusPageTheme;
   publishedAt: number | null;
+  customDomain: string | null;
+  customHostnameId: string | null;
+  customDomainStatus: CustomDomainStatus | null;
+  customDomainCheckedAt: number | null;
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
