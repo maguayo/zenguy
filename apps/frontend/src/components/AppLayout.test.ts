@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AlertsOverview } from "../api/types";
-import { alertCreditBanner } from "./AppLayout";
+import {
+  alertCreditBanner,
+  appContentWidth,
+  appContentWidthClass,
+} from "./AppLayout";
 import {
   accountMenuItems,
   navigationItems,
@@ -37,6 +41,31 @@ describe("alert credit banner", () => {
         true,
       ),
     ).toBeNull();
+  });
+});
+
+describe("app content width", () => {
+  it("keeps operational lists fluid and anchors capped pages by content type", () => {
+    expect(appContentWidth("/w/ws_1/tests")).toBe("fluid");
+    expect(appContentWidth("/w/ws_1/uptime")).toBe("fluid");
+    expect(appContentWidth("/w/ws_1/overview")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/tests/test_1")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/runs/run_1")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/settings")).toBe("standard");
+    expect(appContentWidth("/w/ws_1/alerts/sms-calls")).toBe("standard");
+    expect(appContentWidth("/w/ws_1/tests/new")).toBe("narrow");
+    expect(appContentWidth("/w/ws_1/tests/test_1/edit")).toBe("narrow");
+    expect(appContentWidth("/w/ws_1/uptime/new")).toBe("narrow");
+  });
+
+  it("defines only left-anchored width variants", () => {
+    expect(appContentWidthClass).toEqual({
+      fluid: "max-w-none",
+      narrow: "max-w-[1120px]",
+      standard: "max-w-[1440px]",
+      wide: "max-w-[1920px]",
+    });
+    expect(Object.values(appContentWidthClass).join(" ")).not.toContain("mx-auto");
   });
 });
 

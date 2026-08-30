@@ -4,7 +4,14 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { BrowserTest, RunListItem } from "../../api/types";
-import { parseRunFilter, recentRunHistory, runColumns } from "./TestDetailPage";
+import {
+  durationPercentage,
+  parseRunFilter,
+  performanceLegendItems,
+  recentPerformanceSummary,
+  recentRunHistory,
+  runColumns,
+} from "./TestDetailPage";
 
 const test: BrowserTest = {
   channelIds: [],
@@ -24,7 +31,11 @@ const test: BrowserTest = {
   updatedAt: "2026-08-01T10:00:00.000Z",
 };
 
-function run(id: string, createdAt: string): RunListItem {
+function run(
+  id: string,
+  createdAt: string,
+  overrides: Partial<RunListItem> = {},
+): RunListItem {
   return {
     attemptCount: 2,
     billable: true,
@@ -36,6 +47,7 @@ function run(id: string, createdAt: string): RunListItem {
     source: "SCHEDULED",
     status: "PASSED",
     triggeredBy: { name: "Marcos", userId: "user_1" },
+    ...overrides,
   };
 }
 
@@ -64,6 +76,71 @@ describe("test detail history", () => {
     expect(newestFirst.map((item) => item.id)).toEqual(originalOrder);
   });
 
+  it("derives honest performance metrics from completed product results", () => {
+    const runs = [
+      run("direct", "2026-08-29T07:00:00.000Z", {
+        attemptCount: 1,
+        durationMs: 60_000,
+        passedAfterRetry: false,
+      }),
+      run("retry", "2026-08-29T08:00:00.000Z", {
+        attemptCount: 2,
+        durationMs: 180_000,
+      }),
+      run("failed", "2026-08-29T09:00:00.000Z", {
+        attemptCount: 2,
+        durationMs: null,
+        passedAfterRetry: false,
+        status: "FAILED",
+      }),
+      run("active", "2026-08-29T10:00:00.000Z", {
+        attemptCount: 0,
+        durationMs: null,
+        passedAfterRetry: false,
+        status: "RUNNING",
+      }),
+    ];
+
+    expect(recentPerformanceSummary(runs)).toEqual({
+      averageDurationMs: 120_000,
+      maxDurationMs: 180_000,
+      passed: 2,
+      retryCount: 2,
+      retryPercentage: 67,
+      total: 3,
+    });
+  });
+
+  it("scales durations safely for charts and table tracks", () => {
+    expect(durationPercentage(null, 10_000)).toBe(0);
+    expect(durationPercentage(1_000, 0)).toBe(0);
+    expect(durationPercentage(1_000, 100_000)).toBe(12);
+    expect(durationPercentage(50_000, 100_000)).toBe(50);
+    expect(durationPercentage(200_000, 100_000)).toBe(100);
+  });
+
+  it("labels every result tone present in the performance chart", () => {
+    const labels = performanceLegendItems([
+      { passedAfterRetry: true, status: "PASSED" },
+      { passedAfterRetry: false, status: "TIMEOUT" },
+      { passedAfterRetry: false, status: "FAILED" },
+      { passedAfterRetry: false, status: "SYSTEM_ERROR" },
+      { passedAfterRetry: false, status: "RUNNING" },
+    ]).map((item) => item.label);
+
+    expect(labels).toEqual([
+      "Direct",
+      "Retried / timeout",
+      "Failed",
+      "System error",
+      "Active",
+    ]);
+    expect(
+      performanceLegendItems([{ passedAfterRetry: false, status: "TIMEOUT" }])[1]
+        ?.label,
+    ).toBe("Timeout");
+  });
+
   it("presents a compact linked run row with its operational evidence", () => {
     const columns = runColumns(test, "UTC", "ws_1");
     expect(columns.map((column) => column.key)).toEqual([
@@ -71,7 +148,8 @@ describe("test detail history", () => {
       "result",
       "duration",
       "attempts",
-      "triggeredBy",
+      "origin",
+      "open",
     ]);
     const item = run("run_1", "2026-08-29T10:00:00.000Z");
     const html = renderToStaticMarkup(
@@ -92,7 +170,8 @@ describe("test detail history", () => {
     expect(html).toContain("Passed after retry");
     expect(html).toContain("12s");
     expect(html).toContain("2 of 3");
-    expect(html).toContain("Marcos");
+    expect(html).toContain("Scheduled");
     expect(html).toContain("1 billable run");
+    expect(html).toContain("Open run from");
   });
 });

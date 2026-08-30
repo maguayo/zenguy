@@ -9,6 +9,35 @@ import { useWorkspace } from "../contexts/WorkspaceContext";
 import { IconButton } from "./ui/IconButton";
 import { Sidebar } from "./Sidebar";
 
+export type AppContentWidth = "fluid" | "narrow" | "standard" | "wide";
+
+export const appContentWidthClass: Record<AppContentWidth, string> = {
+  fluid: "max-w-none",
+  narrow: "max-w-[1120px]",
+  standard: "max-w-[1440px]",
+  wide: "max-w-[1920px]",
+};
+
+export function appContentWidth(pathname: string): AppContentWidth {
+  const segments = pathname.split("/").filter(Boolean);
+  const page = segments[0] === "w" ? segments.slice(2) : segments;
+  const [section, resourceId, action] = page;
+
+  if (
+    (section === "tests" || section === "uptime") &&
+    (resourceId === "new" || action === "edit")
+  ) {
+    return "narrow";
+  }
+  if ((section === "tests" || section === "uptime") && resourceId === undefined) {
+    return "fluid";
+  }
+  if (section === "alerts" || section === "billing" || section === "settings") {
+    return "standard";
+  }
+  return "wide";
+}
+
 const focusableSelector = [
   "a[href]",
   "button:not([disabled])",
@@ -106,6 +135,7 @@ export function AppLayout() {
   const location = useLocation();
   const { can, current, subscriptionStatus } = useWorkspace();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const contentWidthClass = appContentWidthClass[appContentWidth(location.pathname)];
   const alerts = useQuery({
     queryFn: () => getAlertsOverview(current.id),
     queryKey: alertsQueryKey(current.id),
@@ -139,8 +169,8 @@ export function AppLayout() {
         </header>
 
         {subscriptionStatus === "PAST_DUE" ? (
-          <div className="border-b border-warn-600/20 bg-warn-50 px-4 py-3 text-sm text-zinc-800 md:px-6">
-            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
+          <div className="border-b border-warn-600/20 bg-warn-50 px-4 py-3 text-sm text-zinc-800 md:px-6 xl:px-10">
+            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3`}>
               <p>Your last payment failed. Update your payment method to keep runs going.</p>
               {can("billing.manage") ? (
                 <Link
@@ -157,8 +187,8 @@ export function AppLayout() {
         ) : null}
 
         {creditBanner ? (
-          <div className="border-b border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-zinc-800 md:px-6">
-            <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
+          <div className="border-b border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-zinc-800 md:px-6 xl:px-10">
+            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3`}>
               <p>{creditBanner.message}</p>
               {creditBanner.showTopUp ? (
                 <Link
@@ -174,7 +204,7 @@ export function AppLayout() {
           </div>
         ) : null}
 
-        <main className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 xl:px-10">
+        <main className={`${contentWidthClass} mr-auto w-full px-4 py-6 md:px-6 xl:px-10`}>
           <Outlet />
         </main>
       </div>

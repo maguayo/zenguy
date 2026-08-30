@@ -1,7 +1,7 @@
 /*
  * Zenguy visual rules
  * - Cards use bg-white border border-zinc-200 rounded-lg. Shadows are reserved for overlays.
- * - Page containers use max-w-6xl mx-auto px-4 md:px-6 py-6.
+ * - App pages are left-anchored to the sidebar and choose fluid, wide, standard, or narrow widths by content type.
  * - Page titles use text-xl font-semibold; section titles use text-sm font-semibold text-zinc-900.
  * - Secondary text uses text-zinc-500.
  * - Spacing follows a 4/8/12/16/24 rhythm; tables are dense (py-2.5); controls are h-9.

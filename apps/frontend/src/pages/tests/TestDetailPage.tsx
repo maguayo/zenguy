@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import clsx from "clsx";
 import {
   Bell,
   CalendarClock,
@@ -7,11 +8,9 @@ import {
   CircleAlert,
   Clock3,
   Globe2,
-  History,
   Laptop,
   ListChecks,
   MoreHorizontal,
-  Pencil,
   Play,
   RotateCcw,
   Smartphone,
@@ -22,8 +21,6 @@ import { listChannels } from "../../api/channels";
 import { deleteTest, getTest, listRuns } from "../../api/tests";
 import type { BrowserTest, RunListItem, RunStatus } from "../../api/types";
 import { CopyButton } from "../../components/CopyButton";
-import { passRateLabel, RunHistoryStrip } from "../../components/PulseStrip";
-import { RunSourceBadge } from "../../components/RunSourceBadge";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -33,11 +30,9 @@ import { Dropdown } from "../../components/ui/Dropdown";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { IconButton } from "../../components/ui/IconButton";
-import { LoadMore } from "../../components/ui/LoadMore";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Spinner } from "../../components/ui/Spinner";
 import { Table, type TableColumn } from "../../components/ui/Table";
-import { Tabs } from "../../components/ui/Tabs";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
 import { useMutationError } from "../../hooks/useMutationError";
@@ -55,6 +50,11 @@ const filterStatuses = ["PASSED", "FAILED", "TIMEOUT", "SYSTEM_ERROR"] as const;
 type RunFilter = "ALL" | (typeof filterStatuses)[number];
 const historyLimit = 20;
 const runPageSize = 10;
+const performanceStatuses: ReadonlySet<RunStatus> = new Set([
+  "PASSED",
+  "FAILED",
+  "TIMEOUT",
+]);
 
 export function parseRunFilter(value: string | null): RunFilter {
   return filterStatuses.includes(value as (typeof filterStatuses)[number])
@@ -68,6 +68,48 @@ export function recentRunHistory(
   max = historyLimit,
 ): RunListItem[] {
   return runs.slice(0, max).reverse();
+}
+
+export interface RecentPerformanceSummary {
+  averageDurationMs: number | null;
+  maxDurationMs: number;
+  passed: number;
+  retryCount: number;
+  retryPercentage: number;
+  total: number;
+}
+
+export function recentPerformanceSummary(
+  runs: readonly RunListItem[],
+): RecentPerformanceSummary {
+  const completed = runs.filter((run) => performanceStatuses.has(run.status));
+  const durations = completed.flatMap((run) =>
+    run.durationMs === null ? [] : [run.durationMs],
+  );
+  const retryCount = completed.filter((run) => run.attemptCount > 1).length;
+  return {
+    averageDurationMs:
+      durations.length === 0
+        ? null
+        : Math.round(
+            durations.reduce((total, duration) => total + duration, 0) /
+              durations.length,
+          ),
+    maxDurationMs: durations.length === 0 ? 0 : Math.max(...durations),
+    passed: completed.filter((run) => run.status === "PASSED").length,
+    retryCount,
+    retryPercentage:
+      completed.length === 0 ? 0 : Math.round((retryCount / completed.length) * 100),
+    total: completed.length,
+  };
+}
+
+export function durationPercentage(
+  durationMs: number | null,
+  maxDurationMs: number,
+): number {
+  if (durationMs === null || maxDurationMs <= 0) return 0;
+  return Math.min(100, Math.max(12, Math.round((durationMs / maxDurationMs) * 100)));
 }
 
 function hostLabel(url: string): string {
@@ -91,48 +133,218 @@ function channelCountLabel(count: number): string {
   return `${count} alert ${count === 1 ? "channel" : "channels"}`;
 }
 
-function historyIconTone(status: RunStatus | undefined): string {
-  switch (status) {
+function runTone(run: Pick<RunListItem, "passedAfterRetry" | "status">): string {
+  if (run.status === "PASSED" && run.passedAfterRetry) return "bg-warn-600";
+  switch (run.status) {
     case "PASSED":
-      return "bg-ok-50 text-ok-700";
+      return "bg-ok-600";
     case "FAILED":
-      return "bg-danger-50 text-danger-700";
+      return "bg-danger-600";
     case "TIMEOUT":
-      return "bg-warn-50 text-warn-600";
+      return "bg-warn-600";
     case "QUEUED":
     case "RUNNING":
-      return "bg-info-50 text-info-600";
+      return "bg-info-600 motion-safe:animate-pulse";
     default:
-      return "bg-zinc-100 text-zinc-600";
+      return "bg-zinc-300";
   }
 }
 
+export function performanceLegendItems(
+  runs: readonly Pick<RunListItem, "passedAfterRetry" | "status">[],
+): Array<{ className: string; label: string }> {
+  const hasRetriedPass = runs.some(
+    (run) => run.status === "PASSED" && run.passedAfterRetry,
+  );
+  const hasTimeout = runs.some((run) => run.status === "TIMEOUT");
+  return [
+    { className: "bg-ok-600", label: "Direct" },
+    {
+      className: "bg-warn-600",
+      label:
+        hasRetriedPass && hasTimeout
+          ? "Retried / timeout"
+          : hasTimeout
+            ? "Timeout"
+            : "Retried",
+    },
+    ...(runs.some((run) => run.status === "FAILED")
+      ? [{ className: "bg-danger-600", label: "Failed" }]
+      : []),
+    ...(runs.some((run) => run.status === "SYSTEM_ERROR")
+      ? [{ className: "bg-zinc-300", label: "System error" }]
+      : []),
+    ...(runs.some((run) => run.status === "QUEUED" || run.status === "RUNNING")
+      ? [{ className: "bg-info-600", label: "Active" }]
+      : []),
+  ];
+}
+
 function SummaryFact({
+  detail,
   icon,
   label,
   value,
 }: {
+  detail?: React.ReactNode;
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-zinc-500 ring-1 ring-inset ring-zinc-200">
+    <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-zinc-100 text-zinc-500">
         {icon}
       </span>
       <div className="min-w-0">
         <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</dt>
         <dd className="mt-0.5 truncate text-sm font-medium text-zinc-900">{value}</dd>
+        {detail ? <dd className="mt-0.5 truncate text-xs text-zinc-500">{detail}</dd> : null}
       </div>
     </div>
   );
+}
+
+function PerformanceChart({
+  runs,
+  summary,
+  workspaceId,
+}: {
+  runs: RunListItem[];
+  summary: RecentPerformanceSummary;
+  workspaceId: string;
+}) {
+  const placeholders = Math.max(0, historyLimit - runs.length);
+  const oldest = runs[0];
+  const newest = runs.at(-1);
+  const legendItems = performanceLegendItems(runs);
+  const label =
+    summary.total === 0
+      ? "Recent performance: no completed runs"
+      : `Recent performance: ${summary.passed} of ${summary.total} completed runs passed`;
+
+  return (
+    <div>
+      <div
+        aria-label={label}
+        className="grid h-24 grid-cols-[repeat(20,minmax(0,1fr))] items-end gap-1 sm:h-28 sm:gap-1.5"
+        role="group"
+      >
+        {Array.from({ length: placeholders }, (_, index) => (
+          <span
+            key={`empty-${index}`}
+            aria-hidden="true"
+            className="h-1/3 rounded-[3px] bg-zinc-100"
+          />
+        ))}
+        {runs.map((run) => {
+          const percentage = durationPercentage(run.durationMs, summary.maxDurationMs);
+          return (
+            <Link
+              key={run.id}
+              aria-label={`${run.status.toLowerCase().replaceAll("_", " ")}, ${formatDuration(run.durationMs)}, ${formatRelative(run.createdAt)}`}
+              className={clsx(
+                "min-h-4 rounded-[3px] transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2",
+                runTone(run),
+              )}
+              style={{ height: `${percentage === 0 ? 18 : percentage}%` }}
+              title={`${formatDuration(run.durationMs)} · ${formatRelative(run.createdAt)}`}
+              to={`/w/${workspaceId}/runs/${run.id}`}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-[11px] text-zinc-500">
+        <span>{oldest ? formatRelative(oldest.createdAt) : "No runs yet"}</span>
+        <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          {legendItems.map((item, index) => (
+            <span
+              key={`${item.label}-${index}`}
+              className={clsx("items-center gap-1.5", index > 1 ? "hidden sm:inline-flex" : "inline-flex")}
+            >
+              <span
+                aria-hidden="true"
+                className={clsx("size-2 rounded-sm", item.className)}
+              />
+              {item.label}
+            </span>
+          ))}
+        </span>
+        <span className="text-right">{newest ? formatRelative(newest.createdAt) : "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+function PerformanceStat({ label, tone, value }: { label: string; tone?: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className={clsx("mt-1 text-sm font-semibold text-zinc-950", tone)}>{value}</dd>
+    </div>
+  );
+}
+
+const filterLabels: Record<RunFilter, string> = {
+  ALL: "All",
+  FAILED: "Failed",
+  PASSED: "Passed",
+  SYSTEM_ERROR: "System error",
+  TIMEOUT: "Timeout",
+};
+
+function RunFilterPills({
+  allCount,
+  onChange,
+  value,
+}: {
+  allCount: number;
+  onChange: (next: RunFilter) => void;
+  value: RunFilter;
+}) {
+  const items: RunFilter[] = ["ALL", ...filterStatuses];
+  return (
+    <div aria-label="Filter run history" className="flex max-w-full gap-1.5 overflow-x-auto" role="group">
+      {items.map((item) => {
+        const active = item === value;
+        return (
+          <button
+            key={item}
+            aria-pressed={active}
+            className={clsx(
+              "h-8 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors",
+              active
+                ? "border-accent-200 bg-accent-50 text-accent-700"
+                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+            )}
+            type="button"
+            onClick={() => onChange(item)}
+          >
+            {filterLabels[item]}
+            {item === "ALL" ? ` · ${allCount}` : ""}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function runSourceLabel(source: RunListItem["source"]): string {
+  switch (source) {
+    case "MANUAL":
+      return "Manual";
+    case "SCHEDULED":
+      return "Scheduled";
+    case "VALIDATION":
+      return "Validation";
+  }
 }
 
 export function runColumns(
   test: BrowserTest,
   timezone: string,
   workspaceId: string,
+  maxDurationMs = 0,
 ): TableColumn<RunListItem>[] {
   return [
     {
@@ -146,14 +358,11 @@ export function runColumns(
         >
           <span className="inline-flex items-center gap-0.5 font-medium text-zinc-900 group-hover:text-accent-700 group-hover:underline">
             <time dateTime={run.createdAt}>{formatRelative(run.createdAt)}</time>
-            <ChevronRight aria-hidden="true" className="size-3.5 text-zinc-400" />
           </span>
-          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+          <span className="mt-0.5 block text-xs text-zinc-500">
             <time className="whitespace-nowrap" dateTime={run.createdAt}>
               {formatDateTime(run.createdAt, timezone)}
             </time>
-            <span aria-hidden="true">·</span>
-            <RunSourceBadge source={run.source} />
           </span>
         </Link>
       ),
@@ -168,23 +377,55 @@ export function runColumns(
     {
       header: "Duration",
       key: "duration",
-      render: (run) => formatDuration(run.durationMs),
+      render: (run) => {
+        const percentage = durationPercentage(run.durationMs, maxDurationMs);
+        return (
+          <div className="flex min-w-36 items-center gap-3 tabular-nums">
+            <span className="w-14 shrink-0 text-zinc-900">{formatDuration(run.durationMs)}</span>
+            <span className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-zinc-100">
+              <span
+                aria-hidden="true"
+                className={clsx("block h-full rounded-full", runTone(run))}
+                style={{ width: `${percentage}%` }}
+              />
+            </span>
+          </div>
+        );
+      },
     },
     {
       header: "Attempts",
       key: "attempts",
-      render: (run) => `${run.attemptCount} of ${test.maxRetries + 1}`,
+      render: (run) => (
+        <span className={clsx(run.attemptCount > 1 && "font-medium text-warn-600")}>
+          {run.attemptCount} of {test.maxRetries + 1}
+        </span>
+      ),
     },
     {
-      header: "Triggered by",
-      key: "triggeredBy",
+      header: "Origin",
+      key: "origin",
       render: (run) => (
         <div className="whitespace-nowrap">
-          <p className="text-zinc-900">{run.triggeredBy?.name ?? "—"}</p>
+          <p className="text-zinc-900">{runSourceLabel(run.source)}</p>
           <p className="mt-0.5 text-xs text-zinc-500">
             {run.billable ? "1 billable run" : "Not billed"}
           </p>
         </div>
+      ),
+    },
+    {
+      className: "w-10",
+      header: <span className="sr-only">Open run</span>,
+      key: "open",
+      render: (run) => (
+        <Link
+          aria-label={`Open run from ${formatRelative(run.createdAt)}`}
+          className="grid size-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+          to={`/w/${workspaceId}/runs/${run.id}`}
+        >
+          <ChevronRight aria-hidden="true" className="size-3.5" />
+        </Link>
       ),
     },
   ];
@@ -218,7 +459,6 @@ function MobileRunList({
                   >
                     {formatRelative(run.createdAt)}
                   </time>
-                  <RunSourceBadge source={run.source} />
                 </div>
                 <time className="mt-1 block text-xs text-zinc-500" dateTime={run.createdAt}>
                   {formatDateTime(run.createdAt, timezone)}
@@ -252,10 +492,10 @@ function MobileRunList({
             </div>
             <div className="min-w-0">
               <dt className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                Triggered by
+                Origin
               </dt>
               <dd className="mt-0.5 truncate text-xs font-medium text-zinc-800">
-                {run.triggeredBy?.name ?? "—"}
+                {runSourceLabel(run.source)}
               </dd>
             </div>
             <div>
@@ -379,20 +619,14 @@ export default function TestDetailPage() {
   const historyRows = allRuns.data?.pages.flatMap((page) => page.items) ?? [];
   const historyRuns = recentRunHistory(historyRows);
   const lastRun = testData.lastRun;
+  const headlineRun = historyRows[0] ?? lastRun;
+  const performance = recentPerformanceSummary(historyRuns);
+  const latestPerformanceRun = lastRun;
+  const maxRowDurationMs = Math.max(
+    0,
+    ...rows.flatMap((item) => (item.durationMs === null ? [] : [item.durationMs])),
+  );
   const DeviceIcon = testData.device === "DESKTOP" ? Laptop : Smartphone;
-  const lastRunDetail = lastRun
-    ? [
-        lastRun.finishedAt
-          ? formatRelative(lastRun.finishedAt)
-          : lastRun.status === "QUEUED"
-            ? "Queued"
-            : "In progress",
-        lastRun.durationMs === null ? null : formatDuration(lastRun.durationMs),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : "Run it now or wait for the schedule.";
-  const historyRate = passRateLabel(historyRuns);
   const instructionsCanExpand =
     testData.instructions.length > 360 || testData.instructions.split("\n").length > 6;
   const runNowDisabled = run.pending || isActiveRun(testData);
@@ -438,10 +672,9 @@ export default function TestDetailPage() {
               {can("tests.manage") ? (
                 <>
                   <Link
-                    className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+                    className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
                     to={`/w/${current.id}/tests/${testData.id}/edit`}
                   >
-                    <Pencil aria-hidden="true" className="size-4" />
                     Edit
                   </Link>
                   <Dropdown
@@ -453,7 +686,10 @@ export default function TestDetailPage() {
                       },
                     ]}
                     trigger={
-                      <IconButton aria-label={`More actions for ${testData.name}`}>
+                      <IconButton
+                        aria-label={`More actions for ${testData.name}`}
+                        className="border border-zinc-300 bg-white hover:bg-zinc-50"
+                      >
                         <MoreHorizontal aria-hidden="true" className="size-4" />
                       </IconButton>
                     }
@@ -473,9 +709,20 @@ export default function TestDetailPage() {
                 <DeviceIcon aria-hidden="true" className="size-3.5" />
                 {testData.device === "DESKTOP" ? "Desktop" : "Mobile"}
               </span>
+              <span aria-hidden="true" className="text-zinc-300">·</span>
+              <span>Next run {formatRelative(testData.nextRunAt)}</span>
             </span>
           }
-          title={testData.name}
+          title={
+            <span className="inline-flex flex-wrap items-center gap-2.5">
+              <span>{testData.name}</span>
+              {headlineRun ? (
+                <StatusBadge status={headlineRun.status} />
+              ) : (
+                <Badge tone="neutral">Never run</Badge>
+              )}
+            </span>
+          }
         />
       </div>
 
@@ -496,105 +743,99 @@ export default function TestDetailPage() {
         </Card>
       ) : null}
 
-      <Card className="overflow-hidden" padding="none">
-        <div className="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(17rem,0.75fr)]">
-          <div className="min-w-0 p-5 sm:p-6 lg:border-r lg:border-zinc-200">
-            <div className="flex flex-wrap items-start gap-4">
-              <span
-                className={`grid size-11 shrink-0 place-items-center rounded-xl ${historyIconTone(lastRun?.status)}`}
-              >
-                <History aria-hidden="true" className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Latest run
+      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <Card className="overflow-hidden rounded-xl" padding="none">
+          <div className="p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-950">Recent performance</h2>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Last {historyLimit} runs, duration of each
                 </p>
-                <div className="mt-2">
-                  {lastRun ? (
-                    <StatusBadge
-                      passedAfterRetry={lastRun.passedAfterRetry}
-                      status={lastRun.status}
-                    />
-                  ) : (
-                    <Badge tone="neutral">Never run</Badge>
-                  )}
-                </div>
-                <p className="mt-2 text-xs text-zinc-500">{lastRunDetail}</p>
               </div>
-              {historyRate ? <Badge tone="accent">{historyRate}</Badge> : null}
+              {performance.total > 0 ? (
+                <Badge tone={performance.passed === performance.total ? "ok" : "neutral"}>
+                  {performance.passed}/{performance.total} passed
+                </Badge>
+              ) : (
+                <Badge tone="neutral">No results</Badge>
+              )}
             </div>
 
-            <div className="mt-5 rounded-xl bg-zinc-50/90 p-4 ring-1 ring-inset ring-zinc-200">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-900">Recent performance</h2>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Last {historyLimit} runs, oldest to newest
-                  </p>
-                </div>
-                <span className="text-[11px] font-medium text-zinc-400">Newest →</span>
+            {allRuns.isError ? (
+              <div className="mt-6 flex min-h-28 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+                <span>Performance history is temporarily unavailable.</span>
+                <button
+                  className="shrink-0 font-medium text-accent-700 hover:underline"
+                  type="button"
+                  onClick={() => void allRuns.refetch()}
+                >
+                  Retry
+                </button>
               </div>
-              {allRuns.isError ? (
-                <div className="mt-4 flex min-h-10 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
-                  <span>History is temporarily unavailable.</span>
-                  <button
-                    className="shrink-0 font-medium text-accent-700 hover:underline"
-                    type="button"
-                    onClick={() => void allRuns.refetch()}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                <RunHistoryStrip
-                  className="mt-4"
-                  max={historyLimit}
+            ) : allRuns.isPending ? (
+              <div
+                aria-label="Loading recent performance"
+                className="mt-6 h-28 animate-pulse rounded-lg bg-zinc-100"
+                role="status"
+              />
+            ) : (
+              <div className="mt-6">
+                <PerformanceChart
                   runs={historyRuns}
+                  summary={performance}
                   workspaceId={current.id}
                 />
-              )}
-              <p className="mt-2 text-[11px] text-zinc-500">
-                {allRuns.isPending
-                  ? "Loading run history…"
-                  : historyRuns.length === 0
-                    ? "No runs yet"
-                    : `${historyRuns.length} recent ${historyRuns.length === 1 ? "run" : "runs"}`}
-              </p>
-            </div>
-          </div>
-
-          <aside className="bg-zinc-50/70 p-5 sm:p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              Next scheduled run
-            </p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent-700">
-                <CalendarClock aria-hidden="true" className="size-5" />
-              </span>
-              <div>
-                <time
-                  className="block text-xl font-semibold text-zinc-950"
-                  dateTime={testData.nextRunAt}
-                >
-                  {formatRelative(testData.nextRunAt)}
-                </time>
-                <time
-                  className="mt-0.5 block text-xs text-zinc-500"
-                  dateTime={testData.nextRunAt}
-                >
-                  {formatDateTime(testData.nextRunAt, timezone)}
-                </time>
               </div>
-            </div>
-            <dl className="mt-6 divide-y divide-zinc-200 border-t border-zinc-200 pt-3">
+            )}
+
+            <dl className="mt-5 grid gap-4 border-t border-zinc-200 pt-4 sm:grid-cols-3">
+              <PerformanceStat
+                label="Latest run"
+                value={
+                  latestPerformanceRun
+                    ? `${formatRelative(latestPerformanceRun.finishedAt ?? latestPerformanceRun.createdAt)} · ${formatDuration(latestPerformanceRun.durationMs)}`
+                    : "No completed runs"
+                }
+              />
+              <PerformanceStat
+                label="Average duration"
+                value={formatDuration(performance.averageDurationMs)}
+              />
+              <PerformanceStat
+                label={`With retry (${performance.total} runs)`}
+                tone={performance.retryCount > 0 ? "text-warn-600" : undefined}
+                value={`${performance.retryCount} ${performance.retryCount === 1 ? "run" : "runs"} · ${performance.retryPercentage}%`}
+              />
+            </dl>
+          </div>
+        </Card>
+
+        <Card className="rounded-xl" padding="none">
+          <aside className="flex h-full flex-col p-5">
+            <dl className="divide-y divide-zinc-200">
+              <SummaryFact
+                detail={
+                  <time dateTime={testData.nextRunAt}>
+                    {formatDateTime(testData.nextRunAt, timezone)}
+                  </time>
+                }
+                icon={<CalendarClock aria-hidden="true" className="size-4" />}
+                label="Next run"
+                value={
+                  <time dateTime={testData.nextRunAt}>
+                    {formatRelative(testData.nextRunAt)}
+                  </time>
+                }
+              />
               <SummaryFact
                 icon={<Clock3 aria-hidden="true" className="size-4" />}
-                label="Schedule"
+                label="Frequency"
                 value={formatInterval(testData.intervalHours)}
               />
               <SummaryFact
                 icon={<Bell aria-hidden="true" className="size-4" />}
-                label="Alert delivery"
+                label="Alerts"
                 value={channelCountLabel(testData.channelIds.length)}
               />
               <SummaryFact
@@ -604,36 +845,26 @@ export default function TestDetailPage() {
               />
             </dl>
             <a
-              className="mt-5 inline-flex text-xs font-medium text-accent-700 hover:underline"
+              className="mt-auto border-t border-zinc-200 pt-3 text-xs font-medium text-accent-700 hover:underline"
               href="#test-setup"
             >
-              View test setup ↓
+              View test setup →
             </a>
           </aside>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
-      <Card className="overflow-hidden" padding="none">
+      <Card className="overflow-hidden rounded-xl" padding="none">
         <div className="px-5 pt-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-base font-semibold text-zinc-950">Run history</h2>
               <p className="mt-1 text-xs text-zinc-500">
                 Open a run to inspect its attempts, evidence, and result.
               </p>
             </div>
-            {runs.isSuccess ? <Badge tone="neutral">{rows.length} shown</Badge> : null}
-          </div>
-          <div className="mt-3">
-            <Tabs
-              label="Filter run history"
-              items={[
-                { key: "ALL", label: "All" },
-                { key: "PASSED", label: "Passed" },
-                { key: "FAILED", label: "Failed" },
-                { key: "TIMEOUT", label: "Timeout" },
-                { key: "SYSTEM_ERROR", label: "System error" },
-              ]}
+            <RunFilterPills
+              allCount={Math.min(historyRows.length, visibleAllRuns)}
               value={filter}
               onChange={(next) => {
                 const params = new URLSearchParams(searchParams);
@@ -672,9 +903,9 @@ export default function TestDetailPage() {
                 />
               )}
             </div>
-            <div className="hidden lg:block">
+            <div className="hidden px-5 lg:block">
               <Table
-                columns={runColumns(testData, timezone, current.id)}
+                columns={runColumns(testData, timezone, current.id, maxRowDurationMs)}
                 empty={
                   <EmptyState
                     className="m-4"
@@ -691,12 +922,20 @@ export default function TestDetailPage() {
                 rows={rows}
               />
             </div>
-            <div className="px-5 pb-5">
-              <LoadMore
-                loading={runs.isFetchingNextPage}
-                nextCursor={nextRunCursor}
-                onMore={() => void loadMoreRuns()}
-              />
+            <div className="flex min-h-12 items-center justify-between gap-4 border-t border-zinc-200 px-5 py-3">
+              <p className="text-xs text-zinc-500">
+                Showing {rows.length} {rows.length === 1 ? "run" : "runs"}
+              </p>
+              {nextRunCursor ? (
+                <button
+                  className="text-xs font-medium text-accent-700 hover:underline disabled:cursor-wait disabled:opacity-60"
+                  disabled={runs.isFetchingNextPage}
+                  type="button"
+                  onClick={() => void loadMoreRuns()}
+                >
+                  {runs.isFetchingNextPage ? "Loading…" : "Load more"}
+                </button>
+              ) : null}
             </div>
           </>
         )}
