@@ -63,12 +63,12 @@ function HeroMetric({
 }) {
   return (
     <div className="min-w-0 text-right tabular-nums">
-      <p className="whitespace-nowrap text-[10px] font-semibold uppercase leading-4 tracking-[0.025em] text-zinc-400 2xl:text-[11px]">
+      <p className="whitespace-nowrap text-[10px] font-semibold uppercase leading-4 tracking-[0.025em] text-zinc-400 2xl:text-[12.5px] 2xl:leading-5">
         {label}
       </p>
       <p
         className={clsx(
-          "mt-1 whitespace-nowrap text-xl font-semibold leading-6 tracking-[-0.035em] 2xl:text-2xl 2xl:leading-7",
+          "mt-1 whitespace-nowrap text-xl font-semibold leading-6 tracking-[-0.035em] 2xl:mt-[5px] 2xl:text-[25px] 2xl:leading-[30px]",
           tone === "ok" && "text-emerald-600",
           tone === "danger" && "text-red-600",
           tone === "neutral" && "text-zinc-950",
@@ -152,25 +152,25 @@ export function OverviewHero({
   return (
     <section
       aria-labelledby="overview-hero-title"
-      className="grid min-h-[116px] items-center gap-5 rounded-xl border border-[#e9e9e7] bg-white px-[22px] py-[18px] lg:grid-cols-[minmax(0,1fr)_400px] 2xl:min-h-[136px] 2xl:grid-cols-[minmax(0,1fr)_440px] 2xl:gap-8 2xl:px-7 2xl:py-6"
+      className="grid min-h-[116px] items-center gap-5 rounded-xl border border-[#e9e9e7] bg-white px-[22px] py-[18px] lg:grid-cols-[minmax(0,1fr)_400px] 2xl:min-h-[145px] 2xl:grid-cols-[minmax(0,1fr)_500px] 2xl:gap-[25px] 2xl:rounded-[15px] 2xl:px-[27.5px] 2xl:py-[22.5px]"
     >
-      <div className="flex min-w-0 items-start gap-2.5 2xl:gap-3">
+      <div className="flex min-w-0 items-start gap-2.5 2xl:gap-[12.5px]">
         <span
           aria-hidden="true"
-          className={clsx("mt-0.5 grid size-9 shrink-0 place-items-center rounded-full 2xl:size-11", tone.halo)}
+          className={clsx("mt-0.5 grid size-9 shrink-0 place-items-center rounded-full 2xl:mt-[2.5px] 2xl:size-[45px]", tone.halo)}
         >
-          <span className={clsx("size-2.5 rounded-full 2xl:size-3", tone.dot)} />
+          <span className={clsx("size-2.5 rounded-full 2xl:size-[12.5px]", tone.dot)} />
         </span>
         <div className="min-w-0">
           <h1
-            className="text-lg font-semibold leading-5 tracking-[-0.025em] text-zinc-950 2xl:text-xl 2xl:leading-6"
+            className="text-lg font-semibold leading-5 tracking-[-0.025em] text-zinc-950 2xl:text-[22.5px] 2xl:leading-[25px]"
             id="overview-hero-title"
           >
             {heroHeadline(state, openIncidents)}
           </h1>
-          <p className="mt-0.5 text-xs leading-4 text-zinc-500 2xl:text-sm 2xl:leading-5">{story}{state === "calm" ? " ·" : null}</p>
+          <p className="mt-0.5 text-xs leading-4 text-zinc-500 2xl:mt-[2.5px] 2xl:text-[15px] 2xl:leading-5">{story}{state === "calm" ? " ·" : null}</p>
           <Link
-            className="text-xs font-semibold leading-4 text-[#463de1] hover:underline 2xl:text-sm 2xl:leading-5"
+            className="text-xs font-semibold leading-4 text-[#463de1] hover:underline 2xl:text-[15px] 2xl:leading-5"
             to={historyTarget}
           >
             {historyLabel}
@@ -178,7 +178,7 @@ export function OverviewHero({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-[1fr_1.5fr_1fr_1fr] 2xl:gap-5">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-[1fr_1.5fr_1fr_1fr] 2xl:gap-x-5 2xl:gap-y-[15px]">
         <HeroMetric
           label="Uptime 30 d"
           tone={uptimeTone}
