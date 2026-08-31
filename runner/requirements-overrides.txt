@@ -1,5 +1,5 @@
 # browser-use 0.13.8 pins vulnerable patch releases exactly. These are API-
 # compatible security overrides until upstream relaxes its metadata.
 click>=8.3.3
-mcp>=1.28.1,<2
+mcp>=2.1.1,<3
 pypdf>=6.15.0
