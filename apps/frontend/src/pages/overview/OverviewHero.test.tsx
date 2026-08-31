@@ -2,65 +2,57 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ActivityItem, ActivityType, Incident, Overview } from "../../api/types";
+import type { Incident, Overview } from "../../api/types";
 import {
   OverviewHero,
+  compactDuration,
+  compactRelative,
   heroHeadline,
   heroState,
-  liveChip,
-  pulseLabel,
-  pulseSlots,
-  tickTone,
 } from "./OverviewHero";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
+const MINUTE_MS = 60 * 1_000;
 const HOUR_MS = 60 * 60 * 1_000;
+const DAY_MS = 24 * HOUR_MS;
 
 function iso(msAgo: number): string {
   return new Date(NOW - msAgo).toISOString();
 }
 
-function activity(overrides: Partial<ActivityItem> = {}): ActivityItem {
-  return {
-    id: "activity_1",
-    link: { runId: "run_1" },
-    occurredAt: iso(HOUR_MS),
-    resourceId: "bt_1",
-    resourceName: "Checkout",
-    resourceType: "BROWSER_TEST",
-    title: "Checkout passed",
-    type: "TEST_PASSED",
-    ...overrides,
-  };
-}
-
-function overview(overrides: {
-  activity?: ActivityItem[];
+function overview({
+  avgResponseTimeMs24h = 215,
+  failed24h = 0,
+  monitors = { up: 10 },
+  openBrowserIncidents = 0,
+  openUptimeIncidents = 0,
+  tests = 12,
+  uptime30d = 99.98,
+}: {
+  avgResponseTimeMs24h?: number | null;
   failed24h?: number;
+  monitors?: { down?: number; unknown?: number; up?: number };
   openBrowserIncidents?: number;
   openUptimeIncidents?: number;
-  monitors?: { down?: number; unknown?: number; up?: number };
-  running?: Overview["running"];
-  runningRuns?: number;
   tests?: number;
+  uptime30d?: number | null;
 } = {}): Overview {
-  const monitors = overrides.monitors ?? { up: 10 };
   return {
-    activity: overrides.activity ?? [],
+    activity: [],
     browserTests: {
-      failed24h: overrides.failed24h ?? 0,
-      openIncidents: overrides.openBrowserIncidents ?? 0,
-      runningRuns: overrides.runningRuns ?? 0,
-      total: overrides.tests ?? 12,
+      failed24h,
+      openIncidents: openBrowserIncidents,
+      runningRuns: 0,
+      total: tests,
     },
-    running: overrides.running,
+    running: [],
     uptime: {
-      avgResponseTimeMs24h: null,
+      avgResponseTimeMs24h,
       down: monitors.down ?? 0,
-      openIncidents: overrides.openUptimeIncidents ?? 0,
+      openIncidents: openUptimeIncidents,
       unknown: monitors.unknown ?? 0,
       up: monitors.up ?? 0,
-      uptime30d: null,
+      uptime30d,
     },
     usage: {
       billableRuns: 0,
@@ -78,7 +70,7 @@ function overview(overrides: {
 
 function incident(overrides: Partial<Incident> = {}): Incident {
   return {
-    durationMs: 12 * 60 * 1_000,
+    durationMs: 12 * MINUTE_MS,
     id: "inc_1",
     lastEventAt: iso(0),
     openedAt: iso(12 * 60 * 1_000),
@@ -106,6 +98,14 @@ function renderHero(props: Partial<Parameters<typeof OverviewHero>[0]> = {}): st
   );
 }
 
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
@@ -113,121 +113,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-});
-
-describe("tickTone", () => {
-  it("maps every activity type to a pulse tone", () => {
-    const expected: Record<ActivityType, string> = {
-      CHANNEL_DELIVERY_FAILED: "warn",
-      MONITOR_DOWN: "fail",
-      MONITOR_RECOVERED: "ok",
-      TEST_FAILED: "fail",
-      TEST_PASSED: "ok",
-      TEST_RECOVERED: "ok",
-      TEST_SYSTEM_ERROR: "warn",
-      TEST_TIMEOUT: "warn",
-    };
-    for (const [type, tone] of Object.entries(expected)) {
-      expect(tickTone(type as ActivityType)).toBe(tone);
-    }
-  });
-});
-
-describe("pulseSlots", () => {
-  it("pads sparse history with leading empty slots up to thirty-two", () => {
-    const slots = pulseSlots(
-      [
-        activity({ id: "a_new", occurredAt: iso(HOUR_MS), title: "Checkout passed" }),
-        activity({
-          id: "a_old",
-          occurredAt: iso(2 * HOUR_MS),
-          title: "Search failed",
-          type: "TEST_FAILED",
-        }),
-      ],
-      [],
-    );
-
-    expect(slots).toHaveLength(32);
-    expect(slots.slice(0, 30).every((slot) => slot.tone === "empty")).toBe(true);
-    expect(slots[30]).toMatchObject({ label: "Search failed · 2h ago", tone: "fail" });
-    expect(slots[31]).toMatchObject({ label: "Checkout passed · 1h ago", tone: "ok" });
-  });
-
-  it("appends running runs after the newest result", () => {
-    const slots = pulseSlots(
-      [activity()],
-      [{ browserTestId: "bt_1", id: "run_live", startedAt: iso(30_000), testName: "Add to cart" }],
-    );
-
-    expect(slots[31]).toMatchObject({ label: "Add to cart · running", tone: "run" });
-    expect(slots[30]).toMatchObject({ tone: "ok" });
-  });
-
-  it("drops the oldest results when history plus running overflow thirty-two", () => {
-    const history = Array.from({ length: 32 }, (_, index) =>
-      activity({ id: `a_${index}`, occurredAt: iso((index + 1) * HOUR_MS) }),
-    );
-    const slots = pulseSlots(history, [
-      { browserTestId: "bt_1", id: "run_live", startedAt: iso(0), testName: "Add to cart" },
-    ]);
-
-    expect(slots).toHaveLength(32);
-    expect(slots[0]).toMatchObject({ tone: "ok" });
-    expect(slots[31]).toMatchObject({ tone: "run" });
-  });
-});
-
-describe("pulseLabel", () => {
-  it("summarises the visible slots for screen readers", () => {
-    const slots = pulseSlots(
-      [
-        activity({ id: "a_1" }),
-        activity({ id: "a_2", type: "TEST_FAILED" }),
-        activity({ id: "a_3", type: "TEST_TIMEOUT" }),
-      ],
-      [{ browserTestId: "bt_1", id: "run_live", startedAt: iso(0), testName: "Add to cart" }],
-    );
-
-    expect(pulseLabel(slots)).toBe(
-      "Last 4 results, oldest first: 1 passed, 1 failed, 1 warning, 1 running.",
-    );
-  });
-
-  it("describes an empty strip", () => {
-    expect(pulseLabel(pulseSlots([], []))).toBe("No results yet.");
-  });
-});
-
-describe("liveChip", () => {
-  it("returns nothing when no run is in flight", () => {
-    expect(liveChip([], 0)).toBeNull();
-  });
-
-  it("names the newest running run", () => {
-    expect(
-      liveChip(
-        [{ browserTestId: "bt_1", id: "run_live", startedAt: iso(0), testName: "Add to cart" }],
-        1,
-      ),
-    ).toEqual({ label: "Add to cart · running", runId: "run_live" });
-  });
-
-  it("counts the extra runs beyond the named one", () => {
-    expect(
-      liveChip(
-        [
-          { browserTestId: "bt_1", id: "run_a", startedAt: iso(0), testName: "Add to cart" },
-          { browserTestId: "bt_2", id: "run_b", startedAt: iso(1_000), testName: "Login" },
-        ],
-        3,
-      ),
-    ).toEqual({ label: "Add to cart +2 · running", runId: "run_a" });
-  });
-
-  it("falls back to a count when the API sends no run details", () => {
-    expect(liveChip(undefined, 2)).toEqual({ label: "2 running", runId: null });
-  });
 });
 
 describe("heroState", () => {
@@ -249,123 +134,121 @@ describe("heroState", () => {
 
 describe("heroHeadline", () => {
   it("counts open incidents", () => {
-    expect(heroHeadline("incident", 1)).toBe("1 incident open.");
-    expect(heroHeadline("incident", 3)).toBe("3 incidents open.");
+    expect(heroHeadline("incident", 1)).toBe("1 incidencia abierta");
+    expect(heroHeadline("incident", 3)).toBe("3 incidencias abiertas");
   });
 
   it("keeps the calm and empty voices", () => {
-    expect(heroHeadline("calm", 0)).toBe("All quiet.");
-    expect(heroHeadline("empty", 0)).toBe("Nothing under watch yet.");
+    expect(heroHeadline("calm", 0)).toBe("Todo en calma");
+    expect(heroHeadline("empty", 0)).toBe("Aún no hay nada bajo vigilancia");
+  });
+});
+
+describe("compactDuration", () => {
+  it("formats seconds, minutes, and hours compactly", () => {
+    expect(compactDuration(0)).toBe("1 s");
+    expect(compactDuration(42_000)).toBe("42 s");
+    expect(compactDuration(14 * MINUTE_MS + 32_000)).toBe("14 m");
+    expect(compactDuration(4 * HOUR_MS)).toBe("4 h");
+    expect(compactDuration(4 * HOUR_MS + 35 * MINUTE_MS)).toBe("4 h 35 m");
+  });
+
+  it("does not invent a duration for missing or invalid data", () => {
+    expect(compactDuration(null)).toBe("—");
+    expect(compactDuration(Number.NaN)).toBe("—");
+    expect(compactDuration(Number.POSITIVE_INFINITY)).toBe("—");
+  });
+});
+
+describe("compactRelative", () => {
+  it("formats recent timestamps in Spanish compact units", () => {
+    expect(compactRelative(iso(30_000))).toBe("ahora");
+    expect(compactRelative(iso(12 * MINUTE_MS))).toBe("hace 12 m");
+    expect(compactRelative(iso(4 * HOUR_MS + 20 * MINUTE_MS))).toBe("hace 4 h");
+    expect(compactRelative(iso(6 * DAY_MS))).toBe("hace 6 d");
+  });
+
+  it("handles future and invalid timestamps safely", () => {
+    expect(compactRelative(iso(-5 * MINUTE_MS))).toBe("ahora");
+    expect(compactRelative("not-a-date")).toBe("—");
   });
 });
 
 describe("OverviewHero render", () => {
-  it("tells the story of the newest open incident", () => {
-    const html = renderHero({
-      openIncident: incident(),
-      overview: overview({ openUptimeIncidents: 1, monitors: { down: 1, up: 9 } }),
-    });
-
-    expect(html).toContain("1 incident open.");
-    expect(html).toContain("<strong");
-    expect(html).toContain("Checkout API");
-    expect(html).toContain("went down 12m ago.");
-    expect(html).toContain('href="/w/ws_1/incidents?status=open"');
-    expect(html).toContain("Open incidents");
-  });
-
-  it("describes failing browser tests and counts the other open incidents", () => {
-    const html = renderHero({
-      openIncident: incident({
-        resourceName: "Checkout flow",
-        resourceType: "BROWSER_TEST",
-      }),
-      overview: overview({ openBrowserIncidents: 2, openUptimeIncidents: 1 }),
-    });
-
-    expect(html).toContain("3 incidents open.");
-    expect(html).toContain("Checkout flow");
-    expect(html).toContain("started failing 12m ago.");
-    expect(html).toContain("2 more incidents are open.");
-  });
-
-  it("remembers the last incident when all is quiet", () => {
+  it("renders the calm story, metrics, and incident-history link", () => {
     const html = renderHero({
       lastIncident: incident({
-        durationMs: 14 * 60 * 1_000,
-        openedAt: iso(6 * 24 * HOUR_MS),
-        resolvedAt: iso(6 * 24 * HOUR_MS - 14 * 60 * 1_000),
-        resourceName: "Checkout flow",
-        resourceType: "BROWSER_TEST",
+        durationMs: 4 * HOUR_MS + 35 * MINUTE_MS,
+        openedAt: iso(6 * DAY_MS),
+        resolvedAt: iso(6 * DAY_MS - (4 * HOUR_MS + 35 * MINUTE_MS)),
         status: "RESOLVED",
       }),
-      overview: overview({ failed24h: 2 }),
-    });
-
-    expect(html).toContain("All quiet.");
-    expect(html).toContain("2 failed runs in the last 24 h.");
-    expect(html).toContain("Last incident:");
-    expect(html).toContain("Checkout flow");
-    expect(html).toContain("6d ago — resolved in 14m 00s.");
-    expect(html).toContain('href="/w/ws_1/incidents"');
-    expect(html).toContain("Incident history");
-  });
-
-  it("says so when there has never been an incident", () => {
-    const html = renderHero({ lastIncident: null });
-
-    expect(html).toContain("All quiet.");
-    expect(html).toContain("No incidents so far.");
-  });
-
-  it("shows counts and the live chip linking to the running run", () => {
-    const html = renderHero({
       overview: overview({
-        running: [
-          { browserTestId: "bt_1", id: "run_live", startedAt: iso(0), testName: "Add to cart" },
-        ],
-        runningRuns: 1,
+        avgResponseTimeMs24h: 214.6,
+        failed24h: 2,
+        uptime30d: 99.987,
       }),
     });
+    const text = visibleText(html);
 
-    expect(html).toContain("12 tests · 10 monitors");
-    expect(html).toContain("Add to cart · running");
-    expect(html).toContain('href="/w/ws_1/runs/run_live"');
+    expect(text).toContain("Todo en calma");
+    expect(text).toContain("Último incidente hace 6 d — resuelto en 4 h 35 m");
+    expect(text).toContain(
+      "Uptime 30 d 99,99 % Resp. 24 h 215 ms Fallos 24 h 2 Incidentes 0",
+    );
+    expect(html).toContain('href="/w/ws_1/incidents"');
+    expect(text).toContain("Historial");
   });
 
-  it("uses singular nouns for a single test and monitor", () => {
+  it("renders an open incident with danger metrics and the filtered incidents link", () => {
     const html = renderHero({
-      overview: overview({ monitors: { up: 1 }, tests: 1 }),
+      openIncident: incident(),
+      overview: overview({
+        avgResponseTimeMs24h: null,
+        failed24h: 3,
+        monitors: { down: 1, up: 9 },
+        openUptimeIncidents: 1,
+        uptime30d: 98.75,
+      }),
     });
+    const text = visibleText(html);
 
-    expect(html).toContain("1 test · 1 monitor");
+    expect(text).toContain("1 incidencia abierta");
+    expect(text).toContain("Checkout API tiene una incidencia desde hace 12 m.");
+    expect(text).toContain(
+      "Uptime 30 d 98,75 % Resp. 24 h — Fallos 24 h 3 Incidentes 1",
+    );
+    expect(html).toContain('href="/w/ws_1/incidents?status=open"');
+    expect(text).toContain("Ver incidencias");
   });
 
-  it("labels the pulse strip for screen readers", () => {
+  it("renders the empty state and routes managers to create their first test", () => {
     const html = renderHero({
-      overview: overview({ activity: [activity()] }),
+      overview: overview({
+        avgResponseTimeMs24h: null,
+        monitors: {},
+        tests: 0,
+        uptime30d: null,
+      }),
     });
+    const text = visibleText(html);
 
-    expect(html).toContain('aria-label="Last 1 result, oldest first: 1 passed."');
-  });
-
-  it("invites the first test when nothing is under watch", () => {
-    const html = renderHero({
-      overview: overview({ tests: 0, monitors: {} }),
-    });
-
-    expect(html).toContain("Nothing under watch yet.");
+    expect(text).toContain("Aún no hay nada bajo vigilancia");
+    expect(text).toContain("Crea un test o un monitor para empezar a vigilar tus servicios.");
+    expect(text).toContain(
+      "Uptime 30 d — Resp. 24 h — Fallos 24 h 0 Incidentes 0",
+    );
     expect(html).toContain('href="/w/ws_1/tests/new"');
-    expect(html).toContain("Create your first test");
+    expect(text).toContain("Empezar");
   });
 
-  it("points members without manage rights at the tests page instead", () => {
+  it("routes members without manage rights to the tests list", () => {
     const html = renderHero({
       canManageTests: false,
       overview: overview({ tests: 0, monitors: {} }),
     });
 
     expect(html).toContain('href="/w/ws_1/tests"');
-    expect(html).toContain("View tests");
+    expect(visibleText(html)).toContain("Empezar");
   });
 });

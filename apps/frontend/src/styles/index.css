@@ -37,7 +37,8 @@
 
 @layer base {
   body {
-    @apply bg-zinc-50 font-sans text-sm text-zinc-900 antialiased;
+    @apply font-sans text-sm text-zinc-900 antialiased;
+    background: #f9f9f8;
   }
 
   *:focus-visible {

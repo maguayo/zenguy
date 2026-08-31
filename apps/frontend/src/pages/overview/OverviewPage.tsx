@@ -1,77 +1,44 @@
-import { useState, type ComponentType, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  BellOff,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Globe,
-  HeartPulse,
-  Siren,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { Link } from "react-router-dom";
 
 import { listIncidents } from "../../api/incidents";
 import { getOverview } from "../../api/overview";
-import type { ActivityItem, ActivityType, Incident, Usage } from "../../api/types";
+import { listTests } from "../../api/tests";
+import type {
+  ActivityItem,
+  ActivityType,
+  BrowserTest,
+  Incident,
+  Monitor,
+  MonitorStats,
+  RunStatus,
+  Usage,
+} from "../../api/types";
+import { getStats, listMonitors } from "../../api/uptime";
 import { Card } from "../../components/ui/Card";
-import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
-import { formatCurrency, formatDateTime, formatRelative } from "../../lib/format";
+import { formatCurrency, formatDateTime, formatDuration } from "../../lib/format";
 import { OverviewHero } from "./OverviewHero";
 
 interface ActivityPresentation {
   className: string;
-  icon: ComponentType<{ "aria-hidden"?: boolean | "true"; className?: string }>;
   label: string;
 }
 
 export const activityPresentation: Record<ActivityType, ActivityPresentation> = {
-  TEST_PASSED: {
-    className: "bg-ok-50 text-ok-700",
-    icon: CheckCircle2,
-    label: "Passed",
-  },
-  TEST_FAILED: {
-    className: "bg-danger-50 text-danger-700",
-    icon: XCircle,
-    label: "Failed",
-  },
-  TEST_TIMEOUT: {
-    className: "bg-warn-50 text-warn-600",
-    icon: Clock,
-    label: "Timed out",
-  },
-  TEST_SYSTEM_ERROR: {
-    className: "bg-zinc-100 text-zinc-600",
-    icon: Wrench,
-    label: "System error",
-  },
-  TEST_RECOVERED: {
-    className: "bg-ok-50 text-ok-700",
-    icon: HeartPulse,
-    label: "Recovered",
-  },
-  MONITOR_DOWN: {
-    className: "bg-danger-50 text-danger-700",
-    icon: Siren,
-    label: "Down",
-  },
-  MONITOR_RECOVERED: {
-    className: "bg-ok-50 text-ok-700",
-    icon: HeartPulse,
-    label: "Recovered",
-  },
-  CHANNEL_DELIVERY_FAILED: {
-    className: "bg-warn-50 text-warn-600",
-    icon: BellOff,
-    label: "Delivery failed",
-  },
+  TEST_PASSED: { className: "bg-[#169941]", label: "Passed" },
+  TEST_FAILED: { className: "bg-red-500", label: "Failed" },
+  TEST_TIMEOUT: { className: "bg-amber-500", label: "Timeout" },
+  TEST_SYSTEM_ERROR: { className: "bg-zinc-500", label: "System error" },
+  TEST_RECOVERED: { className: "bg-[#169941]", label: "Recuperado" },
+  MONITOR_DOWN: { className: "bg-red-500", label: "Incidente abierto" },
+  MONITOR_RECOVERED: { className: "bg-[#169941]", label: "Recuperado" },
+  CHANNEL_DELIVERY_FAILED: { className: "bg-amber-500", label: "Entrega fallida" },
 };
 
 export function activityResourceLabel(resourceType: string): string {
@@ -104,36 +71,388 @@ export function uptimeMetric(value: number | null | undefined): {
   };
 }
 
-type MetricTone = "danger" | "neutral" | "ok" | "warn";
+export function browserTestNoun(count: number): "test" | "tests" {
+  return count === 1 ? "test" : "tests";
+}
 
-const metricSupportClass: Record<MetricTone, string> = {
-  danger: "text-danger-700",
-  neutral: "text-zinc-500",
-  ok: "text-ok-700",
-  warn: "text-warn-600",
-};
+export function safeHost(value: string): string {
+  try {
+    return new URL(value).host || "Unknown host";
+  } catch {
+    return "Unknown host";
+  }
+}
 
-function MetricCard({
-  label,
-  support,
-  tone = "neutral",
-  unit,
-  value,
+export function compactTime(iso: string): string {
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp)) return "—";
+  const difference = timestamp - Date.now();
+  const future = difference > 0;
+  const elapsed = Math.abs(difference);
+  if (elapsed < 60_000) return "ahora";
+  const value =
+    elapsed < 3_600_000
+      ? `${Math.max(1, Math.round(elapsed / 60_000))}m`
+      : elapsed < 86_400_000
+        ? `${Math.max(1, Math.round(elapsed / 3_600_000))}h`
+        : `${Math.max(1, Math.round(elapsed / 86_400_000))}d`;
+  return future ? `en ${value}` : value;
+}
+
+export function responsePercentile(values: number[], percentile = 0.95): number | null {
+  const measured = values.filter(Number.isFinite).sort((left, right) => left - right);
+  if (measured.length === 0) return null;
+  const index = Math.max(0, Math.ceil(measured.length * percentile) - 1);
+  return measured[Math.min(index, measured.length - 1)] ?? null;
+}
+
+export function usageSegmentCount(
+  used: number,
+  included: number,
+  segments = 30,
+): number {
+  if (!Number.isFinite(used) || !Number.isFinite(included) || included <= 0 || segments <= 0) {
+    return 0;
+  }
+  return Math.min(segments, Math.max(0, Math.round((used / included) * segments)));
+}
+
+function heroIncident(page: { items: Incident[] } | undefined): Incident | null | undefined {
+  return page === undefined ? undefined : (page.items[0] ?? null);
+}
+
+function frequencyLabel(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
+  const hours = seconds / 3_600;
+  return hours === 1 ? "1 h" : `${hours} h`;
+}
+
+function intervalLabel(hours: number): string {
+  if (!Number.isFinite(hours) || hours <= 0) return "—";
+  return hours === 1 ? "cada hora" : `cada ${hours} h`;
+}
+
+function decimalPercent(value: number): string {
+  return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value);
+}
+
+function SectionHeader({
+  count,
+  linkLabel,
+  title,
+  to,
 }: {
-  label: string;
-  support: ReactNode;
-  tone?: MetricTone;
-  unit?: string | null;
-  value: ReactNode;
+  count: number;
+  linkLabel: string;
+  title: string;
+  to: string;
 }) {
   return (
-    <Card className="min-h-30 rounded-xl">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-2 flex items-baseline gap-1.5 tabular-nums">
-        <span className="text-3xl font-semibold tracking-tight text-zinc-950">{value}</span>
-        {unit ? <span className="text-xs font-medium text-zinc-500">{unit}</span> : null}
-      </p>
-      <p className={clsx("mt-1.5 text-xs font-medium", metricSupportClass[tone])}>{support}</p>
+    <div className="flex h-[41px] items-center justify-between gap-4 px-[22px]">
+      <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">
+        {title}<span className="font-normal text-zinc-400"> · {count}</span>
+      </h2>
+      <Link className="text-xs font-semibold text-[#463de1] hover:underline" to={to}>
+        {linkLabel} →
+      </Link>
+    </div>
+  );
+}
+
+function MonitorBars({ monitor, stats }: { monitor: Monitor; stats?: MonitorStats }) {
+  const measured = (stats?.series ?? []).slice(-24);
+  const recent = measured.length > 0
+    ? measured.map((point, index) => ({
+        id: `${point.t}:${index}`,
+        response: point.responseTimeMs,
+        status: point.status,
+      }))
+    : (monitor.recentChecks ?? []).slice(-24).map((check, index) => ({
+        id: check.id,
+        response: null,
+        status: check.status,
+        index,
+      }));
+  const placeholders = Math.max(0, 24 - recent.length);
+  const max = Math.max(1, ...recent.map((point) => point.response ?? 0));
+
+  return (
+    <div
+      aria-label={`Historial reciente de ${monitor.name}`}
+      className="flex h-6 min-w-0 items-end gap-[2px]"
+      role="img"
+    >
+      {Array.from({ length: placeholders }, (_, index) => (
+        <span key={`empty-${index}`} className="h-1.5 min-w-[3px] flex-1 bg-indigo-50" />
+      ))}
+      {recent.map((point, index) => (
+        <span
+          key={point.id}
+          className={clsx(
+            "min-w-[3px] flex-1 rounded-[1px]",
+            point.status === "FAILED" ? "bg-red-300" : "bg-indigo-200",
+          )}
+          style={{
+            height: point.response === null
+              ? `${32 + ((index * 17) % 44)}%`
+              : `${Math.max(28, Math.round((point.response / max) * 100))}%`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MonitorRow({
+  monitor,
+  stats,
+  workspaceId,
+}: {
+  monitor: Monitor;
+  stats?: MonitorStats;
+  workspaceId: string;
+}) {
+  const uptime = stats?.uptime30d;
+  const response = stats?.avgResponseTimeMs24h ?? monitor.lastResponseTimeMs;
+  return (
+    <Link
+      className="group grid min-h-[61px] grid-cols-[10px_minmax(0,1fr)_82px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[10px_minmax(130px,1.2fr)_minmax(100px,.8fr)_90px_80px_minmax(12px,1fr)] min-[1400px]:grid-cols-[10px_213px_154px_110px_104px_minmax(12px,1fr)]"
+      to={`/w/${workspaceId}/uptime/${monitor.id}`}
+    >
+      <span
+        aria-label={monitor.status === "UP" ? "Up" : monitor.status === "DOWN" ? "Down" : "Unknown"}
+        className={clsx(
+          "size-2 rounded-full",
+          monitor.status === "UP" && "bg-[#169941]",
+          monitor.status === "DOWN" && "bg-red-500",
+          monitor.status === "UNKNOWN" && "bg-zinc-400",
+        )}
+        role="img"
+      />
+      <span className="min-w-0">
+        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900">
+          {monitor.name}
+        </strong>
+        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500">
+          {monitor.method} · cada {frequencyLabel(monitor.frequencySeconds)}
+        </span>
+      </span>
+      <span className="hidden min-w-0 min-[1100px]:block">
+        <MonitorBars monitor={monitor} stats={stats} />
+      </span>
+      <span className="hidden min-w-0 font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block">
+        {response === null || response === undefined ? "—" : `${Math.round(response)} ms`}
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">resp. media</span>
+      </span>
+      <span className="pl-3 text-left font-mono text-[13px] tabular-nums text-emerald-600">
+        {uptime === null || uptime === undefined ? "—" : `${decimalPercent(uptime)} %`}
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">uptime 30 d</span>
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        className="size-3 justify-self-end text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-500"
+      />
+    </Link>
+  );
+}
+
+const RUN_TONE: Record<RunStatus, string> = {
+  FAILED: "bg-red-400",
+  PASSED: "bg-[#7beda2]",
+  QUEUED: "bg-indigo-300",
+  RUNNING: "bg-indigo-400",
+  SYSTEM_ERROR: "bg-zinc-300",
+  TIMEOUT: "bg-amber-400",
+};
+
+function TestBars({ test }: { test: BrowserTest }) {
+  const runs = (test.recentRuns ?? []).slice(-20);
+  const placeholders = Math.max(0, 20 - runs.length);
+  return (
+    <div className="flex h-6 items-end gap-[2px]" aria-label={`Últimos runs de ${test.name}`} role="img">
+      {Array.from({ length: placeholders }, (_, index) => (
+        <span key={`empty-${index}`} className="h-2 min-w-[4px] flex-1 bg-zinc-100" />
+      ))}
+      {runs.map((run, index) => (
+        <span
+          key={run.id}
+          className={clsx("min-w-[4px] flex-1 rounded-[1px]", RUN_TONE[run.status])}
+          style={{ height: `${run.status === "RUNNING" || run.status === "QUEUED" ? 100 : 38 + ((index * 19) % 30)}%` }}
+          title={run.status.toLowerCase().replace("_", " ")}
+        />
+      ))}
+    </div>
+  );
+}
+
+function testStatus(test: BrowserTest): RunStatus | null {
+  return test.recentRuns?.at(-1)?.status ?? test.lastRun?.status ?? null;
+}
+
+function statusLabel(status: RunStatus | null): { label: string; tone: string } {
+  if (status === "PASSED") return { label: "Passed", tone: "bg-[#d7fce3] text-[#147d37]" };
+  if (status === "FAILED") return { label: "Failed", tone: "bg-red-100 text-red-700" };
+  if (status === "TIMEOUT") return { label: "Timeout", tone: "bg-amber-100 text-amber-700" };
+  if (status === "RUNNING") return { label: "Running", tone: "bg-indigo-100 text-indigo-700" };
+  if (status === "QUEUED") return { label: "Queued", tone: "bg-indigo-100 text-indigo-700" };
+  if (status === "SYSTEM_ERROR") return { label: "System error", tone: "bg-zinc-100 text-zinc-700" };
+  return { label: "Sin runs", tone: "bg-zinc-100 text-zinc-600" };
+}
+
+function BrowserTestRow({ test, workspaceId }: { test: BrowserTest; workspaceId: string }) {
+  const status = testStatus(test);
+  const badge = statusLabel(status);
+  const completed = (test.recentRuns ?? []).filter((run) =>
+    ["PASSED", "FAILED", "TIMEOUT", "SYSTEM_ERROR"].includes(run.status),
+  );
+  const passed = completed.filter((run) => run.status === "PASSED").length;
+  return (
+    <Link
+      className="group grid min-h-[88px] grid-cols-[74px_minmax(0,1fr)_86px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[74px_minmax(120px,1.15fr)_minmax(100px,.85fr)_92px_76px_minmax(12px,1fr)] min-[1400px]:grid-cols-[74px_149px_154px_102px_88px_minmax(12px,1fr)]"
+      to={`/w/${workspaceId}/tests/${test.id}`}
+    >
+      <span className={clsx("inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", badge.tone)}>
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+        {badge.label}
+      </span>
+      <span className="min-w-0">
+        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900">{test.name}</strong>
+        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500">
+          {safeHost(test.startUrl)} · {test.device === "DESKTOP" ? "Desktop" : "Mobile"} ·
+        </span>
+        <span className="block truncate text-[11px] leading-4 text-zinc-500">
+          {intervalLabel(test.intervalHours)} · próximo {compactTime(test.nextRunAt)}
+        </span>
+      </span>
+      <span className="hidden min-w-0 min-[1100px]:block"><TestBars test={test} /></span>
+      <span className="hidden font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block">
+        {test.lastRun?.durationMs == null ? "—" : formatDuration(test.lastRun.durationMs).replace(/([hms])/g, "$1 ").trim()}
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">último run</span>
+      </span>
+      <span className="text-center font-mono text-[13px] tabular-nums text-emerald-600">
+        {completed.length === 0 ? "—" : `${passed}/${completed.length}`}
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">últimos runs</span>
+      </span>
+      <ChevronRight aria-hidden="true" className="size-3 justify-self-end text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-500" />
+    </Link>
+  );
+}
+
+function CompactInventoryState({ children }: { children: ReactNode }) {
+  return <div className="grid min-h-[82px] place-items-center border-t border-[#f0efed] px-5 text-xs text-zinc-500">{children}</div>;
+}
+
+function InventoryError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <CompactInventoryState>
+      <span className="flex items-center gap-2">
+        No se pudo cargar el inventario.
+        <button className="font-semibold text-[#463de1] hover:underline" type="button" onClick={onRetry}>
+          Reintentar
+        </button>
+      </span>
+    </CompactInventoryState>
+  );
+}
+
+function MonitorsCard({
+  count,
+  error,
+  monitors,
+  onRetry,
+  pending,
+  statsById,
+  workspaceId,
+}: {
+  count: number;
+  error: boolean;
+  monitors: Monitor[];
+  onRetry: () => void;
+  pending: boolean;
+  statsById: Map<string, MonitorStats>;
+  workspaceId: string;
+}) {
+  return (
+    <Card className="min-h-[178px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
+      <SectionHeader count={count} linkLabel="Ver monitores" title="Monitores" to={`/w/${workspaceId}/uptime`} />
+      {error ? (
+        <InventoryError onRetry={onRetry} />
+      ) : pending ? (
+        <div className="space-y-3 border-t border-[#f0efed] px-[22px] py-4">
+          <Skeleton className="h-9 w-full" /><Skeleton className="h-9 w-full" />
+        </div>
+      ) : monitors.length === 0 ? (
+        <CompactInventoryState>No hay monitores todavía.</CompactInventoryState>
+      ) : monitors.slice(0, 2).map((monitor) => (
+        <MonitorRow key={monitor.id} monitor={monitor} stats={statsById.get(monitor.id)} workspaceId={workspaceId} />
+      ))}
+    </Card>
+  );
+}
+
+function TestsCard({ count, error, onRetry, pending, tests, workspaceId }: { count: number; error: boolean; onRetry: () => void; pending: boolean; tests: BrowserTest[]; workspaceId: string }) {
+  return (
+    <Card className="min-h-[131px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
+      <SectionHeader count={count} linkLabel="Ver tests" title="Browser tests" to={`/w/${workspaceId}/tests`} />
+      {error ? (
+        <InventoryError onRetry={onRetry} />
+      ) : pending ? (
+        <div className="border-t border-[#f0efed] px-[22px] py-5"><Skeleton className="h-10 w-full" /></div>
+      ) : tests.length === 0 ? (
+        <CompactInventoryState>No hay browser tests todavía.</CompactInventoryState>
+      ) : (
+        <BrowserTestRow test={tests[0]!} workspaceId={workspaceId} />
+      )}
+    </Card>
+  );
+}
+
+function responseValues(stats: MonitorStats[]): number[] {
+  return stats
+    .flatMap((entry) => entry.series)
+    .filter((point) => point.responseTimeMs !== null)
+    .sort((left, right) => Date.parse(left.t) - Date.parse(right.t))
+    .map((point) => point.responseTimeMs as number);
+}
+
+function sampledValues(measured: number[]): number[] {
+  if (measured.length <= 48) return measured;
+  return Array.from({ length: 48 }, (_, index) => measured[Math.floor((index / 47) * (measured.length - 1))]!);
+}
+
+function ResponseTimeCard({ fallbackAverage, pending, stats }: { fallbackAverage: number | null; pending: boolean; stats: MonitorStats[] }) {
+  const measured = responseValues(stats);
+  const average = measured.length > 0
+    ? measured.reduce((sum, value) => sum + value, 0) / measured.length
+    : fallbackAverage;
+  const values = sampledValues(measured);
+  const max = Math.max(1, ...values);
+  const p95 = responsePercentile(measured);
+  return (
+    <Card className="h-auto min-h-[176px] overflow-hidden rounded-xl border-[#e9e9e7] px-[22px] pb-4 pt-[17px] sm:h-[154px] sm:min-h-0" padding="none">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Tiempo de respuesta · 24 h</h2>
+        <p className="shrink-0 text-[11px] text-zinc-500">
+          <span className="font-mono text-zinc-900">{average === null ? "—" : `${Math.round(average)} ms`}</span> media
+          <span aria-hidden="true"> · </span>
+          <span className="font-mono text-zinc-900">{p95 === null ? "—" : `${Math.round(p95)} ms`}</span> p95
+        </p>
+      </div>
+      <div aria-label="Respuesta de las últimas 24 horas" className="mt-4 flex h-[58px] items-end gap-[3px]" role="img">
+        {values.length === 0 ? (
+          <div className="grid h-full w-full place-items-center text-xs text-zinc-400">
+            {pending ? "Cargando mediciones" : "Sin serie disponible"}
+          </div>
+        ) : values.map((value, index) => (
+          <span
+            key={index}
+            className="min-w-[5px] flex-1 rounded-t-[2px] bg-[#98a0f9]"
+            style={{ height: `${Math.max(22, Math.round((value / max) * 100))}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400"><span>hace 24 h</span><span>ahora</span></div>
     </Card>
   );
 }
@@ -141,111 +460,115 @@ function MetricCard({
 function shortCycleDate(value: string, timezone: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: timezone,
-  }).format(date);
+  return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", timeZone: timezone }).format(date).replace(".", "");
 }
 
-function OverviewUsage({ timezone, usage }: { timezone: string; usage: Usage }) {
-  const percentage = Math.min(
-    100,
-    Math.max(0, (usage.billableRuns / usage.includedRuns) * 100),
-  );
-  const barClass =
-    usage.overageRuns > 0
-      ? "bg-danger-600"
-      : percentage >= 80
-        ? "bg-warn-600"
-        : "bg-accent-600";
-
+function UsageCard({ timezone, usage }: { timezone: string; usage: Usage }) {
+  const percentage = usage.includedRuns > 0
+    ? Math.min(100, Math.max(0, (usage.billableRuns / usage.includedRuns) * 100))
+    : 0;
+  const segments = 30;
+  const filledSegments = usageSegmentCount(usage.billableRuns, usage.includedRuns, segments);
   return (
-    <Card className="rounded-xl" title="Usage this cycle">
-      <p className="flex items-baseline gap-2 tabular-nums">
-        <span className="text-3xl font-semibold tracking-tight text-zinc-950">
-          {usage.billableRuns}
-        </span>
-        <span className="text-sm font-medium text-zinc-500">of {usage.includedRuns} runs</span>
-      </p>
-      <div
-        aria-label={`${usage.billableRuns} of ${usage.includedRuns} runs used`}
-        aria-valuemax={usage.includedRuns}
-        aria-valuemin={0}
-        aria-valuenow={Math.min(usage.billableRuns, usage.includedRuns)}
-        className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100"
-        role="progressbar"
-      >
-        <div
-          className={clsx("h-full rounded-full transition-[width]", barClass)}
-          style={{ width: `${percentage}%` }}
-        />
+    <Card className="h-[185px] rounded-xl border-[#e9e9e7] px-5 pb-4 pt-[18px]" padding="none">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Consumo del ciclo</h2>
+        <span className="text-[11px] text-zinc-400">renueva {shortCycleDate(usage.periodEnd, timezone)}</span>
       </div>
-      <dl className="mt-2.5 flex items-center justify-between gap-4 text-xs text-zinc-500">
-        <div>
-          <dt className="sr-only">Remaining runs</dt>
-          <dd>{usage.remainingRuns} remaining</dd>
-        </div>
-        <div className="text-right">
-          <dt className="sr-only">Cycle renewal</dt>
-          <dd>Renews {shortCycleDate(usage.periodEnd, timezone)}</dd>
-        </div>
-      </dl>
-      <p className="mt-4 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
-        Projected total{" "}
-        <strong className="font-semibold text-zinc-900">
-          {formatCurrency(usage.projectedTotalCents, usage.currency)}
-        </strong>
-        {usage.overageRuns > 0
-          ? ` · ${usage.overageRuns} extra ${usage.overageRuns === 1 ? "run" : "runs"}`
-          : null}
+      <p className="mt-3 flex items-baseline gap-1.5 tabular-nums">
+        <strong className="text-[26px] font-semibold leading-7 tracking-[-0.05em] text-zinc-950">{usage.billableRuns}</strong>
+        <span className="text-[13px] text-zinc-500">de {usage.includedRuns} runs · {formatCurrency(usage.projectedTotalCents, usage.currency)} previstos</span>
       </p>
+      <div aria-label={`${usage.billableRuns} de ${usage.includedRuns} runs consumidos`} className="mt-3 h-2 overflow-hidden rounded-full bg-[#eeedea]" role="progressbar" aria-valuemax={usage.includedRuns} aria-valuemin={0} aria-valuenow={Math.min(usage.billableRuns, usage.includedRuns)}>
+        <span className="block h-full rounded-full bg-[linear-gradient(90deg,#463de1,#7681f7)]" style={{ width: `${percentage}%` }} />
+      </div>
+      <div aria-hidden="true" className="mt-5 flex h-[27px] items-end gap-[3px]">
+        {Array.from({ length: segments }, (_, index) => (
+          <span
+            key={index}
+            className={clsx("h-full min-w-[3px] flex-1", index < filledSegments ? "bg-[#dbe3ff]" : "bg-zinc-100")}
+          />
+        ))}
+      </div>
+      <p className="mt-1 text-[10px] text-zinc-400">{Math.round(percentage)} % consumido · ciclo actual</p>
     </Card>
   );
 }
 
-function heroIncident(page: { items: Incident[] } | undefined): Incident | null | undefined {
-  return page === undefined ? undefined : (page.items[0] ?? null);
+function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityItem[]; timezone: string; workspaceId: string }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? activity : activity.slice(0, 7);
+  return (
+    <Card className="min-h-[447px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
+      <div className="flex h-[50px] items-center justify-between px-5">
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Actividad</h2>
+        {activity.length > 7 ? (
+          <button
+            aria-controls="overview-activity-list"
+            aria-expanded={showAll}
+            className="text-xs font-semibold text-[#463de1] hover:underline"
+            type="button"
+            onClick={() => setShowAll((value) => !value)}
+          >
+            {showAll ? "Ver menos" : "Ver todo"}
+          </button>
+        ) : null}
+      </div>
+      {activity.length === 0 ? (
+        <div className="grid min-h-[370px] place-items-center px-6 text-center text-xs text-zinc-400">La actividad aparecerá aquí.</div>
+      ) : (
+        <ul className="px-5" id="overview-activity-list">
+          {visible.map((item) => {
+            const presentation = activityPresentation[item.type];
+            const relative = compactTime(item.occurredAt);
+            return (
+              <li key={activityKey(item)} className="border-b border-[#f0efed] last:border-b-0">
+                <Link
+                  aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
+                  className="group grid min-h-[55px] grid-cols-[8px_minmax(0,1fr)_auto] items-start gap-3 py-2.5 transition-colors hover:bg-zinc-50/60"
+                  to={activityPath(workspaceId, item)}
+                >
+                  <span aria-hidden="true" className={clsx("mt-1.5 size-2 rounded-full", presentation.className)} />
+                  <span className="min-w-0">
+                    <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900 group-hover:text-[#463de1]">{item.resourceName}</strong>
+                    <span className="block truncate text-xs leading-4 text-zinc-500">{presentation.label}</span>
+                  </span>
+                  <time className="pt-0.5 text-[11px] text-zinc-400" dateTime={item.occurredAt} title={formatDateTime(item.occurredAt, timezone)}>{relative}</time>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
 }
 
 function OverviewSkeleton() {
   return (
-    <div aria-label="Loading overview" className="space-y-5" role="status">
-      <Skeleton className="h-21 rounded-xl" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Card className="min-h-30 rounded-xl" key={index}>
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="mt-4 h-8 w-24" />
-            <Skeleton className="mt-3 h-3 w-32" />
-          </Card>
-        ))}
-      </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
-        <Skeleton className="h-48 rounded-xl" />
-        <Skeleton className="h-72 rounded-xl" />
-      </div>
+    <div aria-label="Loading overview" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px]" role="status">
+      <div className="space-y-4"><Skeleton className="h-[116px] rounded-xl" /><Skeleton className="h-[178px] rounded-xl" /><Skeleton className="h-[131px] rounded-xl" /><Skeleton className="h-[154px] rounded-xl" /></div>
+      <div className="space-y-4"><Skeleton className="h-[185px] rounded-xl" /><Skeleton className="h-[447px] rounded-xl" /></div>
     </div>
   );
 }
 
 export default function OverviewPage() {
   const { can, current, timezone } = useWorkspace();
-  const [showAllActivity, setShowAllActivity] = useState(false);
-  const overview = useQuery({
-    queryFn: () => getOverview(current.id),
-    queryKey: ["ws", current.id, "overview"],
-    refetchInterval: 30_000,
+  const overview = useQuery({ queryFn: () => getOverview(current.id), queryKey: ["ws", current.id, "overview"], refetchInterval: 30_000 });
+  const monitors = useQuery({ queryFn: () => listMonitors(current.id), queryKey: ["ws", current.id, "monitors"], refetchInterval: 30_000 });
+  const tests = useQuery({ queryFn: () => listTests(current.id), queryKey: ["ws", current.id, "tests"], refetchInterval: 30_000 });
+  const monitorsForStats = (monitors.data ?? []).slice(0, 2);
+  const monitorStats = useQueries({
+    queries: monitorsForStats.map((monitor) => ({
+      queryFn: () => getStats(current.id, monitor.id),
+      queryKey: ["ws", current.id, "monitors", monitor.id, "stats"],
+      refetchInterval: 30_000,
+      staleTime: 20_000,
+    })),
   });
-  const openIncidents = overview.data
-    ? overview.data.browserTests.openIncidents + overview.data.uptime.openIncidents
-    : 0;
-  const watchedChecks = overview.data
-    ? overview.data.browserTests.total +
-      overview.data.uptime.up +
-      overview.data.uptime.down +
-      overview.data.uptime.unknown
-    : 0;
+  const openIncidents = overview.data ? overview.data.browserTests.openIncidents + overview.data.uptime.openIncidents : 0;
+  const watchedChecks = overview.data ? overview.data.browserTests.total + overview.data.uptime.up + overview.data.uptime.down + overview.data.uptime.unknown : 0;
   const openIncidentQuery = useQuery({
     enabled: overview.isSuccess && openIncidents > 0,
     queryFn: () => listIncidents(current.id, { status: "open" }, null, 1),
@@ -262,180 +585,29 @@ export default function OverviewPage() {
   if (overview.isPending) return <OverviewSkeleton />;
   if (overview.isError) return <ErrorState onRetry={() => void overview.refetch()} />;
 
-  const data = overview.data;
-  const monitorCount = data.uptime.up + data.uptime.down + data.uptime.unknown;
-  const uptime = uptimeMetric(data.uptime.uptime30d);
-  const uptimeTone: MetricTone =
-    data.uptime.uptime30d === null || data.uptime.uptime30d === undefined
-      ? "neutral"
-      : data.uptime.uptime30d >= 99.9
-        ? "ok"
-        : data.uptime.uptime30d >= 99
-          ? "warn"
-          : "danger";
-  const visibleActivity = showAllActivity ? data.activity : data.activity.slice(0, 4);
+  const statsById = new Map<string, MonitorStats>();
+  monitorStats.forEach((query, index) => {
+    const monitor = monitorsForStats[index];
+    if (monitor && query.data) statsById.set(monitor.id, query.data);
+  });
+  const statsPending = monitors.isPending || monitorStats.some((query) => query.isPending);
+  const completeStats = monitorStats.length === monitorsForStats.length && monitorStats.every((query) => query.isSuccess)
+    ? monitorStats.flatMap((query) => query.data ? [query.data] : [])
+    : [];
+  const monitorCount = overview.data.uptime.up + overview.data.uptime.down + overview.data.uptime.unknown;
 
   return (
-    <div className="space-y-5">
-      <OverviewHero
-        canManageTests={can("tests.manage")}
-        lastIncident={heroIncident(lastIncidentQuery.data)}
-        openIncident={heroIncident(openIncidentQuery.data)}
-        overview={data}
-        workspaceId={current.id}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Uptime · 30 days"
-          support={
-            monitorCount === 0
-              ? "No monitors yet"
-              : data.uptime.uptime30d === null || data.uptime.uptime30d === undefined
-                ? "Collecting availability data"
-                : `${monitorCount} ${monitorCount === 1 ? "monitor" : "monitors"} measured`
-          }
-          tone={uptimeTone}
-          unit={uptime.unit}
-          value={uptime.value}
-        />
-        <MetricCard
-          label="Avg response · 24 h"
-          support={
-            data.uptime.avgResponseTimeMs24h === null
-              ? "No response data yet"
-              : "Across all uptime monitors"
-          }
-          unit={data.uptime.avgResponseTimeMs24h === null ? null : "ms"}
-          value={
-            data.uptime.avgResponseTimeMs24h === null
-              ? "—"
-              : Math.round(data.uptime.avgResponseTimeMs24h)
-          }
-        />
-        <MetricCard
-          label="Failures · 24 h"
-          support={data.browserTests.failed24h === 0 ? "No failed runs" : "Review recent failures"}
-          tone={data.browserTests.failed24h === 0 ? "ok" : "danger"}
-          value={data.browserTests.failed24h}
-        />
-        <MetricCard
-          label="Open incidents"
-          support={openIncidents === 0 ? "All clear" : "Needs attention"}
-          tone={openIncidents === 0 ? "ok" : "danger"}
-          value={openIncidents}
-        />
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+      <div className="min-w-0 space-y-4">
+        <OverviewHero canManageTests={can("tests.manage")} lastIncident={heroIncident(lastIncidentQuery.data)} openIncident={heroIncident(openIncidentQuery.data)} overview={overview.data} workspaceId={current.id} />
+        <MonitorsCard count={monitorCount} error={monitors.isError} monitors={monitors.data ?? []} onRetry={() => void monitors.refetch()} pending={monitors.isPending} statsById={statsById} workspaceId={current.id} />
+        <TestsCard count={overview.data.browserTests.total} error={tests.isError} onRetry={() => void tests.refetch()} pending={tests.isPending} tests={tests.data ?? []} workspaceId={current.id} />
+        <ResponseTimeCard fallbackAverage={overview.data.uptime.avgResponseTimeMs24h} pending={statsPending} stats={completeStats} />
       </div>
-
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
-        <OverviewUsage timezone={timezone} usage={data.usage} />
-
-        <Card className="overflow-hidden rounded-xl" padding="none">
-          <div className="flex min-h-13 items-center justify-between gap-4 border-b border-zinc-200 px-5 py-3.5">
-            <h2 className="text-sm font-semibold text-zinc-900">Recent activity</h2>
-            {data.activity.length > 4 ? (
-              <button
-                aria-controls="overview-activity-list"
-                aria-expanded={showAllActivity}
-                className="text-xs font-medium text-accent-700 underline-offset-4 hover:underline"
-                type="button"
-                onClick={() => setShowAllActivity((visible) => !visible)}
-              >
-                {showAllActivity ? "Show less" : "View all"}
-              </button>
-            ) : data.activity.length > 0 ? (
-              <span className="text-xs text-zinc-400">
-                {data.activity.length} {data.activity.length === 1 ? "event" : "events"}
-              </span>
-            ) : null}
-          </div>
-          {data.activity.length === 0 ? (
-            <EmptyState
-              action={
-                can("tests.manage") ? (
-                  <Link
-                    className="inline-flex h-9 items-center rounded-md bg-accent-600 px-4 text-sm font-medium text-white hover:bg-accent-700"
-                    to={`/w/${current.id}/tests/new`}
-                  >
-                    Create your first test
-                  </Link>
-                ) : undefined
-              }
-              className="m-4"
-              description="Create your first browser test to see activity here."
-              icon={<Globe aria-hidden="true" className="size-6" />}
-              title="No activity yet"
-            />
-          ) : (
-            <ul className="divide-y divide-zinc-100" id="overview-activity-list">
-              {visibleActivity.map((item) => {
-                const presentation = activityPresentation[item.type];
-                const Icon = presentation.icon;
-                const relative = formatRelative(item.occurredAt);
-                return (
-                  <li key={activityKey(item)}>
-                    <Link
-                      aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
-                      className="group grid min-h-14 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50/70 focus-visible:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
-                      to={activityPath(current.id, item)}
-                    >
-                      <span
-                        className={clsx(
-                          "grid size-7 shrink-0 place-items-center rounded-full",
-                          presentation.className,
-                        )}
-                      >
-                        <Icon aria-hidden="true" className="size-3.5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm text-zinc-700">
-                          <strong
-                            className="font-semibold text-zinc-900 group-hover:text-accent-700"
-                            title={item.resourceName}
-                          >
-                            {item.resourceName}
-                          </strong>
-                          <span> · {presentation.label}</span>
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-zinc-500">
-                          {activityResourceLabel(item.resourceType)}
-                          <span aria-hidden="true" className="sm:hidden">
-                            {" "}·{" "}
-                          </span>
-                          <time
-                            className="sm:hidden"
-                            dateTime={item.occurredAt}
-                            title={formatDateTime(item.occurredAt, timezone)}
-                          >
-                            {relative}
-                          </time>
-                        </span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <time
-                          className="hidden text-xs text-zinc-500 sm:block"
-                          dateTime={item.occurredAt}
-                          title={formatDateTime(item.occurredAt, timezone)}
-                        >
-                          {relative}
-                        </time>
-                        <ChevronRight
-                          aria-hidden="true"
-                          className="size-3.5 text-zinc-400 transition-transform group-hover:translate-x-0.5"
-                        />
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+      <div className="min-w-0 space-y-4">
+        <UsageCard timezone={timezone} usage={overview.data.usage} />
+        <ActivityCard activity={overview.data.activity} timezone={timezone} workspaceId={current.id} />
       </div>
     </div>
   );
-}
-
-export function browserTestNoun(count: number): "test" | "tests" {
-  return count === 1 ? "test" : "tests";
 }

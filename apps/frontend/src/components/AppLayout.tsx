@@ -9,11 +9,12 @@ import { useWorkspace } from "../contexts/WorkspaceContext";
 import { IconButton } from "./ui/IconButton";
 import { Sidebar } from "./Sidebar";
 
-export type AppContentWidth = "fluid" | "narrow" | "standard" | "wide";
+export type AppContentWidth = "fluid" | "narrow" | "overview" | "standard" | "wide";
 
 export const appContentWidthClass: Record<AppContentWidth, string> = {
   fluid: "max-w-none",
   narrow: "max-w-[1120px]",
+  overview: "max-w-[1144px]",
   standard: "max-w-[1440px]",
   wide: "max-w-[1920px]",
 };
@@ -23,6 +24,7 @@ export function appContentWidth(pathname: string): AppContentWidth {
   const page = segments[0] === "w" ? segments.slice(2) : segments;
   const [section, resourceId, action] = page;
 
+  if (section === "overview") return "overview";
   if (
     (section === "tests" || section === "uptime") &&
     (resourceId === "new" || action === "edit")
@@ -142,7 +144,14 @@ export function AppLayout() {
   const location = useLocation();
   const { can, current, subscriptionStatus } = useWorkspace();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const contentWidthClass = appContentWidthClass[appContentWidth(location.pathname)];
+  const contentWidth = appContentWidth(location.pathname);
+  const contentWidthClass = appContentWidthClass[contentWidth];
+  const contentHorizontalPaddingClass =
+    contentWidth === "overview" ? "px-4 md:px-8" : "px-4 md:px-6 xl:px-10";
+  const contentPaddingClass =
+    contentWidth === "overview"
+      ? "px-4 py-6 md:px-8 md:pb-8 md:pt-7"
+      : "px-4 py-6 md:px-6 xl:px-10";
   const alerts = useQuery({
     queryFn: () => getAlertsOverview(current.id),
     queryKey: alertsQueryKey(current.id),
@@ -156,7 +165,7 @@ export function AppLayout() {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="min-h-screen md:grid md:grid-cols-[216px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-screen border-r border-zinc-200 md:block">
         <Sidebar />
       </aside>
@@ -177,7 +186,7 @@ export function AppLayout() {
 
         {subscriptionStatus === "PAST_DUE" ? (
           <div className="border-b border-warn-600/20 bg-warn-50 text-sm text-zinc-800">
-            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 xl:px-10`}>
+            <div className={`${contentWidthClass} ${contentHorizontalPaddingClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 py-3`}>
               <p>Your last payment failed. Update your payment method to keep runs going.</p>
               {can("billing.manage") ? (
                 <Link
@@ -195,7 +204,7 @@ export function AppLayout() {
 
         {creditBanner ? (
           <div className="border-b border-danger-600/20 bg-danger-50 text-sm text-zinc-800">
-            <div className={`${contentWidthClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 xl:px-10`}>
+            <div className={`${contentWidthClass} ${contentHorizontalPaddingClass} mr-auto flex w-full flex-wrap items-center justify-between gap-3 py-3`}>
               <p>{creditBanner.message}</p>
               {creditBanner.showTopUp ? (
                 <Link
@@ -211,7 +220,7 @@ export function AppLayout() {
           </div>
         ) : null}
 
-        <main className={`${contentWidthClass} mr-auto w-full px-4 py-6 md:px-6 xl:px-10`}>
+        <main className={`${contentWidthClass} ${contentPaddingClass} mr-auto w-full`}>
           <Outlet />
         </main>
       </div>

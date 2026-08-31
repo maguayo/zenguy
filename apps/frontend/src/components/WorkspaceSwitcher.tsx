@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useWorkspace } from "../contexts/WorkspaceContext";
@@ -46,13 +46,13 @@ export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
       trigger={
         <button
           aria-label={`Switch workspace. Current workspace: ${current.name}`}
-          className="flex h-10 w-full min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-left transition-colors hover:bg-zinc-50"
+          className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2.5 text-left transition-colors hover:bg-zinc-50"
           type="button"
         >
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-900">
             {current.name}
           </span>
-          <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-zinc-500" />
+          <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-zinc-500" />
         </button>
       }
     />

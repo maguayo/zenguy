@@ -7,6 +7,10 @@ import {
   activityPresentation,
   activityResourceLabel,
   browserTestNoun,
+  compactTime,
+  responsePercentile,
+  safeHost,
+  usageSegmentCount,
   uptimeMetric,
 } from "./OverviewPage";
 
@@ -52,15 +56,43 @@ describe("overview activity", () => {
         Object.entries(activityPresentation).map(([type, value]) => [type, value.label]),
       ),
     ).toEqual({
-      CHANNEL_DELIVERY_FAILED: "Delivery failed",
-      MONITOR_DOWN: "Down",
-      MONITOR_RECOVERED: "Recovered",
+      CHANNEL_DELIVERY_FAILED: "Entrega fallida",
+      MONITOR_DOWN: "Incidente abierto",
+      MONITOR_RECOVERED: "Recuperado",
       TEST_FAILED: "Failed",
       TEST_PASSED: "Passed",
-      TEST_RECOVERED: "Recovered",
+      TEST_RECOVERED: "Recuperado",
       TEST_SYSTEM_ERROR: "System error",
-      TEST_TIMEOUT: "Timed out",
+      TEST_TIMEOUT: "Timeout",
     });
+  });
+
+  it("keeps credentials and paths out of inventory host labels", () => {
+    expect(safeHost("https://user:secret@example.com/private?token=x")).toBe(
+      "example.com",
+    );
+    expect(safeHost("not a url")).toBe("Unknown host");
+  });
+
+  it("calculates response percentiles without mutating missing data", () => {
+    expect(responsePercentile([40, 10, 20, 30], 0.5)).toBe(20);
+    expect(responsePercentile([10, 20, 30, 40])).toBe(40);
+    expect(responsePercentile([])).toBeNull();
+  });
+
+  it("maps aggregate usage to exact quota segments", () => {
+    expect(usageSegmentCount(171, 300)).toBe(17);
+    expect(usageSegmentCount(300, 300)).toBe(30);
+    expect(usageSegmentCount(350, 300)).toBe(30);
+    expect(usageSegmentCount(0, 300)).toBe(0);
+    expect(usageSegmentCount(10, 0)).toBe(0);
+  });
+
+  it("uses compact overview-relative labels", () => {
+    const now = Date.now();
+    expect(compactTime(new Date(now).toISOString())).toBe("ahora");
+    expect(compactTime(new Date(now - 3 * 60 * 60_000).toISOString())).toBe("3h");
+    expect(compactTime(new Date(now + 4 * 60_000).toISOString())).toBe("en 4m");
   });
 
   it("uses readable resource labels", () => {

@@ -48,7 +48,7 @@ describe("app content width", () => {
   it("keeps operational lists fluid and anchors capped pages by content type", () => {
     expect(appContentWidth("/w/ws_1/tests")).toBe("fluid");
     expect(appContentWidth("/w/ws_1/uptime")).toBe("fluid");
-    expect(appContentWidth("/w/ws_1/overview")).toBe("wide");
+    expect(appContentWidth("/w/ws_1/overview")).toBe("overview");
     expect(appContentWidth("/w/ws_1/tests/test_1")).toBe("wide");
     expect(appContentWidth("/w/ws_1/alerts/sms-calls")).toBe("wide");
     expect(appContentWidth("/w/ws_1/status-pages/page_1")).toBe("wide");
@@ -66,6 +66,7 @@ describe("app content width", () => {
     expect(appContentWidthClass).toEqual({
       fluid: "max-w-none",
       narrow: "max-w-[1120px]",
+      overview: "max-w-[1144px]",
       standard: "max-w-[1440px]",
       wide: "max-w-[1920px]",
     });
