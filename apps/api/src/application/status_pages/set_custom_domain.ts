@@ -15,6 +15,7 @@ import type { CustomHostnameClient } from "../../infrastructure/cloudflare/custo
 import type { Clock } from "../../shared/clock";
 import { conflict, forbidden, notFound, unavailable } from "../../shared/errors";
 import { logEvent } from "../../shared/log";
+import { rethrowCustomHostnameFailure } from "./custom_hostname_failure";
 import { parseCustomDomain } from "./input";
 
 export class SetCustomDomain {
@@ -54,7 +55,9 @@ export class SetCustomDomain {
       throw conflict("This domain is already connected to another status page");
     }
 
-    const record = await this.customHostnames.create(hostname);
+    const record = await this.customHostnames
+      .create(hostname)
+      .catch((error: unknown) => rethrowCustomHostnameFailure(error, "create"));
     const now = this.clock.now();
     try {
       await this.pages.setCustomDomain(

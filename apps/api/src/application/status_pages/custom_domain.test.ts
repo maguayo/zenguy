@@ -10,6 +10,7 @@ import {
 } from "../../test/fakes/custom_hostnames";
 import { FakeSubscriptionRepo } from "../../test/fakes/repos";
 import { FakeStatusPageRepo } from "../../test/fakes/status_page_repos";
+import { CustomHostnameApiError } from "../../infrastructure/cloudflare/custom_hostnames";
 import { CheckCustomDomain } from "./check_custom_domain";
 import { RemoveCustomDomain } from "./remove_custom_domain";
 import { SetCustomDomain } from "./set_custom_domain";
@@ -200,6 +201,57 @@ describe("SetCustomDomain", () => {
     await expect(
       unconfigured.execute({ ...baseInput, hostname: "status.example.com" }),
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+  });
+});
+
+describe("Cloudflare API failures", () => {
+  it("maps a Cloudflare rejection to CONFLICT with the reason", async () => {
+    const { pages, client, set } = build();
+    await pages.insert(page("sp_1"));
+    client.failWith = new CustomHostnameApiError(
+      "Duplicate custom hostname found.",
+      409,
+    );
+    await expect(
+      set.execute({ ...baseInput, hostname: "status.example.com" }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Cloudflare rejected this domain: Duplicate custom hostname found.",
+    });
+    expect((await pages.findById("ws_1", "sp_1"))?.customDomain).toBeNull();
+  });
+
+  it("maps Cloudflare auth and server failures to SERVICE_UNAVAILABLE", async () => {
+    const { pages, client, set } = build();
+    await pages.insert(page("sp_1"));
+    for (const status of [401, 403, 500, 502]) {
+      client.failWith = new CustomHostnameApiError(`HTTP ${status}`, status);
+      await expect(
+        set.execute({ ...baseInput, hostname: "status.example.com" }),
+      ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+    }
+  });
+
+  it("turns a failing status lookup into SERVICE_UNAVAILABLE without marking FAILED", async () => {
+    const { pages, client, set, check } = build();
+    await pages.insert(page("sp_1"));
+    await set.execute({ ...baseInput, hostname: "status.example.com" });
+    client.failWith = new CustomHostnameApiError("Authentication error", 403);
+    await expect(check.execute(baseInput)).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+    });
+    expect(
+      (await pages.findById("ws_1", "sp_1"))?.customDomainStatus,
+    ).toBe("PENDING");
+  });
+
+  it("keeps unexpected errors untranslated", async () => {
+    const { pages, client, set } = build();
+    await pages.insert(page("sp_1"));
+    client.failWith = new Error("boom");
+    await expect(
+      set.execute({ ...baseInput, hostname: "status.example.com" }),
+    ).rejects.toThrow("boom");
   });
 });
 

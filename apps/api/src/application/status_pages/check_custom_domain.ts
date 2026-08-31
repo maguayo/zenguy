@@ -10,6 +10,7 @@ import type { CustomHostnameClient } from "../../infrastructure/cloudflare/custo
 import type { CnameResolver } from "../../infrastructure/dns/doh";
 import type { Clock } from "../../shared/clock";
 import { forbidden, notFound, unavailable } from "../../shared/errors";
+import { rethrowCustomHostnameFailure } from "./custom_hostname_failure";
 
 export interface CustomDomainCheckResult {
   domain: string;
@@ -53,7 +54,9 @@ export class CheckCustomDomain {
     }
 
     const [record, cnameValue] = await Promise.all([
-      this.customHostnames.get(page.customHostnameId),
+      this.customHostnames
+        .get(page.customHostnameId)
+        .catch((error: unknown) => rethrowCustomHostnameFailure(error, "get")),
       this.cnames.resolve(page.customDomain),
     ]);
     const status: CustomDomainStatus =
