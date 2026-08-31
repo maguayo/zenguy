@@ -1,16 +1,15 @@
 ---
 // The homepage retold as one conversation with a cold visitor (the former
 // /proposal2, promoted to home on 2026-08-26). Each section answers the next
-// question they would ask: what is it (Hero), why care (Night), is it real
-// (WatchItRun), what do I get (Evidence2), will I find out (Reaches), does it
-// cover the basics (Uptime2), can I trust it (Trust), what does it cost
-// (Pricing2), last doubts (Faq2), act (Cta2). Founder.astro exists but stays
-// unmounted while the founder is the only social proof available.
+// question they would ask: what is it (Hero), is it real (WatchItRun), what do
+// I get (Evidence2), will I find out (Reaches), does it cover the basics
+// (Uptime2), can I trust it (Trust), what does it cost (Pricing2), last doubts
+// (Faq2), act (Cta2). Founder.astro exists but stays unmounted while the
+// founder is the only social proof available.
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import Hero from "../components/Hero.astro";
 import Footer from "../components/Footer.astro";
-import Night from "../components/proposal2/Night.astro";
 import WatchItRun from "../components/proposal2/WatchItRun.astro";
 import Evidence2 from "../components/proposal2/Evidence2.astro";
 import ScreenshotDialog from "../components/ScreenshotDialog.astro";
@@ -27,7 +26,6 @@ import Cta2 from "../components/proposal2/Cta2.astro";
     <Nav />
     <main>
       <Hero />
-      <Night />
       <WatchItRun />
       <Evidence2 />
       <Reaches />
