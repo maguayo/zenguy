@@ -149,11 +149,11 @@ function SectionHeader({
   to: string;
 }) {
   return (
-    <div className="flex h-[41px] items-center justify-between gap-4 px-[22px]">
-      <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">
+    <div className="flex h-[41px] items-center justify-between gap-4 px-[22px] 2xl:h-12 2xl:px-6">
+      <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950 2xl:text-base">
         {title}<span className="font-normal text-zinc-400"> · {count}</span>
       </h2>
-      <Link className="text-xs font-semibold text-[#463de1] hover:underline" to={to}>
+      <Link className="text-xs font-semibold text-[#463de1] hover:underline 2xl:text-sm" to={to}>
         {linkLabel} →
       </Link>
     </div>
@@ -180,7 +180,7 @@ function MonitorBars({ monitor, stats }: { monitor: Monitor; stats?: MonitorStat
   return (
     <div
       aria-label={`Historial reciente de ${monitor.name}`}
-      className="flex h-6 min-w-0 items-end gap-[2px]"
+      className="flex h-6 min-w-0 items-end gap-[2px] 2xl:h-7"
       role="img"
     >
       {Array.from({ length: placeholders }, (_, index) => (
@@ -217,7 +217,7 @@ function MonitorRow({
   const response = stats?.avgResponseTimeMs24h ?? monitor.lastResponseTimeMs;
   return (
     <Link
-      className="group grid min-h-[61px] grid-cols-[10px_minmax(0,1fr)_82px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[10px_minmax(130px,1.2fr)_minmax(100px,.8fr)_90px_80px_minmax(12px,1fr)] min-[1400px]:grid-cols-[10px_213px_154px_110px_104px_minmax(12px,1fr)]"
+      className="group grid min-h-[61px] grid-cols-[10px_minmax(0,1fr)_82px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[10px_minmax(130px,1.2fr)_minmax(100px,.8fr)_90px_80px_minmax(12px,1fr)] min-[1400px]:grid-cols-[10px_213px_154px_110px_104px_minmax(12px,1fr)] 2xl:min-h-[72px] 2xl:gap-4 2xl:px-6"
       to={`/w/${workspaceId}/uptime/${monitor.id}`}
     >
       <span
@@ -231,23 +231,23 @@ function MonitorRow({
         role="img"
       />
       <span className="min-w-0">
-        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900">
+        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900 2xl:text-sm 2xl:leading-5">
           {monitor.name}
         </strong>
-        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500">
+        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500 2xl:text-xs">
           {monitor.method} · cada {frequencyLabel(monitor.frequencySeconds)}
         </span>
       </span>
       <span className="hidden min-w-0 min-[1100px]:block">
         <MonitorBars monitor={monitor} stats={stats} />
       </span>
-      <span className="hidden min-w-0 font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block">
+      <span className="hidden min-w-0 font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block 2xl:text-sm">
         {response === null || response === undefined ? "—" : `${Math.round(response)} ms`}
-        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">resp. media</span>
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400 2xl:text-[11px]">resp. media</span>
       </span>
-      <span className="pl-3 text-left font-mono text-[13px] tabular-nums text-emerald-600">
+      <span className="pl-3 text-left font-mono text-[13px] tabular-nums text-emerald-600 2xl:text-sm">
         {uptime === null || uptime === undefined ? "—" : `${decimalPercent(uptime)} %`}
-        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">uptime 30 d</span>
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400 2xl:text-[11px]">uptime 30 d</span>
       </span>
       <ChevronRight
         aria-hidden="true"
@@ -270,7 +270,7 @@ function TestBars({ test }: { test: BrowserTest }) {
   const runs = (test.recentRuns ?? []).slice(-20);
   const placeholders = Math.max(0, 20 - runs.length);
   return (
-    <div className="flex h-6 items-end gap-[2px]" aria-label={`Últimos runs de ${test.name}`} role="img">
+    <div className="flex h-6 items-end gap-[2px] 2xl:h-7" aria-label={`Últimos runs de ${test.name}`} role="img">
       {Array.from({ length: placeholders }, (_, index) => (
         <span key={`empty-${index}`} className="h-2 min-w-[4px] flex-1 bg-zinc-100" />
       ))}
@@ -309,30 +309,30 @@ function BrowserTestRow({ test, workspaceId }: { test: BrowserTest; workspaceId:
   const passed = completed.filter((run) => run.status === "PASSED").length;
   return (
     <Link
-      className="group grid min-h-[88px] grid-cols-[74px_minmax(0,1fr)_86px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[74px_minmax(120px,1.15fr)_minmax(100px,.85fr)_92px_76px_minmax(12px,1fr)] min-[1400px]:grid-cols-[74px_149px_154px_102px_88px_minmax(12px,1fr)]"
+      className="group grid min-h-[88px] grid-cols-[74px_minmax(0,1fr)_86px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[74px_minmax(120px,1.15fr)_minmax(100px,.85fr)_92px_76px_minmax(12px,1fr)] min-[1400px]:grid-cols-[74px_149px_154px_102px_88px_minmax(12px,1fr)] 2xl:min-h-[104px] 2xl:grid-cols-[82px_164px_170px_112px_96px_minmax(12px,1fr)] 2xl:gap-4 2xl:px-6"
       to={`/w/${workspaceId}/tests/${test.id}`}
     >
-      <span className={clsx("inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", badge.tone)}>
+      <span className={clsx("inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold 2xl:px-3 2xl:py-1.5 2xl:text-xs", badge.tone)}>
         <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
         {badge.label}
       </span>
       <span className="min-w-0">
-        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900">{test.name}</strong>
-        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500">
+        <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900 2xl:text-sm 2xl:leading-5">{test.name}</strong>
+        <span className="mt-0.5 block truncate text-[11px] leading-4 text-zinc-500 2xl:text-xs">
           {safeHost(test.startUrl)} · {test.device === "DESKTOP" ? "Desktop" : "Mobile"} ·
         </span>
-        <span className="block truncate text-[11px] leading-4 text-zinc-500">
+        <span className="block truncate text-[11px] leading-4 text-zinc-500 2xl:text-xs">
           {intervalLabel(test.intervalHours)} · próximo {compactTime(test.nextRunAt)}
         </span>
       </span>
       <span className="hidden min-w-0 min-[1100px]:block"><TestBars test={test} /></span>
-      <span className="hidden font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block">
+      <span className="hidden font-mono text-[13px] tabular-nums text-zinc-900 min-[1100px]:block 2xl:text-sm">
         {test.lastRun?.durationMs == null ? "—" : formatDuration(test.lastRun.durationMs).replace(/([hms])/g, "$1 ").trim()}
-        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">último run</span>
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400 2xl:text-[11px]">último run</span>
       </span>
-      <span className="text-center font-mono text-[13px] tabular-nums text-emerald-600">
+      <span className="text-center font-mono text-[13px] tabular-nums text-emerald-600 2xl:text-sm">
         {completed.length === 0 ? "—" : `${passed}/${completed.length}`}
-        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400">últimos runs</span>
+        <span className="mt-0.5 block font-sans text-[10px] text-zinc-400 2xl:text-[11px]">últimos runs</span>
       </span>
       <ChevronRight aria-hidden="true" className="size-3 justify-self-end text-zinc-300 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-500" />
     </Link>
@@ -340,7 +340,7 @@ function BrowserTestRow({ test, workspaceId }: { test: BrowserTest; workspaceId:
 }
 
 function CompactInventoryState({ children }: { children: ReactNode }) {
-  return <div className="grid min-h-[82px] place-items-center border-t border-[#f0efed] px-5 text-xs text-zinc-500">{children}</div>;
+  return <div className="grid min-h-[82px] flex-1 place-items-center border-t border-[#f0efed] px-5 text-xs text-zinc-500">{children}</div>;
 }
 
 function InventoryError({ onRetry }: { onRetry: () => void }) {
@@ -374,12 +374,12 @@ function MonitorsCard({
   workspaceId: string;
 }) {
   return (
-    <Card className="min-h-[178px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
+    <Card className="flex min-h-[178px] flex-col overflow-hidden rounded-xl border-[#e9e9e7] 2xl:min-h-[192px]" padding="none">
       <SectionHeader count={count} linkLabel="Ver monitores" title="Monitores" to={`/w/${workspaceId}/uptime`} />
       {error ? (
         <InventoryError onRetry={onRetry} />
       ) : pending ? (
-        <div className="space-y-3 border-t border-[#f0efed] px-[22px] py-4">
+        <div className="flex-1 space-y-3 border-t border-[#f0efed] px-[22px] py-4">
           <Skeleton className="h-9 w-full" /><Skeleton className="h-9 w-full" />
         </div>
       ) : monitors.length === 0 ? (
@@ -393,12 +393,12 @@ function MonitorsCard({
 
 function TestsCard({ count, error, onRetry, pending, tests, workspaceId }: { count: number; error: boolean; onRetry: () => void; pending: boolean; tests: BrowserTest[]; workspaceId: string }) {
   return (
-    <Card className="min-h-[131px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
+    <Card className="flex min-h-[131px] flex-col overflow-hidden rounded-xl border-[#e9e9e7] 2xl:min-h-[152px]" padding="none">
       <SectionHeader count={count} linkLabel="Ver tests" title="Browser tests" to={`/w/${workspaceId}/tests`} />
       {error ? (
         <InventoryError onRetry={onRetry} />
       ) : pending ? (
-        <div className="border-t border-[#f0efed] px-[22px] py-5"><Skeleton className="h-10 w-full" /></div>
+        <div className="flex-1 border-t border-[#f0efed] px-[22px] py-5"><Skeleton className="h-10 w-full" /></div>
       ) : tests.length === 0 ? (
         <CompactInventoryState>No hay browser tests todavía.</CompactInventoryState>
       ) : (
@@ -430,16 +430,16 @@ function ResponseTimeCard({ fallbackAverage, pending, stats }: { fallbackAverage
   const max = Math.max(1, ...values);
   const p95 = responsePercentile(measured);
   return (
-    <Card className="h-auto min-h-[176px] overflow-hidden rounded-xl border-[#e9e9e7] px-[22px] pb-4 pt-[17px] sm:h-[154px] sm:min-h-0" padding="none">
+    <Card className="h-auto min-h-[176px] overflow-hidden rounded-xl border-[#e9e9e7] px-[22px] pb-4 pt-[17px] sm:h-[154px] sm:min-h-0 2xl:h-[184px] 2xl:px-6 2xl:pb-5 2xl:pt-5" padding="none">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Tiempo de respuesta · 24 h</h2>
-        <p className="shrink-0 text-[11px] text-zinc-500">
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950 2xl:text-base">Tiempo de respuesta · 24 h</h2>
+        <p className="shrink-0 text-[11px] text-zinc-500 2xl:text-xs">
           <span className="font-mono text-zinc-900">{average === null ? "—" : `${Math.round(average)} ms`}</span> media
           <span aria-hidden="true"> · </span>
           <span className="font-mono text-zinc-900">{p95 === null ? "—" : `${Math.round(p95)} ms`}</span> p95
         </p>
       </div>
-      <div aria-label="Respuesta de las últimas 24 horas" className="mt-4 flex h-[58px] items-end gap-[3px]" role="img">
+      <div aria-label="Respuesta de las últimas 24 horas" className="mt-4 flex h-[58px] items-end gap-[3px] 2xl:mt-5 2xl:h-[70px] 2xl:gap-1" role="img">
         {values.length === 0 ? (
           <div className="grid h-full w-full place-items-center text-xs text-zinc-400">
             {pending ? "Cargando mediciones" : "Sin serie disponible"}
@@ -452,7 +452,7 @@ function ResponseTimeCard({ fallbackAverage, pending, stats }: { fallbackAverage
           />
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400"><span>hace 24 h</span><span>ahora</span></div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400 2xl:text-[11px]"><span>hace 24 h</span><span>ahora</span></div>
     </Card>
   );
 }
@@ -470,19 +470,19 @@ function UsageCard({ timezone, usage }: { timezone: string; usage: Usage }) {
   const segments = 30;
   const filledSegments = usageSegmentCount(usage.billableRuns, usage.includedRuns, segments);
   return (
-    <Card className="h-[185px] rounded-xl border-[#e9e9e7] px-5 pb-4 pt-[18px]" padding="none">
+    <Card className="h-[185px] rounded-xl border-[#e9e9e7] px-5 pb-4 pt-[18px] 2xl:h-[216px] 2xl:px-6 2xl:pb-5 2xl:pt-5" padding="none">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Consumo del ciclo</h2>
-        <span className="text-[11px] text-zinc-400">renueva {shortCycleDate(usage.periodEnd, timezone)}</span>
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950 2xl:text-base">Consumo del ciclo</h2>
+        <span className="text-[11px] text-zinc-400 2xl:text-xs">renueva {shortCycleDate(usage.periodEnd, timezone)}</span>
       </div>
       <p className="mt-3 flex items-baseline gap-1.5 tabular-nums">
-        <strong className="text-[26px] font-semibold leading-7 tracking-[-0.05em] text-zinc-950">{usage.billableRuns}</strong>
-        <span className="text-[13px] text-zinc-500">de {usage.includedRuns} runs · {formatCurrency(usage.projectedTotalCents, usage.currency)} previstos</span>
+        <strong className="text-[26px] font-semibold leading-7 tracking-[-0.05em] text-zinc-950 2xl:text-[30px] 2xl:leading-8">{usage.billableRuns}</strong>
+        <span className="text-[13px] text-zinc-500 2xl:text-sm">de {usage.includedRuns} runs · {formatCurrency(usage.projectedTotalCents, usage.currency)} previstos</span>
       </p>
       <div aria-label={`${usage.billableRuns} de ${usage.includedRuns} runs consumidos`} className="mt-3 h-2 overflow-hidden rounded-full bg-[#eeedea]" role="progressbar" aria-valuemax={usage.includedRuns} aria-valuemin={0} aria-valuenow={Math.min(usage.billableRuns, usage.includedRuns)}>
         <span className="block h-full rounded-full bg-[linear-gradient(90deg,#463de1,#7681f7)]" style={{ width: `${percentage}%` }} />
       </div>
-      <div aria-hidden="true" className="mt-5 flex h-[27px] items-end gap-[3px]">
+      <div aria-hidden="true" className="mt-5 flex h-[27px] items-end gap-[3px] 2xl:mt-6 2xl:h-8 2xl:gap-1">
         {Array.from({ length: segments }, (_, index) => (
           <span
             key={index}
@@ -490,7 +490,7 @@ function UsageCard({ timezone, usage }: { timezone: string; usage: Usage }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-[10px] text-zinc-400">{Math.round(percentage)} % consumido · ciclo actual</p>
+      <p className="mt-1 text-[10px] text-zinc-400 2xl:text-[11px]">{Math.round(percentage)} % consumido · ciclo actual</p>
     </Card>
   );
 }
@@ -499,14 +499,14 @@ function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityI
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? activity : activity.slice(0, 7);
   return (
-    <Card className="min-h-[447px] overflow-hidden rounded-xl border-[#e9e9e7]" padding="none">
-      <div className="flex h-[50px] items-center justify-between px-5">
-        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950">Actividad</h2>
+    <Card className="flex min-h-[447px] flex-col overflow-hidden rounded-xl border-[#e9e9e7] 2xl:min-h-[488px]" padding="none">
+      <div className="flex h-[50px] items-center justify-between px-5 2xl:h-14 2xl:px-6">
+        <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950 2xl:text-base">Actividad</h2>
         {activity.length > 7 ? (
           <button
             aria-controls="overview-activity-list"
             aria-expanded={showAll}
-            className="text-xs font-semibold text-[#463de1] hover:underline"
+            className="text-xs font-semibold text-[#463de1] hover:underline 2xl:text-sm"
             type="button"
             onClick={() => setShowAll((value) => !value)}
           >
@@ -515,9 +515,9 @@ function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityI
         ) : null}
       </div>
       {activity.length === 0 ? (
-        <div className="grid min-h-[370px] place-items-center px-6 text-center text-xs text-zinc-400">La actividad aparecerá aquí.</div>
+        <div className="grid min-h-[370px] flex-1 place-items-center px-6 text-center text-xs text-zinc-400">La actividad aparecerá aquí.</div>
       ) : (
-        <ul className="px-5" id="overview-activity-list">
+        <ul className="flex-1 px-5" id="overview-activity-list">
           {visible.map((item) => {
             const presentation = activityPresentation[item.type];
             const relative = compactTime(item.occurredAt);
@@ -525,15 +525,15 @@ function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityI
               <li key={activityKey(item)} className="border-b border-[#f0efed] last:border-b-0">
                 <Link
                   aria-label={`${item.resourceName}: ${presentation.label}, ${relative}`}
-                  className="group grid min-h-[55px] grid-cols-[8px_minmax(0,1fr)_auto] items-start gap-3 py-2.5 transition-colors hover:bg-zinc-50/60"
+                  className="group grid min-h-[55px] grid-cols-[8px_minmax(0,1fr)_auto] items-start gap-3 py-2.5 transition-colors hover:bg-zinc-50/60 2xl:min-h-[61px] 2xl:gap-4 2xl:py-3"
                   to={activityPath(workspaceId, item)}
                 >
                   <span aria-hidden="true" className={clsx("mt-1.5 size-2 rounded-full", presentation.className)} />
                   <span className="min-w-0">
-                    <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900 group-hover:text-[#463de1]">{item.resourceName}</strong>
-                    <span className="block truncate text-xs leading-4 text-zinc-500">{presentation.label}</span>
+                    <strong className="block truncate text-[13px] font-semibold leading-4 text-zinc-900 group-hover:text-[#463de1] 2xl:text-sm 2xl:leading-5">{item.resourceName}</strong>
+                    <span className="block truncate text-xs leading-4 text-zinc-500 2xl:text-[13px]">{presentation.label}</span>
                   </span>
-                  <time className="pt-0.5 text-[11px] text-zinc-400" dateTime={item.occurredAt} title={formatDateTime(item.occurredAt, timezone)}>{relative}</time>
+                  <time className="pt-0.5 text-[11px] text-zinc-400 2xl:text-xs" dateTime={item.occurredAt} title={formatDateTime(item.occurredAt, timezone)}>{relative}</time>
                 </Link>
               </li>
             );
@@ -546,9 +546,9 @@ function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityI
 
 function OverviewSkeleton() {
   return (
-    <div aria-label="Loading overview" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px]" role="status">
-      <div className="space-y-4"><Skeleton className="h-[116px] rounded-xl" /><Skeleton className="h-[178px] rounded-xl" /><Skeleton className="h-[131px] rounded-xl" /><Skeleton className="h-[154px] rounded-xl" /></div>
-      <div className="space-y-4"><Skeleton className="h-[185px] rounded-xl" /><Skeleton className="h-[447px] rounded-xl" /></div>
+    <div aria-label="Loading overview" className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:gap-5" role="status">
+      <div className="space-y-4 2xl:space-y-5"><Skeleton className="h-[116px] rounded-xl 2xl:h-[136px]" /><Skeleton className="h-[178px] rounded-xl 2xl:h-[192px]" /><Skeleton className="h-[131px] rounded-xl 2xl:h-[152px]" /><Skeleton className="h-[154px] rounded-xl 2xl:h-[184px]" /></div>
+      <div className="space-y-4 2xl:space-y-5"><Skeleton className="h-[185px] rounded-xl 2xl:h-[216px]" /><Skeleton className="h-[447px] rounded-xl 2xl:h-[488px]" /></div>
     </div>
   );
 }
@@ -597,14 +597,14 @@ export default function OverviewPage() {
   const monitorCount = overview.data.uptime.up + overview.data.uptime.down + overview.data.uptime.unknown;
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
-      <div className="min-w-0 space-y-4">
+    <div className="grid items-start gap-4 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:gap-5">
+      <div className="min-w-0 space-y-4 2xl:space-y-5">
         <OverviewHero canManageTests={can("tests.manage")} lastIncident={heroIncident(lastIncidentQuery.data)} openIncident={heroIncident(openIncidentQuery.data)} overview={overview.data} workspaceId={current.id} />
         <MonitorsCard count={monitorCount} error={monitors.isError} monitors={monitors.data ?? []} onRetry={() => void monitors.refetch()} pending={monitors.isPending} statsById={statsById} workspaceId={current.id} />
         <TestsCard count={overview.data.browserTests.total} error={tests.isError} onRetry={() => void tests.refetch()} pending={tests.isPending} tests={tests.data ?? []} workspaceId={current.id} />
         <ResponseTimeCard fallbackAverage={overview.data.uptime.avgResponseTimeMs24h} pending={statsPending} stats={completeStats} />
       </div>
-      <div className="min-w-0 space-y-4">
+      <div className="min-w-0 space-y-4 2xl:space-y-5">
         <UsageCard timezone={timezone} usage={overview.data.usage} />
         <ActivityCard activity={overview.data.activity} timezone={timezone} workspaceId={current.id} />
       </div>

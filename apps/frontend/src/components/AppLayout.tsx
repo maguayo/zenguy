@@ -14,7 +14,7 @@ export type AppContentWidth = "fluid" | "narrow" | "overview" | "standard" | "wi
 export const appContentWidthClass: Record<AppContentWidth, string> = {
   fluid: "max-w-none",
   narrow: "max-w-[1120px]",
-  overview: "max-w-[1144px]",
+  overview: "max-w-[1440px]",
   standard: "max-w-[1440px]",
   wide: "max-w-[1920px]",
 };
@@ -147,10 +147,10 @@ export function AppLayout() {
   const contentWidth = appContentWidth(location.pathname);
   const contentWidthClass = appContentWidthClass[contentWidth];
   const contentHorizontalPaddingClass =
-    contentWidth === "overview" ? "px-4 md:px-8" : "px-4 md:px-6 xl:px-10";
+    contentWidth === "overview" ? "px-4 xl:px-6 2xl:px-8" : "px-4 md:px-6 xl:px-10";
   const contentPaddingClass =
     contentWidth === "overview"
-      ? "px-4 py-6 md:px-8 md:pb-8 md:pt-7"
+      ? "px-4 py-6 md:pb-8 md:pt-7 xl:px-6 2xl:px-8"
       : "px-4 py-6 md:px-6 xl:px-10";
   const alerts = useQuery({
     queryFn: () => getAlertsOverview(current.id),

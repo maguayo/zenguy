@@ -66,7 +66,7 @@ describe("app content width", () => {
     expect(appContentWidthClass).toEqual({
       fluid: "max-w-none",
       narrow: "max-w-[1120px]",
-      overview: "max-w-[1144px]",
+      overview: "max-w-[1440px]",
       standard: "max-w-[1440px]",
       wide: "max-w-[1920px]",
     });

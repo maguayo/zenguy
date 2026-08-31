@@ -196,6 +196,14 @@ describe("OverviewHero render", () => {
     expect(text).toContain(
       "Uptime 30 d 99,99 % Resp. 24 h 215 ms Fallos 24 h 2 Incidentes 0",
     );
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Uptime 30 d<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Resp\. 24 h<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Fallos 24 h<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Incidentes<\/p>/u);
+    expect(html).toMatch(
+      /<p class="[^"]*\bwhitespace-nowrap\b[^"]*">215 <span class="[^"]*">ms<\/span><\/p>/u,
+    );
+    expect(html).not.toMatch(/class="[^"]*\bblock\b[^"]*">ms<\/span>/u);
     expect(html).toContain('href="/w/ws_1/incidents"');
     expect(text).toContain("Historial");
   });
