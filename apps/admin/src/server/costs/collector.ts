@@ -212,6 +212,41 @@ const R2_CLASS_B = new Set([
 ]);
 
 /**
+ * Containers is the one dataset whose official tutorial mixes its types:
+ * `date_geq` / `date_leq` filters fed by **Time**-typed variables, and a page
+ * size of 100. This probe mirrors that example verbatim — the generic
+ * Date-typed pattern (fine for D1/KV/DO) fails against this node.
+ */
+function containersProbe(): Probe {
+  const dataset = "containersUsageAdaptiveGroups";
+  const fields: Record<string, { metric: string; scale?: number }> = {
+    cpuTimeSec: { metric: "containers.vcpu_s" },
+    allocatedMemory: { metric: "containers.memory_gib_s", scale: 1 / GIB },
+    allocatedDisk: { metric: "containers.disk_gb_s", scale: 1 / GB },
+  };
+  const query = `query ($accountTag: String, $from: Time, $to: Time) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    ${dataset}(limit: 100, filter: { date_geq: $from, date_leq: $to }, orderBy: [date_ASC]) {
+      dimensions { date } sum { ${Object.keys(fields).join(" ")} }
+    }
+  } }
+}`;
+  return {
+    name: "containers",
+    async run(client, range) {
+      const { data } = await client(query, timeVariables(range));
+      const rows = new Rows();
+      for (const node of nodes(data, dataset)) {
+        for (const [field, spec] of Object.entries(fields)) {
+          rows.add(day(node), spec.metric, num(node.sum?.[field]) * (spec.scale ?? 1));
+        }
+      }
+      return rows.list();
+    },
+  };
+}
+
+/**
  * One request per dataset on purpose: a GraphQL document fails as a whole when
  * any field is unknown, and several of these fields are introspection-derived
  * rather than documented. A wrong guess must cost one probe, not the night's run.
@@ -241,11 +276,7 @@ export const PROBES: readonly Probe[] = [
   sumProbe("do-duration", "durableObjectsPeriodicGroups", true, {
     activeTime: { metric: "do.duration_gbs", scale: DO_GB_PER_ACTIVE_SECOND / 1_000_000 },
   }),
-  sumProbe("containers", "containersUsageAdaptiveGroups", true, {
-    cpuTimeSec: { metric: "containers.vcpu_s" },
-    allocatedMemory: { metric: "containers.memory_gib_s", scale: 1 / GIB },
-    allocatedDisk: { metric: "containers.disk_gb_s", scale: 1 / GB },
-  }),
+  containersProbe(),
   actionProbe("kv", "kvOperationsAdaptiveGroups", true, (action) => {
     switch (action) {
       case "read": return "kv.reads";
