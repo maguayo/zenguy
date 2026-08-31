@@ -217,7 +217,7 @@ function MonitorRow({
   const response = stats?.avgResponseTimeMs24h ?? monitor.lastResponseTimeMs;
   return (
     <Link
-      className="group grid min-h-[61px] grid-cols-[10px_minmax(0,1fr)_82px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[10px_minmax(130px,1.2fr)_minmax(100px,.8fr)_90px_80px_minmax(12px,1fr)] min-[1400px]:grid-cols-[10px_213px_154px_110px_104px_minmax(12px,1fr)] 2xl:min-h-[76px] 2xl:grid-cols-[12.5px_minmax(170px,1.2fr)_minmax(120px,.8fr)_110px_104px_minmax(15px,1fr)] 2xl:gap-[15px] 2xl:px-[27.5px]"
+      className="group grid min-h-[61px] grid-cols-[10px_minmax(0,1fr)_82px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[10px_minmax(130px,1.2fr)_minmax(100px,.8fr)_90px_80px_minmax(12px,1fr)] min-[1400px]:grid-cols-[10px_213px_154px_110px_104px_minmax(12px,1fr)] 2xl:min-h-[76px] 2xl:grid-cols-[12.5px_minmax(170px,1.2fr)_minmax(120px,.8fr)_137.5px_130px_minmax(15px,1fr)] 2xl:gap-[15px] 2xl:px-[27.5px]"
       to={`/w/${workspaceId}/uptime/${monitor.id}`}
     >
       <span
@@ -309,7 +309,7 @@ function BrowserTestRow({ test, workspaceId }: { test: BrowserTest; workspaceId:
   const passed = completed.filter((run) => run.status === "PASSED").length;
   return (
     <Link
-      className="group grid min-h-[88px] grid-cols-[74px_minmax(0,1fr)_86px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[74px_minmax(120px,1.15fr)_minmax(100px,.85fr)_92px_76px_minmax(12px,1fr)] min-[1400px]:grid-cols-[74px_149px_154px_102px_88px_minmax(12px,1fr)] 2xl:min-h-[110px] 2xl:grid-cols-[92.5px_minmax(160px,1.15fr)_minmax(130px,.85fr)_105px_95px_minmax(15px,1fr)] 2xl:gap-[15px] 2xl:px-[27.5px]"
+      className="group grid min-h-[88px] grid-cols-[74px_minmax(0,1fr)_86px_12px] items-center gap-3 border-t border-[#f0efed] px-[22px] transition-colors hover:bg-zinc-50/70 min-[1100px]:grid-cols-[74px_minmax(120px,1.15fr)_minmax(100px,.85fr)_92px_76px_minmax(12px,1fr)] min-[1400px]:grid-cols-[74px_149px_154px_102px_88px_minmax(12px,1fr)] 2xl:min-h-[110px] 2xl:grid-cols-[minmax(92.5px,max-content)_minmax(160px,1.15fr)_minmax(130px,.85fr)_127.5px_110px_minmax(15px,1fr)] 2xl:gap-[15px] 2xl:px-[27.5px]"
       to={`/w/${workspaceId}/tests/${test.id}`}
     >
       <span className={clsx("inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold 2xl:gap-[5px] 2xl:px-[12.5px] 2xl:py-[5px] 2xl:text-[13.75px] 2xl:leading-5", badge.tone)}>
@@ -430,7 +430,7 @@ function ResponseTimeCard({ fallbackAverage, pending, stats }: { fallbackAverage
   const max = Math.max(1, ...values);
   const p95 = responsePercentile(measured);
   return (
-    <Card className="h-auto min-h-[176px] overflow-hidden rounded-xl border-[#e9e9e7] px-[22px] pb-4 pt-[17px] sm:h-[154px] sm:min-h-0 2xl:h-[193px] 2xl:rounded-[15px] 2xl:px-[27.5px] 2xl:pb-5 2xl:pt-[21.25px]" padding="none">
+    <Card className="h-auto min-h-[176px] overflow-hidden rounded-xl border-[#e9e9e7] px-[22px] pb-4 pt-[17px] sm:h-[154px] sm:min-h-0 2xl:h-[289.5px] 2xl:rounded-[15px] 2xl:px-[27.5px] 2xl:pb-5 2xl:pt-[21.25px]" padding="none">
       <div className="flex items-baseline justify-between gap-4 2xl:gap-5">
         <h2 className="text-sm font-semibold tracking-[-0.015em] text-zinc-950 2xl:text-[17.5px] 2xl:leading-[25px]">Tiempo de respuesta · 24 h</h2>
         <p className="shrink-0 text-[11px] text-zinc-500 2xl:text-[13.75px] 2xl:leading-5">
@@ -439,7 +439,7 @@ function ResponseTimeCard({ fallbackAverage, pending, stats }: { fallbackAverage
           <span className="font-mono text-zinc-900">{p95 === null ? "—" : `${Math.round(p95)} ms`}</span> p95
         </p>
       </div>
-      <div aria-label="Respuesta de las últimas 24 horas" className="mt-4 flex h-[58px] items-end gap-[3px] 2xl:mt-5 2xl:h-[72.5px] 2xl:gap-[3.75px]" role="img">
+      <div aria-label="Respuesta de las últimas 24 horas" className="mt-4 flex h-[58px] items-end gap-[3px] 2xl:mt-5 2xl:h-[169px] 2xl:gap-[3.75px]" role="img">
         {values.length === 0 ? (
           <div className="grid h-full w-full place-items-center text-xs text-zinc-400 2xl:text-[15px] 2xl:leading-5">
             {pending ? "Cargando mediciones" : "Sin serie disponible"}
@@ -477,7 +477,7 @@ function UsageCard({ timezone, usage }: { timezone: string; usage: Usage }) {
       </div>
       <p className="mt-3 flex items-baseline gap-1.5 tabular-nums 2xl:mt-[15px] 2xl:gap-[7.5px]">
         <strong className="text-[26px] font-semibold leading-7 tracking-[-0.05em] text-zinc-950 2xl:text-[32.5px] 2xl:leading-[35px]">{usage.billableRuns}</strong>
-        <span className="text-[13px] text-zinc-500 2xl:text-[16.25px] 2xl:leading-5">de {usage.includedRuns} runs · {formatCurrency(usage.projectedTotalCents, usage.currency)} previstos</span>
+        <span className="text-[13px] text-zinc-500 2xl:text-[16.25px] 2xl:leading-[23.25px]">de {usage.includedRuns} runs · {formatCurrency(usage.projectedTotalCents, usage.currency)} previstos</span>
       </p>
       <div aria-label={`${usage.billableRuns} de ${usage.includedRuns} runs consumidos`} className="mt-3 h-2 overflow-hidden rounded-full bg-[#eeedea] 2xl:mt-[15px] 2xl:h-2.5" role="progressbar" aria-valuemax={usage.includedRuns} aria-valuemin={0} aria-valuenow={Math.min(usage.billableRuns, usage.includedRuns)}>
         <span className="block h-full rounded-full bg-[linear-gradient(90deg,#463de1,#7681f7)]" style={{ width: `${percentage}%` }} />
@@ -547,7 +547,7 @@ function ActivityCard({ activity, timezone, workspaceId }: { activity: ActivityI
 function OverviewSkeleton() {
   return (
     <div aria-label="Loading overview" className="grid gap-4 2xl:gap-5 min-[1600px]:grid-cols-[minmax(0,1fr)_clamp(400px,25vw,450px)]" role="status">
-      <div className="space-y-4 2xl:space-y-5"><Skeleton className="h-[116px] rounded-xl 2xl:h-[145px] 2xl:rounded-[15px]" /><Skeleton className="h-[178px] rounded-xl 2xl:h-[223px] 2xl:rounded-[15px]" /><Skeleton className="h-[131px] rounded-xl 2xl:h-[164px] 2xl:rounded-[15px]" /><Skeleton className="h-[154px] rounded-xl 2xl:h-[193px] 2xl:rounded-[15px]" /></div>
+      <div className="space-y-4 2xl:space-y-5"><Skeleton className="h-[116px] rounded-xl 2xl:h-[145px] 2xl:rounded-[15px]" /><Skeleton className="h-[178px] rounded-xl 2xl:h-[223px] 2xl:rounded-[15px]" /><Skeleton className="h-[131px] rounded-xl 2xl:h-[164px] 2xl:rounded-[15px]" /><Skeleton className="h-[154px] rounded-xl 2xl:h-[289.5px] 2xl:rounded-[15px]" /></div>
       <div className="space-y-4 2xl:space-y-5"><Skeleton className="h-[185px] rounded-xl 2xl:h-[231px] 2xl:rounded-[15px]" /><Skeleton className="h-[447px] rounded-xl 2xl:h-[559px] 2xl:rounded-[15px]" /></div>
     </div>
   );

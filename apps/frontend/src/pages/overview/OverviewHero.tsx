@@ -75,7 +75,7 @@ function HeroMetric({
         )}
       >
         {value}
-        {unit === "%" ? <span className="ml-0.5">%</span> : null}
+        {unit === "%" ? <span className="ml-0.5 2xl:ml-[2.5px]">%</span> : null}
         {unit === "ms" ? (
           <>
             {" "}<span className="text-[0.8em] tracking-normal">ms</span>

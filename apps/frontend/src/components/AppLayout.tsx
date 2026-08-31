@@ -165,7 +165,7 @@ export function AppLayout() {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[216px_minmax(0,1fr)]">
+    <div className="min-h-screen md:grid md:grid-cols-[216px_minmax(0,1fr)] 2xl:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-screen border-r border-zinc-200 md:block">
         <Sidebar />
       </aside>
