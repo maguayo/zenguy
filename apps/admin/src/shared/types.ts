@@ -133,7 +133,7 @@ export interface Metrics {
   users: {
     registered: number;
     newInRange: number;
-    /** Distinct users with a sign-in or activity event in the last 7 days. */
+    /** Distinct registered users with a sign-in or activity event in the last 7 days. */
     active7d: number;
     /** Accounts older than 14 days with no sign-in nor activity event in 14 days. */
     danger: number;

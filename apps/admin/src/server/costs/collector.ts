@@ -213,9 +213,10 @@ const R2_CLASS_B = new Set([
 
 /**
  * Containers is the one dataset whose official tutorial mixes its types:
- * `date_geq` / `date_leq` filters fed by **Time**-typed variables, and a page
- * size of 100. This probe mirrors that example verbatim — the generic
- * Date-typed pattern (fine for D1/KV/DO) fails against this node.
+ * `date_geq` / `date_leq` filters fed by **Time**-typed variables, but with
+ * date-only (`YYYY-MM-DD`) values, and a page size of 100. The generic
+ * Date-typed pattern (fine for D1/KV/DO) fails against this node, while full
+ * timestamps fail its date parser.
  */
 function containersProbe(): Probe {
   const dataset = "containersUsageAdaptiveGroups";
@@ -234,7 +235,7 @@ function containersProbe(): Probe {
   return {
     name: "containers",
     async run(client, range) {
-      const { data } = await client(query, timeVariables(range));
+      const { data } = await client(query, dateVariables(range));
       const rows = new Rows();
       for (const node of nodes(data, dataset)) {
         for (const [field, spec] of Object.entries(fields)) {

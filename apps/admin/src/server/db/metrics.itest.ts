@@ -372,6 +372,34 @@ describe("loadMetrics", () => {
     expect(metrics.users.productUsage.series.at(-1)?.activeUsers).toBe(1);
   });
 
+  it("does not count activity belonging to users that are no longer registered", async () => {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM users WHERE id = ?").bind(U3),
+      env.DB.prepare(
+        `INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
+         VALUES ('rt_deleted', 'usr_deleted_a', 'hash-deleted', ?, ?)`,
+      ).bind(NOW + DAY, NOW - HOUR),
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_deleted_a', 'web.page_viewed', 'usr_deleted_a', 'web', ?)`,
+      ).bind(NOW - HOUR),
+      env.DB.prepare(
+        `INSERT INTO activity_events (id, type, user_id, source, occurred_at)
+         VALUES ('ae_deleted_b', 'web.page_viewed', 'usr_deleted_b', 'web', ?)`,
+      ).bind(NOW - HOUR),
+    ]);
+
+    const metrics = await loadMetrics(env.DB, NOW, 7);
+    // Without joining activity back to users this fixture reports the real-world
+    // contradiction: 4 active IDs despite only 3 currently registered accounts.
+    expect(metrics.users.registered).toBe(3);
+    expect(metrics.users.active7d).toBe(2);
+    expect(metrics.users.active7d).toBeLessThanOrEqual(metrics.users.registered);
+    if ("unavailable" in metrics.users.productUsage) throw new Error("activity migration unexpectedly missing");
+    expect(metrics.users.productUsage.overall.activeUsers).toBe(2);
+    expect(metrics.users.productUsage.bySource.web.activeUsers).toBe(2);
+  });
+
   it("survives an empty database", async () => {
     await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
     const metrics = await loadMetrics(env.DB, NOW, 7);

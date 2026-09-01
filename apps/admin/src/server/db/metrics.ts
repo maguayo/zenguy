@@ -177,7 +177,10 @@ const USER_SCALARS_SQL = `
     (SELECT COUNT(*) FROM users) AS registered,
     (SELECT COUNT(*) FROM users WHERE created_at >= ?1) AS new_in_range,
     (SELECT COUNT(*) FROM users WHERE created_at < ?1) AS users_before,
-    (SELECT COUNT(DISTINCT user_id) FROM refresh_tokens WHERE created_at >= ?2) AS active_tokens,
+    (SELECT COUNT(DISTINCT rt.user_id)
+       FROM refresh_tokens rt
+       JOIN users active_user ON active_user.id = rt.user_id
+      WHERE rt.created_at >= ?2) AS active_tokens,
     (SELECT COUNT(*) FROM users u
       WHERE u.created_at <= ?3
         AND NOT EXISTS (
@@ -192,9 +195,15 @@ interface UserActivityRow {
 const USER_ACTIVITY_SQL = `
   SELECT
     (SELECT COUNT(*) FROM (
-      SELECT user_id FROM refresh_tokens WHERE created_at >= ?1
+      SELECT rt.user_id
+        FROM refresh_tokens rt
+        JOIN users token_user ON token_user.id = rt.user_id
+       WHERE rt.created_at >= ?1
       UNION
-      SELECT user_id FROM activity_events WHERE occurred_at >= ?1 AND user_id IS NOT NULL
+      SELECT ae.user_id
+        FROM activity_events ae
+        JOIN users activity_user ON activity_user.id = ae.user_id
+       WHERE ae.occurred_at >= ?1
     )) AS active_combined,
     (SELECT COUNT(*) FROM users u
       WHERE u.created_at <= ?2
@@ -225,12 +234,12 @@ interface ProductUsageDayRow {
 
 const PRODUCT_USAGE_SCALARS_SQL = `
   WITH eligible AS (
-    SELECT user_id, source, type, occurred_at
-      FROM activity_events
-     WHERE occurred_at >= ?1 AND occurred_at < ?2
-       AND user_id IS NOT NULL
-       AND source IN ('web', 'app')
-       AND type IN (${PRODUCT_HUMAN_SQL})
+    SELECT event.user_id, event.source, event.type, event.occurred_at
+      FROM activity_events event
+      JOIN users active_user ON active_user.id = event.user_id
+     WHERE event.occurred_at >= ?1 AND event.occurred_at < ?2
+       AND event.source IN ('web', 'app')
+       AND event.type IN (${PRODUCT_HUMAN_SQL})
   ), slices AS (
     SELECT source,
            COUNT(DISTINCT CASE WHEN occurred_at >= ?3 THEN user_id END) AS dau,
@@ -263,12 +272,12 @@ function productUsageDaySql(windows: MadridDayWindow[]): string {
     ), sources(source) AS (
       VALUES ('web'), ('app')
     ), eligible AS (
-      SELECT user_id, source, type, occurred_at
-        FROM activity_events
-       WHERE occurred_at >= ${earliest} AND occurred_at < ${latest}
-         AND user_id IS NOT NULL
-         AND source IN ('web', 'app')
-         AND type IN (${PRODUCT_HUMAN_SQL})
+      SELECT event.user_id, event.source, event.type, event.occurred_at
+        FROM activity_events event
+        JOIN users active_user ON active_user.id = event.user_id
+       WHERE event.occurred_at >= ${earliest} AND event.occurred_at < ${latest}
+         AND event.source IN ('web', 'app')
+         AND event.type IN (${PRODUCT_HUMAN_SQL})
     )
     SELECT bounds.day, 'all' AS source,
            COUNT(DISTINCT event.user_id) AS active_users,

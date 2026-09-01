@@ -113,6 +113,26 @@ describe("collectUsage", () => {
     expect(probes.find((probe) => probe.probe === "queues")).toEqual({ probe: "queues", ok: true, rows: 0 });
     expect(rows.some((row) => row.metric === "queues.operations")).toBe(false);
   });
+
+  it("sends date-only values to the Containers date filters", async () => {
+    const containers = PROBES.find((probe) => probe.name === "containers");
+    expect(containers).toBeDefined();
+    const client = vi.fn<GraphqlClient>(async () => ({
+      data: { viewer: { accounts: [{ containersUsageAdaptiveGroups: [] }] } },
+    }));
+
+    await containers!.run(client, RANGE);
+
+    expect(client).toHaveBeenCalledOnce();
+    const [query, variables] = client.mock.calls[0]!;
+    expect(query).toContain("$from: Time");
+    expect(query).toContain("date_geq: $from, date_leq: $to");
+    expect(variables).toEqual({
+      accountTag: "acct",
+      from: "2026-08-27",
+      to: "2026-08-29",
+    });
+  });
 });
 
 describe("cloudflareGraphql", () => {
