@@ -212,11 +212,10 @@ const R2_CLASS_B = new Set([
 ]);
 
 /**
- * Containers is the one dataset whose official tutorial mixes its types:
- * `date_geq` / `date_leq` filters fed by **Time**-typed variables, but with
- * date-only (`YYYY-MM-DD`) values, and a page size of 100. The generic
- * Date-typed pattern (fine for D1/KV/DO) fails against this node, while full
- * timestamps fail its date parser.
+ * The official Containers billing tutorial feeds Time-typed variables to
+ * `date_geq` / `date_leq`, but the live API rejects that mixed combination.
+ * Keep the scalar and filter aligned on datetime while still grouping by the
+ * daily `date` dimension. This node also caps the page size at 100.
  */
 function containersProbe(): Probe {
   const dataset = "containersUsageAdaptiveGroups";
@@ -227,7 +226,7 @@ function containersProbe(): Probe {
   };
   const query = `query ($accountTag: String, $from: Time, $to: Time) {
   viewer { accounts(filter: { accountTag: $accountTag }) {
-    ${dataset}(limit: 100, filter: { date_geq: $from, date_leq: $to }, orderBy: [date_ASC]) {
+    ${dataset}(limit: 100, filter: { datetime_geq: $from, datetime_leq: $to }, orderBy: [date_ASC]) {
       dimensions { date } sum { ${Object.keys(fields).join(" ")} }
     }
   } }
@@ -235,7 +234,7 @@ function containersProbe(): Probe {
   return {
     name: "containers",
     async run(client, range) {
-      const { data } = await client(query, dateVariables(range));
+      const { data } = await client(query, timeVariables(range));
       const rows = new Rows();
       for (const node of nodes(data, dataset)) {
         for (const [field, spec] of Object.entries(fields)) {

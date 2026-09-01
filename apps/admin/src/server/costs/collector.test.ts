@@ -114,7 +114,7 @@ describe("collectUsage", () => {
     expect(rows.some((row) => row.metric === "queues.operations")).toBe(false);
   });
 
-  it("sends date-only values to the Containers date filters", async () => {
+  it("uses matching datetime filters and values for Containers", async () => {
     const containers = PROBES.find((probe) => probe.name === "containers");
     expect(containers).toBeDefined();
     const client = vi.fn<GraphqlClient>(async () => ({
@@ -126,11 +126,12 @@ describe("collectUsage", () => {
     expect(client).toHaveBeenCalledOnce();
     const [query, variables] = client.mock.calls[0]!;
     expect(query).toContain("$from: Time");
-    expect(query).toContain("date_geq: $from, date_leq: $to");
+    expect(query).toContain("datetime_geq: $from, datetime_leq: $to");
+    expect(query).not.toContain("date_geq:");
     expect(variables).toEqual({
       accountTag: "acct",
-      from: "2026-08-27",
-      to: "2026-08-29",
+      from: "2026-08-27T00:00:00Z",
+      to: "2026-08-29T23:59:59Z",
     });
   });
 });
