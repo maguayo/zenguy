@@ -436,6 +436,9 @@ export class D1WorkspaceDeletionRepo implements WorkspaceDeletionRepo {
         .prepare("DELETE FROM workspace_alert_settings WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database
+        .prepare("DELETE FROM workspace_remote_ai_consents WHERE workspace_id = ?")
+        .bind(workspaceId),
+      this.database
         .prepare("DELETE FROM alert_credit_balances WHERE workspace_id = ?")
         .bind(workspaceId),
       this.database

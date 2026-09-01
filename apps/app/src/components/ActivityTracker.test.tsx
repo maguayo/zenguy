@@ -87,7 +87,7 @@ describe("ActivityTracker", () => {
 
   it("reports nothing until the email is verified", async () => {
     mockUser.current = { emailVerified: false };
-    mockSegments.current = ["verify-pending"];
+    mockSegments.current = ["access-unavailable"];
     mockParams.current = {};
     await render(<ActivityTracker />);
     jest.advanceTimersByTime(1_000);

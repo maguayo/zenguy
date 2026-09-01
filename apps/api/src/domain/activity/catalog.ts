@@ -74,6 +74,8 @@ export const ACTIVITY_EVENTS = {
   statusPageItemsChanged: "status_page.items_changed",
   incidentUpdatePosted: "incident.update_posted",
   incidentUpdateDeleted: "incident.update_deleted",
+  remoteAiConsentGranted: "privacy.remote_ai_consent_granted",
+  remoteAiConsentRevoked: "privacy.remote_ai_consent_revoked",
 } as const;
 
 export type ActivityEventType =
@@ -181,6 +183,8 @@ export const ACTIVITY_EVENT_SPECS: Record<ActivityEventType, ActivityEventSpec> 
   "status_page.items_changed": spec("workspace", "status_page"),
   "incident.update_posted": spec("workspace", "incident"),
   "incident.update_deleted": spec("workspace", "incident"),
+  "privacy.remote_ai_consent_granted": spec("workspace", "remote_ai_consent"),
+  "privacy.remote_ai_consent_revoked": spec("workspace", "remote_ai_consent"),
 };
 
 /** Audited mutations are bridged into activity by `WriteAudit`; exhaustive by type. */
@@ -228,6 +232,8 @@ export const AUDIT_TO_ACTIVITY: Record<AuditAction, ActivityEventType> = {
   [AUDIT_ACTIONS.statusPageItemsChanged]: ACTIVITY_EVENTS.statusPageItemsChanged,
   [AUDIT_ACTIONS.incidentUpdatePosted]: ACTIVITY_EVENTS.incidentUpdatePosted,
   [AUDIT_ACTIONS.incidentUpdateDeleted]: ACTIVITY_EVENTS.incidentUpdateDeleted,
+  [AUDIT_ACTIONS.remoteAiConsentGranted]: ACTIVITY_EVENTS.remoteAiConsentGranted,
+  [AUDIT_ACTIONS.remoteAiConsentRevoked]: ACTIVITY_EVENTS.remoteAiConsentRevoked,
 };
 
 export function isActivityEventType(value: string): value is ActivityEventType {

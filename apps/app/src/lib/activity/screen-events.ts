@@ -21,22 +21,16 @@ export interface ClientMeta {
  * Screens reachable without a session (or public link pages). Nothing is ever
  * recorded for them, even when the visitor happens to be signed in.
  */
-// Public screens, plus the one authenticated screen an unverified account can
-// reach: the API only accepts events from verified accounts.
 const PUBLIC_SCREENS = new Set([
   "/",
-  "/verify-pending",
+  "/access-unavailable",
   "/sign-in",
-  "/sign-up",
   "/forgot-password",
   "/reset-password",
   "/privacy",
   "/terms",
-  "/verify-email",
   "/invitations/[token]",
   "/invitations/accept",
-  "/grants/[token]",
-  "/grants/redeem",
 ]);
 
 /** Screens that become a typed resource visit; every other authenticated screen is `app.screen_viewed`. */

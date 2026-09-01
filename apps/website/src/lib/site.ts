@@ -41,6 +41,8 @@ export const footerGroups = [
     links: [
       { label: "Legal notice", href: "/legal-notice/" },
       { label: "Privacy", href: "/privacy/" },
+      { label: "Privacy choices", href: "/privacy-choices/" },
+      { label: "Support", href: "/support/" },
       { label: "Terms", href: "/terms/" },
       { label: "Cookies", href: "/cookies/" },
       { label: "Contact", href: "mailto:privacy@zenguy.com" },

@@ -9,21 +9,12 @@
     "workspace": "."
   },
   {
-    "expires": "2026-09-23",
-    "id": "GHSA-w3rx-r6r6-pgpr",
-    "package": "image-size",
-    "patch": "apps/app/patches/image-size@1.2.1.patch",
-    "reason": "No fixed upstream release exists; the pinned local patch rejects zero/invalid ICNS entry lengths.",
-    "version": "1.2.1",
-    "workspace": "apps/app"
-  },
-  {
-    "expires": "2026-09-23",
-    "id": "GHSA-5p2g-fcmc-qvqq",
-    "package": "image-size",
-    "patch": "apps/app/patches/image-size@1.2.1.patch",
-    "reason": "No fixed upstream release exists; the pinned local patch rejects zero/undersized JXL and HEIF boxes.",
-    "version": "1.2.1",
+    "expires": "2026-10-01",
+    "id": "GHSA-vcc3-ghjq-m6fr",
+    "package": "decode-uri-component",
+    "patch": "apps/app/patches/decode-uri-component@0.2.2.patch",
+    "reason": "Expo Router 57 pins CommonJS query-string 7, which cannot load the ESM-only fixed package. The sealed patch ports the upstream 0.5.0 single-pass scanner while preserving the CommonJS API and query-string plus handling.",
+    "version": "0.2.2",
     "workspace": "apps/app"
   }
 ]

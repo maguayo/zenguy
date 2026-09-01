@@ -51,14 +51,17 @@ export default function SignIn() {
 
   return (
     <AuthShell
-      description="Sign in to your workspace."
+      description="Sign in with your existing Zenguy account."
       footer={
-        <Muted>
-          Don&apos;t have an account?{" "}
-          <Link href="/(auth)/sign-up">
-            <Label color={colors.accentDark}>Sign up</Label>
+        <View style={styles.legalLinks}>
+          <Link href="/terms">
+            <Label color={colors.accentDark}>Terms</Label>
           </Link>
-        </Muted>
+          <Muted>·</Muted>
+          <Link href="/privacy">
+            <Label color={colors.accentDark}>Privacy</Label>
+          </Link>
+        </View>
       }
       title="Welcome back"
     >
@@ -130,4 +133,5 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   forgot: { alignItems: "flex-end" },
   form: { gap: spacing.lg },
+  legalLinks: { flexDirection: "row", gap: spacing.sm, justifyContent: "center" },
 });

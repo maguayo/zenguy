@@ -17,16 +17,16 @@ describe("link capabilities", () => {
 
   it("isolates capability types and supports explicit disposal", () => {
     captureLinkCapability("invitation", "invite", 2_000);
-    captureLinkCapability("grant", "grant", 2_000);
+    captureLinkCapability("password-reset", "reset", 2_000);
     forgetLinkCapability("invitation");
     expect(linkCapability("invitation", 2_001)).toBeNull();
-    expect(linkCapability("grant", 2_001)).toBe("grant");
-    forgetLinkCapability("grant");
+    expect(linkCapability("password-reset", 2_001)).toBe("reset");
+    forgetLinkCapability("password-reset");
   });
 
   it("rejects malformed input and clears an older value of that type", () => {
-    captureLinkCapability("grant", "old", 3_000);
-    expect(captureLinkCapability("grant", "../new", 3_001)).toBeNull();
-    expect(linkCapability("grant", 3_002)).toBeNull();
+    captureLinkCapability("password-reset", "old", 3_000);
+    expect(captureLinkCapability("password-reset", "../new", 3_001)).toBeNull();
+    expect(linkCapability("password-reset", 3_002)).toBeNull();
   });
 });

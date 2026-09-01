@@ -1,5 +1,6 @@
 import {
   LegalContactEmail,
+  LegalExternalLink,
   LegalPage,
   LegalParagraph,
   LegalSection,
@@ -10,8 +11,16 @@ export default function Terms() {
     <LegalPage related={{ href: "/privacy", label: "Privacy Policy" }} title="Terms of Service">
       <LegalParagraph>
         These Terms govern Zenguy, a service of NIESAYO GROUP, S.L. (NIF
-        B23920663), Barcelona. Creating an account means you agree to them. The
-        full text is at zenguy.com/terms.
+        B23920663), Barcelona. Using your existing Zenguy account means you
+        agree to them. Zenguy for iOS is a companion app: it only signs in
+        existing users and does not offer account or workspace creation,
+        subscription activation, purchases, or payment management. The full
+        text is at{" "}
+        <LegalExternalLink
+          label="https://zenguy.com/terms/"
+          url="https://zenguy.com/terms/"
+        />
+        .
       </LegalParagraph>
 
       <LegalSection title="1. The service">
@@ -47,15 +56,15 @@ export default function Terms() {
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="5. Fees, liability and law">
+      <LegalSection title="5. Web-service fees, liability and law">
         <LegalParagraph>
-          Prices and taxes are shown in Stripe Checkout. Subscriptions renew
-          until cancelled. Creating an account asks us to start immediately;
-          consumers then lose the 14-day withdrawal right once performance has
-          begun. These Terms do not limit liability that Spanish or EU law
-          forbids limiting. Spanish law applies. Courts of Barcelona have
-          jurisdiction, except that consumers may use the courts of their
-          domicile. Questions: <LegalContactEmail />.
+          Any subscription for the separate web service is governed by the
+          order accepted outside this app. Zenguy for iOS does not display
+          prices or purchase links and cannot activate, cancel, or manage a
+          subscription or payment. These Terms do not limit liability that
+          Spanish or EU law forbids limiting. Spanish law applies. Courts of
+          Barcelona have jurisdiction, except that consumers may use the courts
+          of their domicile. Questions: <LegalContactEmail />.
         </LegalParagraph>
       </LegalSection>
     </LegalPage>

@@ -18,6 +18,7 @@ import {
   retryPendingLogout,
   type AuthSession,
 } from "@/api/auth";
+import { deleteAccount as requestAccountDeletion } from "@/api/account";
 import type { User } from "@/api/types";
 import { Image } from "expo-image";
 import * as Notifications from "expo-notifications";
@@ -43,6 +44,7 @@ export type AuthStatus = "loading" | "signedIn" | "signedOut" | "unavailable";
 export interface AuthContextValue {
   /** Tears down the old principal, persists the replacement, then adopts it. */
   adoptSession: (session: AuthSession) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   refreshUser: () => Promise<User>;
   retry: () => void;
   signIn: (email: string, password: string) => Promise<User>;
@@ -156,6 +158,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [becomeSignedOut]);
 
+  const deleteAccount = useCallback(
+    async (password: string) => {
+      await requestAccountDeletion(password);
+      // The server has revoked every credential and anonymized the account;
+      // clear the local Keychain/cache without making a now-impossible logout call.
+      await clearSession();
+      await becomeSignedOut();
+    },
+    [becomeSignedOut],
+  );
+
   const refreshUser = useCallback(async () => {
     const nextUser = await me();
     if (principalRef.current !== null && principalRef.current !== nextUser.id) {
@@ -175,8 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ adoptSession, refreshUser, retry, signIn, signOut, status, user }),
-    [adoptSession, refreshUser, retry, signIn, signOut, status, user],
+    () => ({ adoptSession, deleteAccount, refreshUser, retry, signIn, signOut, status, user }),
+    [adoptSession, deleteAccount, refreshUser, retry, signIn, signOut, status, user],
   );
 
   // Remount every descendant on A→B so native listeners and view-local state

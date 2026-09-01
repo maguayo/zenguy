@@ -8,6 +8,7 @@ the Git-connected Cloudflare Pages project `zenguy`.
 
 ```bash
 pnpm --filter @zenguy/website dev      # http://localhost:4400
+pnpm --filter @zenguy/website test
 pnpm --filter @zenguy/website build    # outputs dist/
 pnpm --filter @zenguy/website preview  # serve the built site on :4400
 ```
@@ -39,6 +40,18 @@ Required project settings (dashboard → zenguy → Settings → Build):
 
 `zenguy.com` and `www.zenguy.com` are attached to this Pages project as active
 custom domains with SSL enabled.
+
+Before `production.yml` can reach production secrets, its reusable security
+gate tests and builds this site and verifies the built Support, Privacy Choices
+and Privacy pages against the reviewed App Store contract. Run the same check
+from the repository root after building both public projects:
+
+```bash
+pnpm --filter @zenguy/frontend build
+pnpm --filter @zenguy/website test
+pnpm --filter @zenguy/website build
+node apps/app/scripts/verify-app-store-static-output.mjs
+```
 
 ## Porting notes
 

@@ -325,6 +325,7 @@ export default function TestDetailScreen() {
                           <RunSourceBadge source={item.source} />
                         </View>
                       }
+                      testID={index === 0 ? "app-store-run" : undefined}
                       title={formatDateTime(item.createdAt, timezone)}
                       onPress={() => router.push(`${base}/runs/${item.id}`)}
                     />

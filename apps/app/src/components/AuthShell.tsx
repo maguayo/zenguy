@@ -13,7 +13,7 @@ export function Wordmark({ dark = false, size = 24 }: { dark?: boolean; size?: n
   );
 }
 
-/** Shared chrome for the signed-out and onboarding screens. */
+/** Shared chrome for signed-out and account-access screens. */
 export function AuthShell({
   children,
   description,

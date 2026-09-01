@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "releaseRecordSha256": "<RELEASED_RELEASE_RECORD_SHA256>",
+  "candidate": {
+    "version": "<VERSION>",
+    "build": "<BUILD>",
+    "commit": "<FULL_COMMIT_SHA>",
+    "easBuildId": "<EAS_BUILD_UUID>",
+    "easBuildUrl": "<EAS_BUILD_URL>",
+    "easSubmissionId": "<EAS_SUBMISSION_UUID>",
+    "easSubmissionUrl": "<EAS_SUBMISSION_URL>",
+    "appStoreUrl": "<APP_STORE_URL>",
+    "releasedAt": "<RELEASED_AT_WITH_ZONE>"
+  },
+  "owners": {
+    "operations": "<OPERATIONS_OWNER>",
+    "support": "<SUPPORT_OWNER>",
+    "credentials": "<CREDENTIAL_OWNER>"
+  },
+  "credentialRenewal": {
+    "distributionCertificateExpiresOn": "<DISTRIBUTION_CERTIFICATE_EXPIRY>",
+    "provisioningProfileExpiresOn": "<PROVISIONING_PROFILE_EXPIRY>",
+    "nextReviewOn": "<NEXT_CREDENTIAL_REVIEW_DATE>"
+  },
+  "checkpoints": [
+    {
+      "phase": "RELEASE",
+      "observedAt": "<RELEASE_CHECK_TIMESTAMP_WITH_ZONE>",
+      "signals": {
+        "api": { "status": "PENDING", "evidence": "<API_EVIDENCE>" },
+        "appReviewMessages": { "status": "PENDING", "evidence": "<APP_REVIEW_MESSAGE_EVIDENCE>" },
+        "crashes": { "status": "PENDING", "evidence": "<CRASH_EVIDENCE>" },
+        "login": { "status": "PENDING", "evidence": "<LOGIN_EVIDENCE>" },
+        "notifications": { "status": "PENDING", "evidence": "<NOTIFICATION_EVIDENCE>" },
+        "runner": { "status": "PENDING", "evidence": "<RUNNER_EVIDENCE>" },
+        "support": { "status": "PENDING", "evidence": "<SUPPORT_EVIDENCE>" }
+      }
+    },
+    {
+      "phase": "H_PLUS_24",
+      "observedAt": "<H_PLUS_24_TIMESTAMP_WITH_ZONE>",
+      "signals": {
+        "api": { "status": "PENDING", "evidence": "<API_EVIDENCE>" },
+        "appReviewMessages": { "status": "PENDING", "evidence": "<APP_REVIEW_MESSAGE_EVIDENCE>" },
+        "crashes": { "status": "PENDING", "evidence": "<CRASH_EVIDENCE>" },
+        "login": { "status": "PENDING", "evidence": "<LOGIN_EVIDENCE>" },
+        "notifications": { "status": "PENDING", "evidence": "<NOTIFICATION_EVIDENCE>" },
+        "runner": { "status": "PENDING", "evidence": "<RUNNER_EVIDENCE>" },
+        "support": { "status": "PENDING", "evidence": "<SUPPORT_EVIDENCE>" }
+      }
+    },
+    {
+      "phase": "H_PLUS_48",
+      "observedAt": "<H_PLUS_48_TIMESTAMP_WITH_ZONE>",
+      "signals": {
+        "api": { "status": "PENDING", "evidence": "<API_EVIDENCE>" },
+        "appReviewMessages": { "status": "PENDING", "evidence": "<APP_REVIEW_MESSAGE_EVIDENCE>" },
+        "crashes": { "status": "PENDING", "evidence": "<CRASH_EVIDENCE>" },
+        "login": { "status": "PENDING", "evidence": "<LOGIN_EVIDENCE>" },
+        "notifications": { "status": "PENDING", "evidence": "<NOTIFICATION_EVIDENCE>" },
+        "runner": { "status": "PENDING", "evidence": "<RUNNER_EVIDENCE>" },
+        "support": { "status": "PENDING", "evidence": "<SUPPORT_EVIDENCE>" }
+      }
+    }
+  ],
+  "incidents": [],
+  "completedAt": "<COMPLETED_AT_WITH_ZONE>"
+}

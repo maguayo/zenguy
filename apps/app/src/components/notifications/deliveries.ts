@@ -1,5 +1,4 @@
 import type { Delivery } from "@/api/types";
-import { formatEuros } from "@/lib/format";
 import type { Tone } from "@/theme";
 
 const eventLabels: Record<Delivery["eventType"], { label: string; tone: Tone }> = {
@@ -14,15 +13,6 @@ export function deliveryAttempts(count: number): string {
 
 export function deliveryEvent(eventType: Delivery["eventType"]): { label: string; tone: Tone } {
   return eventLabels[eventType];
-}
-
-/** "0,18 € · Spain" for paid deliveries; nothing for free channels or older payloads. */
-export function deliveryCostLabel(
-  delivery: Pick<Delivery, "costCents" | "destinationCountry">,
-): string | null {
-  if (typeof delivery.costCents !== "number") return null;
-  const cost = formatEuros(delivery.costCents);
-  return delivery.destinationCountry ? `${cost} · ${delivery.destinationCountry}` : cost;
 }
 
 export function deliveryIncidentHref(

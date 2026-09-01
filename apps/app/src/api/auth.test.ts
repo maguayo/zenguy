@@ -10,8 +10,6 @@ import {
   logout,
   retryPendingLogout,
   SessionStorageError,
-  register,
-  verifyEmail,
 } from "./auth";
 import type { User } from "./types";
 
@@ -33,13 +31,6 @@ const nativeSession = {
   user,
 };
 
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify({ data }), {
-    headers: { "Content-Type": "application/json" },
-    status,
-  });
-}
-
 describe("auth API sessions", () => {
   let fetchMock: FetchMock;
 
@@ -53,50 +44,10 @@ describe("auth API sessions", () => {
     await clearSession();
   });
 
-  it("returns token-free registration state without replacing the active principal", async () => {
-    const pending = {
-      registrationPending: true as const,
-      email: user.email,
-    };
-    fetchMock.mockResolvedValueOnce(jsonResponse(pending, 201));
-
-    const result = await register("María", user.email, "Password123!", {
-      acceptedPrivacy: true,
-      acceptedTerms: true,
-      marketingOptIn: false,
-    });
-
-    expect(result).toEqual(pending);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8787/api/auth/register");
-    expect(getToken().accessToken).toBeNull();
-    expect(await hasStoredSession()).toBe(false);
-  });
-
-  it("returns verification sessions for atomic adoption", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ...nativeSession, user: { ...user, emailVerified: true }, verified: true }),
-    );
-
-    const session = await verifyEmail("token", "original password");
-
-    expect(session.user.emailVerified).toBe(true);
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe("http://127.0.0.1:8787/api/auth/verify-email");
-    expect(new Headers(init?.headers).get("X-Zenguy-Client")).toBe("native");
-    expect(init?.body).toBe(
-      JSON.stringify({ password: "original password", token: "token" }),
-    );
-    expect(getToken().accessToken).toBeNull();
-    expect(await hasStoredSession()).toBe(false);
-  });
-
   it("never keeps a half-stored session when the Keychain rejects it", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ...nativeSession, verified: true }));
     jest.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(new Error("entitlement missing"));
 
-    const session = await verifyEmail("token", "original password");
-
-    await expect(activateSession(session)).rejects.toBeInstanceOf(SessionStorageError);
+    await expect(activateSession(nativeSession)).rejects.toBeInstanceOf(SessionStorageError);
 
     expect(getToken().accessToken).toBeNull();
     expect(await hasStoredSession()).toBe(false);

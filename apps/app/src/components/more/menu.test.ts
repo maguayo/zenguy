@@ -8,21 +8,15 @@ describe("more menu", () => {
       "Notifications",
       "Secrets",
       "Members",
-      "Plan & Usage",
+      "AI data sharing",
       "Workspace Settings",
     ]);
   });
 
-  it("hides billing when the role cannot view it", () => {
-    const memberItems = visibleMoreItems(() => false);
-    expect(memberItems.map((item) => item.label)).not.toContain("Plan & Usage");
-    expect(memberItems).toHaveLength(moreMenuItems.length - 1);
-  });
-
-  it("shows billing when the role can view it", () => {
-    expect(visibleMoreItems(() => true)).toEqual(moreMenuItems);
-    expect(visibleMoreItems((action) => action === "billing.view").map((item) => item.path)).toContain(
-      "billing",
+  it("limits workspace privacy decisions to roles with settings permission", () => {
+    expect(visibleMoreItems(() => false).map((item) => item.label)).not.toContain(
+      "AI data sharing",
     );
+    expect(visibleMoreItems(() => true)).toEqual(moreMenuItems);
   });
 });

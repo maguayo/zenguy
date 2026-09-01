@@ -221,7 +221,7 @@ export function MonitorForm({ monitor }: { monitor?: Monitor }) {
                   autoCapitalize="sentences"
                   autoCorrect={false}
                   invalid={Boolean(fieldState.error)}
-                  placeholder="Checkout API"
+                  placeholder="Public API"
                   returnKeyType="next"
                   value={field.value}
                   onBlur={field.onBlur}

@@ -21,7 +21,6 @@ import {
   channelFormSchema,
   channelTypeOptions,
   createChannelInput,
-  isPaidChannelType,
   isPhoneChannelType,
   isWebhookChannelType,
   phoneHint,
@@ -48,7 +47,7 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
     <View>
       <Muted style={styles.pickerIntro}>Choose how Zenguy should notify your team.</Muted>
       <View style={styles.typeGrid}>
-        {channelTypeOptions.map(({ label, paid, type }) => (
+        {channelTypeOptions.map(({ label, type }) => (
           <Pressable
             key={type}
             accessibilityRole="button"
@@ -57,7 +56,6 @@ function TypePicker({ onSelect }: { onSelect: (type: ChannelType) => void }) {
           >
             <ChannelTile size={36} type={type} />
             <Label style={styles.typeLabel}>{label}</Label>
-            <Caption color={paid ? colors.warn : colors.okDark}>{paid ? "Pay as you go" : "Free"}</Caption>
           </Pressable>
         ))}
       </View>
@@ -233,7 +231,7 @@ export function ChannelForm({ channel, onClose, open }: ChannelFormProps) {
                     />
                   ) : null}
 
-                  {isPaidChannelType(selectedType) ? (
+                  {isPhoneChannelType(selectedType) ? (
                     <Controller
                       control={form.control}
                       name="smsConsent"

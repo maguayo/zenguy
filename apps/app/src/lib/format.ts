@@ -1,5 +1,3 @@
-import type { BillingCurrency } from "@/api/types";
-
 const emDash = "—";
 
 function validDate(value: string): Date | null {
@@ -76,18 +74,6 @@ export function formatDuration(ms: number | null): string {
   if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
   if (totalMinutes > 0) return `${totalMinutes}m ${String(seconds).padStart(2, "0")}s`;
   return `${seconds}s`;
-}
-
-export function formatCurrency(cents: number, currency: BillingCurrency): string {
-  return new Intl.NumberFormat(currency === "EUR" ? "es-ES" : "en-US", {
-    currency,
-    style: "currency",
-  }).format(Math.round(cents) / 100);
-}
-
-/** Alert credit and paid-alert prices remain EUR-only. */
-export function formatEuros(cents: number): string {
-  return formatCurrency(cents, "EUR");
 }
 
 export function formatPct(value: number | null): string {

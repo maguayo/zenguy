@@ -18,7 +18,9 @@ describe("HTTP kernel", () => {
     const response = await testApp().request("/api/health");
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: { ok: true } });
+    await expect(response.json()).resolves.toEqual({
+      data: { ok: true, environment: "development", runnerDispatch: "queue" },
+    });
   });
 
   it("boots with SMS and voice when Paddle and WhatsApp are disabled", async () => {

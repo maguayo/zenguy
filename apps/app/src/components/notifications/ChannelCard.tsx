@@ -25,7 +25,6 @@ import {
 } from "@/ui";
 
 import {
-  channelPriceLabel,
   channelReachLabel,
   channelTarget,
   channelTypeLabels,
@@ -153,7 +152,6 @@ export function ChannelCard({
 
   const lastDelivery = deliveries.data?.items[0];
   const loadingLastDelivery = Boolean(channel.lastDeliveryStatus) && deliveries.isPending;
-  const price = channelPriceLabel(channel);
   const reach = channelReachLabel(channel);
   const paused = pausedLabel(channel);
   const target = channelTarget(channel);
@@ -184,7 +182,6 @@ export function ChannelCard({
             {target}
           </Muted>
         )}
-        {price ? <MonoSmall style={styles.detail}>{price}</MonoSmall> : null}
         {reach ? <MonoSmall style={styles.detail}>{reach}</MonoSmall> : null}
         {channel.enabled && paused ? (
           <View style={styles.paused}>

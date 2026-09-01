@@ -77,7 +77,7 @@ jobs:
 
       - name: Validate iOS app
         working-directory: apps/app
-        run: pnpm verify:release-config && pnpm typecheck && pnpm lint && pnpm test --runInBand --forceExit
+        run: pnpm verify:app-store-package && pnpm verify:release-config && pnpm typecheck && pnpm lint && pnpm test --runInBand --forceExit && pnpm test:release-tools
 
       - name: Re-verify current main before signing key
         env:
@@ -118,7 +118,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_IOS_OTA_TOKEN }}
           OTA_MESSAGE: ${{ inputs.message || github.ref_name }}
         run: >-
-          pnpm exec eas update
+          pnpm dlx eas-cli@23.2.0 update
           --channel production
           --environment production
           --private-key-path "$RUNNER_TEMP/zenguy-update-key.pem"

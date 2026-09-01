@@ -285,7 +285,7 @@ export function TestForm({ testId }: { testId?: string }) {
             render={({ field, fieldState }) => (
               <Field
                 error={fieldState.error?.message}
-                hint="The starting hostname is included automatically. Separate checkout, OAuth, API, or asset hostnames with commas; *.example.com is supported."
+                hint="The starting hostname is included automatically. Separate API, login, or asset hostnames with commas; *.example.com is supported."
                 label="Additional allowed domains"
               >
                 <Input
@@ -294,7 +294,7 @@ export function TestForm({ testId }: { testId?: string }) {
                   invalid={Boolean(fieldState.error)}
                   keyboardType="url"
                   mono
-                  placeholder="checkout.example.com, *.login.example.com"
+                  placeholder="api.example.com, *.login.example.com"
                   value={field.value.join(", ")}
                   onBlur={() => {
                     field.onChange(field.value.filter(Boolean));

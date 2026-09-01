@@ -1,0 +1,34 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "0.2.2",
+    "copyright": "2026 NIESAYO GROUP, S.L.",
+    "categories": ["DEVELOPER_TOOLS", "BUSINESS"],
+    "info": {
+      "en-US": {
+        "title": "Zenguy",
+        "subtitle": "Website monitoring & evidence",
+        "description": "Zenguy for iOS is the operational companion for teams that already use Zenguy. Sign in with an existing account to see whether the journeys and services your organization monitors are working as expected.\n\nFrom your iPhone you can:\n\n• Review browser tests and their recent results.\n• Inspect screenshots and step-by-step evidence from completed runs.\n• Check uptime monitors, response times and current health.\n• Investigate incidents and their timelines.\n• Receive optional push alerts when something fails or recovers.\n• View notification channels, secrets, members and workspace settings according to your existing role.\n• Protect the app with Face ID, Touch ID or the device passcode.\n• Delete your Zenguy account directly from Account settings.\n\nBrowser tests run remotely against systems that the organization is authorized to test. The iOS app shows their configuration and results; it is not a general-purpose web browser.\n\nZenguy for iOS requires a pre-existing Zenguy account, workspace and active access supplied by your organization. The iOS app does not offer account or workspace registration, purchases, subscriptions, prices or payment management.",
+        "keywords": [
+          "website monitoring",
+          "synthetic monitoring",
+          "uptime",
+          "incidents",
+          "alerts",
+          "browser tests",
+          "evidence",
+          "operations"
+        ],
+        "promoText": "Review browser-test evidence, uptime and incidents from your iPhone. Zenguy for iOS is a free companion app for teams with an existing Zenguy account.",
+        "marketingUrl": "https://zenguy.com/",
+        "supportUrl": "https://zenguy.com/support/",
+        "privacyPolicyUrl": "https://zenguy.com/privacy/",
+        "privacyChoicesUrl": "https://zenguy.com/privacy-choices/"
+      }
+    },
+    "release": {
+      "automaticRelease": false,
+      "phasedRelease": false
+    }
+  }
+}

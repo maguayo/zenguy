@@ -9,13 +9,14 @@ behaviour, copy and validation faithfully; only the presentation changes.
 - `app/` — expo-router routes. URLs match the web app (`/w/[wsId]/tests/[testId]`,
   `/w/[wsId]/runs/[runId]`, …). Tab groups (`(overview)`, `(tests)`, `(uptime)`,
   `(incidents)`, `(more)`) are each a native stack; `(more)` hosts Notifications,
-  Secrets, Members, Plan & Usage, Settings and Account.
+  Secrets, Members, Settings and Account. Do not add registration, workspace
+  creation, plan activation, pricing or payment routes to the iOS target.
 - `src/api/` — resource clients and `types.ts` (ported verbatim from the web).
 - `src/lib/` — `api.ts` (fetch + bearer + Keychain refresh), `format.ts`,
   `errors.ts`, `permissions.ts`, `links.ts`, `share.ts`, `timezones.ts`,
   `stack-options.ts`.
 - `src/contexts/` — `useAuth()`, `useWorkspace()`, `useToast()`, `useAppLock()`.
-- `src/hooks/` — `useMutationError()` (403/402 handling), `useResendVerification()`.
+- `src/hooks/` — `useMutationError()` (403/402 handling).
 - `src/ui/` — primitives: `Screen`, `Card` (`eyebrow`, `elevated`, `tone`),
   `Hero` (the one ink card, overview only), `StatTile`, `PulseStrip`, `IconTile`,
   `SectionHeader`, `Button` (`accent` once per screen, `primary` ink, `secondary`
@@ -27,7 +28,7 @@ behaviour, copy and validation faithfully; only the presentation changes.
   `useReducedMotion`), text variants (`Display`, `Title`, `Heading`, `Body`,
   `Small`, `Muted`, `Caption`, `Label`, `Eyebrow`, `Mono`, `MonoSmall`).
 - `src/components/` — domain components (`StatusBadge`, `RunSourceBadge`,
-  `UsageMeter`, `ChannelPicker`, `TimezonePicker`, `CopyButton`, `RoleBadge`,
+  `ChannelPicker`, `TimezonePicker`, `CopyButton`, `RoleBadge`,
   `FormError`, `AuthShell`, …).
 - `src/theme/` — the "Paper & Pulse" tokens: palette, semantic colours, Geist
   faces, spacing, radius, shadows, typography, tones (see *Design system*).

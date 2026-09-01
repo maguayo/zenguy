@@ -31,5 +31,3 @@ export function resolveApiOrigin(raw: string | undefined, isDev: boolean): strin
 }
 
 export const API_ORIGIN = resolveApiOrigin(process.env.EXPO_PUBLIC_API_ORIGIN, __DEV__);
-
-export const APP_WEB_URL = "https://app.zenguy.com";

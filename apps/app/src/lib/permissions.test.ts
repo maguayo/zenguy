@@ -8,8 +8,6 @@ const expected: Record<Role, Record<Action, boolean>> = {
   ADMIN: {
     "admins.manage": false,
     "audit.view": true,
-    "billing.manage": false,
-    "billing.view": true,
     "channels.manage": true,
     "members.invite": true,
     "members.remove": true,
@@ -26,8 +24,6 @@ const expected: Record<Role, Record<Action, boolean>> = {
   MEMBER: {
     "admins.manage": false,
     "audit.view": false,
-    "billing.manage": false,
-    "billing.view": false,
     "channels.manage": false,
     "members.invite": false,
     "members.remove": false,

@@ -120,6 +120,8 @@ describe("WriteAudit", () => {
         "monitor.created",
         "monitor.updated",
         "monitor.deleted",
+        "privacy.remote_ai_consent_granted",
+        "privacy.remote_ai_consent_revoked",
         "billing.subscription_updated",
         "billing.grant_issued",
         "billing.grant_redeemed",

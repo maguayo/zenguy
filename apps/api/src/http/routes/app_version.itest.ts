@@ -18,14 +18,14 @@ describe("app version requirements", () => {
   it("includes the App Store link when the environment provides one", async () => {
     const app = buildApp({
       ...testEnv(),
-      IOS_APP_STORE_URL: "https://apps.apple.com/app/id123456789",
+      IOS_APP_STORE_URL: "https://apps.apple.com/app/id6804201911",
     });
     const response = await app.request("/api/app/version");
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       data: {
         minVersion: MIN_APP_VERSION,
-        storeUrl: "https://apps.apple.com/app/id123456789",
+        storeUrl: "https://apps.apple.com/app/id6804201911",
       },
     });
   });
@@ -37,6 +37,18 @@ describe("app version requirements", () => {
     expect(() =>
       loadConfig({ ...testEnv(), IOS_APP_STORE_URL: "https://example.com/not-the-store" }),
     ).toThrow(/IOS_APP_STORE_URL/u);
+    expect(() =>
+      loadConfig({
+        ...testEnv(),
+        IOS_APP_STORE_URL: "https://apps.apple.com/app/id123456789",
+      }),
+    ).toThrow(/6804201911/u);
+    expect(() =>
+      loadConfig({
+        ...testEnv(),
+        IOS_APP_STORE_URL: "https://apps.apple.com/es/app/zenguy/id6804201911?mt=8",
+      }),
+    ).toThrow(/canonical/u);
     expect(loadConfig({ ...testEnv(), IOS_APP_STORE_URL: "  " }).iosAppStoreUrl).toBeNull();
   });
 });

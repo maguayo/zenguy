@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": "22.0.0",
+    "version": "23.2.0",
     "appVersionSource": "remote",
     "requireCommit": true
   },
@@ -48,6 +48,12 @@
     "production": {
       "ios": {
         "ascAppId": "6804201911"
+      }
+    },
+    "app-review-metadata": {
+      "ios": {
+        "ascAppId": "6804201911",
+        "metadataPath": "./store.review.config.cjs"
       }
     }
   }

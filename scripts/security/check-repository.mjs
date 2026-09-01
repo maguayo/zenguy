@@ -25,15 +25,54 @@ if (enforceTrackedReleaseArtifacts) {
     ".github/workflows/ios-release.yml",
     ".node-version",
     "apps/app/app.config.ts",
+    "apps/app/app-age-rating.config.json",
+    "apps/app/app-privacy.config.json",
     "apps/app/certs/updates-certificate.pem",
     "apps/app/eas.json",
+    "apps/app/maestro/app-store-screenshots.yaml",
     "apps/app/package.json",
     "apps/app/plugins/with-universal-links-only.js",
     "apps/app/pnpm-lock.yaml",
     "apps/app/pnpm-workspace.yaml",
+    "apps/app/scripts/app-age-rating-contract.mjs",
+    "apps/app/scripts/app-age-rating-contract.test.mjs",
+    "apps/app/scripts/app-privacy-contract.mjs",
+    "apps/app/scripts/app-privacy-contract.test.mjs",
+    "apps/app/scripts/app-store-public-contract.mjs",
+    "apps/app/scripts/app-store-public-contract.test.mjs",
+    "apps/app/scripts/existing-account-only-contract.mjs",
+    "apps/app/scripts/existing-account-only-contract.test.mjs",
+    "apps/app/scripts/prepare-app-store-screenshots.mjs",
+    "apps/app/scripts/post-release-monitoring-contract.mjs",
+    "apps/app/scripts/post-release-monitoring-contract.test.mjs",
+    "apps/app/scripts/release-record-contract.mjs",
+    "apps/app/scripts/release-record-contract.test.mjs",
+    "apps/app/scripts/store-review-config.test.mjs",
+    "apps/app/scripts/verify-app-age-rating.mjs",
+    "apps/app/scripts/verify-app-review-account.mjs",
+    "apps/app/scripts/verify-app-review-account.test.mjs",
+    "apps/app/scripts/verify-app-privacy.mjs",
+    "apps/app/scripts/verify-app-store-package.mjs",
+    "apps/app/scripts/verify-app-store-post-release.mjs",
+    "apps/app/scripts/verify-app-store-release-record.mjs",
+    "apps/app/scripts/verify-app-store-remotes.mjs",
+    "apps/app/scripts/verify-app-store-remotes.test.mjs",
+    "apps/app/scripts/verify-app-store-static-output.mjs",
     "apps/app/scripts/verify-release-config.mjs",
     "apps/app/scripts/verify-release-tag.mjs",
+    "apps/app/store.config.json",
+    "apps/app/store.review.config.cjs",
     "apps/frontend/public/.well-known/apple-app-site-association",
+    "docs/app-store/content-rights.md",
+    "docs/app-store/metadata-en-US.md",
+    "docs/app-store/post-release-monitoring.template.json",
+    "docs/app-store/release-record.template.json",
+    "docs/app-store/release-smoke-test.md",
+    "docs/app-store/review-account.md",
+    "docs/app-store/review-notes-en-US.md",
+    "docs/app-store/review-response-guideline-2.1.md",
+    "docs/app-store/screenshots-en-US.md",
+    "docs/ios-app-privacy-inventory.md",
     "scripts/security/check-repository.mjs",
   ]) {
     if (!trackedPaths.has(path) || !existsSync(path)) {
@@ -202,8 +241,441 @@ const appManifest = JSON.parse(readFileSync("apps/app/package.json", "utf8"));
 if (appManifest.devDependencies?.["expo-doctor"] !== "1.20.2") {
   failures.push("apps/app/package.json: expo-doctor must remain pinned exactly to 1.20.2");
 }
-if (appManifest.devDependencies?.["eas-cli"] !== "22.0.0") {
-  failures.push("apps/app/package.json: eas-cli must remain pinned exactly to 22.0.0");
+if (appManifest.dependencies?.["expo-application"] !== "~57.0.2") {
+  failures.push(
+    "apps/app/package.json: expo-application must remain direct so the native App Store version/build is visible",
+  );
+}
+if (appManifest.scripts?.test !== "jest") {
+  failures.push(
+    "apps/app/package.json: mobile tests must use the audited Jest entry point",
+  );
+}
+if (
+  appManifest.scripts?.["test:release-tools"] !==
+  "node --test scripts/app-age-rating-contract.test.mjs scripts/app-privacy-contract.test.mjs scripts/app-store-public-contract.test.mjs scripts/existing-account-only-contract.test.mjs scripts/post-release-monitoring-contract.test.mjs scripts/release-record-contract.test.mjs scripts/store-review-config.test.mjs scripts/verify-app-review-account.test.mjs scripts/verify-app-store-remotes.test.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: release-tool tests must include age rating, privacy, existing-account-only, public-output, release-record, post-release monitoring, App Review account, metadata and bounded remote-deployment contracts",
+  );
+}
+if (
+  appManifest.scripts?.["prepare:app-store-screenshots"] !==
+  "node scripts/prepare-app-store-screenshots.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: the reproducible App Store screenshot preparer must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-age-rating"] !==
+  "node scripts/verify-app-age-rating.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: the structured App Store age-rating verifier must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-store-package"] !==
+  "node scripts/verify-app-store-package.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: App Store source package verification must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-privacy"] !==
+  "node scripts/verify-app-privacy.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: the structured App Privacy verifier must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-review-account"] !==
+  "node scripts/verify-app-review-account.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: the production App Review account verifier must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-store-release-record"] !==
+  "node scripts/verify-app-store-release-record.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: final App Store release-record verification must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-store-post-release"] !==
+  "node scripts/verify-app-store-post-release.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: 48-hour App Store post-release verification must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-store-remotes"] !==
+  "node scripts/verify-app-store-remotes.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: published App Store prerequisite verification must remain available",
+  );
+}
+if (
+  appManifest.scripts?.["verify:app-store-static-output"] !==
+  "node scripts/verify-app-store-static-output.mjs"
+) {
+  failures.push(
+    "apps/app/package.json: built App Store public-output verification must remain available",
+  );
+}
+if (appManifest.scripts?.["verify:ios-archive"] !== "node scripts/verify-ios-archive.mjs") {
+  failures.push(
+    "apps/app/package.json: the packaged iOS archive verifier must remain available",
+  );
+}
+if (
+  Object.hasOwn(appManifest.dependencies ?? {}, "eas-cli") ||
+  Object.hasOwn(appManifest.devDependencies ?? {}, "eas-cli")
+) {
+  failures.push(
+    "apps/app/package.json: eas-cli must stay outside project dependencies and run through the exact audited pnpm dlx version",
+  );
+}
+const appAccountScreen = readFileSync(
+  "apps/app/app/w/[wsId]/(tabs)/(more)/account/index.tsx",
+  "utf8",
+);
+if (
+  !appAccountScreen.includes("Application.nativeApplicationVersion") ||
+  !appAccountScreen.includes("Application.nativeBuildVersion")
+) {
+  failures.push(
+    "iOS Account screen must display the authoritative native App Store version and build",
+  );
+}
+const appTestDetailScreen = readFileSync(
+  "apps/app/app/w/[wsId]/(tabs)/(tests)/tests/[testId]/index.tsx",
+  "utf8",
+);
+if (!appTestDetailScreen.includes('testID={index === 0 ? "app-store-run" : undefined}')) {
+  failures.push(
+    "iOS test detail must retain the stable App Store evidence selector",
+  );
+}
+const appStoreScreenshotFlow = readFileSync(
+  "apps/app/maestro/app-store-screenshots.yaml",
+  "utf8",
+);
+const screenshotInputLines = appStoreScreenshotFlow.match(/^\s*- inputText: .+$/gmu) ?? [];
+if (
+  JSON.stringify(screenshotInputLines.map((line) => line.trim())) !==
+    JSON.stringify([
+      "- inputText: ${MAESTRO_REVIEW_EMAIL}",
+      "- inputText: ${MAESTRO_REVIEW_PASSWORD}",
+    ]) ||
+  !appStoreScreenshotFlow.includes("clearState: true") ||
+  !appStoreScreenshotFlow.includes('id: "app-store-run"')
+) {
+  failures.push(
+    "app-store-screenshots.yaml: capture must use only injected review credentials, clean state and the stable evidence selector",
+  );
+}
+for (const screenshotName of [
+  "01-overview",
+  "02-test-run-evidence",
+  "03-uptime",
+  "04-incident",
+  "05-notifications",
+]) {
+  if (!appStoreScreenshotFlow.includes(`takeScreenshot: ${screenshotName}`)) {
+    failures.push(
+      `app-store-screenshots.yaml: missing required capture ${screenshotName}`,
+    );
+  }
+}
+const appStoreScreenshotPreparer = readFileSync(
+  "apps/app/scripts/prepare-app-store-screenshots.mjs",
+  "utf8",
+);
+for (const invariant of [
+  "const expectedWidth = 1320",
+  "const expectedHeight = 2868",
+  'properties.space !== "RGB"',
+  'properties.hasAlpha !== "no"',
+  "new Set(files.map((file) => file.sha256)).size !== files.length",
+  'flag: "wx"',
+]) {
+  if (!appStoreScreenshotPreparer.includes(invariant)) {
+    failures.push(
+      `prepare-app-store-screenshots.mjs: missing release QA invariant ${invariant}`,
+    );
+  }
+}
+const appStorePackageVerifier = readFileSync(
+  "apps/app/scripts/verify-app-store-package.mjs",
+  "utf8",
+);
+for (const invariant of [
+  "packageJson.version",
+  "expectedReviewPlaceholders",
+  "expectedGuideline21Placeholders",
+  "expectedReleaseRecordPlaceholders",
+  "expectedSmokePlaceholders",
+  "expectedStoreInfoKeys",
+  'readFileSync(join(appRoot, "store.config.json"), "utf8")',
+  "validateAppAgeRatingContract()",
+  "validateAppPrivacyContract()",
+  'createHash("sha256")',
+  "bytes.readUInt32BE(16)",
+  "icon.colorType !== 2",
+  "Account reports the same native version and build as EAS and App Store Connect",
+  "source checklist must contain exactly 13 uncompleted sign-offs",
+  "postReleaseTemplate",
+]) {
+  if (!appStorePackageVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-store-package.mjs: missing source-package invariant ${invariant}`,
+    );
+  }
+}
+const appAgeRatingContract = readFileSync(
+  "apps/app/scripts/app-age-rating-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'readFileSync(join(appRoot, "app-age-rating.config.json"), "utf8")',
+  'question === "User-Generated Content"',
+  'apple?.overrideToHigherAgeRating !== "18+"',
+  'apple?.displayGlobalRating !== "18+"',
+  "mobile and website Terms must both retain the 18+ minimum age",
+  "metadata age-rating table differs from structured answers",
+]) {
+  if (!appAgeRatingContract.includes(invariant)) {
+    failures.push(
+      `app-age-rating-contract.mjs: missing structured age-rating invariant ${invariant}`,
+    );
+  }
+}
+const appStoreReleaseRecordContract = readFileSync(
+  "apps/app/scripts/release-record-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  "all review-ready sign-offs must be explicitly true",
+  "release record age-rating evidence is not exact",
+  "release evidence hashes are missing or do not match the supplied files",
+  "screenshot manifest does not identify the exact candidate",
+  "smoke-test record is not a complete physical-device PASS",
+  "smoke-test physical-device provenance is incomplete",
+  "Guideline 2.1 response does not complete all seven requested answers",
+  "Guideline 2.1 physical-device recording provenance is incomplete",
+  "appReviewResponseSha256",
+  "screenRecordingSha256",
+  "TestFlight/release/storefront distribution is not exact and deterministic",
+  "candidate.easBuildUrl !==",
+  "candidate.easSubmissionUrl !==",
+  "REVIEW_READY lifecycle must remain unsubmitted",
+  'appReview.status === "READY_FOR_REVIEW"',
+  'appReview.status === "READY_FOR_DISTRIBUTION"',
+]) {
+  if (!appStoreReleaseRecordContract.includes(invariant)) {
+    failures.push(
+      `release-record-contract.mjs: missing final-candidate invariant ${invariant}`,
+    );
+  }
+}
+const appStoreReleaseRecordVerifier = readFileSync(
+  "apps/app/scripts/verify-app-store-release-record.mjs",
+  "utf8",
+);
+for (const invariant of [
+  "privacy report must be a non-empty PDF; supply the report generated by Xcode",
+  "physical-device screen recording must be a 1-500 MB MOV/MP4 media file",
+  '"--app-review-response"',
+  '"--screen-recording"',
+  "immutable iOS release tag does not point to the recorded commit",
+  '`${record.candidate.commit}:apps/app/package.json`',
+  '`${record.candidate.commit}:apps/app/app-age-rating.config.json`',
+  "candidate source is unavailable locally",
+  "screenshot evidence does not match its manifest",
+  'execFileSync("git", ["cat-file"',
+]) {
+  if (!appStoreReleaseRecordVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-store-release-record.mjs: missing evidence-integrity invariant ${invariant}`,
+    );
+  }
+}
+const appStorePostReleaseContract = readFileSync(
+  "apps/app/scripts/post-release-monitoring-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'postReleasePhases = ["RELEASE", "H_PLUS_24", "H_PLUS_48"]',
+  'appReviewMessages: "CLEAR"',
+  "post-release record is not hash-linked to the supplied RELEASED record",
+  "post-release monitoring requires exactly three checkpoints",
+  "the H_PLUS_48 checkpoint must close with every signal healthy or clear",
+  "issue is not covered by a resolved incident",
+  "next credential review must follow monitoring and precede expiry by 30 days",
+]) {
+  if (!appStorePostReleaseContract.includes(invariant)) {
+    failures.push(
+      `post-release-monitoring-contract.mjs: missing release-closure invariant ${invariant}`,
+    );
+  }
+}
+const appStorePostReleaseVerifier = readFileSync(
+  "apps/app/scripts/verify-app-store-post-release.mjs",
+  "utf8",
+);
+for (const invariant of [
+  '"--release-record"',
+  'createHash("sha256")',
+  "validatePostReleaseMonitoringRecord",
+  "through H+48",
+]) {
+  if (!appStorePostReleaseVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-store-post-release.mjs: missing evidence-integrity invariant ${invariant}`,
+    );
+  }
+}
+const appPrivacyContract = readFileSync(
+  "apps/app/scripts/app-privacy-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'readFileSync(join(appRoot, "app-privacy.config.json"), "utf8")',
+  '"NSPrivacyCollectedDataTypePhotosorVideos"',
+  '"NSPrivacyCollectedDataTypeOtherDiagnosticData"',
+  "expectedPrivacyManifestCollectedData",
+  "inventory App Store Connect table differs from structured answers",
+]) {
+  if (!appPrivacyContract.includes(invariant)) {
+    failures.push(
+      `app-privacy-contract.mjs: missing structured App Privacy invariant ${invariant}`,
+    );
+  }
+}
+const appStoreReviewConfig = readFileSync(
+  "apps/app/store.review.config.cjs",
+  "utf8",
+);
+for (const invariant of [
+  "requiredReviewEnvironment",
+  "APP_REVIEW_SCREEN_RECORDING_FILENAME",
+  "APP_REVIEW_TESTED_DEVICES",
+  "delete environment[name]",
+  "demoRequired: true",
+  "notes: readReviewNotes({ recordingFilename, testedDevices })",
+  'replaceAll("<SCREEN_RECORDING_FILENAME>", recordingFilename)',
+  'replaceAll("<TESTED_DEVICE_LIST>", testedDevices)',
+  "screen-recording filename is invalid",
+  "tested-device list is invalid",
+  "committed local fixture identities are forbidden",
+]) {
+  if (!appStoreReviewConfig.includes(invariant)) {
+    failures.push(
+      `store.review.config.cjs: missing ephemeral App Review metadata invariant ${invariant}`,
+    );
+  }
+}
+const appReviewAccountVerifier = readFileSync(
+  "apps/app/scripts/verify-app-review-account.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'apiOrigin = "https://api.zenguy.com"',
+  "localFixtureEmails",
+  "localFixturePasswords",
+  "safeApiPath(url.pathname)",
+  "delete process.env.MAESTRO_REVIEW_EMAIL",
+  "delete process.env.MAESTRO_REVIEW_PASSWORD",
+  "primary.accessToken !== secondary.accessToken",
+  "primary.refreshToken !== secondary.refreshToken",
+  'const expectedArtifactQuery = ["exp", "id", "sig"]',
+  "signed screenshot evidence could not be loaded",
+  "at least one enabled notification channel is required",
+  'configPreview?.recipients === "WORKSPACE_MEMBERS"',
+  '"Blog listing"',
+  '"Search filters"',
+  '"Status API"',
+  "optional OpenAI consent must remain pristine and off",
+  "Promise.allSettled(",
+]) {
+  if (!appReviewAccountVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-review-account.mjs: missing safe production-account invariant ${invariant}`,
+    );
+  }
+}
+const appStoreRemoteVerifier = readFileSync(
+  "apps/app/scripts/verify-app-store-remotes.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'redirect: "manual"',
+  "htmlPrerequisites.map(verifyHtml)",
+  "validateAasaDocument(localAasa)",
+  "validateAasaDocument(remote)",
+  "waitForPublishedAppStorePrerequisites",
+  "attempts = 1",
+  "attempts > 1 && options.delayMs === 0",
+  '"https://app.zenguy.com/.well-known/apple-app-site-association"',
+  '"https://api.zenguy.com/api/health"',
+  '"https://api.zenguy.com/api/app/version"',
+  'health?.data?.environment !== "production"',
+  'health?.data?.runnerDispatch !== "queue"',
+  "canonical Zenguy App Store URL",
+  "deployed AASA does not exactly match the reviewed source",
+]) {
+  if (!appStoreRemoteVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-store-remotes.mjs: missing production prerequisite ${invariant}`,
+    );
+  }
+}
+const appStorePublicContract = readFileSync(
+  "apps/app/scripts/app-store-public-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  'url: "https://zenguy.com/support/"',
+  'url: "https://zenguy.com/privacy-choices/"',
+  'url: "https://zenguy.com/privacy/"',
+  "There is no registration option in the iOS app",
+  "only after current workspace consent",
+  "Account and workspace deletion",
+  'appIDs: ["HT84Q65URB.com.zenguy.app"]',
+  'paths: ["/reset-password", "/invitations/*", "/w/*"]',
+  "production App Store prerequisite must remain indexable",
+]) {
+  if (!appStorePublicContract.includes(invariant)) {
+    failures.push(
+      `app-store-public-contract.mjs: missing public release invariant ${invariant}`,
+    );
+  }
+}
+const appStoreStaticOutputVerifier = readFileSync(
+  "apps/app/scripts/verify-app-store-static-output.mjs",
+  "utf8",
+);
+for (const invariant of [
+  '"apps", "website", "dist"',
+  '"apps", "frontend", "dist"',
+  "built AASA bytes differ from the reviewed source",
+  "built frontend _headers bytes differ from the reviewed source",
+  "Content-Type: application/json",
+]) {
+  if (!appStoreStaticOutputVerifier.includes(invariant)) {
+    failures.push(
+      `verify-app-store-static-output.mjs: missing built-output invariant ${invariant}`,
+    );
+  }
 }
 const appLockfile = readFileSync("apps/app/pnpm-lock.yaml", "utf8");
 const appWorkspace = readFileSync("apps/app/pnpm-workspace.yaml", "utf8");
@@ -217,25 +689,71 @@ if (
   (appWorkspace.match(/^allowBuilds:/gmu) ?? []).length !== 1 ||
   JSON.stringify(appAllowBuildDecisions) !==
     JSON.stringify([
-      ["dtrace-provider", "false"],
       ["unrs-resolver", "true"],
     ])
 ) {
   failures.push(
-    "apps/app/pnpm-workspace.yaml: native dependency build policy must allow only unrs-resolver and explicitly deny optional dtrace-provider telemetry",
+    "apps/app/pnpm-workspace.yaml: native dependency build policy must allow only unrs-resolver",
   );
 }
+const appMinimumReleaseAgeBody =
+  /^minimumReleaseAgeExclude:\n((?:  - .*\n?)*)/mu.exec(appWorkspace)?.[1] ?? "";
+const appMinimumReleaseAgeExclusions = [
+  ...appMinimumReleaseAgeBody.matchAll(/^  - ['"]?([^'"\n]+)['"]?$/gmu),
+].map((match) => match[1]);
+const expectedAppMinimumReleaseAgeExclusions = [
+  "@expo/cli@57.0.21",
+  "@expo/fingerprint@0.20.12",
+  "@expo/router-server@57.0.9",
+  "babel-preset-expo@57.0.10",
+  "expo-asset@57.0.16",
+  "expo-constants@57.0.17",
+  "expo-font@57.0.3",
+  "expo-modules-core@57.0.15",
+  "expo-modules-jsi@57.0.7",
+  "expo@57.0.19",
+  "@expo/metro-runtime@57.0.15",
+  "@expo/ui@57.0.15",
+  "expo-eas-client@57.0.3",
+  "expo-image@57.0.4",
+  "expo-linking@57.0.9",
+  "expo-notifications@57.0.16",
+  "expo-router@57.0.18",
+  "expo-secure-store@57.0.3",
+  "expo-sharing@57.0.17",
+  "expo-updates@57.0.21",
+];
+const appMinimumReleaseAgeBlockCount = (
+  appWorkspace.match(/^minimumReleaseAgeExclude:/gmu) ?? []
+).length;
 if (
-  !/^ {6}eas-cli:\n {8}specifier: 22\.0\.0\n {8}version: 22\.0\.0(?:\(|$)/mu.test(
-    appLockfile,
-  ) ||
-  !/^ {2}eas-cli@22\.0\.0:\n {4}resolution: \{integrity: sha512-[A-Za-z0-9+/]+=*\}$/mu.test(
-    appLockfile,
-  )
+  appMinimumReleaseAgeExclusions.length === 0
+    ? appMinimumReleaseAgeBlockCount !== 0
+    : appMinimumReleaseAgeBlockCount !== 1 ||
+      JSON.stringify(appMinimumReleaseAgeExclusions) !==
+        JSON.stringify(expectedAppMinimumReleaseAgeExclusions)
 ) {
   failures.push(
-    "apps/app/pnpm-lock.yaml: eas-cli 22.0.0 must remain a direct, integrity-pinned dependency",
+    "apps/app/pnpm-workspace.yaml: temporary Expo release-age exceptions must be absent or remain exact and version-pinned",
   );
+}
+if (releaseTagInGithubActions && appMinimumReleaseAgeExclusions.length > 0) {
+  failures.push(
+    "apps/app/pnpm-workspace.yaml: remove temporary Expo release-age exceptions before creating an iOS release tag",
+  );
+}
+if (/^ {2,8}eas-cli(?:@|:)/mu.test(appLockfile)) {
+  failures.push(
+    "apps/app/pnpm-lock.yaml: eas-cli must not be installed as a project dependency",
+  );
+}
+for (const invariant of [
+  '"ajv@>=7.0.0-alpha.0 <8.18.0": 8.18.0',
+  "decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch",
+]) {
+  if (!appWorkspace.includes(invariant)) {
+    failures.push(`apps/app/pnpm-workspace.yaml: missing security override ${invariant}`);
+  }
 }
 
 const apiManifest = JSON.parse(readFileSync("apps/api/package.json", "utf8"));
@@ -754,6 +1272,19 @@ if (
     "SEC-23: named environments must use the private non-exportable AES-GCM key-wrapping provider without a public KMS fetch handler",
   );
 }
+for (const invariant of [
+  'const IOS_ASC_APP_ID = "6804201911"',
+  'parsed.hostname !== APP_STORE_HOST',
+  'parsed.search !== ""',
+  'parsed.hash !== ""',
+  "id${IOS_ASC_APP_ID}$",
+]) {
+  if (!apiConfigSource.includes(invariant)) {
+    failures.push(
+      `apps/api/src/shared/config.ts: missing canonical Zenguy App Store URL invariant ${invariant}`,
+    );
+  }
+}
 const apiIntegrationVitestConfig = readFileSync(
   "apps/api/vitest.integration.config.ts",
   "utf8",
@@ -987,10 +1518,7 @@ if (
     "login.ts: auth must retain the dummy KDF and compare-and-swap legacy rehash",
   );
 }
-for (const path of [
-  "apps/frontend/src/pages/auth/SignUp.tsx",
-  "apps/app/app/(auth)/sign-up.tsx",
-]) {
+for (const path of ["apps/frontend/src/pages/auth/SignUp.tsx"]) {
   const signUpScreen = readFileSync(path, "utf8");
   if (signUpScreen.includes("An account with this email already exists")) {
     failures.push(`${path}: signup must not expose an account-existence branch`);
@@ -1003,12 +1531,59 @@ for (const path of [
   }
   if (
     signUpScreen.includes("adoptSession(") ||
-    (path.startsWith("apps/frontend/") &&
-      !signUpScreen.includes("state: { email: pending.email }")) ||
-    (path.startsWith("apps/app/") &&
-      !signUpScreen.includes("setPendingRegistrationEmail(pending.email)"))
+    !signUpScreen.includes("state: { email: pending.email }")
   ) {
     failures.push(`${path}: signup must keep pending registration token-free`);
+  }
+}
+for (const path of [
+  "apps/app/app/(auth)/sign-up.tsx",
+  "apps/app/app/verify-email.tsx",
+  "apps/app/app/verify-pending.tsx",
+  "apps/app/app/onboarding/workspace.tsx",
+  "apps/app/app/grants/[token].tsx",
+  "apps/app/app/grants/redeem.tsx",
+  "apps/app/app/complimentary.tsx",
+  "apps/app/app/w/[wsId]/setup/billing.tsx",
+  "apps/app/app/w/[wsId]/(tabs)/(more)/billing/index.tsx",
+  "apps/app/src/api/grants.ts",
+  "apps/app/src/api/billing.ts",
+]) {
+  if (existsSync(path)) {
+    failures.push(
+      `${path}: the iOS existing-account-only companion must not contain acquisition or billing artifacts`,
+    );
+  }
+}
+const existingAccountOnlyContract = readFileSync(
+  "apps/app/scripts/existing-account-only-contract.mjs",
+  "utf8",
+);
+for (const invariant of [
+  "forbiddenMobilePaths",
+  "forbiddenVisibleCopy",
+  "forbiddenAcquisitionRoute",
+  "forbiddenEndpoint",
+  "workspaceCreationCall",
+  "forbiddenExternalAcquisitionUrl",
+  "requiredExistingAccountCopy",
+]) {
+  if (!existingAccountOnlyContract.includes(invariant)) {
+    failures.push(
+      `apps/app/scripts/existing-account-only-contract.mjs: missing acquisition guard ${invariant}`,
+    );
+  }
+}
+for (const path of [
+  "apps/app/scripts/verify-release-config.mjs",
+  "apps/app/scripts/verify-app-store-package.mjs",
+]) {
+  const source = readFileSync(path, "utf8");
+  if (
+    !source.includes('from "./existing-account-only-contract.mjs"') ||
+    !source.includes("validateExistingAccountOnlyContract(appRoot)")
+  ) {
+    failures.push(`${path}: existing-account-only source gate must run before release`);
   }
 }
 const frontendRoutes = readFileSync("apps/frontend/src/App.tsx", "utf8");
@@ -1247,10 +1822,7 @@ for (const invariant of [
     failures.push(`verify email route: missing two-factor/rate invariant ${invariant}`);
   }
 }
-for (const path of [
-  "apps/frontend/src/pages/auth/VerifyEmail.tsx",
-  "apps/app/app/verify-email.tsx",
-]) {
+for (const path of ["apps/frontend/src/pages/auth/VerifyEmail.tsx"]) {
   const screen = readFileSync(path, "utf8");
   if (
     !screen.includes("verificationPasswordSchema") ||
@@ -1621,6 +2193,7 @@ for (const invariant of [
   'tags:\n      - "ios-v*"',
   "github.repository == 'maguayo/zenguy'",
   "github.ref_type == 'tag'",
+  "actions: read",
   "name: ios-production-release",
   "fetch-depth: 0",
   'node apps/app/scripts/verify-release-tag.mjs release "$GITHUB_REF_NAME"',
@@ -1630,9 +2203,14 @@ for (const invariant of [
   "pnpm exec expo install --check",
   "pnpm exec expo-doctor",
   'ZENGUY_ENFORCE_TRACKED_RELEASE_ARTIFACTS: "1"',
+  "pnpm verify:app-store-package",
+  "pnpm test:release-tools",
+  "pnpm verify:app-store-remotes",
   "pnpm verify:release-config",
+  "actions/workflows/production.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=100",
+  'select(.conclusion == "success")',
   "secrets.EXPO_IOS_RELEASE_TOKEN",
-  "pnpm exec eas build",
+  "pnpm dlx eas-cli@23.2.0 build",
   "--freeze-credentials",
 ]) {
   if (!iosReleaseWorkflow.includes(invariant)) {
@@ -1660,7 +2238,7 @@ for (const [path, source] of [
   ["apps/app/README.md", readFileSync("apps/app/README.md", "utf8")],
 ]) {
   if (/\bnpx(?:\s+--yes)?\s+eas-cli(?:@|\s)/u.test(source)) {
-    failures.push(`${path}: EAS must execute from the frozen app lockfile`);
+    failures.push(`${path}: EAS must use the exact audited pnpm dlx CLI version`);
   }
 }
 for (const invariant of [
@@ -1677,12 +2255,14 @@ for (const invariant of [
   "pnpm exec expo-doctor",
   "EAS_BUILD_PROFILE: production",
   'ZENGUY_ENFORCE_TRACKED_RELEASE_ARTIFACTS: "1"',
+  "pnpm verify:app-store-package",
+  "pnpm test:release-tools",
   "pnpm verify:release-config",
   "secrets.EXPO_IOS_OTA_TOKEN",
   "EAS_UPDATE_PRIVATE_KEY_PEM",
   "openssl x509",
   "cmp --silent",
-  "pnpm exec eas update",
+  "pnpm dlx eas-cli@23.2.0 update",
   "--private-key-path",
   "if: always()",
 ]) {
@@ -1749,8 +2329,28 @@ if (
     "apps/app/eas.json: production must use its production environment/channel and auto-increment",
   );
 }
+if (
+  easConfig.submit?.production?.ios?.ascAppId !== "6804201911" ||
+  Object.hasOwn(easConfig.submit.production.ios, "metadataPath") ||
+  easConfig.submit?.["app-review-metadata"]?.ios?.ascAppId !== "6804201911" ||
+  easConfig.submit?.["app-review-metadata"]?.ios?.metadataPath !==
+    "./store.review.config.cjs"
+) {
+  failures.push(
+    "apps/app/eas.json: binary submission and ephemeral App Review metadata must remain separate",
+  );
+}
 
 const expoConfig = readFileSync("apps/app/app.config.ts", "utf8");
+if (
+  !expoConfig.includes('import appPrivacyConfig from "./app-privacy.config.json"') ||
+  !expoConfig.includes("appPrivacyConfig.apple.dataTypes.map") ||
+  !expoConfig.includes("NSPrivacyCollectedDataTypes: privacyCollectedDataTypes")
+) {
+  failures.push(
+    "apps/app/app.config.ts: collected data must derive from the structured App Privacy contract",
+  );
+}
 if (
   !expoConfig.includes('codeSigningCertificate: "./certs/updates-certificate.pem"') ||
   !expoConfig.includes('alg: "rsa-v1_5-sha256"') ||
@@ -1760,13 +2360,28 @@ if (
 }
 if (
   !expoConfig.includes('associatedDomains: ["applinks:app.zenguy.com"]') ||
-  /\bscheme\s*:/u.test(expoConfig) ||
+  !expoConfig.includes('const internalRouterScheme = "zenguy-internal"') ||
+  !expoConfig.includes("scheme: internalRouterScheme") ||
   !expoConfig.includes('"aps-environment": isProductionProfile ? "production" : "development"') ||
   !expoConfig.includes('"./plugins/with-universal-links-only"')
 ) {
   failures.push(
-    "apps/app/app.config.ts: require the HTTPS Universal Link entitlement and no custom URL scheme",
+    "apps/app/app.config.ts: require HTTPS Universal Links and the internal Expo Router scheme",
   );
+}
+for (const privacyInvariant of [
+  'NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp"',
+  'NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"]',
+  'NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace"',
+  'NSPrivacyAccessedAPITypeReasons: ["85F4.1", "E174.1"]',
+  'NSPrivacyAccessedAPITypeReasons: ["35F9.1"]',
+  'NSPrivacyAccessedAPITypeReasons: ["CA92.1"]',
+]) {
+  if (!expoConfig.includes(privacyInvariant)) {
+    failures.push(
+      `apps/app/app.config.ts: missing reviewed privacy-manifest invariant ${privacyInvariant}`,
+    );
+  }
 }
 const universalLinksOnlyPlugin = readFileSync(
   "apps/app/plugins/with-universal-links-only.js",
@@ -1786,10 +2401,8 @@ const aasa = JSON.parse(
   ),
 );
 const expectedAasaPaths = [
-  "/verify-email",
   "/reset-password",
   "/invitations/*",
-  "/grants/*",
   "/w/*",
 ];
 const modernAasaDetail = aasa.applinks?.details?.find(
@@ -1848,10 +2461,7 @@ for (const path of [
     failures.push(`${path}: invitation bearer must travel only in POST bodies`);
   }
 }
-for (const path of [
-  "apps/frontend/src/api/grants.ts",
-  "apps/app/src/api/grants.ts",
-]) {
+for (const path of ["apps/frontend/src/api/grants.ts"]) {
   const client = readFileSync(path, "utf8");
   if (
     !client.includes('apiPost("/api/subscription-grants/preview", { token })') ||
@@ -1865,14 +2475,6 @@ for (const [path, invariants] of [
   [
     "apps/app/app/invitations/[token].tsx",
     ['captureLinkCapability("invitation"', "Linking.clearInitialURL()", 'router.replace("/invitations/accept")'],
-  ],
-  [
-    "apps/app/app/grants/[token].tsx",
-    ['captureLinkCapability("grant"', "Linking.clearInitialURL()", 'router.replace("/grants/redeem")'],
-  ],
-  [
-    "apps/app/app/verify-email.tsx",
-    ['captureLinkCapability("verification"', "Linking.clearInitialURL()", 'router.replace("/verify-email")'],
   ],
   [
     "apps/app/app/(auth)/reset-password.tsx",
@@ -1948,6 +2550,9 @@ const productionAdminPreflight = productionWorkflow.indexOf(
 const productionAdminDeploy = productionWorkflow.indexOf(
   "Deploy production admin Worker",
 );
+const productionAppStoreRemoteVerification = productionWorkflow.indexOf(
+  "Wait for and verify published App Store prerequisites",
+);
 if (
   productionApiDeploy === -1 ||
   productionAdminFence <= productionApiDeploy ||
@@ -1962,10 +2567,20 @@ if (
   !productionWorkflow.slice(productionAdminDeploy).includes(
     "working-directory: apps/admin",
   ) ||
-  !productionWorkflow.slice(productionAdminDeploy).includes("run: pnpm deploy")
+  !productionWorkflow.slice(productionAdminDeploy).includes("run: pnpm deploy") ||
+  productionAppStoreRemoteVerification <= productionAdminDeploy ||
+  !productionWorkflow
+    .slice(productionAppStoreRemoteVerification)
+    .includes("node apps/app/scripts/verify-app-store-remotes.mjs") ||
+  !productionWorkflow
+    .slice(productionAppStoreRemoteVerification)
+    .includes("--attempts 20") ||
+  !productionWorkflow
+    .slice(productionAppStoreRemoteVerification)
+    .includes("--delay-ms 15000")
 ) {
   failures.push(
-    "production.yml: the tested admin Worker must deploy only after migration, API deploy and a fresh main-head fence",
+    "production.yml: the tested admin Worker and bounded public App Store verification must follow migration, API deploy and a fresh main-head fence",
   );
 }
 
@@ -2759,6 +3374,17 @@ if (
   )
 ) {
   failures.push("security.yml: read-only remote-control guard tests must run in CI");
+}
+for (const invariant of [
+  "pnpm --filter @zenguy/frontend build",
+  "pnpm --filter @zenguy/frontend test",
+  "pnpm --filter @zenguy/website test",
+  "pnpm --filter @zenguy/website build",
+  "node apps/app/scripts/verify-app-store-static-output.mjs",
+]) {
+  if (!securityWorkflow.includes(invariant)) {
+    failures.push(`security.yml: missing App Store public-build gate ${invariant}`);
+  }
 }
 const edgeAuditJobStart = securityWorkflow.indexOf("  cloudflare-edge-audit:");
 const clientSecurityJobStart = securityWorkflow.indexOf(

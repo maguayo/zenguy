@@ -7,7 +7,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
   title="Privacy Policy — Zenguy"
   description="How NIESAYO GROUP, S.L. processes personal data for Zenguy under the GDPR and Spain’s LOPDGDD."
   heading="Privacy Policy"
-  effective="30 August 2026"
+  effective="1 September 2026"
 >
   <p>
     This Privacy Policy explains how {legalCompany.legalName} (“we”, “us”),
@@ -114,7 +114,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       or resource URLs.
     </li>
     <li>
-      <strong>Application analytics milestones:</strong> completed registration,
+      <strong>Web-application analytics milestones:</strong> completed registration,
       subscription checkout started, and a confirmed paid subscription. The
       confirmed subscription event includes product, price, currency and a
       Stripe invoice identifier as the transaction identifier. Analytics events
@@ -135,8 +135,17 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     </li>
     <li>
       <strong>iOS app:</strong> Face ID stays on the device (we do not receive
-      biometric templates). Push tokens are processed to deliver optional
-      notifications you enable.
+      biometric templates). When you enable push, we process the Expo push
+      token, an internal device record, device model, platform and app version.
+      The signed-in iOS app also sends first-party app-open events and
+      normalized screen/resource visits as described above; it contains no
+      Google Analytics SDK and does not send mobile activity to Google.
+    </li>
+    <li>
+      <strong>Remote-AI consent:</strong> for each workspace, the provider,
+      policy version, acceptance or revocation time, and the Owner or Admin who
+      made the choice. The option starts off and is not inferred from a general
+      acceptance of this policy.
     </li>
   </ul>
   <p>We do not sell personal data. We do not build advertising profiles.</p>
@@ -175,6 +184,13 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       record is not optional Google Analytics and does not enable advertising.
       You may object to processing based on legitimate interests under article
       21 GDPR.
+    </li>
+    <li>
+      <strong>Use OpenAI as an optional browser-test fallback</strong> — the
+      workspace&apos;s explicit consent (art. 6.1.a). It is off by default,
+      requires an affirmative action by an Owner or Admin, and can be withdrawn
+      from AI data sharing at any time. Withdrawal prevents future remote runs;
+      a run already in progress may finish.
     </li>
     <li>
       <strong>Deliver a consistent, readable web interface</strong> — legitimate
@@ -232,9 +248,19 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       marketing.
     </li>
     <li>
-      <strong>OpenAI, LLC</strong> — model inference used to drive the browser
-      agent that executes your instructions. Do not put secrets in the
-      instruction text if you can avoid it; use the secrets vault.
+      <strong>OpenAI, LLC</strong> — optional model inference for the remote
+      browser-test fallback, and only after current workspace consent. OpenAI
+      may receive the test name, instructions, target URLs, device
+      configuration, relevant page content and screenshots, console/network
+      results, and model input/output needed to choose and assess steps. It does
+      not receive account, member, billing or notification data. Zenguy never
+      releases configured secret values to a remote runner or OpenAI; only
+      placeholder names remain in the instructions. OpenAI states that API
+      inputs and outputs are not used to train its models by default. Unless
+      our OpenAI project has an approved shorter retention control, standard
+      API abuse-monitoring logs may contain customer content for up to 30 days.
+      See OpenAI&apos;s <a href="https://openai.com/business-data/">business-data commitments</a>
+      and <a href="https://platform.openai.com/docs/models/default-usage-policies-by-endpoint">API data controls</a>.
     </li>
     <li>
       <strong>Expo (650 Industries, Inc.)</strong> — iOS push delivery and app
@@ -283,6 +309,14 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     </li>
     <li>Run evidence (screenshots, reports, logs): 30 days.</li>
     <li>
+      Optional OpenAI request/response content follows the provider control
+      described above: standard abuse-monitoring retention is up to 30 days
+      unless a shorter approved control applies. The workspace consent record
+      remains while the workspace is active and for as long as reasonably
+      necessary to demonstrate the choice; actor identifiers are removed when
+      the relevant account is deleted.
+    </li>
+    <li>
       Authenticated service activity: high-volume page, screen and view events
       for up to 90 days; other account and product activity events for up to
       365 days, unless a shorter account-deletion flow or a longer legal or
@@ -310,7 +344,29 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     </li>
   </ul>
 
-  <h2>8. Security</h2>
+  <h2>8. Account and workspace deletion</h2>
+  <p>
+    The iOS app provides <strong>Account → Delete my account</strong>. It asks
+    for the current password, the word DELETE and a final confirmation; it does
+    not require contacting support. Deletion immediately revokes sessions and
+    push tokens, removes memberships in workspaces owned by other people,
+    revokes pending invitations, makes every owned workspace inaccessible,
+    cancels its service subscription and starts the retryable purge of its
+    database and object-storage data. The account is replaced with an
+    anonymized tombstone so retained financial and security records no longer
+    identify an active user.
+  </p>
+  <p>
+    The common deletion path completes immediately. If a billing provider or
+    storage operation is temporarily unavailable, the workspace remains
+    inaccessible and the deletion job retries until the purge succeeds. The
+    only exceptions are billing/tax records kept for up to six years and
+    necessary security records kept for up to twelve months or longer when a
+    legal claim requires it. See <a href="/privacy-choices/">Privacy choices</a>
+    for the controls available before and after deletion.
+  </p>
+
+  <h2>9. Security</h2>
   <p>
     We use TLS, hashed passwords, encrypted secrets, access control by
     workspace role, short-lived sessions, rate limits and audit logs. No
@@ -320,7 +376,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     it.
   </p>
 
-  <h2>9. Your rights</h2>
+  <h2>10. Your rights</h2>
   <p>
     You may request access, rectification, erasure, restriction, portability
     and objection, and you may withdraw consent without affecting earlier
@@ -328,7 +384,8 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     the right not to be subject to solely automated decisions (art. 22).
   </p>
   <p>
-    Write to <a href={legalMailto}>{legalCompany.email}</a>. We may need to
+    Use the controls listed at <a href="/privacy-choices/">Privacy choices</a>
+    or write to <a href={legalMailto}>{legalCompany.email}</a>. We may need to
     verify your identity. We will answer within one month, extendable as the
     GDPR allows. You can also complain to the AEPD.
   </p>
@@ -339,7 +396,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     organisation.
   </p>
 
-  <h2>10. SMS and phone alerts</h2>
+  <h2>11. SMS and phone alerts</h2>
   <p>
     Operational SMS and calls are only sent to numbers you enrol, after an
     explicit, unchecked confirmation in the product. We do not sell mobile
@@ -350,10 +407,10 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     several messages in a day when something is down.
   </p>
 
-  <h2>11. Children</h2>
+  <h2>12. Children</h2>
   <p>Zenguy is not directed at children and we do not knowingly collect their data.</p>
 
-  <h2>12. Changes</h2>
+  <h2>13. Changes</h2>
   <p>
     We may update this policy when the service or the law changes. The date at
     the top is the current version. Material changes will be announced in the

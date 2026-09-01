@@ -35,10 +35,10 @@ export const transferOwnershipDescription =
   "Give another existing member full control of this workspace.";
 
 export const deleteWorkspaceDescription =
-  "Cancel billing and permanently remove workspace data after retention.";
+  "Permanently remove this workspace and its data after retention.";
 
 export const deleteWorkspaceWarning =
-  "This cancels the subscription immediately, stops all scheduled runs and checks, revokes invitations, and permanently removes data after the retention window. Type the workspace name to confirm.";
+  "This stops all scheduled runs and checks, revokes invitations, and permanently removes data after the retention window. Type the workspace name to confirm.";
 
 /** Deletion only proceeds when the exact workspace name was typed. */
 export function canConfirmDeletion(input: string, workspaceName: string): boolean {

@@ -9,7 +9,6 @@ import { Badge, IconTile, Label, Mono, MonoSmall, type FeatherIconName } from "@
 
 import {
   deliveryAttempts,
-  deliveryCostLabel,
   deliveryEvent,
   deliveryIncidentHref,
 } from "./deliveries";
@@ -34,9 +33,8 @@ export function DeliveryRow({
 }) {
   const router = useRouter();
   const event = deliveryEvent(delivery.eventType);
-  const cost = deliveryCostLabel(delivery);
   const incidentHref = deliveryIncidentHref(workspaceId, delivery);
-  const meta = [deliveryAttempts(delivery.attemptCount), ...(cost ? [cost] : [])].join(" · ");
+  const meta = deliveryAttempts(delivery.attemptCount);
 
   return (
     <View style={[styles.row, last && styles.last]}>

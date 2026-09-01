@@ -125,11 +125,9 @@ function Invitation({ token }: { token: string }) {
                 })
               }
             />
-            <Button
-              fullWidth
-              title="Create an account"
-              onPress={() => router.push("/(auth)/sign-up")}
-            />
+            <Muted>
+              Invitations can only be accepted by an existing Zenguy account.
+            </Muted>
           </View>
         ) : null}
 

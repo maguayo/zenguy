@@ -45,26 +45,7 @@ export interface PublicInvitation {
   workspaceName: string;
 }
 
-export type SubscriptionSource = "free" | "grant" | "paddle" | "stripe";
 export type BillingCurrency = "EUR" | "USD";
-
-export interface BillingPlanPrice {
-  currency: BillingCurrency;
-  overagePerRunCents: number;
-  pricePerMonthCents: number;
-}
-
-interface BillingConfigBase {
-  canIssueComplimentaryGrants?: boolean;
-  plan: BillingPlanPrice;
-}
-
-export interface StripeBillingConfig extends BillingConfigBase {
-  mode: "stripe";
-  environment: "test" | "live";
-}
-
-export type BillingConfig = StripeBillingConfig;
 
 export interface Usage {
   billableRuns: number;
@@ -76,32 +57,6 @@ export interface Usage {
   periodStart: string;
   projectedTotalCents: number;
   remainingRuns: number;
-}
-
-export interface Invoice {
-  billedAt: string | null;
-  currency: BillingCurrency;
-  id: string;
-  invoiceNumber: string | null;
-  status: string;
-  totalCents: number;
-}
-
-export interface Billing {
-  invoices: Invoice[];
-  plan: BillingPlanPrice & {
-    includedRuns: 300;
-  };
-  subscription: {
-    cancelAtPeriodEnd: boolean;
-    cancelUrl: string | null;
-    periodEnd: string | null;
-    periodStart: string | null;
-    source?: SubscriptionSource;
-    status: SubscriptionStatus;
-    updatePaymentMethodUrl: string | null;
-  };
-  usage: Usage;
 }
 
 export interface Secret {

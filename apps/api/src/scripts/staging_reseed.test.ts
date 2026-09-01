@@ -20,7 +20,9 @@ describe("staging fixture isolation", () => {
     expect(workflow).toContain("branches:");
     expect(workflow).toContain("- staging");
     expect(workflow).toContain("pnpm db:migrate:staging");
-    expect(workflow).not.toMatch(/seed|fixture|abc123456|marcos@aguayo\.es/iu);
+    expect(workflow).not.toMatch(
+      /seed|fixture|abc123456|marcos@aguayo\.es|owner@example\.com|Local-demo-password-2026!/iu,
+    );
     expect(workflow).not.toContain("zenguy-db");
     expect(workflow).not.toContain("db:migrate:production");
     expect(workflow).not.toContain("deploy:production");

@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import {
   formatDateTime,
-  formatCurrency,
   formatDuration,
-  formatEuros,
   formatFrequency,
   formatInterval,
   formatPct,
@@ -50,18 +48,6 @@ describe("formatters", () => {
     expect(formatDuration(60_000)).toBe("1m 00s");
     expect(formatDuration(192_000)).toBe("3m 12s");
     expect(formatDuration(3_840_000)).toBe("1h 04m");
-  });
-
-  it("formats and rounds euro cents", () => {
-    expect(formatEuros(3_900)).toBe("39,00 €");
-    expect(formatEuros(3_900.6)).toBe("39,01 €");
-    expect(formatEuros(0)).toBe("0,00 €");
-  });
-
-  it("formats billing amounts in their configured currency", () => {
-    expect(formatCurrency(3_900, "EUR")).toBe("39,00 €");
-    expect(formatCurrency(3_900, "USD")).toBe("$39.00");
-    expect(formatCurrency(20, "USD")).toBe("$0.20");
   });
 
   it("formats percentages including null and zero", () => {

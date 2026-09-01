@@ -4,6 +4,10 @@ import type { Subscription } from "../../domain/billing/types";
 import type { BrowserTest } from "../../domain/browser_tests/types";
 import { verifyIrreversibleRunAuthorization } from "../../domain/browser_tests/irreversible_authorization";
 import type { AttemptMessage } from "../../domain/queues";
+import {
+  REMOTE_AI_CONSENT_VERSION,
+  REMOTE_AI_PROVIDER,
+} from "../../domain/users/remote_ai_consent";
 import type { User } from "../../domain/users/types";
 import type { Workspace } from "../../domain/workspaces/types";
 import { issueAccessToken } from "../../infrastructure/auth/jwt";
@@ -12,6 +16,7 @@ import { D1AuditRepo } from "../../infrastructure/db/audit_repo";
 import { D1BrowserTestRepo } from "../../infrastructure/db/browser_test_repo";
 import { D1MemberRepo } from "../../infrastructure/db/member_repo";
 import { D1RunRepo } from "../../infrastructure/db/run_repo";
+import { D1RemoteAiConsentRepo } from "../../infrastructure/db/remote_ai_consent_repo";
 import { D1StepRepo } from "../../infrastructure/db/step_repo";
 import { D1SubscriptionRepo } from "../../infrastructure/db/subscription_repo";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
@@ -375,6 +380,13 @@ describe("browser test run creation routes", () => {
   });
 
   it("hands unclaimed attempts to the fallback runner only after the delay", async () => {
+    await new D1RemoteAiConsentRepo(testEnv().DB).grant({
+      workspaceId: WORKSPACE.id,
+      provider: REMOTE_AI_PROVIDER,
+      policyVersion: REMOTE_AI_CONSENT_VERSION,
+      actorUserId: OWNER.id,
+      at: NOW,
+    });
     const created = await app.request(
       `/api/workspaces/${WORKSPACE.id}/browser-tests/${TEST.id}/run-now`,
       { method: "POST", headers: headers(ownerToken) },

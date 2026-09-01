@@ -279,11 +279,13 @@ export function parseComplimentaryIssuerEmails(value: unknown): string[] {
 }
 
 const APP_STORE_HOST = "apps.apple.com";
+const IOS_ASC_APP_ID = "6804201911";
 
 /**
  * The App Store link published to the iOS app. Only an https URL on
- * apps.apple.com is accepted: the app opens it in response to a forced update,
- * so it must never point anywhere else.
+ * apps.apple.com for this exact App Store Connect app is accepted: the app
+ * opens it in response to a forced update, so it must never point to another
+ * listing or carry mutable tracking/navigation parameters.
  */
 export function parseIosAppStoreUrl(value: unknown): string | null {
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -293,8 +295,19 @@ export function parseIosAppStoreUrl(value: unknown): string | null {
   } catch {
     throw new Error("IOS_APP_STORE_URL must be a valid https://apps.apple.com URL");
   }
-  if (parsed.protocol !== "https:" || parsed.hostname !== APP_STORE_HOST) {
-    throw new Error("IOS_APP_STORE_URL must be a valid https://apps.apple.com URL");
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== APP_STORE_HOST ||
+    parsed.port !== "" ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    parsed.search !== "" ||
+    parsed.hash !== "" ||
+    !new RegExp(`(?:^|/)id${IOS_ASC_APP_ID}$`, "u").test(parsed.pathname)
+  ) {
+    throw new Error(
+      `IOS_APP_STORE_URL must be the canonical https://apps.apple.com URL for app ${IOS_ASC_APP_ID}`,
+    );
   }
   return parsed.toString();
 }

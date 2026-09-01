@@ -1,3 +1,4 @@
+import * as Application from "expo-application";
 import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
@@ -16,9 +17,11 @@ import {
 } from "@/components/more/account";
 import { toHref } from "@/components/more/links";
 import { NotificationsCard } from "@/components/push/NotificationsCard";
+import { FormError } from "@/components/FormError";
 import { useAppLock } from "@/contexts/AppLockContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
+import { ApiError } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { colors, spacing } from "@/theme";
 import {
@@ -28,8 +31,11 @@ import {
   confirm,
   Field,
   IconTile,
+  Input,
   ListRow,
   MonoSmall,
+  Muted,
+  PasswordInput,
   Screen,
   SelectSheet,
   Text,
@@ -40,9 +46,14 @@ import {
 export default function AccountScreen() {
   const router = useRouter();
   const toast = useToast();
-  const { signOut, user } = useAuth();
+  const { deleteAccount, signOut, user } = useAuth();
   const { biometricsAvailable, preferences, setEnabled, setThreshold } = useAppLock();
   const [signingOut, setSigningOut] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState<string | undefined>();
+  const [deleting, setDeleting] = useState(false);
   const updateTrace = appUpdateTraceLabel(Updates.channel, Updates.updateId);
 
   const toggleLock = async (enabled: boolean) => {
@@ -80,6 +91,42 @@ export default function AccountScreen() {
       setSigningOut(false);
     }
     router.replace("/(auth)/sign-in");
+  };
+
+  const closeDeletion = () => {
+    setDeleteOpen(false);
+    setDeleteConfirmation("");
+    setDeletePassword("");
+    setDeleteError(undefined);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE" || deletePassword.length === 0) return;
+    const accepted = await confirm({
+      confirmLabel: "Delete account",
+      destructive: true,
+      message:
+        "This permanently deletes your account and every workspace you own. It cannot be undone.",
+      title: "Delete your account?",
+    });
+    if (!accepted) return;
+    setDeleteError(undefined);
+    setDeleting(true);
+    try {
+      await deleteAccount(deletePassword);
+      toast.success("Account deleted");
+      router.replace("/(auth)/sign-in");
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "FORBIDDEN") {
+        setDeleteError("Password is incorrect.");
+      } else if (error instanceof ApiError && error.code === "RATE_LIMITED") {
+        setDeleteError("Too many attempts. Try again in a moment.");
+      } else {
+        setDeleteError(apiErrorMessage(error));
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -140,6 +187,56 @@ export default function AccountScreen() {
             />
           </Card>
 
+          <Card title="Delete account" tone="danger">
+            <Muted>
+              Permanently deletes this account, revokes every session, removes you from
+              other organizations, and deletes every workspace you own. Retained legal or
+              financial records are anonymized and kept only where required by law.
+            </Muted>
+            {deleteOpen ? (
+              <View style={styles.deletionForm}>
+                <Field hint="Type DELETE in capitals." label="Confirmation" required>
+                  <Input
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    placeholder="DELETE"
+                    testID="delete-account-confirmation"
+                    value={deleteConfirmation}
+                    onChangeText={setDeleteConfirmation}
+                  />
+                </Field>
+                <Field label="Current password" required>
+                  <PasswordInput
+                    autoComplete="current-password"
+                    testID="delete-account-password"
+                    textContentType="password"
+                    value={deletePassword}
+                    onChangeText={setDeletePassword}
+                  />
+                </Field>
+                <FormError message={deleteError} />
+                <View style={styles.deletionActions}>
+                  <Button disabled={deleting} title="Cancel" onPress={closeDeletion} />
+                  <Button
+                    disabled={deleteConfirmation !== "DELETE" || deletePassword.length === 0}
+                    loading={deleting}
+                    testID="delete-account-submit"
+                    title="Delete account"
+                    variant="danger"
+                    onPress={() => void handleDeleteAccount()}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Button
+                style={styles.deleteButton}
+                title="Delete my account…"
+                variant="danger"
+                onPress={() => setDeleteOpen(true)}
+              />
+            )}
+          </Card>
+
           <Button
             fullWidth
             loading={signingOut}
@@ -148,7 +245,10 @@ export default function AccountScreen() {
             onPress={() => void handleSignOut()}
           />
           <MonoSmall style={styles.version}>
-            {appVersionLabel(Constants.expoConfig?.version, Constants.expoConfig?.ios?.buildNumber)}
+            {appVersionLabel(
+              Application.nativeApplicationVersion ?? Constants.expoConfig?.version,
+              Application.nativeBuildVersion ?? Constants.expoConfig?.ios?.buildNumber,
+            )}
           </MonoSmall>
           {updateTrace ? <MonoSmall style={styles.version}>{updateTrace}</MonoSmall> : null}
         </View>
@@ -158,6 +258,9 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  deleteButton: { marginTop: spacing.lg },
+  deletionActions: { flexDirection: "row", gap: spacing.sm, justifyContent: "flex-end" },
+  deletionForm: { gap: spacing.md, marginTop: spacing.lg },
   initial: { fontSize: 22, fontWeight: "600", lineHeight: 26 },
   lastRow: { borderBottomWidth: 0 },
   lockAfter: { marginTop: spacing.lg },

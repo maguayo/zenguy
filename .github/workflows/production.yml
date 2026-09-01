@@ -113,3 +113,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PRODUCTION_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm deploy
+      - name: Wait for and verify published App Store prerequisites
+        run: >
+          node apps/app/scripts/verify-app-store-remotes.mjs
+          --attempts 20
+          --delay-ms 15000

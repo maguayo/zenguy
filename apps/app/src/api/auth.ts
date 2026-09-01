@@ -20,15 +20,6 @@ export interface AuthSession {
   user: User;
 }
 
-export interface VerifiedSession extends AuthSession {
-  verified: true;
-}
-
-export interface RegistrationPending {
-  registrationPending: true;
-  email: string;
-}
-
 export class SessionStorageError extends Error {
   constructor() {
     super("Couldn't store the session securely on this device.");
@@ -70,30 +61,6 @@ export async function activateSession<T extends AuthSession>(session: T): Promis
   return keepSession(session);
 }
 
-/** Returns a new session for AuthContext to adopt after tearing down any prior principal. */
-export interface RegistrationConsent {
-  acceptedPrivacy: boolean;
-  acceptedTerms: boolean;
-  marketingOptIn: boolean;
-}
-
-/** Registration is deliberately token-free until inbox + password verification. */
-export function register(
-  name: string,
-  email: string,
-  password: string,
-  consent: RegistrationConsent,
-): Promise<RegistrationPending> {
-  return apiPost<RegistrationPending>("/api/auth/register", {
-    acceptedPrivacy: consent.acceptedPrivacy,
-    acceptedTerms: consent.acceptedTerms,
-    marketingOptIn: consent.marketingOptIn,
-    email,
-    name,
-    password,
-  });
-}
-
 export async function login(email: string, password: string): Promise<AuthSession> {
   await prepareForNewSession();
   return apiPost<AuthSession>("/api/auth/login", { email, password });
@@ -122,21 +89,6 @@ export async function refresh(): Promise<AuthSession> {
 export async function me(): Promise<User> {
   const result = await apiGet<{ user: User }>("/api/auth/me");
   return result.user;
-}
-
-/** The inbox token and original registration password jointly verify the account. */
-export async function verifyEmail(
-  token: string,
-  password: string,
-): Promise<VerifiedSession> {
-  // Do not overwrite the current principal before AuthContext has cleared its
-  // cache and unregistered push with the old session.
-  await prepareForNewSession();
-  return apiPost<VerifiedSession>("/api/auth/verify-email", { password, token });
-}
-
-export function resendVerification(email: string): Promise<{ sent: true }> {
-  return apiPost("/api/auth/resend-verification", { email });
 }
 
 export function forgotPassword(email: string): Promise<{ sent: true }> {

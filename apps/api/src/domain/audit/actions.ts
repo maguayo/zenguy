@@ -40,6 +40,8 @@ export const AUDIT_ACTIONS = {
   statusPageItemsChanged: "status_page.items_changed",
   incidentUpdatePosted: "incident.update_posted",
   incidentUpdateDeleted: "incident.update_deleted",
+  remoteAiConsentGranted: "privacy.remote_ai_consent_granted",
+  remoteAiConsentRevoked: "privacy.remote_ai_consent_revoked",
 } as const;
 
 export type AuditAction =

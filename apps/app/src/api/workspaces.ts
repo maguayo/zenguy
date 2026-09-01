@@ -8,12 +8,10 @@ import {
 } from "../lib/api";
 import type { AuditEntry, Workspace } from "./types";
 
-export interface CreateWorkspaceInput {
-  name: string;
-  timezone: string;
+export interface UpdateWorkspaceInput {
+  name?: string;
+  timezone?: string;
 }
-
-export type UpdateWorkspaceInput = Partial<CreateWorkspaceInput>;
 
 function workspacePath(workspaceId: string): string {
   return `/api/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -25,10 +23,6 @@ export function listWorkspaces(): Promise<Workspace[]> {
 
 export function getWorkspace(workspaceId: string): Promise<Workspace> {
   return apiGet(workspacePath(workspaceId));
-}
-
-export function createWorkspace(input: CreateWorkspaceInput): Promise<Workspace> {
-  return apiPost("/api/workspaces", input);
 }
 
 export function updateWorkspace(

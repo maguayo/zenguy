@@ -1,5 +1,5 @@
-export const LEGAL_VERSION = "2026-08-27";
-export const LEGAL_EFFECTIVE = "27 August 2026";
+export const LEGAL_VERSION = "2026-09-01";
+export const LEGAL_EFFECTIVE = "1 September 2026";
 
 /** Public identification of the information-society service provider (LSSI-CE art. 10). */
 export const legalCompany = {

@@ -26,6 +26,11 @@ import type {
 } from "../../domain/browser_tests/types";
 import { extractPlaceholders } from "../../domain/secrets/rules";
 import type { ResolvedSecrets } from "../../domain/secrets/types";
+import {
+  REMOTE_AI_CONSENT_VERSION,
+  REMOTE_AI_PROVIDER,
+  type RemoteAiConsentRepo,
+} from "../../domain/users/remote_ai_consent";
 import type { ArtifactStorage } from "../../infrastructure/storage/artifacts";
 import { artifactStorageKey } from "../../infrastructure/storage/artifacts";
 import type { Clock } from "../../shared/clock";
@@ -93,7 +98,13 @@ export interface ExternalRunnerDependencies {
   clock: Clock;
   ids: IdGenerator;
   authorizationSigningSecret: string;
+  remoteAiConsents: Pick<RemoteAiConsentRepo, "hasActive">;
 }
+
+export type PolicyAwareRunnerClaimInput = RunnerClaimInput & {
+  /** Set by the authenticated runner route, never accepted from runner JSON. */
+  remoteAiProcessing?: boolean;
+};
 
 interface AttemptState {
   run: TestRun;
@@ -171,7 +182,32 @@ function safeOptional(redactor: Redactor, value: string | undefined): string | u
 export class ExternalRunner {
   constructor(private readonly dependencies: ExternalRunnerDependencies) {}
 
-  async claim(input: RunnerClaimInput): Promise<ExternalRunnerJob | null> {
+  async claim(input: PolicyAwareRunnerClaimInput): Promise<ExternalRunnerJob | null> {
+    return this.claimWithPolicy(input, input.remoteAiProcessing === true);
+  }
+
+  private async claimWithPolicy(
+    input: RunnerClaimInput,
+    remoteAiProcessing: boolean,
+  ): Promise<ExternalRunnerJob | null> {
+    if (remoteAiProcessing) {
+      // This check happens before lifecycle.claim and before returning the run
+      // snapshot, so no test instructions, URLs, page data, or secrets cross
+      // the remote-runner boundary without current workspace consent.
+      const run = await this.dependencies.runs.findByIdForExecution(
+        input.message.runId,
+      );
+      if (
+        run === null ||
+        !(await this.dependencies.remoteAiConsents.hasActive(
+          run.workspaceId,
+          REMOTE_AI_PROVIDER,
+          REMOTE_AI_CONSENT_VERSION,
+        ))
+      ) {
+        return null;
+      }
+    }
     if (
       (await this.dependencies.lifecycle.claim(
         input.message,
@@ -269,17 +305,20 @@ export class ExternalRunner {
       STALE_CLAIM_CANDIDATES,
     );
     for (const candidate of candidates) {
-      const job = await this.claim({
-        deliveryId: input.deliveryId,
-        workerId: input.workerId,
-        message: {
-          kind: "attempt",
-          runId: candidate.testRunId,
-          attemptId: candidate.id,
-          attemptIndex: candidate.attemptIndex,
-          executionGeneration: candidate.queuedAt,
+      const job = await this.claimWithPolicy(
+        {
+          deliveryId: input.deliveryId,
+          workerId: input.workerId,
+          message: {
+            kind: "attempt",
+            runId: candidate.testRunId,
+            attemptId: candidate.id,
+            attemptIndex: candidate.attemptIndex,
+            executionGeneration: candidate.queuedAt,
+          },
         },
-      });
+        true,
+      );
       if (job !== null) return job;
     }
     return null;
@@ -287,6 +326,7 @@ export class ExternalRunner {
 
   async start(
     reference: RunnerAttemptReference,
+    options: { remoteAiProcessing?: boolean } = {},
   ): Promise<ExternalRunnerStart | null> {
     let state = await this.state(reference);
     if (state === null || isRunTerminal(state.run)) return null;
@@ -311,7 +351,7 @@ export class ExternalRunner {
     // Secret material is a one-response lease. Replaying the job capability
     // may resume an already running attempt, but it never releases the values
     // a second time.
-    const secrets = newlyStarted
+    const secrets = newlyStarted && options.remoteAiProcessing !== true
       ? await this.secretsForRun(state.run)
       : new Map();
     return {

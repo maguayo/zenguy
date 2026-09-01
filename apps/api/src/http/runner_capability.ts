@@ -1,13 +1,15 @@
 import type { RunnerAttemptReference } from "../domain/browser_tests/runner_protocol";
+import type { RunnerWorkerMode } from "../domain/runners/types";
 import type { Clock } from "../shared/clock";
 import { hmacSign, hmacVerify } from "../shared/crypto";
 
-const CAPABILITY_VERSION = 1;
+const CAPABILITY_VERSION = 2;
 const CAPABILITY_TTL_MS = 6 * 60_000;
 
 interface CapabilityClaims extends RunnerAttemptReference {
   v: typeof CAPABILITY_VERSION;
   workerId: string;
+  workerMode: RunnerWorkerMode;
   exp: number;
   jti: string;
 }
@@ -40,6 +42,9 @@ function claimsMatch(
   return (
     claims.v === CAPABILITY_VERSION &&
     claims.workerId === workerId &&
+    (claims.workerMode === "local" ||
+      claims.workerMode === "fallback" ||
+      claims.workerMode === "cf") &&
     claims.runId === reference.runId &&
     claims.attemptId === reference.attemptId &&
     claims.attemptIndex === reference.attemptIndex &&
@@ -58,12 +63,14 @@ export async function issueRunnerCapability(
   secret: string,
   reference: RunnerAttemptReference,
   workerId: string,
+  workerMode: RunnerWorkerMode,
   clock: Clock,
 ): Promise<string> {
   const claims: CapabilityClaims = {
     v: CAPABILITY_VERSION,
     ...reference,
     workerId,
+    workerMode,
     exp: clock.now() + CAPABILITY_TTL_MS,
     jti: crypto.randomUUID(),
   };
@@ -77,17 +84,20 @@ export async function verifyRunnerCapability(
   reference: RunnerAttemptReference,
   workerId: string,
   clock: Clock,
-): Promise<boolean> {
+): Promise<RunnerWorkerMode | null> {
   const parts = token.split(".");
   const payload = parts[0];
   const signature = parts[1];
   if (parts.length !== 2 || payload === undefined || signature === undefined) {
-    return false;
+    return null;
   }
-  if (!(await hmacVerify(secret, payload, signature))) return false;
+  if (!(await hmacVerify(secret, payload, signature))) return null;
   try {
-    return claimsMatch(decode(payload), reference, workerId, clock.now());
+    const claims = decode(payload);
+    return claimsMatch(claims, reference, workerId, clock.now())
+      ? claims.workerMode
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }

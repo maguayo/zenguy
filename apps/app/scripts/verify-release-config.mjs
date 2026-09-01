@@ -1,25 +1,77 @@
+import { Buffer } from "node:buffer";
 import { spawnSync } from "node:child_process";
 import { createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  appPrivacyConfig,
+  expectedPrivacyManifestCollectedData,
+  validateAppPrivacyContract,
+} from "./app-privacy-contract.mjs";
+import { validateExistingAccountOnlyContract } from "./existing-account-only-contract.mjs";
+
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const expectedDomain = "applinks:app.zenguy.com";
 const expectedImage = "macos-tahoe-26.5-xcode-26.6";
 const expectedProjectId = "dbac86d4-6e5f-4cb1-b465-4182ccb5cac7";
 const expectedAppId = "HT84Q65URB.com.zenguy.app";
+const expectedRouterScheme = "zenguy-internal";
 const expectedCertificateFingerprint =
   "88:2A:06:F4:85:BF:16:0F:3F:F2:63:E8:2E:26:8A:DC:B0:00:51:8D:40:99:0E:B2:D4:2F:22:47:A0:F8:5D:10";
 const failures = [];
+
+const expectedRequiredReasonApis = {
+  NSPrivacyAccessedAPICategoryDiskSpace: ["85F4.1", "E174.1"],
+  NSPrivacyAccessedAPICategoryFileTimestamp: ["0A2A.1", "3B52.1", "C617.1"],
+  NSPrivacyAccessedAPICategorySystemBootTime: ["35F9.1"],
+  NSPrivacyAccessedAPICategoryUserDefaults: ["CA92.1"],
+};
 
 function fail(message) {
   failures.push(message);
 }
 
+for (const failure of validateAppPrivacyContract()) {
+  fail(`app privacy: ${failure}`);
+}
+
+function normalizedRequiredReasonApis(entries) {
+  return Object.fromEntries(
+    (entries ?? [])
+      .map((entry) => [
+        entry.NSPrivacyAccessedAPIType,
+        [...(entry.NSPrivacyAccessedAPITypeReasons ?? [])].sort(),
+      ])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function normalizedCollectedData(entries) {
+  for (const entry of entries ?? []) {
+    if (
+      entry.NSPrivacyCollectedDataTypeLinked !== true ||
+      entry.NSPrivacyCollectedDataTypeTracking !== false
+    ) {
+      fail(
+        `${entry.NSPrivacyCollectedDataType}: collected data must remain linked and non-tracking`,
+      );
+    }
+  }
+  return Object.fromEntries(
+    (entries ?? [])
+      .map((entry) => [
+        entry.NSPrivacyCollectedDataType,
+        [...(entry.NSPrivacyCollectedDataTypePurposes ?? [])].sort(),
+      ])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
 function resolvedConfig(profile) {
-  const expo = join(appRoot, "node_modules", ".bin", "expo");
-  const result = spawnSync(expo, ["config", "--type", "introspect", "--json"], {
+  const expo = join(appRoot, "node_modules", "expo", "bin", "cli");
+  const result = spawnSync(process.execPath, [expo, "config", "--type", "introspect", "--json"], {
     cwd: appRoot,
     encoding: "utf8",
     env: {
@@ -47,6 +99,9 @@ function verifyNativeProfile(profile, expectedApns, localNetworking) {
 
   if (Array.isArray(info.CFBundleURLTypes) && info.CFBundleURLTypes.length > 0) {
     fail(`${profile}: generated Info.plist still registers a custom URL scheme`);
+  }
+  if (config.scheme !== expectedRouterScheme) {
+    fail(`${profile}: Expo Router logical scheme is missing or changed`);
   }
   if (
     JSON.stringify(entitlements["com.apple.developer.associated-domains"]) !==
@@ -99,9 +154,33 @@ if (production.ios?.appleTeamId !== "HT84Q65URB") {
 if (production.extra?.eas?.projectId !== expectedProjectId) {
   fail("production EAS project ID changed");
 }
+if (
+  JSON.stringify(
+    normalizedRequiredReasonApis(
+      production.ios?.privacyManifests?.NSPrivacyAccessedAPITypes,
+    ),
+  ) !== JSON.stringify(expectedRequiredReasonApis)
+) {
+  fail("application privacy manifest must contain the exact required-reason API union");
+}
+if (
+  production.ios?.privacyManifests?.NSPrivacyTracking !==
+    appPrivacyConfig.apple.tracking ||
+  JSON.stringify(production.ios?.privacyManifests?.NSPrivacyTrackingDomains) !==
+    JSON.stringify([]) ||
+  JSON.stringify(
+    normalizedCollectedData(
+      production.ios?.privacyManifests?.NSPrivacyCollectedDataTypes,
+    ),
+  ) !== JSON.stringify(expectedPrivacyManifestCollectedData)
+) {
+  fail(
+    "application privacy manifest must match the exact eleven structured App Store answers",
+  );
+}
 
 const eas = JSON.parse(readFileSync(join(appRoot, "eas.json"), "utf8"));
-if (eas.cli?.version !== "22.0.0" || eas.cli?.requireCommit !== true) {
+if (eas.cli?.version !== "23.2.0" || eas.cli?.requireCommit !== true) {
   fail("EAS CLI must be exact and builds must require a clean commit");
 }
 for (const profile of ["development", "preview", "production"]) {
@@ -122,6 +201,19 @@ for (const [profile, build] of Object.entries(eas.build ?? {})) {
       fail(`${profile}: build profile contains a non-public inline environment value`);
     }
   }
+}
+if (
+  eas.submit?.production?.ios?.ascAppId !== "6804201911" ||
+  Object.hasOwn(eas.submit.production.ios, "metadataPath") ||
+  JSON.stringify(eas.submit?.["app-review-metadata"]?.ios) !==
+    JSON.stringify({
+      ascAppId: "6804201911",
+      metadataPath: "./store.review.config.cjs",
+    })
+) {
+  fail(
+    "EAS submit must keep binary submission separate from the dynamic App Review metadata profile",
+  );
 }
 
 const certificatePath = join(appRoot, "certs", "updates-certificate.pem");
@@ -196,10 +288,8 @@ const details = aasa.applinks?.details ?? [];
 const modern = details.find((detail) => detail.appIDs?.includes(expectedAppId));
 const legacy = details.find((detail) => detail.appID === expectedAppId);
 const expectedPaths = [
-  "/verify-email",
   "/reset-password",
   "/invitations/*",
-  "/grants/*",
   "/w/*",
 ];
 if (
@@ -212,9 +302,18 @@ if (JSON.stringify(legacy?.paths) !== JSON.stringify(expectedPaths)) {
   fail("AASA legacy paths do not exactly match the approved routes");
 }
 
+// App Review 3.1.3(f): iOS is deliberately an existing-account-only
+// companion. Reject routes, modules, positive acquisition copy, API calls and
+// outbound purchase URLs across the complete production mobile source tree.
+for (const failure of validateExistingAccountOnlyContract(appRoot)) {
+  fail(`existing-account-only: ${failure}`);
+}
+
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log("iOS release config verified (profiles, entitlements, OTA certificate, AASA).");
+  console.log(
+    "iOS release config verified (existing-account-only source, profiles, entitlements, App Privacy, OTA certificate, AASA).",
+  );
 }

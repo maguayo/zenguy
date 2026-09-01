@@ -42,5 +42,12 @@ export function safeNextPath(value: unknown): string | null {
   if (typeof candidate !== "string") return null;
   if (!candidate.startsWith("/") || candidate.startsWith("//")) return null;
   if (candidate.length > 512 || /[\s\\]/u.test(candidate)) return null;
+  if (
+    /^\/(?:\(auth\)\/sign-up|sign-up|verify-(?:email|pending)|onboarding(?:\/|$)|grants(?:\/|$)|complimentary(?:\/|$)|w\/[^/]+\/(?:setup\/billing|billing)(?:\/|$))/u.test(
+      candidate,
+    )
+  ) {
+    return null;
+  }
   return candidate;
 }

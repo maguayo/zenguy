@@ -61,6 +61,17 @@ To verify the frontend build locally before pushing:
 pnpm --filter @zenguy/frontend build
 ```
 
+The reusable security workflow also checks the freshly built AASA and
+`_headers` byte-for-byte against their reviewed sources and validates the exact
+existing-account-only Universal Link contract. Together with the public website
+build, the repository-wide gate can be reproduced with:
+
+```sh
+pnpm --filter @zenguy/website test
+pnpm --filter @zenguy/website build
+node apps/app/scripts/verify-app-store-static-output.mjs
+```
+
 There are no frontend billing secrets or runtime environment variables. The
 browser receives only the Stripe mode/environment from `GET /api/billing/config`;
 the API creates hosted Checkout and Customer Portal sessions server-side.

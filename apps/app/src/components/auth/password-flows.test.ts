@@ -8,14 +8,11 @@ import {
   resetPasswordSchema,
   resetTokenMessage,
 } from "./password-flows";
-import { verificationEmailSchema } from "./verify-email";
 
 describe("email-link auth schemas", () => {
-  it("validates email addresses for forgot and resend flows", () => {
+  it("validates email addresses for the forgot-password flow", () => {
     expect(forgotPasswordSchema.safeParse({ email: "invalid" }).success).toBe(false);
-    expect(
-      verificationEmailSchema.safeParse({ email: "maria@example.com" }).success,
-    ).toBe(true);
+    expect(forgotPasswordSchema.safeParse({ email: "maria@example.com" }).success).toBe(true);
   });
 
   it("requires a strong matching reset password", () => {

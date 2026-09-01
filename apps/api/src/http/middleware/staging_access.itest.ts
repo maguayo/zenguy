@@ -113,7 +113,9 @@ describe("staging Access Worker boundary", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: { ok: true } });
+    await expect(response.json()).resolves.toEqual({
+      data: { ok: true, environment: "staging", runnerDispatch: "queue" },
+    });
   });
 
   it("accepts a service token and denies one without a client identity", async () => {

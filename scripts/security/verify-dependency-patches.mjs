@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -69,15 +70,23 @@ try {
 }
 
 const appRequire = createRequire(join(root, "apps/app/package.json"));
-const imageSize = appRequire("image-size");
-const malformedIcns = Buffer.alloc(16);
-malformedIcns.write("icns", 0, "ascii");
-malformedIcns.writeUInt32BE(16, 4);
-malformedIcns.write("icp4", 8, "ascii");
-assert.throws(() => imageSize(malformedIcns), /Invalid ICNS entry length/u);
+const decodeUriComponent = appRequire("decode-uri-component");
+assert.equal(decodeUriComponent("st%C3%A5le"), "ståle");
+assert.equal(decodeUriComponent("a+b"), "a b");
+assert.equal(decodeUriComponent("%C3%5A%A5"), "%C3Z%A5");
+assert.equal(decodeUriComponent("%20%20%25%80"), "  %%80");
+const malformedEncoding = "%ab".repeat(5_000);
+const decodeStartedAt = performance.now();
+assert.equal(decodeUriComponent(malformedEncoding), malformedEncoding);
+assert.ok(
+  performance.now() - decodeStartedAt < 5_000,
+  "decode-uri-component malformed input must remain bounded",
+);
+const decoderSource = await readFile(
+  appRequire.resolve("decode-uri-component"),
+  "utf8",
+);
+assert.match(decoderSource, /function parsePercentByte/u);
+assert.doesNotMatch(decoderSource, /decodeComponents/u);
 
-const imageUtilsPath = join(dirname(appRequire.resolve("image-size/package.json")), "dist/types/utils.js");
-const imageUtilsSource = await readFile(imageUtilsPath, "utf8");
-assert.match(imageUtilsSource, /boxSize < 8/u);
-
-console.log("Local extract-zip and image-size advisory patches are active and verified.");
+console.log("Local extract-zip and decode-uri-component advisory patches are active and verified.");

@@ -1,0 +1,159 @@
+{
+  "configVersion": 1,
+  "lastReconciled": "2026-09-01",
+  "apple": {
+    "questionnaire": "Updated age rating questionnaire required since 2026-01-31",
+    "sourceUrl": "https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/",
+    "answers": [
+      {
+        "section": "In-App Controls",
+        "question": "Parental Controls",
+        "answer": "NO",
+        "rationale": "Zenguy has no child-oriented content filters, usage limits or parental restriction tools."
+      },
+      {
+        "section": "In-App Controls",
+        "question": "Age Assurance",
+        "answer": "NO",
+        "rationale": "Zenguy does not estimate or verify age and does not use the Declared Age Range API."
+      },
+      {
+        "section": "Capabilities",
+        "question": "Unrestricted Web Access",
+        "answer": "NO",
+        "rationale": "The app has no address bar or general-purpose embedded browser; it displays stored evidence from authorized remote tests and opens only fixed product or legal links externally."
+      },
+      {
+        "section": "Capabilities",
+        "question": "User-Generated Content",
+        "answer": "NO",
+        "rationale": "Customer-authored configuration and evidence remain inside a private access-controlled workspace and are not broadly distributed as part of the intended experience."
+      },
+      {
+        "section": "Capabilities",
+        "question": "Social Media",
+        "answer": "NO",
+        "rationale": "The app has no social feed, discovery, likes, comments, shares or content amplification."
+      },
+      {
+        "section": "Capabilities",
+        "question": "Social Media Disabled for Users Under 13",
+        "answer": "NO",
+        "rationale": "The app has no social-media capability for any user and does not use the Declared Age Range API."
+      },
+      {
+        "section": "Capabilities",
+        "question": "Messaging and Chat",
+        "answer": "NO",
+        "rationale": "The app has no direct messaging, group chat or public posting feature."
+      },
+      {
+        "section": "Capabilities",
+        "question": "Advertising",
+        "answer": "NO",
+        "rationale": "The app contains no paid advertising formats."
+      },
+      {
+        "section": "Mature Themes",
+        "question": "Profanity or Crude Humor",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no profanity or crude humor."
+      },
+      {
+        "section": "Mature Themes",
+        "question": "Horror/Fear Themes",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no horror or fear themes."
+      },
+      {
+        "section": "Mature Themes",
+        "question": "Alcohol, Tobacco, or Drug Use or References",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no alcohol, tobacco or drug depictions or references."
+      },
+      {
+        "section": "Medical or Wellness",
+        "question": "Medical or Treatment Information",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no diagnosis, treatment or medical-management guidance."
+      },
+      {
+        "section": "Medical or Wellness",
+        "question": "Health or Wellness Topics",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no self-care, diet, exercise or lifestyle recommendations."
+      },
+      {
+        "section": "Sexuality or Nudity",
+        "question": "Mature or Suggestive Themes",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no mature or suggestive themes."
+      },
+      {
+        "section": "Sexuality or Nudity",
+        "question": "Sexual Content or Nudity",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no sexual content or nudity."
+      },
+      {
+        "section": "Sexuality or Nudity",
+        "question": "Graphic Sexual Content and Nudity",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no graphic sexual content or nudity."
+      },
+      {
+        "section": "Violence",
+        "question": "Cartoon or Fantasy Violence",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no cartoon or fantasy violence."
+      },
+      {
+        "section": "Violence",
+        "question": "Realistic Violence",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no realistic violence."
+      },
+      {
+        "section": "Violence",
+        "question": "Prolonged Graphic or Sadistic Realistic Violence",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no prolonged graphic or sadistic realistic violence."
+      },
+      {
+        "section": "Violence",
+        "question": "Guns or Other Weapons",
+        "answer": "NONE",
+        "rationale": "Zenguy supplies no depictions of guns or other weapons."
+      },
+      {
+        "section": "Chance-Based Activities",
+        "question": "Gambling",
+        "answer": "NO",
+        "rationale": "The app has no real-money or exchangeable-currency wagering."
+      },
+      {
+        "section": "Chance-Based Activities",
+        "question": "Simulated Gambling",
+        "answer": "NONE",
+        "rationale": "The app has no simulated wagering."
+      },
+      {
+        "section": "Chance-Based Activities",
+        "question": "Contests",
+        "answer": "NONE",
+        "rationale": "The app has no competitions, rankings or rewards."
+      },
+      {
+        "section": "Chance-Based Activities",
+        "question": "Loot Boxes",
+        "answer": "NO",
+        "rationale": "The app has no randomized virtual items for purchase."
+      }
+    ],
+    "calculatedGlobalRating": "4+",
+    "madeForKids": "NOT_APPLICABLE",
+    "overrideToHigherAgeRating": "18+",
+    "displayGlobalRating": "18+",
+    "overrideReason": "The Zenguy Terms of Service require every user to be 18 or older."
+  }
+}

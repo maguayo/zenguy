@@ -66,7 +66,7 @@ export function NotificationsCard() {
     <Card title="Notifications">
       {content}
       <Caption style={styles.note}>
-        Push alerts are free and go to every workspace member with the Zenguy app.
+        Push alerts go to every workspace member with the Zenguy app.
       </Caption>
     </Card>
   );

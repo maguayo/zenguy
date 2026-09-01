@@ -1,7 +1,22 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+import appPrivacyConfig from "./app-privacy.config.json";
+
+type PrivacyManifestConfig = NonNullable<
+  NonNullable<ExpoConfig["ios"]>["privacyManifests"]
+>;
+
+const privacyCollectedDataTypes: PrivacyManifestConfig["NSPrivacyCollectedDataTypes"] =
+  appPrivacyConfig.apple.dataTypes.map((entry) => ({
+    NSPrivacyCollectedDataType: entry.privacyManifest.dataType,
+    NSPrivacyCollectedDataTypeLinked: entry.linkedToUser,
+    NSPrivacyCollectedDataTypeTracking: entry.usedForTracking,
+    NSPrivacyCollectedDataTypePurposes: entry.privacyManifest.purposes,
+  }));
+
 const isDevelopmentProfile = process.env.EAS_BUILD_PROFILE === "development";
 const isProductionProfile = process.env.EAS_BUILD_PROFILE === "production";
+const internalRouterScheme = "zenguy-internal";
 
 // The app ships no secrets: the only build-time setting is the API origin,
 // provided through EXPO_PUBLIC_API_ORIGIN (see eas.json and README.md).
@@ -12,6 +27,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
   owner: "maguayo",
   version: "0.2.2",
+  // Expo Router requires a logical scheme to resolve its root URL in a
+  // standalone release. The final config plugin removes the corresponding
+  // CFBundleURLTypes entry, so other iOS apps cannot invoke this scheme;
+  // verified HTTPS Universal Links remain the only inbound link mechanism.
+  scheme: internalRouterScheme,
   // Native inputs produce a distinct runtime automatically. This prevents an
   // OTA from crossing an entitlement, module or config-plugin boundary.
   runtimeVersion: { policy: "fingerprint" },
@@ -60,10 +80,44 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     entitlements: {
       "aps-environment": isProductionProfile ? "production" : "development",
     },
+    // Collected-data rows derive from app-privacy.config.json. The release
+    // contract reconciles that structured source with the human inventory and
+    // App Store Connect answers. Zenguy does not track users or use data for
+    // advertising; all collection is linked to the signed-in account.
+    privacyManifests: {
+      NSPrivacyTracking: appPrivacyConfig.apple.tracking,
+      NSPrivacyTrackingDomains: [],
+      // Duplicate the complete required-reason API union in the application
+      // manifest. Apple does not reliably aggregate every static CocoaPods
+      // manifest, and ExpoFileSystem's generated resource bundle can be empty
+      // when its prebuilt XCFramework is selected. Keep these reasons aligned
+      // with the manifests shipped by Expo and React Native.
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+          NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+          NSPrivacyAccessedAPITypeReasons: ["85F4.1", "E174.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategorySystemBootTime",
+          NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+          NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+        },
+      ],
+      NSPrivacyCollectedDataTypes: privacyCollectedDataTypes,
+    },
   },
   plugins: [
     "expo-router",
+    "expo-image",
     "expo-secure-store",
+    "expo-sharing",
     [
       "expo-local-authentication",
       {
@@ -102,8 +156,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
       },
     ],
-    // Must remain last: Expo's default iOS scheme plugin otherwise adds the
-    // bundle identifier as a claimable custom URL scheme.
+    // Must remain last: keep the logical Router scheme out of Info.plist so it
+    // cannot become a claimable iOS URL scheme.
     "./plugins/with-universal-links-only",
   ],
   experiments: {

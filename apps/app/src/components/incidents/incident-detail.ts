@@ -1,5 +1,5 @@
 import type { Incident, IncidentDelivery, IncidentDetail } from "@/api/types";
-import { formatDateTime, formatDuration, formatEuros } from "@/lib/format";
+import { formatDateTime, formatDuration } from "@/lib/format";
 import type { Tone } from "@/theme";
 
 export const emptyDeliveriesCopy =
@@ -66,18 +66,6 @@ export function incidentDeliveryStatus(
     return { label: "Needs reconciliation", tone: "warn" };
   }
   return { label: "Pending", tone: "neutral" };
-}
-
-function optionalNumber(record: object, key: string): number | null {
-  if (!(key in record)) return null;
-  const value = (record as Record<string, unknown>)[key];
-  return typeof value === "number" ? value : null;
-}
-
-/** Paid deliveries carry a cost once the API exposes it; older payloads simply have none. */
-export function incidentDeliveryCost(delivery: IncidentDelivery): string | null {
-  const cents = optionalNumber(delivery, "costCents");
-  return cents === null ? null : formatEuros(cents);
 }
 
 export function incidentDeliveryTime(

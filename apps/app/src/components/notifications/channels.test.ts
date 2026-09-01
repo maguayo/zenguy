@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 import type { Channel, Delivery } from "@/api/types";
-import { formatEuros } from "@/lib/format";
 import {
-  channelPriceLabel,
   channelTarget,
   channelTypeLabels,
   lastDeliveryText,
@@ -65,7 +63,7 @@ describe("notification channels list", () => {
     ).toBe("https://hooks.slack.com/…abcd");
   });
 
-  it("shows the destination price and pause state of paid channels", () => {
+  it("keeps commercially restricted channels in a neutral unavailable state", () => {
     const sms: Channel = {
       ...baseChannel,
       configPreview: { phoneNumber: "+34612345678" },
@@ -74,13 +72,8 @@ describe("notification channels list", () => {
       price: { cents: 18, currency: "EUR", destination: "Spain" },
       type: "SMS",
     };
-    expect(channelPriceLabel(sms)).toBe(`Spain · ${formatEuros(18)} per alert`);
-    expect(
-      channelPriceLabel({ ...sms, price: { cents: 20, currency: "EUR", destination: "Spain" }, type: "CALL" }),
-    ).toBe(`Spain · ${formatEuros(20)} per call`);
-    expect(channelPriceLabel(baseChannel)).toBeNull();
-    expect(pausedLabel(sms)).toBe("Paused · no credit");
-    expect(pausedLabel({ ...sms, paused: { reason: "PAID_OFF" } })).toBe("Paused · SMS & calls off");
+    expect(pausedLabel(sms)).toBe("Temporarily unavailable");
+    expect(pausedLabel({ ...sms, paused: { reason: "PAID_OFF" } })).toBe("Temporarily unavailable");
     expect(pausedLabel(baseChannel)).toBeNull();
   });
 

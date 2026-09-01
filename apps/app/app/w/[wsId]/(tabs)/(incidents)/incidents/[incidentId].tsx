@@ -6,7 +6,6 @@ import { getIncident } from "@/api/incidents";
 import type { IncidentDelivery, IncidentDetail } from "@/api/types";
 import {
   emptyDeliveriesCopy,
-  incidentDeliveryCost,
   incidentDeliveryEvent,
   incidentDeliveryStatus,
   incidentDeliveryTime,
@@ -58,12 +57,10 @@ function IncidentDeliveryRow({
   timezone: string;
 }) {
   const status = incidentDeliveryStatus(delivery.status);
-  const cost = incidentDeliveryCost(delivery);
   const details = [
     channelTypeLabels[delivery.channelType],
     incidentDeliveryEvent(delivery.eventType),
     deliveryAttempts(delivery.attemptCount),
-    ...(cost ? [cost] : []),
   ].join(" · ");
 
   return (

@@ -1,9 +1,9 @@
 import { StyleSheet, View } from "react-native";
 
 import type { Usage } from "@/api/types";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { colors, radius, spacing, toneSolid } from "@/theme";
-import { Caption, Divider, Mono, Muted, Text } from "@/ui";
+import { Caption, Mono, Muted, Text } from "@/ui";
 
 export type UsageTone = "accent" | "danger" | "warn";
 
@@ -26,16 +26,8 @@ function UsageRow({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function UsageMeter({
-  showProjection = true,
-  timezone,
-  usage,
-}: {
-  showProjection?: boolean;
-  timezone: string;
-  usage: Usage;
-}) {
-  const tone = usageTone(usage);
+/** Operational quota only: the iOS companion never displays prices or purchase prompts. */
+export function UsageMeter({ timezone, usage }: { timezone: string; usage: Usage }) {
   const percentage = usagePercentage(usage);
   const label = `${usage.billableRuns} of ${usage.includedRuns} runs used`;
   return (
@@ -50,31 +42,20 @@ export function UsageMeter({
         accessibilityValue={{ max: usage.includedRuns, min: 0, now: usage.billableRuns }}
         style={styles.track}
       >
-        <View style={[styles.fill, { backgroundColor: toneSolid[tone], width: `${percentage}%` }]} />
+        <View
+          style={[
+            styles.fill,
+            { backgroundColor: toneSolid[usageTone(usage)], width: `${percentage}%` },
+          ]}
+        />
       </View>
       <View style={styles.rows}>
         <UsageRow label="Included runs" value={usage.includedRuns} />
         <UsageRow label="Used" value={usage.billableRuns} />
         <UsageRow label="Remaining" value={usage.remainingRuns} />
-        {usage.overageRuns > 0 ? (
-          <>
-            <UsageRow label="Extra runs" value={usage.overageRuns} />
-            <UsageRow
-              label="Extra cost"
-              value={formatCurrency(usage.overageAmountCents, usage.currency)}
-            />
-          </>
-        ) : null}
+        {usage.overageRuns > 0 ? <UsageRow label="Additional runs" value={usage.overageRuns} /> : null}
       </View>
-      {showProjection ? (
-        <>
-          <Divider />
-          <Caption>
-            Projected total {formatCurrency(usage.projectedTotalCents, usage.currency)} · resets{" "}
-            {formatDateTime(usage.periodEnd, timezone)}
-          </Caption>
-        </>
-      ) : null}
+      <Caption style={styles.period}>Cycle resets {formatDateTime(usage.periodEnd, timezone)}</Caption>
     </View>
   );
 }
@@ -84,6 +65,7 @@ const styles = StyleSheet.create({
   fill: { borderRadius: radius.sm, height: "100%" },
   headline: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
   of: { flexShrink: 1 },
+  period: { marginTop: spacing.lg },
   row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   rows: { gap: spacing.sm, marginTop: spacing.lg },
   track: {

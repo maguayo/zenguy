@@ -1,0 +1,71 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Support — Zenguy"
+  description="Support and troubleshooting for the Zenguy iOS companion app."
+  heading="Zenguy Support"
+  eyebrow="iOS companion app"
+  effective="1 September 2026"
+>
+  <p>
+    Zenguy for iOS is a free companion app for people whose organization has
+    already provided a Zenguy account, workspace and active access. The iOS app
+    does not create accounts or workspaces, sell subscriptions, process
+    purchases, or direct people to buy access elsewhere.
+  </p>
+
+  <h2>Contact support</h2>
+  <p>
+    Email <a href={legalMailto}>{legalCompany.email}</a>. This monitored address
+    handles app access, privacy, account deletion, notifications and technical
+    problems. Include the app version and build shown at the bottom of
+    <strong>Account</strong>, your iOS version, and a description of what
+    happened. Never send a password, API key or test secret.
+  </p>
+
+  <h2>Sign-in help</h2>
+  <ul>
+    <li>
+      Use the email and password for your existing Zenguy account. There is no
+      registration option in the iOS app.
+    </li>
+    <li>
+      Use <strong>Forgot password?</strong> on the sign-in screen if you cannot
+      remember the password.
+    </li>
+    <li>
+      If sign-in succeeds but access is unavailable, contact the administrator
+      of your organization so they can check your existing workspace access.
+      The app deliberately does not show prices or an acquisition path.
+    </li>
+  </ul>
+
+  <h2>Notifications and App Lock</h2>
+  <p>
+    Push notifications are optional. Enable them from Account and allow
+    notifications when iOS asks. If permission was previously denied, open the
+    iOS Settings app and select Zenguy. App Lock is also optional; Face ID or
+    Touch ID is evaluated by iOS and Zenguy never receives biometric templates.
+  </p>
+
+  <h2>Delete an account</h2>
+  <p>
+    In the signed-in app, open <strong>More → Account → Delete my account</strong>.
+    Enter the current password, type DELETE, and confirm. The action revokes
+    sessions, removes memberships and deletes every workspace owned by the
+    account. It does not require a support request. If you cannot sign in to
+    reach the control, email us so we can verify your identity and help with a
+    privacy request.
+  </p>
+
+  <h2>Privacy and optional AI processing</h2>
+  <p>
+    Read the <a href="/privacy/">Privacy Policy</a> and
+    <a href="/privacy-choices/">Privacy choices</a>. OpenAI fallback processing
+    is off by default and can only be enabled or revoked by a workspace Owner
+    or Admin from <strong>More → AI data sharing</strong>.
+  </p>
+</Legal>

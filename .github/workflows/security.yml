@@ -99,19 +99,23 @@ jobs:
       - name: Audit iOS production dependencies
         working-directory: apps/app
         run: |
-          # Both advisories are covered by the same sealed parser-progress patch.
+          # Expo Router 57 still uses CommonJS query-string 7. The ignored
+          # version finding is covered by our sealed upstream-algorithm patch.
           pnpm audit --prod --audit-level moderate \
-            --ignore GHSA-w3rx-r6r6-pgpr \
-            --ignore GHSA-5p2g-fcmc-qvqq
+            --ignore GHSA-vcc3-ghjq-m6fr
 
       - name: Install monorepo dependencies from lock
         run: pnpm install --frozen-lockfile
 
       - name: Validate SPA
-        run: pnpm --filter @zenguy/frontend typecheck && pnpm --filter @zenguy/frontend test
+        run: pnpm --filter @zenguy/frontend build && pnpm --filter @zenguy/frontend test
 
       - name: Build public sites
-        run: pnpm --filter @zenguy/website build && pnpm --filter @zenguy/landing build
+        run: |
+          pnpm --filter @zenguy/website test
+          pnpm --filter @zenguy/website build
+          pnpm --filter @zenguy/landing build
+          node apps/app/scripts/verify-app-store-static-output.mjs
 
       - name: Install iOS dependencies from lock
         working-directory: apps/app

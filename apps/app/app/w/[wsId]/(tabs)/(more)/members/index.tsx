@@ -234,7 +234,7 @@ export default function MembersScreen() {
       />
       <Screen refreshing={refreshing} onRefresh={refresh}>
         <View style={styles.stack}>
-          <Muted>Members are unlimited and free.</Muted>
+          <Muted>Manage the people who can access this workspace.</Muted>
 
           {members.isPending ? (
             <Spinner label="Loading members" />

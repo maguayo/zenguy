@@ -1,10 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 
 import type { Delivery } from "@/api/types";
-import { formatEuros } from "@/lib/format";
 import {
   deliveryAttempts,
-  deliveryCostLabel,
   deliveryEvent,
   deliveryIncidentHref,
 } from "./deliveries";
@@ -35,12 +33,5 @@ describe("delivery history", () => {
   it("links a delivery to its incident when there is one", () => {
     expect(deliveryIncidentHref("ws_1", failed)).toBe("/w/ws_1/incidents/incident_1");
     expect(deliveryIncidentHref("ws_1", { incidentId: null })).toBeNull();
-  });
-
-  it("shows what a paid delivery cost", () => {
-    expect(deliveryCostLabel(failed)).toBeNull();
-    expect(deliveryCostLabel({ costCents: undefined, destinationCountry: undefined })).toBeNull();
-    expect(deliveryCostLabel({ costCents: 18, destinationCountry: "Spain" })).toBe(`${formatEuros(18)} · Spain`);
-    expect(deliveryCostLabel({ costCents: 18, destinationCountry: null })).toBe(formatEuros(18));
   });
 });

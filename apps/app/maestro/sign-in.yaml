@@ -10,10 +10,10 @@ appId: com.zenguy.app
 - takeScreenshot: smoke-01-sign-in
 - tapOn:
     id: "signin-email"
-- inputText: "marcos@aguayo.es"
+- inputText: "owner@example.com"
 - tapOn:
     id: "signin-password"
-- inputText: "abc123456"
+- inputText: "Local-demo-password-2026!"
 - tapOn: "Welcome back"
 - tapOn:
     id: "signin-submit"

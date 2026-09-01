@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 4,
+  "app": {
+    "name": "Zenguy",
+    "bundleIdentifier": "com.zenguy.app",
+    "appleTeamId": "HT84Q65URB",
+    "ascAppId": "6804201911",
+    "easProjectId": "dbac86d4-6e5f-4cb1-b465-4182ccb5cac7"
+  },
+  "ageRating": {
+    "sourceReconciledOn": "2026-09-01",
+    "calculatedGlobalRating": "4+",
+    "madeForKids": "NOT_APPLICABLE",
+    "overrideToHigherAgeRating": "18+",
+    "displayGlobalRating": "18+"
+  },
+  "candidate": {
+    "version": "<VERSION>",
+    "build": "<BUILD>",
+    "commit": "<FULL_COMMIT_SHA>",
+    "runtimeFingerprint": "<FINGERPRINT>",
+    "apiOrigin": "https://api.zenguy.com",
+    "channel": "production",
+    "easBuildId": "<EAS_BUILD_UUID>",
+    "easBuildUrl": "<EAS_BUILD_URL>",
+    "easSubmissionId": "<EAS_SUBMISSION_UUID>",
+    "easSubmissionUrl": "<EAS_SUBMISSION_URL>",
+    "easBuildStatus": "FINISHED",
+    "easSubmissionStatus": "FINISHED",
+    "appleBuildState": "VALID",
+    "testFlightState": "IN_BETA_TESTING"
+  },
+  "distribution": {
+    "testFlightGroup": "Zenguy Internal",
+    "automaticTestFlightDistribution": true,
+    "releaseMethod": "MANUAL",
+    "phasedRelease": false,
+    "storefronts": ["<APPLE_TERRITORY_ID>"]
+  },
+  "evidence": {
+    "appReviewResponseSha256": "<APP_REVIEW_RESPONSE_SHA256>",
+    "privacyReportSha256": "<PRIVACY_REPORT_SHA256>",
+    "screenshotsManifestSha256": "<SCREENSHOTS_MANIFEST_SHA256>",
+    "screenRecordingFilename": "<SCREEN_RECORDING_FILENAME>",
+    "screenRecordingSha256": "<SCREEN_RECORDING_SHA256>",
+    "smokeTestRecordSha256": "<SMOKE_TEST_RECORD_SHA256>"
+  },
+  "signoffs": {
+    "ageRatingSaved": false,
+    "publicUrlsVerified": false,
+    "reviewAccountVerified": false,
+    "physicalDeviceSmokeTestPassed": false,
+    "signedArchiveVerified": false,
+    "privacyReportReconciled": false,
+    "screenshotsReviewedAt100Percent": false,
+    "contentRightsConfirmed": false,
+    "guideline21ResponseSaved": false,
+    "physicalDeviceScreenRecordingAttached": false,
+    "appPrivacyPublished": false,
+    "metadataSaved": false,
+    "agreementsAndTraderStatusVerified": false
+  },
+  "credentials": {
+    "reviewedAt": "<ISO_TIMESTAMP_WITH_ZONE>",
+    "responsible": "<CREDENTIAL_OWNER>",
+    "distributionCertificateSerial": "6A5F4472F596BA3F5C6E50D700221A8",
+    "distributionCertificateExpiresOn": "2027-07-25",
+    "provisioningProfileId": "YNK325M2FS",
+    "provisioningProfileExpiresOn": "2027-07-25",
+    "apnsKeyId": "8UDV42545G",
+    "ascApiKeyId": "U3MR73JGPS"
+  },
+  "appReview": {
+    "stage": "REVIEW_READY",
+    "status": "READY_FOR_REVIEW",
+    "submittedAt": null,
+    "approvedAt": null,
+    "releasedAt": null,
+    "appStoreUrl": null
+  },
+  "recordedAt": "<ISO_TIMESTAMP_WITH_ZONE>"
+}

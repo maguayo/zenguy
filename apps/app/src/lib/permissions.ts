@@ -11,8 +11,6 @@ export type Action =
   | "members.invite"
   | "members.remove"
   | "admins.manage"
-  | "billing.view"
-  | "billing.manage"
   | "workspace.settings"
   | "workspace.transfer"
   | "workspace.delete"
@@ -29,8 +27,6 @@ export const actions: Action[] = [
   "members.invite",
   "members.remove",
   "admins.manage",
-  "billing.view",
-  "billing.manage",
   "workspace.settings",
   "workspace.transfer",
   "workspace.delete",
@@ -47,7 +43,6 @@ const adminActions = new Set<Action>([
   "secrets.manage",
   "members.invite",
   "members.remove",
-  "billing.view",
   "workspace.settings",
   "audit.view",
 ]);

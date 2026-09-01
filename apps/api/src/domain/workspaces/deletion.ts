@@ -45,6 +45,7 @@ export const WORKSPACE_DELETION_TAXONOMY = {
     "workspace_data_encryption_keys",
     "workspace_invitations",
     "workspace_members",
+    "workspace_remote_ai_consents",
     "workspace_secrets",
   ],
   retainAnonymized: [

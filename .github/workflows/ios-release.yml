@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -68,7 +69,23 @@ jobs:
 
       - name: Validate iOS app
         working-directory: apps/app
-        run: pnpm verify:release-config && pnpm typecheck && pnpm lint && pnpm test --runInBand --forceExit
+        run: pnpm verify:app-store-package && pnpm verify:release-config && pnpm typecheck && pnpm lint && pnpm test --runInBand --forceExit && pnpm test:release-tools
+
+      - name: Validate deployed App Store prerequisites
+        working-directory: apps/app
+        run: pnpm verify:app-store-remotes
+
+      - name: Verify this exact commit deployed successfully
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          successful_deployments="$(
+            gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/production.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=100" \
+              --jq '[.workflow_runs[] | select(.conclusion == "success")] | length'
+          )"
+          test "$successful_deployments" -ge 1
 
       - name: Re-verify current main before credentials
         env:
@@ -84,7 +101,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_IOS_RELEASE_TOKEN }}
         run: >-
-          pnpm exec eas build
+          pnpm dlx eas-cli@23.2.0 build
           --platform ios
           --profile production
           --auto-submit

@@ -1,6 +1,6 @@
 import { parseLinkToken } from "./links";
 
-export type LinkCapabilityKind = "grant" | "invitation" | "password-reset" | "verification";
+export type LinkCapabilityKind = "invitation" | "password-reset";
 
 const CAPABILITY_TTL_MS = 30 * 60 * 1_000;
 const capabilities = new Map<

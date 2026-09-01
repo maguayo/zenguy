@@ -95,7 +95,7 @@ export const testFormSchema = z.object({
       if (domains.some((domain) => !domainPattern.test(domain))) {
         context.addIssue({
           code: "custom",
-          message: "Use lowercase hostnames such as checkout.example.com or *.example.com.",
+          message: "Use lowercase hostnames such as api.example.com or *.example.com.",
         });
       }
     }),

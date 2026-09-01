@@ -59,14 +59,9 @@ function RootNavigator() {
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="w/[wsId]" />
-      <Stack.Screen name="verify-pending" />
-      <Stack.Screen name="verify-email" options={{ headerShown: true, title: "Verify email" }} />
-      <Stack.Screen name="onboarding/workspace" />
+      <Stack.Screen name="access-unavailable" />
       <Stack.Screen name="invitations/[token]" options={{ headerShown: true, title: "Invitation" }} />
       <Stack.Screen name="invitations/accept" options={{ headerShown: true, title: "Invitation" }} />
-      <Stack.Screen name="grants/[token]" options={{ headerShown: true, title: "Complimentary access" }} />
-      <Stack.Screen name="grants/redeem" options={{ headerShown: true, title: "Complimentary access" }} />
-      <Stack.Screen name="complimentary" options={{ headerShown: true, title: "Complimentary links" }} />
       <Stack.Screen name="privacy" options={{ headerShown: true, presentation: "modal", title: "Privacy" }} />
       <Stack.Screen name="terms" options={{ headerShown: true, presentation: "modal", title: "Terms" }} />
     </Stack>

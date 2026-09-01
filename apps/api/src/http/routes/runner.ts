@@ -10,6 +10,7 @@ import {
   runnerStepSchema,
 } from "../../domain/browser_tests/runner_protocol";
 import type { RunnerWorkerRepo } from "../../domain/runners/repo";
+import type { RunnerWorkerMode } from "../../domain/runners/types";
 import type { Clock } from "../../shared/clock";
 import { timingSafeEqualText } from "../../shared/crypto";
 import { AppError } from "../../shared/errors";
@@ -94,18 +95,18 @@ export function runnerRoutes(
     provided: string,
     reference: Parameters<typeof verifyRunnerCapability>[2],
     workerId: string,
-  ): Promise<void> {
-    if (
-      !(await verifyRunnerCapability(
-        provided,
-        dependencies.capabilitySecret,
-        reference,
-        workerId,
-        dependencies.clock,
-      ))
-    ) {
+  ): Promise<RunnerWorkerMode> {
+    const mode = await verifyRunnerCapability(
+      provided,
+      dependencies.capabilitySecret,
+      reference,
+      workerId,
+      dependencies.clock,
+    );
+    if (mode === null) {
       throw new AppError("UNAUTHORIZED", "Invalid runner credentials");
     }
+    return mode;
   }
 
   function requireWorkerIdentity(
@@ -155,7 +156,10 @@ export function runnerRoutes(
       bearerToken(context.req.header("Authorization")),
     );
     requireWorkerIdentity(input.workerId, mode);
-    const job = await dependencies.runner.claim(input);
+    const job = await dependencies.runner.claim({
+      ...input,
+      remoteAiProcessing: mode === "cf",
+    });
     const capability =
       job === null
         ? null
@@ -163,6 +167,7 @@ export function runnerRoutes(
             dependencies.capabilitySecret,
             job.reference,
             input.workerId,
+            mode,
             dependencies.clock,
           );
     return context.json({
@@ -187,6 +192,7 @@ export function runnerRoutes(
               dependencies.capabilitySecret,
               job.reference,
               input.workerId,
+              "fallback",
               dependencies.clock,
             );
       return context.json({
@@ -201,7 +207,7 @@ export function runnerRoutes(
   app.post("/attempts/:attemptId/start", zjson(runnerStartSchema), async (context) => {
     const { reference } = context.req.valid("json");
     const workerId = context.req.header("X-Zenguy-Worker-Id") ?? "";
-    await requireCapability(
+    const workerMode = await requireCapability(
       bearerToken(context.req.header("Authorization")),
       reference,
       workerId,
@@ -209,7 +215,9 @@ export function runnerRoutes(
     if (reference.attemptId !== context.req.param("attemptId")) {
       throw new AppError("CONFLICT", "Attempt reference does not match route");
     }
-    const started = await dependencies.runner.start(reference);
+    const started = await dependencies.runner.start(reference, {
+      remoteAiProcessing: workerMode !== "local",
+    });
     return context.json({
       data:
         started === null

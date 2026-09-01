@@ -17,7 +17,12 @@ export const moreMenuItems: MoreMenuItem[] = [
   { icon: "bell", label: "Notifications", path: "notifications" },
   { icon: "key", label: "Secrets", path: "secrets" },
   { icon: "users", label: "Members", path: "members" },
-  { icon: "bar-chart-2", label: "Plan & Usage", path: "billing", permission: "billing.view" },
+  {
+    icon: "cpu",
+    label: "AI data sharing",
+    path: "ai-data-sharing",
+    permission: "workspace.settings",
+  },
   { icon: "settings", label: "Workspace Settings", path: "settings" },
 ];
 

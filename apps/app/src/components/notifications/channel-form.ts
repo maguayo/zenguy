@@ -14,25 +14,20 @@ export function isEditableChannelType(type: ChannelType | null | undefined): typ
 
 export interface ChannelTypeOption {
   label: string;
-  paid?: boolean;
   type: ChannelType;
 }
 
 export const channelTypeOptions: ChannelTypeOption[] = [
   { label: "Email", type: "EMAIL" },
-  { label: "SMS", paid: true, type: "SMS" },
-  { label: "WhatsApp", paid: true, type: "WHATSAPP" },
-  { label: "Phone call", paid: true, type: "CALL" },
+  { label: "SMS", type: "SMS" },
+  { label: "WhatsApp", type: "WHATSAPP" },
+  { label: "Phone call", type: "CALL" },
   { label: "Slack", type: "SLACK" },
   { label: "Discord", type: "DISCORD" },
 ];
 
-export function isPaidChannelType(type: ChannelType | null): boolean {
-  return type === "SMS" || type === "CALL" || type === "WHATSAPP";
-}
-
 export function isPhoneChannelType(type: ChannelType | null): boolean {
-  return isPaidChannelType(type);
+  return type === "SMS" || type === "CALL" || type === "WHATSAPP";
 }
 
 export function isWebhookChannelType(type: ChannelType | null): boolean {
@@ -91,7 +86,7 @@ export function channelFormSchema(editing = false) {
       });
     }
 
-    if (isPaidChannelType(values.type) && !values.smsConsent) {
+    if (isPhoneChannelType(values.type) && !values.smsConsent) {
       context.addIssue({
         code: "custom",
         message: "Confirm the recipient's explicit consent.",
@@ -189,7 +184,7 @@ export function channelFormField(path: string): ChannelFormField | null {
 
 export interface ChannelFormErrors {
   fields: Partial<Record<ChannelFormField, string>>;
-  /** Shown as the form-level error: anything that isn't a field, e.g. a rejected paid `type`. */
+  /** Shown as the form-level error for anything that isn't a field. */
   root: string | null;
 }
 

@@ -328,7 +328,9 @@ describe("public status routes", () => {
   it("keeps first-party hosts on the normal routing table", async () => {
     const health = await app.request("https://app.zenguy.com/api/health");
     expect(health.status).toBe(200);
-    await expect(health.json()).resolves.toEqual({ data: { ok: true } });
+    await expect(health.json()).resolves.toEqual({
+      data: { ok: true, environment: "development", runnerDispatch: "queue" },
+    });
   });
 
   it("rate limits by IP on cache misses", async () => {

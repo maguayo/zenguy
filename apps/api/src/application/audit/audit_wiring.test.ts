@@ -43,6 +43,8 @@ const ACTION_USE_CASES = {
   statusPageItemsChanged: "../status_pages/add_item.ts",
   incidentUpdatePosted: "../incidents/post_incident_update.ts",
   incidentUpdateDeleted: "../incidents/delete_incident_update.ts",
+  remoteAiConsentGranted: "../../http/routes/remote_ai_consent.ts",
+  remoteAiConsentRevoked: "../../http/routes/remote_ai_consent.ts",
 } as const satisfies Record<keyof typeof AUDIT_ACTIONS, string>;
 
 describe("audit action wiring", () => {

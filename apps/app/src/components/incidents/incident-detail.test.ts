@@ -1,10 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 
 import type { IncidentDelivery } from "@/api/types";
-import { formatEuros } from "@/lib/format";
 import {
   emptyDeliveriesCopy,
-  incidentDeliveryCost,
   incidentDeliveryEvent,
   incidentDeliveryStatus,
   incidentDeliveryTime,
@@ -63,7 +61,7 @@ describe("incident detail", () => {
     ).toBe("Opened 19 Aug 2026, 10:00 · 5m 00s · Resolved 19 Aug 2026, 10:05");
   });
 
-  it("keeps delivery event, status, cost and time like the web table", () => {
+  it("keeps delivery event, status and time", () => {
     expect(incidentDeliveryEvent("FAILURE")).toBe("Failure");
     expect(incidentDeliveryEvent("RECOVERY")).toBe("Recovery");
     expect(incidentDeliveryStatus("SENT")).toEqual({ label: "Sent", tone: "ok" });
@@ -73,9 +71,6 @@ describe("incident detail", () => {
       tone: "warn",
     });
     expect(incidentDeliveryStatus("PENDING")).toEqual({ label: "Pending", tone: "neutral" });
-    expect(incidentDeliveryCost(delivery)).toBeNull();
-    expect(incidentDeliveryCost({ ...delivery, costCents: null } as IncidentDelivery)).toBeNull();
-    expect(incidentDeliveryCost({ ...delivery, costCents: 18 } as IncidentDelivery)).toBe(formatEuros(18));
     expect(incidentDeliveryTime(delivery, "UTC")).toBe("19 Aug 2026, 10:00");
     expect(incidentDeliveryTime({ ...delivery, sentAt: "2026-08-19T10:01:00.000Z" }, "UTC")).toBe(
       "19 Aug 2026, 10:01",

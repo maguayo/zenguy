@@ -14,7 +14,6 @@ function WorkspaceStack() {
       screenOptions={{ contentStyle: { backgroundColor: colors.bg }, headerShown: false }}
     >
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="setup/billing" />
     </Stack>
   );
 }
@@ -27,7 +26,7 @@ export default function WorkspaceLayout() {
   if (status === "signedOut") {
     return <Redirect href={{ params: { next: pathname }, pathname: "/(auth)/sign-in" }} />;
   }
-  if (user && !user.emailVerified) return <Redirect href="/verify-pending" />;
+  if (user && !user.emailVerified) return <Redirect href="/access-unavailable" />;
 
   return (
     <WorkspaceProvider>

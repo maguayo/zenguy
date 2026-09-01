@@ -1,6 +1,6 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { cleanup, render, screen, waitFor } from "@testing-library/react-native";
 
 import { UpdateGate, updateRequiredTitle } from "./UpdateGate";
 
@@ -14,14 +14,25 @@ jest.mock("@/api/app", () => ({
   getAppRequirements: () => mockGetAppRequirements(),
 }));
 
+const mountedGateClients: QueryClient[] = [];
+
 function renderGate() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <UpdateGate />
     </QueryClientProvider>,
   );
+  mountedGateClients.push(client);
+  return view;
 }
+
+afterEach(() => {
+  cleanup();
+  for (const client of mountedGateClients.splice(0)) {
+    client.clear();
+  }
+});
 
 describe("UpdateGate", () => {
   it("blocks the app when the API requires a newer build", async () => {

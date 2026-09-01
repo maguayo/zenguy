@@ -26,7 +26,7 @@ export const PBKDF2_ITERATIONS = 100_000;
 // rollout first, which keeps old deployments from silently accepting it.
 export const PBKDF2_MAX_VERIFY_ITERATIONS = 1_200_000;
 export const PASSWORD_KDF_TARGET_MAX_MS = 1_000;
-export const LEGAL_VERSION = "2026-08-27";
+export const LEGAL_VERSION = "2026-09-01";
 export const MIN_PASSWORD_LENGTH = 15;
 export const MAX_PASSWORD_LENGTH = 100;
 
@@ -136,6 +136,7 @@ export const RATE_LIMITS = {
   resend: { limit: 3, windowSeconds: 3600 },
   verify_email: { limit: 5, windowSeconds: 900 },
   reset_password: { limit: 5, windowSeconds: 900 },
+  account_delete: { limit: 5, windowSeconds: 900 },
   invitations: { limit: 20, windowSeconds: 86400 },
   /** Shared across object types so alternating resources cannot bypass quotas. */
   collection_create: { limit: 30, windowSeconds: 3600 },

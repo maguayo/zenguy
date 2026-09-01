@@ -1,0 +1,142 @@
+{
+  "configVersion": 0,
+  "lastReconciled": "2026-09-01",
+  "apple": {
+    "collectsData": true,
+    "tracking": false,
+    "privacyPolicyUrl": "https://zenguy.com/privacy/",
+    "privacyChoicesUrl": "https://zenguy.com/privacy-choices/",
+    "dataTypes": [
+      {
+        "category": "Contact Info",
+        "dataType": "Name",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeName",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "Contact Info",
+        "dataType": "Email Address",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeEmailAddress",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "Contact Info",
+        "dataType": "Phone Number",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypePhoneNumber",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "User Content",
+        "dataType": "Photos or Videos",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypePhotosorVideos",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "User Content",
+        "dataType": "Other User Content",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeOtherUserContent",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "Identifiers",
+        "dataType": "User ID",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality", "Analytics"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeUserID",
+          "purposes": [
+            "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+            "NSPrivacyCollectedDataTypePurposeAnalytics"
+          ]
+        }
+      },
+      {
+        "category": "Identifiers",
+        "dataType": "Device ID",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeDeviceID",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "Purchases",
+        "dataType": "Purchase History",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypePurchaseHistory",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      },
+      {
+        "category": "Usage Data",
+        "dataType": "Product Interaction",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality", "Analytics"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeProductInteraction",
+          "purposes": [
+            "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+            "NSPrivacyCollectedDataTypePurposeAnalytics"
+          ]
+        }
+      },
+      {
+        "category": "Usage Data",
+        "dataType": "Other Usage Data",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality", "Analytics"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeOtherUsageData",
+          "purposes": [
+            "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+            "NSPrivacyCollectedDataTypePurposeAnalytics"
+          ]
+        }
+      },
+      {
+        "category": "Diagnostics",
+        "dataType": "Other Diagnostic Data",
+        "linkedToUser": true,
+        "usedForTracking": false,
+        "purposes": ["App Functionality"],
+        "privacyManifest": {
+          "dataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+          "purposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        }
+      }
+    ]
+  }
+}

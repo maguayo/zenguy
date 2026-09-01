@@ -2,7 +2,7 @@ import type { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 
 import type { Channel, ChannelType, Delivery } from "@/api/types";
-import { formatEuros, formatRelative } from "@/lib/format";
+import { formatRelative } from "@/lib/format";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -49,17 +49,9 @@ export function channelReachLabel(channel: Channel): string | null {
   return `${devices} ${devices === 1 ? "device" : "devices"} · ${members} ${members === 1 ? "member" : "members"}`;
 }
 
-export function channelPriceLabel(channel: Channel): string | null {
-  if (!channel.price) return null;
-  const unit = channel.type === "CALL" ? "call" : "alert";
-  return `${channel.price.destination} · ${formatEuros(channel.price.cents)} per ${unit}`;
-}
-
 export function pausedLabel(channel: Channel): string | null {
   if (!channel.paused) return null;
-  return channel.paused.reason === "PAID_OFF"
-    ? "Paused · SMS & calls off"
-    : "Paused · no credit";
+  return "Temporarily unavailable";
 }
 
 export function lastDeliveryText(

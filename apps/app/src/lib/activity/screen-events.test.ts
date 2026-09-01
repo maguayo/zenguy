@@ -47,27 +47,19 @@ describe("visitEventFor", () => {
       workspaceId: "ws_1",
       properties: { screen: "/w/[wsId]/overview", appVersion: "1.2.0", platform: "ios" },
     });
-    expect(visitEventFor(["onboarding", "workspace"], {}, { appVersion: null })).toEqual({
-      type: "app.screen_viewed",
-      properties: { screen: "/onboarding/workspace", appVersion: "", platform: "ios" },
-    });
-    expect(visitEventFor(["complimentary"], {}, meta)?.type).toBe("app.screen_viewed");
-    expect(visitEventFor(["verify-pending"], {}, meta)).toBeNull();
+    expect(visitEventFor(["access-unavailable"], {}, meta)).toBeNull();
   });
 
   it("ignores public screens", () => {
     for (const segments of [
       ["(auth)", "sign-in"],
-      ["(auth)", "sign-up"],
       ["(auth)", "forgot-password"],
       ["(auth)", "reset-password"],
       ["privacy"],
       ["terms"],
-      ["verify-email"],
       ["invitations", "[token]"],
       ["invitations", "accept"],
-      ["grants", "[token]"],
-      ["grants", "redeem"],
+      ["access-unavailable"],
       [],
     ]) {
       expect(visitEventFor(segments, {}, meta)).toBeNull();

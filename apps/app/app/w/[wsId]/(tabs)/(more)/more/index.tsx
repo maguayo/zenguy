@@ -1,16 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { getBillingConfig } from "@/api/billing";
-import { pastDueBanner } from "@/components/more/billing";
 import { toHref } from "@/components/more/links";
 import { visibleMoreItems } from "@/components/more/menu";
 import { RoleBadge } from "@/components/RoleBadge";
 import { rememberWorkspace, useWorkspace } from "@/contexts/WorkspaceContext";
 import { largeTitleOptions } from "@/lib/stack-options";
 import { colors, spacing } from "@/theme";
-import { Card, Heading, IconTile, Label, ListRow, Screen, SelectSheet, Small, Text } from "@/ui";
+import { Card, Heading, IconTile, ListRow, Screen, SelectSheet, Text } from "@/ui";
 
 export function workspaceInitial(name: string): string {
   return (name.trim().slice(0, 1) || "W").toUpperCase();
@@ -19,12 +17,9 @@ export function workspaceInitial(name: string): string {
 export default function MoreScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { can, current, role, subscriptionStatus, workspaces } = useWorkspace();
-  const billingConfig = useQuery({ queryFn: getBillingConfig, queryKey: ["billing-config"] });
+  const { can, current, role, workspaces } = useWorkspace();
   const base = `/w/${current.id}`;
-  const banner = pastDueBanner(subscriptionStatus, can("billing.manage"));
   const items = visibleMoreItems(can);
-  const showComplimentary = billingConfig.data?.canIssueComplimentaryGrants === true;
   const workspaceOptions = workspaces.map((workspace) => ({
     description: workspace.role.charAt(0) + workspace.role.slice(1).toLowerCase(),
     label: workspace.name,
@@ -42,22 +37,14 @@ export default function MoreScreen() {
   };
 
   const refresh = () => {
-    void billingConfig.refetch();
     void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   };
 
   return (
     <>
       <Stack.Screen options={{ ...largeTitleOptions, title: "More" }} />
-      <Screen refreshing={billingConfig.isRefetching && !billingConfig.isPending} onRefresh={refresh}>
+      <Screen onRefresh={refresh}>
         <View style={styles.stack}>
-          {banner ? (
-            <Card tone="warn">
-              <Small>{banner.message}</Small>
-              <Label style={styles.bannerAction}>{banner.action}</Label>
-            </Card>
-          ) : null}
-
           <Card elevated padding="none">
             <View style={styles.workspace}>
               <View style={styles.workspaceHeader}>
@@ -79,12 +66,6 @@ export default function MoreScreen() {
                 onChange={(workspaceId) => void switchWorkspace(workspaceId)}
               />
             </View>
-            <ListRow
-              left={<IconTile icon="plus" size={32} />}
-              style={styles.lastRow}
-              title="Create workspace"
-              onPress={() => router.push("/onboarding/workspace")}
-            />
           </Card>
 
           <Card eyebrow="Workspace" padding="none">
@@ -102,19 +83,11 @@ export default function MoreScreen() {
           <Card eyebrow="You" padding="none">
             <ListRow
               left={<IconTile icon="user" size={32} />}
-              style={showComplimentary ? undefined : styles.lastRow}
+              style={styles.lastRow}
               testID="more-account"
               title="Account"
               onPress={() => router.push(toHref(`${base}/account`))}
             />
-            {showComplimentary ? (
-              <ListRow
-                left={<IconTile icon="gift" size={32} />}
-                style={styles.lastRow}
-                title="Complimentary links"
-                onPress={() => router.push(toHref("/complimentary"))}
-              />
-            ) : null}
           </Card>
         </View>
       </Screen>
@@ -123,7 +96,6 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  bannerAction: { marginTop: spacing.xs },
   initial: { fontSize: 18, fontWeight: "600", lineHeight: 22 },
   lastRow: { borderBottomWidth: 0 },
   stack: { gap: spacing.xl },

@@ -340,7 +340,7 @@ describe("wrangler environments", () => {
       STRIPE_ENVIRONMENT: "test",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
-      RUNNER_DISPATCH: "container",
+      RUNNER_DISPATCH: "queue",
       RUNNER_ENVIRONMENT: "staging",
       PUBLIC_API_URL: "https://staging-app.zenguy.com",
     });
@@ -354,7 +354,7 @@ describe("wrangler environments", () => {
       STRIPE_ENVIRONMENT: "live",
       EMAIL_FROM: "Zenguy <notifications@zenguy.com>",
       COMPLIMENTARY_ISSUER_EMAILS: "marcos@aguayo.es",
-      RUNNER_DISPATCH: "container",
+      RUNNER_DISPATCH: "queue",
       RUNNER_ENVIRONMENT: "production",
       CF_SAAS_ZONE_ID: "69d739c681934e28848e8d8294f06eac",
       STATUS_CNAME_TARGET: "customers.zenguy.com",
@@ -405,8 +405,8 @@ describe("wrangler environments", () => {
       },
     ]);
 
-    // Runner en Cloudflare Containers: F2 (CLOUDFLARE_RUNNER.md) — staging y
-    // producción despachan por RunnerContainer con la misma imagen.
+    // Containers remain provisioned as an optional consent-gated fallback,
+    // while every normal run is dispatched to the private queue runner.
     for (const environment of [staging, production]) {
       expect(environment.containers).toEqual([
         {
@@ -420,7 +420,7 @@ describe("wrangler environments", () => {
       expect(environment.durable_objects).toEqual({
         bindings: [{ name: "RUNNER_CONTAINER", class_name: "RunnerContainer" }],
       });
-      expect(environment.vars.RUNNER_DISPATCH).toBe("container");
+      expect(environment.vars.RUNNER_DISPATCH).toBe("queue");
     }
     expect(config.migrations).toEqual([
       { tag: "v1", new_sqlite_classes: ["RunnerContainer"] },

@@ -1,0 +1,62 @@
+---
+import Legal from "../layouts/Legal.astro";
+import { legalCompany, legalMailto } from "../lib/legal";
+---
+
+<Legal
+  title="Privacy choices — Zenguy"
+  description="Controls for account deletion, optional AI processing, notifications and privacy rights in Zenguy."
+  heading="Privacy choices"
+  effective="1 September 2026"
+>
+  <p>
+    These controls apply to the Zenguy service and iOS companion app. They are
+    described in detail in the <a href="/privacy/">Privacy Policy</a>.
+  </p>
+
+  <h2>Delete your account</h2>
+  <p>
+    Open <strong>More → Account → Delete my account</strong> in the signed-in
+    iOS app. Confirm with the current password and the word DELETE. Sessions and
+    push tokens are revoked, memberships are removed, and owned workspaces are
+    made inaccessible and purged. The policy explains the limited legal and
+    security records that may be retained in anonymized form. The app does not
+    require you to contact support to complete deletion.
+  </p>
+
+  <h2>Choose whether OpenAI may process test data</h2>
+  <p>
+    OpenAI fallback processing starts off. A workspace Owner or Admin can review
+    the exact categories and purpose in <strong>More → AI data sharing</strong>,
+    give an affirmative consent, or revoke it later. Without a current consent,
+    the backend does not release the run to a remote AI runner. Configured
+    secret values are never released to OpenAI.
+  </p>
+
+  <h2>Push notifications and biometrics</h2>
+  <p>
+    Push is optional and can be disabled for the device in Account or in iOS
+    Settings. Removing the device or deleting the account deletes its Zenguy
+    push-token record. App Lock can be disabled in Account. Face ID and Touch ID
+    matching happen on the device; Zenguy does not receive biometric templates.
+  </p>
+
+  <h2>Access, correction, export and objection</h2>
+  <p>
+    To exercise GDPR access, rectification, erasure, restriction, portability
+    or objection rights, or to withdraw another consent, email
+    <a href={legalMailto}>{legalCompany.email}</a>. We may ask for information
+    needed to verify identity. You can also complain to the Spanish Data
+    Protection Agency (AEPD) or another competent EU supervisory authority.
+  </p>
+
+  <h2>Analytics choices</h2>
+  <p>
+    The iOS app contains no Google Analytics SDK. The website and web
+    application keep optional Google Analytics off until consent is given on
+    that origin. Use <strong>Cookie settings</strong> in the website footer or
+    <strong>Cookie preferences</strong> in the web application to change that
+    choice. Required first-party security and service-activity records are
+    explained in the Privacy Policy and are not used for advertising.
+  </p>
+</Legal>

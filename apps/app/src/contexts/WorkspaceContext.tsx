@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Redirect, useLocalSearchParams, usePathname, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import type { Role, SubscriptionStatus, Workspace } from "@/api/types";
@@ -36,8 +36,17 @@ export function resolveWorkspace(
   return workspaces.find((workspace) => workspace.id === workspaceId);
 }
 
-export function requiresBillingSetup(status: SubscriptionStatus): boolean {
-  return status === "NONE" || status === "CANCELED";
+export function hasMobileAccess(status: SubscriptionStatus): boolean {
+  return status === "ACTIVE" || status === "PAST_DUE";
+}
+
+export function pickMobileWorkspace(
+  workspaces: Workspace[],
+  rememberedId: string | null,
+): Workspace | undefined {
+  const remembered = workspaces.find((workspace) => workspace.id === rememberedId);
+  if (remembered && hasMobileAccess(remembered.subscriptionStatus)) return remembered;
+  return workspaces.find((workspace) => hasMobileAccess(workspace.subscriptionStatus));
 }
 
 export async function rememberWorkspace(workspaceId: string): Promise<void> {
@@ -75,12 +84,13 @@ function WorkspaceNotFound({ workspaces }: { workspaces: Workspace[] }) {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const params = useLocalSearchParams<{ wsId: string }>();
   const wsId = firstParam(params.wsId);
-  const pathname = usePathname();
   const query = useQuery({ queryFn: listWorkspaces, queryKey: ["workspaces"] });
   const current = resolveWorkspace(query.data ?? [], wsId);
 
   useEffect(() => {
-    if (current) void rememberWorkspace(current.id);
+    if (current && hasMobileAccess(current.subscriptionStatus)) {
+      void rememberWorkspace(current.id);
+    }
   }, [current]);
 
   const can = useCallback(
@@ -117,17 +127,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       </Screen>
     );
   }
-  if (query.data.length === 0) return <Redirect href="/onboarding/workspace" />;
-  if (!current || !value) return <WorkspaceNotFound workspaces={query.data} />;
-
-  const billingSetupRoute = `/w/${current.id}/setup/billing`;
-  const billingRoute = `/w/${current.id}/billing`;
-  if (
-    requiresBillingSetup(current.subscriptionStatus) &&
-    pathname !== billingSetupRoute &&
-    pathname !== billingRoute
-  ) {
-    return <Redirect href={billingSetupRoute} />;
+  const accessibleWorkspaces = query.data.filter((workspace) =>
+    hasMobileAccess(workspace.subscriptionStatus),
+  );
+  if (accessibleWorkspaces.length === 0) return <Redirect href="/access-unavailable" />;
+  if (!current || !value || !hasMobileAccess(current.subscriptionStatus)) {
+    return <WorkspaceNotFound workspaces={accessibleWorkspaces} />;
   }
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

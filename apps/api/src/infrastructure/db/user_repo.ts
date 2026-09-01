@@ -34,7 +34,9 @@ export class D1UserRepo implements UserRepo {
   async findByEmail(email: string): Promise<User | null> {
     const row = await one<UserRow>(
       this.database
-        .prepare("SELECT * FROM users WHERE email = ? COLLATE NOCASE")
+        .prepare(
+          "SELECT * FROM users WHERE email = ? COLLATE NOCASE AND deleted_at IS NULL",
+        )
         .bind(email),
     );
     return row === null ? null : toUser(row);
@@ -42,7 +44,9 @@ export class D1UserRepo implements UserRepo {
 
   async findById(id: string): Promise<User | null> {
     const row = await one<UserRow>(
-      this.database.prepare("SELECT * FROM users WHERE id = ?").bind(id),
+      this.database
+        .prepare("SELECT * FROM users WHERE id = ? AND deleted_at IS NULL")
+        .bind(id),
     );
     return row === null ? null : toUser(row);
   }
@@ -64,7 +68,9 @@ export class D1UserRepo implements UserRepo {
           const placeholders = chunk.map(() => "?").join(", ");
           return all<UserRow>(
             this.database
-              .prepare(`SELECT * FROM users WHERE id IN (${placeholders})`)
+              .prepare(
+                `SELECT * FROM users WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+              )
               .bind(...chunk),
           );
         }),
@@ -121,7 +127,8 @@ export class D1UserRepo implements UserRepo {
     await run(
       this.database
         .prepare(
-          "UPDATE users SET email_verified_at = ?, updated_at = ? WHERE id = ?",
+          `UPDATE users SET email_verified_at = ?, updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL`,
         )
         .bind(at, at, id),
     );
@@ -135,7 +142,8 @@ export class D1UserRepo implements UserRepo {
     await run(
       this.database
         .prepare(
-          "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+          `UPDATE users SET password_hash = ?, updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL`,
         )
         .bind(passwordHash, at, id),
     );
@@ -152,7 +160,7 @@ export class D1UserRepo implements UserRepo {
         .prepare(
           `UPDATE users
              SET password_hash = ?, updated_at = ?
-           WHERE id = ? AND password_hash = ?`,
+           WHERE id = ? AND password_hash = ? AND deleted_at IS NULL`,
         )
         .bind(replacementPasswordHash, at, id, expectedPasswordHash),
     );
@@ -162,7 +170,10 @@ export class D1UserRepo implements UserRepo {
   async updateName(id: string, name: string, at: number): Promise<void> {
     await run(
       this.database
-        .prepare("UPDATE users SET name = ?, updated_at = ? WHERE id = ?")
+        .prepare(
+          `UPDATE users SET name = ?, updated_at = ?
+           WHERE id = ? AND deleted_at IS NULL`,
+        )
         .bind(name, at, id),
     );
   }

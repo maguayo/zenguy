@@ -8,8 +8,8 @@ import { buildSafeChildEnvironment } from "./local-secrets.mjs";
 const PBKDF2_ITERATIONS = 600_000;
 const PASSWORD_HASH_SCHEME = "pbkdf2-sha256";
 const PASSWORD_HASH_VERSION = "v1";
-const OWNER_EMAIL = "marcos@aguayo.es";
-const OWNER_PASSWORD = "abc123456";
+const OWNER_EMAIL = "owner@example.com";
+const OWNER_PASSWORD = "Local-demo-password-2026!";
 const ADMIN_EMAIL = "ana@zenguy.dev";
 const MEMBER_EMAIL = "luis@zenguy.dev";
 const MEMBER_TWO_EMAIL = "marta@zenguy.dev";
@@ -401,10 +401,10 @@ function browserTests() {
     },
     {
       slug: "checkout",
-      name: "Checkout flow",
-      startUrl: "https://shop.example.com/checkout",
+      name: "Profile update",
+      startUrl: "https://shop.example.com/account/profile",
       instructions:
-        "Open checkout, confirm the order summary is visible, and that the pay button stays enabled.",
+        "Open the profile editor, confirm the current details are visible, and that the save button stays enabled.",
       device: "MOBILE",
       intervalHours: 6,
       maxRetries: 0,
@@ -416,7 +416,7 @@ function browserTests() {
       name: "Login form",
       startUrl: "https://shop.example.com/login",
       instructions:
-        "Sign in with {{CHECKOUT_USER}} / {{CHECKOUT_PASSWORD}} and confirm the account menu is visible.",
+        "Sign in with {{DEMO_USER}} / {{DEMO_PASSWORD}} and confirm the account menu is visible.",
       device: "DESKTOP",
       intervalHours: 8,
       maxRetries: 1,
@@ -428,7 +428,7 @@ function browserTests() {
       name: "Product search",
       startUrl: "https://shop.example.com/search?q=linen",
       instructions:
-        "Search for linen shirts, open the first result, and confirm the product title and price render.",
+        "Search for linen shirts, open the first result, and confirm the product title and availability render.",
       device: "DESKTOP",
       intervalHours: 12,
       maxRetries: 1,
@@ -437,10 +437,10 @@ function browserTests() {
     },
     {
       slug: "cart",
-      name: "Add to cart",
-      startUrl: "https://shop.example.com/products/linen-shirt",
+      name: "Search filters",
+      startUrl: "https://shop.example.com/search?q=linen",
       instructions:
-        "Choose size M, add the item to the cart, and confirm the cart count updates to 1.",
+        "Apply the size M filter and confirm the results update without losing the search term.",
       device: "DESKTOP",
       intervalHours: 6,
       maxRetries: 1,
@@ -449,10 +449,10 @@ function browserTests() {
     },
     {
       slug: "pricing",
-      name: "Pricing page",
-      startUrl: "https://example.com/pricing",
+      name: "Help center",
+      startUrl: "https://example.com/help",
       instructions:
-        "Open the pricing page and confirm the monthly plan shows EUR 39 and an extra-run price of EUR 0.20.",
+        "Open the help center and confirm the support navigation and latest article are visible.",
       device: "DESKTOP",
       intervalHours: 24,
       maxRetries: 2,
@@ -461,10 +461,10 @@ function browserTests() {
     },
     {
       slug: "signup",
-      name: "Signup flow",
-      startUrl: "https://shop.example.com/signup",
+      name: "Session timeout",
+      startUrl: "https://shop.example.com/session-expired",
       instructions:
-        "Fill the signup form with a disposable address and confirm the verification-pending screen appears.",
+        "Open the expired-session fixture and confirm it returns to the existing-user sign-in screen.",
       device: "DESKTOP",
       intervalHours: 12,
       maxRetries: 1,
@@ -586,8 +586,8 @@ function uptimeMonitors() {
     },
     {
       slug: "checkout_api",
-      name: "Checkout API",
-      url: "https://api.example.com/checkout/health",
+      name: "Protected API",
+      url: "https://api.example.com/protected/health",
       method: "POST",
       frequencySeconds: 300,
       expectedStatus: 200,
@@ -682,8 +682,8 @@ function uptimeMonitors() {
     },
     {
       slug: "billing",
-      name: "Billing API",
-      url: "https://api.example.com/billing/health",
+      name: "Status API",
+      url: "https://api.example.com/status/health",
       method: "GET",
       frequencySeconds: 600,
       expectedStatus: 200,
@@ -1053,7 +1053,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
     "",
     insertRow("users", {
       id: IDS.owner,
-      name: "Marcos Aguayo",
+      name: "Alex Morgan",
       email: OWNER_EMAIL,
       password_hash: ownerHash,
       email_verified_at: workspaceCreated,
@@ -1098,8 +1098,8 @@ async function generateSql(encryptionKey, encryptionKeyId) {
     }),
     insertRow("workspaces", {
       id: IDS.workspace,
-      name: "Aguayo Staging",
-      slug: "aguayo-staging",
+      name: "Atlas Demo",
+      slug: "atlas-demo",
       timezone: "Europe/Madrid",
       owner_user_id: IDS.owner,
       created_at: workspaceCreated,
@@ -1250,28 +1250,28 @@ async function generateSql(encryptionKey, encryptionKeyId) {
     },
     {
       id: "sec_seed_checkout_user",
-      key: "CHECKOUT_USER",
+      key: "DEMO_USER",
       value: encryptedUser,
       domains: '["shop.example.com"]',
-      description: "Checkout demo username",
+      description: "Demo sign-in username",
       createdBy: IDS.admin,
       createdAt: workspaceCreated + 3 * DAY_MS,
     },
     {
       id: "sec_seed_checkout_password",
-      key: "CHECKOUT_PASSWORD",
+      key: "DEMO_PASSWORD",
       value: encryptedPassword,
       domains: '["shop.example.com"]',
-      description: "Checkout demo password",
+      description: "Demo sign-in password",
       createdBy: IDS.admin,
       createdAt: workspaceCreated + 3 * DAY_MS,
     },
     {
       id: "sec_seed_stripe",
-      key: "STRIPE_TEST_KEY",
+      key: "SERVICE_TEST_KEY",
       value: encryptedStripe,
       domains: '["api.example.com","shop.example.com"]',
-      description: "Stripe test key",
+      description: "Third-party service fixture key",
       createdBy: IDS.owner,
       createdAt: workspaceCreated + 5 * DAY_MS,
     },
@@ -1426,7 +1426,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       user_id: IDS.owner,
       token: "ExponentPushToken[seedowneriphone0000000001]",
       platform: "ios",
-      device_name: "Marcos's iPhone",
+      device_name: "Alex's iPhone",
       app_version: "0.1.0",
       enabled: 1,
       disabled_reason: null,
@@ -2076,7 +2076,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.owner,
       resourceType: "workspace",
       resourceId: IDS.workspace,
-      metadata: { name: "Aguayo Staging" },
+      metadata: { name: "Atlas Demo" },
       at: workspaceCreated,
     },
     {
@@ -2124,7 +2124,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.admin,
       resourceType: "secret",
       resourceId: "sec_seed_stripe",
-      metadata: { key: "STRIPE_TEST_KEY" },
+      metadata: { key: "SERVICE_TEST_KEY" },
       at: now - 9 * DAY_MS,
     },
     {
@@ -2156,7 +2156,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.admin,
       resourceType: "browser_test",
       resourceId: "bt_seed_checkout",
-      metadata: { name: "Checkout flow" },
+      metadata: { name: "Profile update" },
       at: now - 5 * DAY_MS,
     },
     {
@@ -2236,7 +2236,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.admin,
       resourceType: "browser_test",
       resourceId: "bt_seed_pricing",
-      metadata: { name: "Pricing page" },
+      metadata: { name: "Help center" },
       at: workspaceCreated + 8 * DAY_MS,
     },
     {
@@ -2284,7 +2284,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.admin,
       resourceType: "workspace",
       resourceId: IDS.workspace,
-      metadata: { name: "Aguayo Staging" },
+      metadata: { name: "Atlas Demo" },
       at: now - 16 * HOUR_MS,
     },
     {
@@ -2300,7 +2300,7 @@ async function generateSql(encryptionKey, encryptionKeyId) {
       actor: IDS.owner,
       resourceType: "uptime_monitor",
       resourceId: "mon_seed_billing",
-      metadata: { name: "Billing API" },
+      metadata: { name: "Status API" },
       at: now - 2 * HOUR_MS,
     },
     {

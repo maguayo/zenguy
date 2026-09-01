@@ -10,7 +10,6 @@ import {
   channelFormSchema,
   channelTypeOptions,
   createChannelInput,
-  isPaidChannelType,
   isPhoneChannelType,
   isWebhookChannelType,
   phoneHint,
@@ -43,13 +42,12 @@ const values: ChannelFormValues = {
 };
 
 describe("channel form", () => {
-  it("labels paid, phone and webhook types", () => {
-    expect(isPaidChannelType("SMS")).toBe(true);
-    expect(isPaidChannelType("CALL")).toBe(true);
-    expect(isPaidChannelType("WHATSAPP")).toBe(true);
-    expect(isPaidChannelType("EMAIL")).toBe(false);
-    expect(isPaidChannelType(null)).toBe(false);
+  it("labels phone and webhook types", () => {
+    expect(isPhoneChannelType("SMS")).toBe(true);
     expect(isPhoneChannelType("CALL")).toBe(true);
+    expect(isPhoneChannelType("WHATSAPP")).toBe(true);
+    expect(isPhoneChannelType("EMAIL")).toBe(false);
+    expect(isPhoneChannelType(null)).toBe(false);
     expect(isWebhookChannelType("DISCORD")).toBe(true);
     expect(isWebhookChannelType("SMS")).toBe(false);
     expect(channelTypeOptions.map((option) => option.type)).toEqual([
@@ -59,11 +57,6 @@ describe("channel form", () => {
       "CALL",
       "SLACK",
       "DISCORD",
-    ]);
-    expect(channelTypeOptions.filter((option) => option.paid).map((option) => option.label)).toEqual([
-      "SMS",
-      "WhatsApp",
-      "Phone call",
     ]);
   });
 

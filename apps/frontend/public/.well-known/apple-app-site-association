@@ -5,20 +5,16 @@
       {
         "appIDs": ["HT84Q65URB.com.zenguy.app"],
         "components": [
-          { "/": "/verify-email", "comment": "One-time email verification links" },
           { "/": "/reset-password", "comment": "One-time password reset links" },
           { "/": "/invitations/*", "comment": "Workspace invitation links" },
-          { "/": "/grants/*", "comment": "Complimentary grant links" },
           { "/": "/w/*", "comment": "Authenticated workspace and push destinations" }
         ]
       },
       {
         "appID": "HT84Q65URB.com.zenguy.app",
         "paths": [
-          "/verify-email",
           "/reset-password",
           "/invitations/*",
-          "/grants/*",
           "/w/*"
         ]
       }

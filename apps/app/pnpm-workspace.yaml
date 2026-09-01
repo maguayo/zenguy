@@ -6,11 +6,34 @@ packages:
 nodeLinker: hoisted
 shamefullyHoist: true
 allowBuilds:
-  # Optional bunyan/DTrace native telemetry pulled by eas-cli is not required.
-  dtrace-provider: false
   unrs-resolver: true
 verifyDepsBeforeRun: false
 overrides:
+  "ajv@>=7.0.0-alpha.0 <8.18.0": 8.18.0
   uuid@7.0.3: 11.1.1
 patchedDependencies:
-  image-size@1.2.1: patches/image-size@1.2.1.patch
+  decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch
+# Exact Expo SDK 57 compatibility batch selected by `expo install --fix` on
+# 2026-09-01. These version-pinned exceptions may bypass only the repository's
+# 24-hour publication-age window; remove the block once every entry has aged.
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.21'
+  - '@expo/fingerprint@0.20.12'
+  - '@expo/router-server@57.0.9'
+  - babel-preset-expo@57.0.10
+  - expo-asset@57.0.16
+  - expo-constants@57.0.17
+  - expo-font@57.0.3
+  - expo-modules-core@57.0.15
+  - expo-modules-jsi@57.0.7
+  - expo@57.0.19
+  - '@expo/metro-runtime@57.0.15'
+  - '@expo/ui@57.0.15'
+  - expo-eas-client@57.0.3
+  - expo-image@57.0.4
+  - expo-linking@57.0.9
+  - expo-notifications@57.0.16
+  - expo-router@57.0.18
+  - expo-secure-store@57.0.3
+  - expo-sharing@57.0.17
+  - expo-updates@57.0.21

@@ -14,10 +14,10 @@ appId: com.zenguy.app
     commands:
       - tapOn:
           id: "signin-email"
-      - inputText: "marcos@aguayo.es"
+      - inputText: "owner@example.com"
       - tapOn:
           id: "signin-password"
-      - inputText: "abc123456"
+      - inputText: "Local-demo-password-2026!"
       - tapOn: "Welcome back"
       - tapOn:
           id: "signin-submit"
@@ -59,10 +59,10 @@ appId: com.zenguy.app
 - tapOn:
     id: "tab-uptime"
 - extendedWaitUntil:
-    visible: ".*Billing API.*"
+    visible: ".*Status API.*"
     timeout: 20000
 - takeScreenshot: s04-uptime
-- tapOn: ".*Billing API.*"
+- tapOn: ".*Status API.*"
 - extendedWaitUntil:
     visible: "Response time.*"
     timeout: 20000
@@ -74,10 +74,10 @@ appId: com.zenguy.app
 - tapOn:
     id: "tab-incidents"
 - extendedWaitUntil:
-    visible: ".*Add to cart.*"
+    visible: ".*Search filters.*"
     timeout: 20000
 - takeScreenshot: s06-incidents
-- tapOn: ".*Add to cart.*"
+- tapOn: ".*Search filters.*"
 - extendedWaitUntil:
     visible: ".*Timeline.*"
     timeout: 20000
@@ -118,13 +118,6 @@ appId: com.zenguy.app
 - takeScreenshot: s11-members
 - tapOn:
     id: "tab-more"
-- tapOn: ".*Plan & Usage.*"
-- extendedWaitUntil:
-    visible: ".*Usage.*"
-    timeout: 20000
-- takeScreenshot: s12-billing
-- tapOn:
-    id: "tab-more"
 - tapOn: ".*Workspace Settings.*"
 - extendedWaitUntil:
     visible: ".*General.*"
@@ -134,7 +127,7 @@ appId: com.zenguy.app
       text: ".*Danger zone.*"
     direction: DOWN
     timeout: 20000
-- takeScreenshot: s13-settings
+- takeScreenshot: s12-settings
 - tapOn:
     id: "tab-more"
 - scrollUntilVisible:
@@ -153,10 +146,10 @@ appId: com.zenguy.app
       text: ".*App Lock.*"
     direction: DOWN
     timeout: 20000
-- takeScreenshot: s14-account
+- takeScreenshot: s13-account
 - scrollUntilVisible:
     element:
-      text: ".*Push alerts are free.*"
+      text: ".*Push alerts go to every workspace member.*"
     direction: DOWN
     timeout: 20000
-- takeScreenshot: s15-account-notifications
+- takeScreenshot: s14-account-notifications

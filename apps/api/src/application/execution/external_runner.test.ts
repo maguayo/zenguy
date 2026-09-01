@@ -148,7 +148,11 @@ class RecordingAttemptQueue implements Pick<Queue<AttemptMessage>, "send"> {
   }
 }
 
-async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
+async function fixture(seed: {
+  runs: TestRun[];
+  attempts: TestAttempt[];
+  remoteConsent?: boolean;
+}) {
   const clock = new FixedClock(NOW);
   const runs = new FakeRunRepo();
   const usageEvents = new FakeUsageEventRepo();
@@ -200,6 +204,9 @@ async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
     runFinalizedHandler: { handle: async () => undefined },
   });
   const resolveSecrets = vi.fn(async () => new Map());
+  const remoteAiConsents = {
+    hasActive: vi.fn(async () => seed.remoteConsent ?? true),
+  };
   const runner = new ExternalRunner({
     lifecycle,
     runs,
@@ -211,11 +218,63 @@ async function fixture(seed: { runs: TestRun[]; attempts: TestAttempt[] }) {
     clock,
     ids,
     authorizationSigningSecret: "runner-authorization-test-secret".padEnd(32, "-"),
+    remoteAiConsents,
   });
-  return { runner, attempts, queue, resolveSecrets };
+  return { runner, attempts, queue, resolveSecrets, remoteAiConsents };
 }
 
 describe("ExternalRunner.claimStale", () => {
+  it("leaves remote fallback work untouched until the workspace consents", async () => {
+    const pending = run("run_no_remote_consent");
+    const { runner, attempts, remoteAiConsents } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_no_remote_consent", pending.id)],
+      remoteConsent: false,
+    });
+
+    await expect(
+      runner.claimStale({ deliveryId: "fallback-no-consent", workerId: "fallback" }),
+    ).resolves.toBeNull();
+
+    expect(remoteAiConsents.hasActive).toHaveBeenCalledWith(
+      WORKSPACE.id,
+      "openai",
+      "2026-09-01-v1",
+    );
+    await expect(attempts.findById("att_no_remote_consent")).resolves.toMatchObject({
+      status: "QUEUED",
+    });
+  });
+
+  it("keeps the private local runner available without remote AI consent", async () => {
+    const pending = run("run_local_without_consent");
+    const { runner, attempts, remoteAiConsents } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_local_without_consent", pending.id)],
+      remoteConsent: false,
+    });
+
+    await expect(
+      runner.claim({
+        deliveryId: "local-no-consent",
+        workerId: "zenguy-production-primary",
+        remoteAiProcessing: false,
+        message: {
+          kind: "attempt",
+          runId: pending.id,
+          attemptId: "att_local_without_consent",
+          attemptIndex: 0,
+          executionGeneration: pending.queuedAt,
+        },
+      }),
+    ).resolves.not.toBeNull();
+
+    expect(remoteAiConsents.hasActive).not.toHaveBeenCalled();
+    await expect(attempts.findById("att_local_without_consent")).resolves.toMatchObject({
+      status: "STARTING",
+    });
+  });
+
   it("skips queued attempts younger than the fallback delay", async () => {
     const fresh = run("run_fresh", { queuedAt: NOW, createdAt: NOW });
     const { runner, attempts } = await fixture({
@@ -389,7 +448,9 @@ describe("ExternalRunner.start", () => {
     });
     if (job === null) throw new Error("expected a claimed job");
 
-    await expect(runner.start(job.reference)).resolves.toMatchObject({
+    await expect(
+      runner.start(job.reference, { remoteAiProcessing: false }),
+    ).resolves.toMatchObject({
       secrets: [
         {
           key: "PASSWORD",
@@ -398,7 +459,9 @@ describe("ExternalRunner.start", () => {
         },
       ],
     });
-    await expect(runner.start(job.reference)).resolves.toMatchObject({
+    await expect(
+      runner.start(job.reference, { remoteAiProcessing: false }),
+    ).resolves.toMatchObject({
       secrets: [],
     });
     expect(resolveSecrets).toHaveBeenCalledTimes(1);
@@ -422,8 +485,8 @@ describe("ExternalRunner.start", () => {
     if (job === null) throw new Error("expected a claimed job");
 
     const results = await Promise.allSettled([
-      runner.start(job.reference),
-      runner.start(job.reference),
+      runner.start(job.reference, { remoteAiProcessing: false }),
+      runner.start(job.reference, { remoteAiProcessing: false }),
     ]);
 
     expect(results.map((result) => result.status).sort()).toEqual([
@@ -444,6 +507,29 @@ describe("ExternalRunner.start", () => {
       },
     });
     expect(resolveSecrets).toHaveBeenCalledTimes(1);
+  });
+
+  it("never releases secret values to a remote AI runner", async () => {
+    const current = run("run_remote_no_secrets");
+    const { runner, resolveSecrets } = await fixture({
+      runs: [current],
+      attempts: [attempt("att_remote_no_secrets", current.id)],
+    });
+    resolveSecrets.mockResolvedValue(
+      new Map([
+        ["PASSWORD", { value: "secret-value", allowedDomains: ["example.com"] }],
+      ]),
+    );
+    const job = await runner.claimStale({
+      deliveryId: "fallback-no-secret-values",
+      workerId: "fallback",
+    });
+    if (job === null) throw new Error("expected a claimed job");
+
+    await expect(
+      runner.start(job.reference, { remoteAiProcessing: true }),
+    ).resolves.toMatchObject({ secrets: [] });
+    expect(resolveSecrets).not.toHaveBeenCalled();
   });
 });
 

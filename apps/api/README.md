@@ -122,8 +122,8 @@ frontend-owned setup.
 
 The seed command recreates an idempotent fixture in local D1:
 
-- Login: `marcos@aguayo.es` / `abc123456`
-- Workspace: Aguayo Staging, with admin and member teammates
+- Login: `owner@example.com` / `Local-demo-password-2026!`
+- Workspace: Atlas Demo, with admin and member teammates
 - Complimentary active subscription with no billing-provider customer
 - Browser tests, completed runs, and uptime monitors ("beats")
 - DEMO_TOKEN secret restricted to example.com
@@ -186,6 +186,23 @@ insertion ensure a concurrent password reset wins and revokes any just-created
 refresh token. This prevents a mailbox owner from
 accidentally activating an attacker-selected password after an unsolicited
 registration while preserving existing pending accounts and legacy hashes.
+
+## Account deletion and erasure
+
+`DELETE /api/account` requires an authenticated session, the current password
+and the exact `DELETE` confirmation. It first tombstones every owned workspace
+through the durable billing-cancellation/R2/D1 purge saga, removes memberships
+from other workspaces, then atomically revokes credentials and anonymizes the
+account. A native request receives no browser cookie; web requests additionally
+clear the refresh cookie.
+
+`ACCOUNT_DELETION_DIRECT_REFERENCES` is the executable final-schema inventory:
+31 direct account references are purged, revoked, anonymized or deliberately
+retained only in a pseudonymous security tombstone. The policy also removes
+account identifiers from audit/activity JSON, irreversible-action snapshots,
+quota counters and rate-limit keys. The D1 integration test derives direct
+references from `sqlite_master`, so a migration adding an unclassified user or
+email column fails CI instead of silently escaping erasure review.
 
 ## Workspace API keys and the public read API
 

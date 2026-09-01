@@ -59,6 +59,7 @@ const DELETE_STATEMENTS = [
   "DELETE FROM alert_credit_entries",
   "DELETE FROM alert_credit_balances",
   "DELETE FROM workspace_alert_settings",
+  "DELETE FROM workspace_remote_ai_consents",
   "DELETE FROM notification_deliveries",
   "DELETE FROM notification_channels",
   "DELETE FROM workspace_secrets",

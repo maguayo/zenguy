@@ -42,6 +42,8 @@ import type {
 import type { PeriodOverageReporter } from "./application/billing/handle_paddle_webhook";
 import type { LegalAcceptanceRepo } from "./domain/users/legal_acceptance";
 import type { OAuthIdentityRepo } from "./domain/users/oauth_identity";
+import type { AccountDeletionRepo } from "./domain/users/account_deletion";
+import type { RemoteAiConsentRepo } from "./domain/users/remote_ai_consent";
 import type {
   IncidentUpdateRepo,
   StatusPageItemRepo,
@@ -65,6 +67,8 @@ import { errorHandler } from "./http/middleware/error_handler";
 import { requestId } from "./http/middleware/request_id";
 import { securityHeaders } from "./http/middleware/security_headers";
 import { authRoutes, type AuthRoutesDependencies } from "./http/routes/auth";
+import { accountRoutes } from "./http/routes/account";
+import { remoteAiConsentRoutes } from "./http/routes/remote_ai_consent";
 import { workspaceRoutes } from "./http/routes/workspaces";
 import {
   publicInvitationRoutes,
@@ -79,6 +83,8 @@ import { D1EmailTokenRepo } from "./infrastructure/db/email_token_repo";
 import { D1RefreshTokenRepo } from "./infrastructure/db/refresh_token_repo";
 import { D1LegalAcceptanceRepo } from "./infrastructure/db/legal_acceptance_repo";
 import { D1OAuthIdentityRepo } from "./infrastructure/db/oauth_identity_repo";
+import { D1AccountDeletionRepo } from "./infrastructure/db/account_deletion_repo";
+import { D1RemoteAiConsentRepo } from "./infrastructure/db/remote_ai_consent_repo";
 import { D1UserRepo } from "./infrastructure/db/user_repo";
 import { D1SessionSecurityRepo } from "./infrastructure/db/session_security_repo";
 import { D1MemberRepo } from "./infrastructure/db/member_repo";
@@ -210,6 +216,8 @@ export interface AppOverrides {
   emailTokens?: EmailTokenRepo;
   refreshTokens?: RefreshTokenRepo;
   sessionSecurity?: SessionSecurityRepo;
+  accountDeletion?: AccountDeletionRepo;
+  remoteAiConsents?: RemoteAiConsentRepo;
   emailSender?: EmailSender;
   rateLimiter?: RateLimiter;
   workspaces?: WorkspaceRepo;
@@ -295,6 +303,10 @@ export function buildApp(
     overrides.refreshTokens ?? new D1RefreshTokenRepo(env.DB);
   const sessionSecurity =
     overrides.sessionSecurity ?? new D1SessionSecurityRepo(env.DB);
+  const accountDeletion =
+    overrides.accountDeletion ?? new D1AccountDeletionRepo(env.DB);
+  const remoteAiConsents =
+    overrides.remoteAiConsents ?? new D1RemoteAiConsentRepo(env.DB);
   const emailSender =
     overrides.emailSender ?? buildEmailSender(config, env.EMAIL);
   const rateLimiter =
@@ -555,6 +567,7 @@ export function buildApp(
       clock,
       ids: overrides.ids ?? realIds,
       authorizationSigningSecret: config.runnerCapabilitySecret,
+      remoteAiConsents,
     });
 
   app.use("*", requestId);
@@ -629,7 +642,15 @@ export function buildApp(
     }),
   );
 
-  app.get("/api/health", (context) => context.json({ data: { ok: true } }));
+  app.get("/api/health", (context) =>
+    context.json({
+      data: {
+        ok: true,
+        environment: config.environment,
+        runnerDispatch: env.RUNNER_DISPATCH ?? "queue",
+      },
+    }),
+  );
   app.route("/api/app", appVersionRoutes(config));
   app.route(
     "/api/me",
@@ -701,6 +722,31 @@ export function buildApp(
       rateLimiter,
       clock,
       ids: overrides.ids ?? realIds,
+      config,
+    }),
+  );
+  app.route(
+    "/api/account",
+    accountRoutes({
+      users,
+      workspaces,
+      members,
+      workspaceDeletion,
+      accountDeletion,
+      rateLimiter,
+      clock,
+      config,
+    }),
+  );
+  app.route(
+    "/api/workspaces",
+    remoteAiConsentRoutes({
+      users,
+      workspaces,
+      members,
+      consents: remoteAiConsents,
+      audit,
+      clock,
       config,
     }),
   );

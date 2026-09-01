@@ -140,6 +140,7 @@ describe("external runner routes", () => {
     expect(externalRunner.claim).toHaveBeenCalledWith({
       deliveryId: "queue-message-1",
       message: MESSAGE,
+      remoteAiProcessing: false,
       workerId: "mac-1",
     });
   });
@@ -427,6 +428,9 @@ describe("external runner routes", () => {
         secrets: [],
       },
     });
+    expect(externalRunner.start).toHaveBeenCalledWith(REFERENCE, {
+      remoteAiProcessing: false,
+    });
 
     clock.advance(6 * 60_000 + 1);
     const expired = await app.request("/api/runner/attempts/att_1/start", {
@@ -552,15 +556,34 @@ describe("cf runner identity", () => {
       }),
     });
     expect(accepted.status).toBe(200);
-    await expect(accepted.json()).resolves.toMatchObject({
+    const acceptedBody = (await accepted.json()) as {
+      data: { job: { capability: string } };
+    };
+    expect(acceptedBody).toMatchObject({
       data: {
         disposition: "EXECUTE",
         job: { ...JOB, capability: expect.any(String) },
       },
     });
     expect(externalRunner.claim).toHaveBeenCalledWith(
-      expect.objectContaining({ workerId: "zenguy-production-cf" }),
+      expect.objectContaining({
+        remoteAiProcessing: true,
+        workerId: "zenguy-production-cf",
+      }),
     );
+
+    const started = await app.request("/api/runner/attempts/att_1/start", {
+      method: "POST",
+      headers: capabilityHeaders(
+        acceptedBody.data.job.capability,
+        "zenguy-production-cf",
+      ),
+      body: JSON.stringify({ reference: REFERENCE }),
+    });
+    expect(started.status).toBe(200);
+    expect(externalRunner.start).toHaveBeenCalledWith(REFERENCE, {
+      remoteAiProcessing: true,
+    });
   });
 
   it("no acepta el token cf con otras identidades ni otros tokens con la cf", async () => {

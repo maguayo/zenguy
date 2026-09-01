@@ -72,21 +72,24 @@ describe("seed script", () => {
     expect(sql).toContain("DELETE FROM users;");
     expect(sql).toContain("DELETE FROM workspaces;");
     expect(sql).toContain("DELETE FROM subscription_grants;");
-    expect(sql).toContain("marcos@aguayo.es");
+    expect(sql).toContain("owner@example.com");
+    expect(sql).not.toContain("marcos@aguayo.es");
     expect(sql).toContain("ana@zenguy.dev");
     expect(sql).toContain("luis@zenguy.dev");
     expect(sql).toContain("marta@zenguy.dev");
     expect(sql).toContain("diego@zenguy.dev");
     expect(sql).toContain("noelia@zenguy.dev");
-    expect(sql).toContain("Aguayo Staging");
+    expect(sql).toContain("Atlas Demo");
     expect(sql).toContain("Europe/Madrid");
     expect(sql).toContain("'ADMIN'");
     expect(sql).toContain("'MEMBER'");
     expect(sql).toContain("Homepage smoke");
-    expect(sql).toContain("Checkout flow");
+    expect(sql).toContain("Profile update");
     expect(sql).toContain("Login form");
-    expect(sql).toContain("Add to cart");
-    expect(sql).toContain("Pricing page");
+    expect(sql).toContain("Search filters");
+    expect(sql).toContain("Help center");
+    expect(sql).toContain("Session timeout");
+    expect(sql).not.toMatch(/Signup flow|Pricing page|Billing API/iu);
     expect(sql).toContain("INSERT INTO test_runs (");
     expect(sql).toContain("Homepage beat");
     expect(sql).toContain("API beat");
@@ -118,7 +121,7 @@ describe("seed script", () => {
     )?.[0];
     expect(passwordHash).toBeDefined();
     await expect(
-      verifyPassword("abc123456", passwordHash ?? ""),
+      verifyPassword("Local-demo-password-2026!", passwordHash ?? ""),
     ).resolves.toBe(true);
     const dataKeyMatch = sql.match(
       /INSERT INTO workspace_data_encryption_keys .* VALUES \('ws_seed_aguayo', '(dek-[A-Za-z0-9_-]{24})', 1, 'seed-test-key', 1, '(w1:seed-test-key:[^']+)', 1, (\d+), \d+, NULL\);/u,
