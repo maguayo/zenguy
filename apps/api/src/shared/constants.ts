@@ -5,6 +5,11 @@ export const RUNNER_VERSION = "zenguy-local-runner/1.0.0";
 export const MIN_APP_VERSION = "0.1.0";
 export const ACCESS_TOKEN_TTL_SECONDS = 1800;
 export const REFRESH_TOKEN_TTL_DAYS = 30;
+// A rotated refresh token presented again this soon after its rotation is a
+// legitimate race (browser tabs sharing the cookie, a native retry after a lost
+// response), not theft: the caller is moved to the head of its chain. Past this
+// window a rotated token is reuse and revokes every session and push device.
+export const REFRESH_REUSE_GRACE_MS = 60_000;
 export const PUSH_DEVICE_INACTIVITY_TTL_DAYS = 90;
 export const EMAIL_VERIFY_TTL_HOURS = 24;
 export const PASSWORD_RESET_TTL_HOURS = 1;

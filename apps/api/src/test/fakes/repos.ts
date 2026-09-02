@@ -292,6 +292,11 @@ export class FakeRefreshTokenRepo implements RefreshTokenRepo {
     return null;
   }
 
+  async findById(id: string): Promise<RefreshToken | null> {
+    const token = this.tokens.get(id);
+    return token === undefined ? null : clone(token);
+  }
+
   async rotate(
     currentId: string,
     replacement: RefreshToken,

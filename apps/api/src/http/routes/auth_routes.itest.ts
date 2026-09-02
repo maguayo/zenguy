@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import { D1UserRepo } from "../../infrastructure/db/user_repo";
 import { loadConfig } from "../../shared/config";
-import { RATE_LIMITS } from "../../shared/constants";
+import { RATE_LIMITS, REFRESH_REUSE_GRACE_MS } from "../../shared/constants";
 import { sha256Hex } from "../../shared/crypto";
 import { freshDb, freshKv, testEnv } from "../../test/helpers";
 import { RecordingEmailSender } from "../../test/fakes/email";
@@ -854,7 +854,25 @@ describe("auth routes", () => {
     expect(refreshed.data.refreshToken).toMatch(/^[A-Za-z0-9_-]+$/u);
     expect(refreshed.data.refreshToken).not.toBe(login.data.refreshToken);
 
-    // Rotation: reusing the replaced token revokes the whole family.
+    // Rotation race: presenting the just-replaced token within the grace
+    // window continues from the head of the chain (a retry after a lost
+    // response), so the family survives.
+    const graced = await app.request(
+      "/api/auth/refresh",
+      jsonRequest({ refreshToken: login.data.refreshToken }, native),
+    );
+    expect(graced.status).toBe(200);
+    const gracedSession = (await graced.json()) as NativeSessionResponse;
+    expect(gracedSession.data.refreshToken).not.toBe(refreshed.data.refreshToken);
+
+    // Past the grace window the same presentation is reuse and revokes the
+    // whole family, including the live head.
+    await testEnv()
+      .DB.prepare(
+        "UPDATE refresh_tokens SET revoked_at = revoked_at - ? WHERE token_hash = ?",
+      )
+      .bind(REFRESH_REUSE_GRACE_MS + 1, await sha256Hex(login.data.refreshToken))
+      .run();
     const reuse = await app.request(
       "/api/auth/refresh",
       jsonRequest({ refreshToken: login.data.refreshToken }, native),
@@ -863,7 +881,7 @@ describe("auth routes", () => {
     expect(reuse.headers.get("Set-Cookie")).toBeNull();
     const afterReuse = await app.request(
       "/api/auth/refresh",
-      jsonRequest({ refreshToken: refreshed.data.refreshToken }, native),
+      jsonRequest({ refreshToken: gracedSession.data.refreshToken }, native),
     );
     expect(afterReuse.status).toBe(401);
 

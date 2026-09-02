@@ -116,7 +116,7 @@ describe("ExpoPushClient", () => {
     expect(JSON.parse(String(recorder.requests[1]?.init?.body))).toHaveLength(1);
   });
 
-  it("fails closed on HTTP errors, malformed responses, and network faults", async () => {
+  it("retries HTTP errors and network faults, parks only an unreadable acceptance", async () => {
     const messages = buildPushMessages([token(1)], FAILURE, {
       workspaceId: "ws_1",
       appUrl: "https://app.zenguy.test",
@@ -128,7 +128,7 @@ describe("ExpoPushClient", () => {
           new Response(`bad token ${token(1)} https://exp.host/private`, { status: 500 }),
         ]).fetch,
       ).send(messages),
-    ).rejects.toThrow("expo push error 500");
+    ).rejects.toMatchObject({ message: "expo push error 500", outcome: "REJECTED" });
     const logged = String(log.mock.calls[0]?.[0]);
     expect(logged).toContain("[redacted-token]");
     expect(logged).toContain("[redacted-url]");
@@ -137,12 +137,15 @@ describe("ExpoPushClient", () => {
 
     await expect(
       new ExpoPushClient(new RecordingFetch([Response.json({ data: [] })]).fetch).send(messages),
-    ).rejects.toThrow("expo push error invalid response");
+    ).rejects.toMatchObject({
+      message: "expo push error invalid response",
+      outcome: "AMBIGUOUS",
+    });
     await expect(
       new ExpoPushClient(async () => {
         throw new Error("offline");
       }).send(messages),
-    ).rejects.toThrow("expo push error network");
+    ).rejects.toMatchObject({ message: "expo push error network", outcome: "REJECTED" });
   });
 });
 

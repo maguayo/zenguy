@@ -56,6 +56,15 @@ export class D1RefreshTokenRepo implements RefreshTokenRepo {
     return row === null ? null : toRefreshToken(row);
   }
 
+  async findById(id: string): Promise<RefreshToken | null> {
+    const row = await one<RefreshTokenRow>(
+      this.database
+        .prepare("SELECT * FROM refresh_tokens WHERE id = ?")
+        .bind(id),
+    );
+    return row === null ? null : toRefreshToken(row);
+  }
+
   async rotate(
     currentId: string,
     replacement: RefreshToken,

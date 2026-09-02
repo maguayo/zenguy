@@ -165,6 +165,20 @@ function signOutAfterAuthFailure() {
   emitSignedOut();
 }
 
+/**
+ * The refresh cookie is shared by every tab of this origin, but the in-flight
+ * guard above is per tab. Two tabs refreshing at the same moment would present
+ * the same token twice, and the server treats the second presentation as
+ * reuse. Serialise refreshes across tabs where the Web Locks API exists.
+ */
+export const REFRESH_LOCK_NAME = "zenguy:auth-refresh";
+
+function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (locks === undefined) return work();
+  return locks.request(REFRESH_LOCK_NAME, work);
+}
+
 export async function ensureFreshToken(): Promise<RefreshPayload> {
   if (isTerminalLogoutPending()) {
     throw new ApiError("Signed out", { code: "UNAUTHORIZED", status: 401 });
@@ -172,7 +186,9 @@ export async function ensureFreshToken(): Promise<RefreshPayload> {
   const epoch = sessionEpoch;
   if (refreshInFlight?.epoch === epoch) return refreshInFlight.promise;
 
-  const promise = (async () => {
+  const promise = withRefreshLock(async () => {
+    // Another tab may have signed this session out while we waited.
+    throwIfSessionChanged(epoch);
     const response = await fetch(apiUrl("/api/auth/refresh"), {
       credentials: "include",
       headers: requestHeaders(true),
@@ -185,7 +201,7 @@ export async function ensureFreshToken(): Promise<RefreshPayload> {
     throwIfSessionChanged(epoch);
     setToken(envelope.data.accessToken, envelope.data.expiresIn);
     return envelope.data;
-  })();
+  });
   refreshInFlight = { epoch, promise };
 
   try {

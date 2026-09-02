@@ -39,6 +39,7 @@ export interface EmailTokenRepo {
 export interface RefreshTokenRepo {
   insert(token: RefreshToken): Promise<void>;
   findByHash(hash: string): Promise<RefreshToken | null>;
+  findById(id: string): Promise<RefreshToken | null>;
   /**
    * Atomically revokes `currentId` and inserts its replacement. Returns false
    * when another caller already claimed the parent or it has expired.

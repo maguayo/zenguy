@@ -58,7 +58,9 @@ CI=1 pnpm exec expo export --platform ios --output-dir /tmp/zenguy-export   # Me
   of a browser cookie (`apps/api/src/http/routes/auth.ts`).
 - **Access token** (JWT, 30 min) lives in memory only and is refreshed a minute
   before expiry or after a `401`.
-- **Refresh token** (30 days, rotated on every use, reuse detection server-side)
+- **Refresh token** (30 days, rotated on every use, reuse detection server-side
+  with a 60 s grace window so a retry after a lost rotation response is not
+  mistaken for theft)
   is stored in the iOS Keychain through `expo-secure-store` with
   `WHEN_UNLOCKED_THIS_DEVICE_ONLY`: readable only while the device is unlocked,
   never synced to iCloud Keychain, never included in backups.

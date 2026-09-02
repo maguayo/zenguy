@@ -10,6 +10,7 @@ import {
   authEvents,
   confirmTerminalLogout,
   ensureFreshToken,
+  REFRESH_LOCK_NAME,
   SessionSupersededError,
   supersedeSession,
 } from "./api";
@@ -153,6 +154,56 @@ describe("API client", () => {
     expect(first.path).toBe("/api/first");
     expect(second.path).toBe("/api/second");
     expect(refreshCalls).toBe(1);
+  });
+
+  it("serialises refreshes across tabs through the Web Locks API", async () => {
+    setToken("stale", 1_800);
+    let runLocked: (() => void) | undefined;
+    const request = vi.fn(
+      (name: string, callback: () => Promise<unknown>) =>
+        new Promise((resolve, reject) => {
+          runLocked = () => callback().then(resolve, reject);
+          void name;
+        }),
+    );
+    vi.stubGlobal("navigator", { locks: { request } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { accessToken: "fresh", expiresIn: 1_800, user: {} } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = ensureFreshToken();
+    await Promise.resolve();
+    expect(request).toHaveBeenCalledWith(REFRESH_LOCK_NAME, expect.any(Function));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    runLocked?.();
+    await expect(pending).resolves.toMatchObject({ accessToken: "fresh" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getToken().accessToken).toBe("fresh");
+  });
+
+  it("does not refresh under a lock acquired after the session was superseded", async () => {
+    setToken("stale", 1_800);
+    let runLocked: (() => void) | undefined;
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: (_name: string, callback: () => Promise<unknown>) =>
+          new Promise((resolve, reject) => {
+            runLocked = () => callback().then(resolve, reject);
+          }),
+      },
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = ensureFreshToken();
+    await Promise.resolve();
+    supersedeSession();
+    runLocked?.();
+
+    await expect(pending).rejects.toBeInstanceOf(SessionSupersededError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("aborts and discards a refresh response from a superseded session", async () => {

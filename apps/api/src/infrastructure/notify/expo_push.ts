@@ -130,7 +130,11 @@ export class ExpoPushClient {
           signal: externalProviderSignal(),
         });
       } catch (error) {
-        throw providerAmbiguous("expo push error network", { cause: error });
+        // A push is free and coalesced by collapseId/threadId on the device,
+        // so a possible duplicate costs nothing while a dropped alert does:
+        // network faults and transient statuses are retried, never parked
+        // as ambiguous like a paid SMS would be.
+        throw providerRejected("expo push error network", { cause: error });
       }
       if (!response.ok) {
         const body = await readLimitedResponseText(
@@ -141,11 +145,7 @@ export class ExpoPushClient {
           status: response.status,
           body: sanitizeExpoError(body),
         });
-        const message = `expo push error ${response.status}`;
-        if (response.status >= 500 || [408, 425, 429].includes(response.status)) {
-          throw providerAmbiguous(message);
-        }
-        throw providerRejected(message);
+        throw providerRejected(`expo push error ${response.status}`);
       }
       const payload = (await readLimitedJsonResponse(
         response,
