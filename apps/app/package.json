@@ -32,7 +32,7 @@
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.1.1",
     "@hookform/resolvers": "^5.9.1",
-    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query": "^5.102.8",
     "expo": "~57.0.19",
     "expo-application": "~57.0.2",
     "expo-clipboard": "~57.0.1",
