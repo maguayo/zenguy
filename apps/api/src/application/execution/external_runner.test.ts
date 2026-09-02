@@ -12,6 +12,7 @@ import {
   ATTEMPT_TIMEOUT_MS,
   FALLBACK_CLAIM_MIN_AGE_MS,
   INFRA_RETRY_DELAY_SECONDS,
+  MAX_INFRA_RETRIES,
 } from "../../shared/constants";
 import { FakeIds } from "../../test/fakes/ids";
 import {
@@ -222,6 +223,135 @@ async function fixture(seed: {
   });
   return { runner, attempts, queue, resolveSecrets, remoteAiConsents };
 }
+
+describe("ExternalRunner.claim from Cloudflare Containers", () => {
+  function containerClaim(
+    runId: string,
+    attemptId: string,
+    executionGeneration: number,
+  ) {
+    return {
+      deliveryId: "cf-delivery",
+      workerId: "zenguy-production-cf",
+      remoteAiProcessing: true,
+      message: {
+        kind: "attempt" as const,
+        runId,
+        attemptId,
+        attemptIndex: 0,
+        executionGeneration,
+      },
+    };
+  }
+
+  it("hands the job to the container once the workspace has consented", async () => {
+    const pending = run("run_cf_with_consent");
+    const { runner, attempts, remoteAiConsents } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_cf_with_consent", pending.id)],
+    });
+
+    await expect(
+      runner.claim(containerClaim(pending.id, "att_cf_with_consent", pending.queuedAt)),
+    ).resolves.not.toBeNull();
+
+    expect(remoteAiConsents.hasActive).toHaveBeenCalledWith(
+      WORKSPACE.id,
+      "openai",
+      "2026-09-01-v1",
+    );
+    await expect(attempts.findById("att_cf_with_consent")).resolves.toMatchObject({
+      status: "STARTING",
+    });
+  });
+
+  it("closes an unconsented attempt as SYSTEM_ERROR instead of leaving it QUEUED", async () => {
+    // Retries exhausted: the outcome is terminal and stays observable.
+    const pending = run("run_cf_without_consent", {
+      infraAttempts: MAX_INFRA_RETRIES,
+    });
+    const { runner, attempts, queue } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_cf_without_consent", pending.id)],
+      remoteConsent: false,
+    });
+
+    await expect(
+      runner.claim(
+        containerClaim(pending.id, "att_cf_without_consent", pending.queuedAt),
+      ),
+    ).resolves.toBeNull();
+
+    await expect(attempts.findById("att_cf_without_consent")).resolves.toMatchObject({
+      status: "SYSTEM_ERROR",
+      systemErrorCode: "REMOTE_AI_CONSENT_REQUIRED",
+      failureReason: expect.stringContaining("OpenAI"),
+    });
+    expect(queue.calls).toEqual([]);
+  });
+
+  it("keeps the bounded infrastructure retry so a prompt consent can still rescue the run", async () => {
+    const pending = run("run_cf_retry_without_consent");
+    const { runner, attempts, queue } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_cf_retry_without_consent", pending.id)],
+      remoteConsent: false,
+    });
+
+    await expect(
+      runner.claim(
+        containerClaim(pending.id, "att_cf_retry_without_consent", pending.queuedAt),
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      attempts.findById("att_cf_retry_without_consent"),
+    ).resolves.toMatchObject({
+      status: "QUEUED",
+      queuedAt: NOW + INFRA_RETRY_DELAY_SECONDS * 1_000,
+    });
+    expect(queue.calls).toEqual([
+      {
+        message: {
+          kind: "attempt",
+          runId: pending.id,
+          attemptId: "att_cf_retry_without_consent",
+          attemptIndex: 0,
+          executionGeneration: NOW + INFRA_RETRY_DELAY_SECONDS * 1_000,
+        },
+        delaySeconds: INFRA_RETRY_DELAY_SECONDS,
+      },
+    ]);
+  });
+
+  it("ignores a stale delivery instead of failing a re-queued attempt", async () => {
+    const pending = run("run_cf_stale_without_consent");
+    const { runner, attempts, queue } = await fixture({
+      runs: [pending],
+      attempts: [attempt("att_cf_stale_without_consent", pending.id)],
+      remoteConsent: false,
+    });
+
+    await expect(
+      runner.claim(
+        containerClaim(
+          pending.id,
+          "att_cf_stale_without_consent",
+          pending.queuedAt - 1,
+        ),
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      attempts.findById("att_cf_stale_without_consent"),
+    ).resolves.toMatchObject({
+      status: "QUEUED",
+      queuedAt: pending.queuedAt,
+      finishedAt: null,
+    });
+    expect(queue.calls).toEqual([]);
+  });
+});
 
 describe("ExternalRunner.claimStale", () => {
   it("leaves remote fallback work untouched until the workspace consents", async () => {

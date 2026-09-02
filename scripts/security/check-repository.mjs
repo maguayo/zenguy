@@ -629,7 +629,7 @@ for (const invariant of [
   '"https://api.zenguy.com/api/health"',
   '"https://api.zenguy.com/api/app/version"',
   'health?.data?.environment !== "production"',
-  'health?.data?.runnerDispatch !== "queue"',
+  'health?.data?.runnerDispatch !== "container"',
   "canonical Zenguy App Store URL",
   "deployed AASA does not exactly match the reviewed source",
 ]) {

@@ -52,7 +52,7 @@
     "STRIPE_ENVIRONMENT": "live",
     "EMAIL_FROM": "Zenguy <notifications@zenguy.com>",
     "COMPLIMENTARY_ISSUER_EMAILS": "marcos@aguayo.es",
-    "RUNNER_DISPATCH": "queue",
+    "RUNNER_DISPATCH": "container",
     "RUNNER_ENVIRONMENT": "production",
     "CF_SAAS_ZONE_ID": "69d739c681934e28848e8d8294f06eac",
     "STATUS_CNAME_TARGET": "customers.zenguy.com",

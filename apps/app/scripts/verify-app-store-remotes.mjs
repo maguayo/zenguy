@@ -120,8 +120,8 @@ export async function verifyPublishedAppStorePrerequisites({
         if (health?.data?.environment !== "production") {
           fail(`${healthUrl}: environment must identify production`);
         }
-        if (health?.data?.runnerDispatch !== "queue") {
-          fail(`${healthUrl}: runnerDispatch must be queue`);
+        if (health?.data?.runnerDispatch !== "container") {
+          fail(`${healthUrl}: runnerDispatch must be container`);
         }
       } catch {
         fail(`${healthUrl}: response is not valid JSON`);

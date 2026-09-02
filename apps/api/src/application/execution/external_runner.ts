@@ -24,9 +24,12 @@ import type {
   TestAttempt,
   TestRun,
 } from "../../domain/browser_tests/types";
+import type { AttemptMessage } from "../../domain/queues";
 import { extractPlaceholders } from "../../domain/secrets/rules";
 import type { ResolvedSecrets } from "../../domain/secrets/types";
 import {
+  REMOTE_AI_CONSENT_REQUIRED_ERROR_CODE,
+  REMOTE_AI_CONSENT_REQUIRED_REASON,
   REMOTE_AI_CONSENT_VERSION,
   REMOTE_AI_PROVIDER,
   type RemoteAiConsentRepo,
@@ -106,6 +109,16 @@ export type PolicyAwareRunnerClaimInput = RunnerClaimInput & {
   remoteAiProcessing?: boolean;
 };
 
+/**
+ * What a claim does with an attempt whose workspace has not consented to
+ * remote AI processing. The local runner needs no consent. The fallback poller
+ * must leave the attempt for the private local runner. A Cloudflare Containers
+ * attempt has no other executor, so leaving it QUEUED would only surface hours
+ * later as WORKER_LOST through the zombie sweep and its infrastructure
+ * retries: it fails right away with an actionable reason instead.
+ */
+type RemoteAiPolicy = "not-required" | "leave-unclaimed" | "fail-attempt";
+
 interface AttemptState {
   run: TestRun;
   attempt: TestAttempt;
@@ -183,28 +196,34 @@ export class ExternalRunner {
   constructor(private readonly dependencies: ExternalRunnerDependencies) {}
 
   async claim(input: PolicyAwareRunnerClaimInput): Promise<ExternalRunnerJob | null> {
-    return this.claimWithPolicy(input, input.remoteAiProcessing === true);
+    return this.claimWithPolicy(
+      input,
+      input.remoteAiProcessing === true ? "fail-attempt" : "not-required",
+    );
   }
 
   private async claimWithPolicy(
     input: RunnerClaimInput,
-    remoteAiProcessing: boolean,
+    policy: RemoteAiPolicy,
   ): Promise<ExternalRunnerJob | null> {
-    if (remoteAiProcessing) {
+    if (policy !== "not-required") {
       // This check happens before lifecycle.claim and before returning the run
       // snapshot, so no test instructions, URLs, page data, or secrets cross
       // the remote-runner boundary without current workspace consent.
       const run = await this.dependencies.runs.findByIdForExecution(
         input.message.runId,
       );
+      if (run === null) return null;
       if (
-        run === null ||
         !(await this.dependencies.remoteAiConsents.hasActive(
           run.workspaceId,
           REMOTE_AI_PROVIDER,
           REMOTE_AI_CONSENT_VERSION,
         ))
       ) {
+        if (policy === "fail-attempt") {
+          await this.failWithoutRemoteAiConsent(run, input.message);
+        }
         return null;
       }
     }
@@ -242,6 +261,37 @@ export class ExternalRunner {
         screenshotJpegQuality: SCREENSHOT_JPEG_QUALITY,
       },
     };
+  }
+
+  private async failWithoutRemoteAiConsent(
+    run: TestRun,
+    message: AttemptMessage,
+  ): Promise<void> {
+    const attempt = await this.dependencies.attempts.findById(message.attemptId);
+    // Only the QUEUED generation this delivery was dispatched for: a stale
+    // redelivery must never terminalise a re-queued or already owned attempt.
+    if (
+      attempt === null ||
+      attempt.testRunId !== run.id ||
+      attempt.attemptIndex !== message.attemptIndex ||
+      attempt.queuedAt !== message.executionGeneration ||
+      attempt.status !== "QUEUED"
+    ) {
+      return;
+    }
+    platformAlert("remote_ai_consent_missing", {
+      workspaceId: run.workspaceId,
+      runId: run.id,
+      attemptId: attempt.id,
+    });
+    await this.dependencies.lifecycle.onAttemptFinished(run, attempt, {
+      status: "SYSTEM_ERROR",
+      systemErrorCode: REMOTE_AI_CONSENT_REQUIRED_ERROR_CODE,
+      failureReason: REMOTE_AI_CONSENT_REQUIRED_REASON,
+      visitedUrls: [],
+      consoleErrors: [],
+      networkErrors: [],
+    });
   }
 
   async authorizeAction(
@@ -317,7 +367,7 @@ export class ExternalRunner {
             executionGeneration: candidate.queuedAt,
           },
         },
-        true,
+        "leave-unclaimed",
       );
       if (job !== null) return job;
     }

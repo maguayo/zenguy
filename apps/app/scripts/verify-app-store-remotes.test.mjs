@@ -22,7 +22,7 @@ function canonicalHtml(definition) {
 function responseFor(
   url,
   {
-    runnerDispatch = "queue",
+    runnerDispatch = "container",
     storeUrl = null,
     supportUnavailable = false,
   } = {},
@@ -104,12 +104,12 @@ test("returns the final deployment failures after exhausting the bounded wait", 
 
 test("rejects a production API serving the wrong runner dispatch mode", async () => {
   const failures = await verifyPublishedAppStorePrerequisites({
-    fetchFn: async (url) => responseFor(url, { runnerDispatch: "container" }),
+    fetchFn: async (url) => responseFor(url, { runnerDispatch: "queue" }),
     localAasa: expectedAasa,
   });
 
   assert.equal(
-    failures.includes(`${healthUrl}: runnerDispatch must be queue`),
+    failures.includes(`${healthUrl}: runnerDispatch must be container`),
     true,
   );
 });

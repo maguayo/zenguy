@@ -218,7 +218,9 @@ Estado actual relevante:
     cumplan el mismo contrato antes de declarar satisfactorio el despliegue.
     Cuatro pruebas cubren éxito, propagación transitoria, agotamiento y límites
     de la espera; una quinta rechaza un API que no identifique producción con
-    `RUNNER_DISPATCH=queue`, y el guard de seguridad impide retirar este paso.
+    `RUNNER_DISPATCH=container` (el único ejecutor real: Cloudflare Containers,
+    con el consentimiento de IA remota exigido en el claim `cf`); el guard de
+    seguridad impide retirar este paso.
   - [x] Preflight de archivo genérico iOS: el verificador inspecciona la app
     empaquetada, detectó la agregación incompleta de Expo FileSystem y ahora
     exige la unión exacta de razones, categorías de datos y manifests de SDK.
@@ -324,7 +326,7 @@ Estado actual relevante:
   controlado en producción. Confirmar también que el AASA público ya no contiene
   `/verify-email` ni `/grants/*`, que `support/` y `privacy-choices/` responden
   `200`, que `privacy/` contiene el consentimiento de OpenAI, el borrado y las
-  opciones vigentes, que `RUNNER_DISPATCH=queue` y que los secretos requeridos
+  opciones vigentes, que `RUNNER_DISPATCH=container` y que los secretos requeridos
   siguen presentes. No construir la candidata contra una API que todavía no
   exponga estos contratos. Criterio mínimo automatizado: después del despliegue,
   `pnpm --dir apps/app verify:app-store-remotes` debe terminar en verde.
