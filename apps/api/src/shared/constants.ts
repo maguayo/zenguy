@@ -26,7 +26,7 @@ export const PBKDF2_ITERATIONS = 100_000;
 // rollout first, which keeps old deployments from silently accepting it.
 export const PBKDF2_MAX_VERIFY_ITERATIONS = 1_200_000;
 export const PASSWORD_KDF_TARGET_MAX_MS = 1_000;
-export const LEGAL_VERSION = "2026-09-01";
+export const LEGAL_VERSION = "2026-09-02";
 export const MIN_PASSWORD_LENGTH = 15;
 export const MAX_PASSWORD_LENGTH = 100;
 

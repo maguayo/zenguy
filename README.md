@@ -9,13 +9,15 @@ experiences them, and alerts the team when something breaks.
 
 - **Browser tests written in plain language.** A test is a start URL plus
   written instructions such as "Check that the page shows the heading
-  'Example Domain' and contains a link labeled 'More information'". An
-  `browser-use` Agent executes those instructions in an isolated Chrome on a
-  separate computer, using an OpenAI-compatible model served locally (the
-  example is Qwen). The application publishes attempts to Cloudflare Queue; the local
-  Python worker pulls them, runs its own browser/model, and posts steps and the
-  outcome back. Every run keeps its verdict, expected versus actual result,
-  step timeline, screenshots, visited URLs, and console/network summaries.
+  'Example Domain' and contains a link labeled 'More information'". A
+  `browser-use` agent executes those instructions in an isolated Chrome inside
+  a one-shot Cloudflare Containers runner that uses the OpenAI API
+  (`gpt-5.6-luna`). The API dispatches each attempt to a `RunnerContainer`
+  Durable Object; the container claims the attempt, runs it, and posts steps
+  and the outcome back. There is no local or fallback runner, and a workspace
+  must grant AI data-sharing consent before any of its browser tests run.
+  Every run keeps its verdict, expected versus actual result, step timeline,
+  screenshots, visited URLs, and console/network summaries.
 - **HTTP uptime monitoring.** Scheduled checks against any endpoint with a
   configurable method, encrypted headers and body, expected status code,
   optional response-body conditions, timeouts, and retries.
@@ -50,7 +52,7 @@ zenguy/
 │   ├── app/      # Expo (React Native) iOS app — standalone pnpm root, see apps/app/README.md
 │   ├── frontend/ # React application
 │   └── website/  # Astro public website
-├── runner/        # External Python Queue consumer, browser-use, Chrome and local LLM
+├── runner/        # Python runner image for Cloudflare Containers: browser-use, Chrome, OpenAI API
 ├── PROJECT.md
 ├── TASKS_BACKEND.md
 └── TASKS_FRONTEND.md

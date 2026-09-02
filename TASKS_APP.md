@@ -174,12 +174,12 @@ Estado actual relevante:
   backend sin consentimiento vigente; secretos reducidos a placeholders; y
   migración `0055_remote_ai_consent.sql`. Falta el despliegue remoto.
 
-  El runner primario usa un modelo local, pero el fallback puede enviar a
-  OpenAI instrucciones y estado de las páginas. Por eso la aceptación genérica
+  El único runner (Cloudflare Containers) usa la API de OpenAI y le envía
+  instrucciones y estado de las páginas en cada run. Por eso la aceptación genérica
   de la política al registrarse en la web se ha sustituido en este flujo por el
   permiso explícito que exige la regla 5.1.2(i).
 
-  Antes de la primera ejecución que pueda usar el fallback, explicar en una
+  Antes de la primera ejecución, explicar en una
   pantalla propia qué proveedor recibe qué categorías de datos y con qué fin;
   usar una acción afirmativa no premarcada; guardar versión, fecha y actor en el
   servidor; exigirla también a cuentas existentes; y ofrecer retirada del

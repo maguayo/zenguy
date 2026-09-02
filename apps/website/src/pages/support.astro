@@ -61,11 +61,14 @@ import { legalCompany, legalMailto } from "../lib/legal";
     privacy request.
   </p>
 
-  <h2>Privacy and optional AI processing</h2>
+  <h2>Privacy and AI processing</h2>
   <p>
     Read the <a href="/privacy/">Privacy Policy</a> and
-    <a href="/privacy-choices/">Privacy choices</a>. OpenAI fallback processing
-    is off by default and can only be enabled or revoked by a workspace Owner
-    or Admin from <strong>More → AI data sharing</strong>.
+    <a href="/privacy-choices/">Privacy choices</a>. Browser tests run on an
+    isolated runner in Cloudflare Containers that uses the OpenAI API, only
+    after workspace consent. That consent is off by default and can only be
+    enabled or revoked by a workspace Owner or Admin from
+    <strong>More → AI data sharing</strong> in the iOS app or
+    <strong>Workspace Settings → AI data sharing</strong> on the web.
   </p>
 </Legal>

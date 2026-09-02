@@ -186,11 +186,14 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       21 GDPR.
     </li>
     <li>
-      <strong>Use OpenAI as an optional browser-test fallback</strong> — the
-      workspace&apos;s explicit consent (art. 6.1.a). It is off by default,
-      requires an affirmative action by an Owner or Admin, and can be withdrawn
-      from AI data sharing at any time. Withdrawal prevents future remote runs;
-      a run already in progress may finish.
+      <strong>Run browser tests with the OpenAI API</strong> — the
+      workspace&apos;s explicit consent (art. 6.1.a). Zenguy executes browser
+      tests on an isolated runner in Cloudflare Containers that uses the OpenAI
+      API to choose and assess steps. Consent is off by default, requires an
+      affirmative action by an Owner or Admin, and can be withdrawn from AI data
+      sharing at any time. Without a current consent no browser test runs in
+      that workspace; withdrawal stops future runs, and a run already in
+      progress may finish.
     </li>
     <li>
       <strong>Deliver a consistent, readable web interface</strong> — legitimate
@@ -248,13 +251,13 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
       marketing.
     </li>
     <li>
-      <strong>OpenAI, LLC</strong> — optional model inference for the remote
-      browser-test fallback, and only after current workspace consent. OpenAI
-      may receive the test name, instructions, target URLs, device
+      <strong>OpenAI, LLC</strong> — model inference for browser-test execution
+      on the Cloudflare Containers runner, and only after current workspace consent.
+      OpenAI may receive the test name, instructions, target URLs, device
       configuration, relevant page content and screenshots, console/network
       results, and model input/output needed to choose and assess steps. It does
       not receive account, member, billing or notification data. Zenguy never
-      releases configured secret values to a remote runner or OpenAI; only
+      releases configured secret values to the runner or to OpenAI; only
       placeholder names remain in the instructions. OpenAI states that API
       inputs and outputs are not used to train its models by default. Unless
       our OpenAI project has an approved shorter retention control, standard
@@ -309,7 +312,7 @@ import { legalAddress, legalCompany, legalMailto } from "../lib/legal";
     </li>
     <li>Run evidence (screenshots, reports, logs): 30 days.</li>
     <li>
-      Optional OpenAI request/response content follows the provider control
+      OpenAI request/response content of consented workspaces follows the provider control
       described above: standard abuse-monitoring retention is up to 30 days
       unless a shorter approved control applies. The workspace consent record
       remains while the workspace is active and for as long as reasonably

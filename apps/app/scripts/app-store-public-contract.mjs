@@ -18,8 +18,8 @@ export const htmlPrerequisites = [
     url: "https://zenguy.com/privacy-choices/",
     invariants: [
       "Delete your account",
-      "OpenAI fallback processing starts off",
-      "the backend does not release the run to a remote AI runner",
+      "OpenAI processing starts off",
+      "the backend does not release the run to the runner or to OpenAI",
       "The iOS app contains no Google Analytics SDK",
     ],
   },

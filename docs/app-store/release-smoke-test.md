@@ -29,7 +29,7 @@ build and submission URLs (which embed their full UUIDs), and fill TestFlight st
 - [ ] Deleted the previous app first for the clean-install pass.
 - [ ] Review account is verified, has active access, no 2FA and fictitious data.
 - [ ] A separate disposable account exists for the deletion test.
-- [ ] Backend, local runner, APNs and the controlled test target are healthy.
+- [ ] Backend, Cloudflare Containers runner, APNs and the controlled test target are healthy.
 - [ ] No production customer data or real secret value is visible.
 
 ## Existing-account-only acquisition audit

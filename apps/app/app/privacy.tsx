@@ -50,18 +50,20 @@ export default function Privacy() {
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="Optional OpenAI processing">
+      <LegalSection title="OpenAI processing">
         <LegalParagraph>
-          Runs use Zenguy&apos;s private local runner by default. An Owner or
-          Admin may separately opt a workspace into OpenAI fallback processing
-          from AI data sharing. The choice starts off, is never preselected,
-          records the policy version, date and actor, and can be revoked there
-          at any time. If enabled, test instructions, target URLs, relevant page
-          content, screenshots and technical results may be sent to OpenAI only
-          to execute and assess browser-test steps. Account, billing, member and
+          Zenguy runs browser tests on an isolated runner in Cloudflare
+          Containers that uses the OpenAI API to execute and assess steps. It
+          does so only after an Owner or Admin opts the workspace in from AI
+          data sharing; without a current consent no browser test runs in that
+          workspace. The choice starts off, is never preselected, records the
+          policy version, date and actor, and can be revoked there at any time.
+          If enabled, test instructions, target URLs, relevant page content,
+          screenshots and technical results may be sent to OpenAI only to
+          execute and assess browser-test steps. Account, billing, member and
           notification data are excluded. Secret values are never disclosed to
-          OpenAI; remote runs receive placeholders only. OpenAI API inputs and
-          outputs are not used to train its models by default and its standard
+          OpenAI; runs receive placeholders only. OpenAI API inputs and outputs
+          are not used to train its models by default and its standard
           abuse-monitoring logs may be retained for up to 30 days.
         </LegalParagraph>
       </LegalSection>

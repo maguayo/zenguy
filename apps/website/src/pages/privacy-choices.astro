@@ -26,11 +26,15 @@ import { legalCompany, legalMailto } from "../lib/legal";
 
   <h2>Choose whether OpenAI may process test data</h2>
   <p>
-    OpenAI fallback processing starts off. A workspace Owner or Admin can review
-    the exact categories and purpose in <strong>More → AI data sharing</strong>,
-    give an affirmative consent, or revoke it later. Without a current consent,
-    the backend does not release the run to a remote AI runner. Configured
-    secret values are never released to OpenAI.
+    OpenAI processing starts off. Zenguy runs browser tests on an isolated
+    runner in Cloudflare Containers that uses the OpenAI API, so without a
+    current consent no browser test runs in the workspace. A workspace Owner or
+    Admin can review the exact categories and purpose in
+    <strong>More → AI data sharing</strong> in the iOS app or
+    <strong>Workspace Settings → AI data sharing</strong> in the web
+    application, give an affirmative consent, or revoke it later. Without a
+    current consent, the backend does not release the run to the runner or to OpenAI.
+    Configured secret values are never released to OpenAI.
   </p>
 
   <h2>Push notifications and biometrics</h2>

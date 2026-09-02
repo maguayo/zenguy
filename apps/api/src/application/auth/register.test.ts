@@ -56,7 +56,7 @@ describe("Register", () => {
     expect([...dependencies.legalAcceptances.rows.values()]).toEqual([
       expect.objectContaining({
         userId: user?.id,
-        legalVersion: "2026-09-01",
+        legalVersion: "2026-09-02",
         marketingOptInAt: null,
       }),
     ]);
