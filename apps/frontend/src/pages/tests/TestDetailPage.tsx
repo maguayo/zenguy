@@ -31,6 +31,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { IconButton } from "../../components/ui/IconButton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { RemoteAiConsentBanner } from "../../components/RemoteAiConsentBanner";
 import { Spinner } from "../../components/ui/Spinner";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
@@ -725,6 +726,8 @@ export default function TestDetailPage() {
           }
         />
       </div>
+
+      <RemoteAiConsentBanner />
 
       {testData.openIncidentId ? (
         <Card className="border-danger-600/20 bg-danger-50">

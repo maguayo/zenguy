@@ -20,6 +20,14 @@ export interface Workspace {
   timezone: string;
 }
 
+export interface RemoteAiConsentStatus {
+  acceptedAt: string | null;
+  active: boolean;
+  policyVersion: string;
+  provider: "OpenAI";
+  revokedAt: string | null;
+}
+
 export interface Member {
   email: string;
   joinedAt: string;

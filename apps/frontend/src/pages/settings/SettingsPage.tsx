@@ -42,6 +42,7 @@ import { useMutationError } from "../../hooks/useMutationError";
 import { ApiError, type ApiPage } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/errors";
 import { formatDateTime } from "../../lib/format";
+import { RemoteAiConsentCard } from "./RemoteAiConsentCard";
 
 export const workspaceSettingsSchema = z.object({
   name: z
@@ -475,6 +476,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageHeader title="Workspace Settings" />
       <GeneralCard workspace={current} />
+      <RemoteAiConsentCard />
       <AuditLogCard />
       <DangerZone />
     </div>

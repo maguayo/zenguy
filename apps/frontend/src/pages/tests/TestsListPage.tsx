@@ -33,6 +33,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { IconButton } from "../../components/ui/IconButton";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { RemoteAiConsentBanner } from "../../components/RemoteAiConsentBanner";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../contexts/ToastContext";
 import { useWorkspace } from "../../contexts/WorkspaceContext";
@@ -529,6 +530,8 @@ export default function TestsListPage() {
         description="Scheduled customer journeys, checked in a fresh browser on every run."
         title="Browser Tests"
       />
+
+      <RemoteAiConsentBanner />
 
       {tests.isError ? (
         <ErrorState onRetry={() => void tests.refetch()} />

@@ -61,7 +61,7 @@ export default function AiDataSharingScreen() {
       const next = await grant.mutateAsync();
       queryClient.setQueryData(queryKey, next);
       setAffirmed(false);
-      toast.success("Optional OpenAI processing enabled");
+      toast.success("OpenAI processing enabled");
     } catch (error) {
       if (!handleMutationError(error)) toast.error(apiErrorMessage(error));
     }
@@ -72,7 +72,7 @@ export default function AiDataSharingScreen() {
       confirmLabel: "Revoke consent",
       destructive: true,
       message:
-        "Future runs will stay on Zenguy's private runner. A run that already started may finish.",
+        "Browser tests in this workspace will stop running until consent is granted again. A run that already started may finish.",
       title: "Revoke OpenAI consent?",
     });
     if (!accepted) return;
@@ -90,20 +90,21 @@ export default function AiDataSharingScreen() {
       <Stack.Screen options={{ title: "AI data sharing" }} />
       <Screen>
         <View style={styles.stack}>
-          <Card elevated title="Optional remote processing">
+          <Card elevated title="OpenAI processing">
             <Badge dot tone={consent.data?.active ? "ok" : "neutral"}>
               {consent.data?.active ? "Enabled" : "Off by default"}
             </Badge>
             <Muted style={styles.intro}>
-              Zenguy normally sends runs to its private local runner. Test data is not sent
-              to OpenAI unless an Owner or Admin gives the workspace consent here.
+              Zenguy runs browser tests on Cloudflare Containers with OpenAI&apos;s model.
+              Nothing is sent to OpenAI, and no browser test runs in this workspace, until
+              an Owner or Admin gives consent here.
             </Muted>
           </Card>
 
-          <Card title="What changes if you consent">
+          <Card title="What is shared while consent is active">
             <Body>
-              If the private runner is unavailable, Zenguy may use OpenAI as an optional
-              fallback to execute browser-test steps. The following data may be shared:
+              OpenAI&apos;s model executes and assesses the steps of every browser test in
+              this workspace. The following data may be shared:
             </Body>
             <View style={styles.categories}>
               {DATA_CATEGORIES.map((category) => (
@@ -119,7 +120,7 @@ export default function AiDataSharingScreen() {
             </Muted>
             <Muted>
               Configured secret values stay in Zenguy and are never disclosed to
-              OpenAI. Remote runs receive only the placeholder names used by a test.
+              OpenAI. Runs receive only the placeholder names used by a test.
             </Muted>
             <Button
               title="Read the privacy policy"
@@ -134,7 +135,7 @@ export default function AiDataSharingScreen() {
             <ErrorState onRetry={() => void consent.refetch()} />
           ) : consent.data.active ? (
             <Card title="Workspace consent" tone="danger">
-              <Body>OpenAI fallback processing is currently allowed.</Body>
+              <Body>OpenAI processing is currently allowed.</Body>
               {consent.data.acceptedAt ? (
                 <Muted>
                   Accepted {formatDateTime(consent.data.acceptedAt, timezone)} · policy {consent.data.policyVersion}
@@ -158,7 +159,7 @@ export default function AiDataSharingScreen() {
               <Button
                 disabled={!affirmed}
                 loading={grant.isPending}
-                title="Enable optional OpenAI fallback"
+                title="Enable OpenAI processing"
                 variant="accent"
                 onPress={() => void enable()}
               />

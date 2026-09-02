@@ -18,6 +18,7 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { RemoteAiConsentBanner } from "../../components/RemoteAiConsentBanner";
 import { Select } from "../../components/ui/Select";
 import { Spinner } from "../../components/ui/Spinner";
 import { Textarea } from "../../components/ui/Textarea";
@@ -377,6 +378,8 @@ export default function TestFormPage() {
         description={editing ? "Update the flow, schedule, and notifications." : "Describe a flow for Zenguy to verify in a real browser."}
         title={editing ? "Edit browser test" : "New browser test"}
       />
+
+      <RemoteAiConsentBanner />
 
       <Card title="Basics">
         <div className="grid gap-4 md:grid-cols-2">

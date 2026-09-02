@@ -10,6 +10,7 @@ import { formatTime } from "../lib/format";
 import { filmstripItems } from "./ScreenshotFilmstrip";
 import { ScreenshotViewer, type ScreenshotItem } from "./ScreenshotViewer";
 import { StatusBadge } from "./StatusBadge";
+import { SystemErrorNotice } from "./SystemErrorNotice";
 import { Badge } from "./ui/Badge";
 import { Card } from "./ui/Card";
 import { ErrorState } from "./ui/ErrorState";
@@ -272,9 +273,7 @@ export function AttemptDetail({
           </div>
         ) : null}
         {data.status === "SYSTEM_ERROR" && data.systemErrorCode ? (
-          <p className="mt-3 font-mono text-xs text-zinc-600">
-            System error code: {data.systemErrorCode}
-          </p>
+          <SystemErrorNotice code={data.systemErrorCode} wsId={wsId} />
         ) : null}
         <p className="mt-3 text-xs text-zinc-500" title={data.runnerVersion ?? undefined}>
           {tokensLine(data)}
