@@ -23,7 +23,7 @@ importers:
         version: 15.1.1(expo-font@57.0.3)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       '@hookform/resolvers':
         specifier: ^5.9.1
-        version: 5.9.1(@sinclair/typebox@0.34.52)(ajv-formats@2.1.1)(joi@17.13.6)(react-hook-form@7.85.0(react@19.2.3))(zod@4.4.3)
+        version: 5.9.1(@sinclair/typebox@0.34.52)(ajv-formats@2.1.1)(joi@17.13.6)(react-hook-form@7.86.0(react@19.2.3))(zod@4.4.3)
       '@tanstack/react-query':
         specifier: ^5.101.4
         version: 5.101.4(react@19.2.3)
@@ -91,8 +91,8 @@ importers:
         specifier: 19.2.3
         version: 19.2.3
       react-hook-form:
-        specifier: ^7.85.0
-        version: 7.85.0(react@19.2.3)
+        specifier: ^7.86.0
+        version: 7.86.0(react@19.2.3)
       react-native:
         specifier: 0.86.3
         version: 0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1)
@@ -4066,8 +4066,8 @@ packages:
     peerDependencies:
       react: '>=17.0.0'
 
-  react-hook-form@7.85.0:
-    resolution: {integrity: sha512-U2MTriFXnclmV4rOE20p2DcRFv5WEg3FIcBFOKcOLFHDVvGIMPvLTkTWefUsonmlaVy23khVDxDWym6uJVGOzw==}
+  react-hook-form@7.86.0:
+    resolution: {integrity: sha512-4kbWJrh5jPZt1+YqVcXcGKffGcXV/XVbozknLh0Yjh0KhpoAkus21TAQhzRYqNwFkkObmnSvRlZZ3GT+ehoIrA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -5955,10 +5955,10 @@ snapshots:
       '@hapi/hoek': 9.3.0
     optional: true
 
-  '@hookform/resolvers@5.9.1(@sinclair/typebox@0.34.52)(ajv-formats@2.1.1)(joi@17.13.6)(react-hook-form@7.85.0(react@19.2.3))(zod@4.4.3)':
+  '@hookform/resolvers@5.9.1(@sinclair/typebox@0.34.52)(ajv-formats@2.1.1)(joi@17.13.6)(react-hook-form@7.86.0(react@19.2.3))(zod@4.4.3)':
     dependencies:
       '@standard-schema/utils': 0.3.0
-      react-hook-form: 7.85.0(react@19.2.3)
+      react-hook-form: 7.86.0(react@19.2.3)
     optionalDependencies:
       '@sinclair/typebox': 0.34.52
       ajv-formats: 2.1.1
@@ -9778,7 +9778,7 @@ snapshots:
     dependencies:
       react: 19.2.3
 
-  react-hook-form@7.85.0(react@19.2.3):
+  react-hook-form@7.86.0(react@19.2.3):
     dependencies:
       react: 19.2.3
 
