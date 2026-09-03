@@ -136,6 +136,7 @@ the `expo-notifications` plugin sets `aps-environment` to production for the
 | Setting | Where | Values |
 | --- | --- | --- |
 | API origin | `EXPO_PUBLIC_API_ORIGIN` (`.env.local`, `eas.json` profiles) | dev `http://127.0.0.1:8787`, preview `https://api-staging.zenguy.com`, production `https://api.zenguy.com` |
+| Native app variant | `APP_VARIANT` (`eas.json` profiles) | `development`, `preview`, `production`; available during local and remote config resolution |
 | Bundle id / links | `app.config.ts` | `com.zenguy.app`, verified Universal Links only |
 | Reproducible iOS builder | `eas.json` | `macos-tahoe-26.5-xcode-26.6` for every profile |
 | Face ID usage text, ATS | `app.config.ts` → `ios.infoPlist` | |
@@ -257,7 +258,7 @@ Once Xcode or EAS has produced the exact archive intended for TestFlight, check
 the packaged application rather than only the source configuration:
 
 ```bash
-pnpm verify:ios-archive -- /path/to/Zenguy.xcarchive --minimum-build 5
+pnpm verify:ios-archive -- /path/to/Zenguy.xcarchive --minimum-build 6
 ```
 
 The archive verifier requires a valid signature for Apple team `HT84Q65URB` by
@@ -267,11 +268,11 @@ preflight; it never closes the signed-candidate or TestFlight checks.
 ### 4. Version
 
 `version` in `app.config.ts` and `package.json` is the public App Store version;
-the release guard requires them to match. Runtime
-compatibility uses `runtimeVersion.policy = fingerprint`, so native modules,
-plugins, permissions and entitlements automatically produce a different OTA
-runtime. Bump the public version deliberately for each commercial release and
-whenever a release must be enforced through `MIN_APP_VERSION`. The build number is remote and auto-incremented
+the release guard requires them to match. Runtime compatibility uses
+`runtimeVersion.policy = appVersion`, so each public binary version has its own
+OTA runtime. Bump the public version for every native change—including modules,
+plugins, permissions and entitlements—and whenever a release must be enforced
+through `MIN_APP_VERSION`. The build number is remote and auto-incremented
 (`appVersionSource: remote`, `autoIncrement: true`); inspect or fix it with
 `pnpm dlx eas-cli@23.2.0 build:version:get --platform ios` /
 `pnpm dlx eas-cli@23.2.0 build:version:set --platform ios`.
@@ -292,7 +293,7 @@ do not weaken or disable it for a release.
 
 The preferred production path is `.github/workflows/ios-release.yml`: on the
 current `main` commit, push the exact tag `ios-v<package version>` (for example
-`ios-v0.2.2`) or dispatch the workflow while viewing that tag, then approve the
+`ios-v0.2.3`) or dispatch the workflow while viewing that tag, then approve the
 protected `ios-production-release` environment. The workflow verifies the tag
 against `package.json` and the live GitHub API `main` head both before and after
 tests, installs the frozen app lockfile, introspects all native profiles, and
@@ -324,8 +325,8 @@ receives it automatically and testers install it from the TestFlight app.
 
 ### 6. OTA updates (JavaScript-only fixes)
 
-`eas update` reaches installed builds with the exact native fingerprint; never
-use it for native changes (see step 4). Updates are accepted only when signed
+`eas update` reaches installed builds with the exact public-version runtime;
+never use it for native changes (see step 4). Updates are accepted only when signed
 by `certs/updates-certificate.pem` using key id `zenguy-2026-01`. The public
 certificate is RSA-2048, SHA-256 fingerprint
 `88:2A:06:F4:85:BF:16:0F:3F:F2:63:E8:2E:26:8A:DC:B0:00:51:8D:40:99:0E:B2:D4:2F:22:47:A0:F8:5D:10`,
@@ -336,7 +337,7 @@ reviewer and protected-tag restriction. It contains only
 `EXPO_IOS_OTA_TOKEN` and `EAS_UPDATE_PRIVATE_KEY_PEM`; neither secret belongs in
 the build environment. The preferred path is `.github/workflows/ios-ota.yml`:
 create a protected `ios-ota-v<package version>-<positive sequence>` tag (for
-example `ios-ota-v0.2.2-1`), approve `ios-production-ota`, and let CI install
+example `ios-ota-v0.2.3-1`), approve `ios-production-ota`, and let CI install
 the frozen lockfile, run all mobile checks, re-check the live `main` head before
 each credential boundary, verify that the signing key matches the versioned
 public certificate, and publish with the pinned EAS CLI. The private key exists
@@ -358,8 +359,8 @@ To rotate the OTA key, generate a new offline key/certificate and key id, ship
 a new binary embedding that public certificate first, and retain the old key
 for the old runtime until it no longer needs updates. Never overwrite the
 vault's only recovery copy. `pnpm verify:release-config` enforces public/private
-key hygiene, the embedded fingerprint, certificate lifetime and local `0600`
-permissions.
+key hygiene, the embedded runtime configuration, certificate lifetime and
+local `0600` permissions.
 
 ### Remote controls still required
 
@@ -390,9 +391,9 @@ TestFlight and the public store are separate phases. Before *Submit for
 Review*, use the versioned source package under `docs/app-store/`:
 
 The first-version record is currently `0.2.0 (3) Rejected`. App Store Connect
-keeps its Version field editable and exposes **Update Review**. Once `0.2.2`
-has processed, update that existing first-version record to `0.2.2`, remove
-build `3`, attach the verified new build `5+`, and replace the stale metadata
+keeps its Version field editable and exposes **Update Review**. Once `0.2.3`
+has processed, update that existing first-version record to `0.2.3`, remove
+build `3`, attach the verified new build `6+`, and replace the stale metadata
 and screenshots. Do not create another platform or press **Update Review**
 until the completed `REVIEW_READY` evidence snapshot passes.
 
@@ -512,7 +513,7 @@ maestro test maestro/app-store-screenshots.yaml \
 pnpm prepare:app-store-screenshots -- \
   /private/tmp/zenguy-app-store-raw \
   /private/tmp/zenguy-app-store-final \
-  --version 0.2.2 \
+  --version 0.2.3 \
   --build <native-build-number> \
   --commit <40-character-candidate-commit> \
   --eas-build <eas-build-uuid> \
@@ -535,9 +536,9 @@ the exact build selected in App Store Connect.
 
 Apple's current rejection requires a physical-device screen recording, not an
 optional supplement. Copy `docs/app-store/review-response-guideline-2.1.md` for
-the exact candidate and record its version/build/commit, both EAS URLs,
-fingerprint, device model, iOS version, capture time, duration, recording
-filename and SHA-256. Complete all 13 sign-offs only after checking the final
+the exact candidate and record its version/build/commit, runtime version, EAS
+build fingerprint, both EAS URLs, device model, iOS version, capture time,
+duration, recording filename and SHA-256. Complete all 13 sign-offs only after checking the final
 uploaded bytes.
 
 The recording must begin from a cold launch of the TestFlight candidate and

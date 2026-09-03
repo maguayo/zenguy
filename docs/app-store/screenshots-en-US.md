@@ -58,7 +58,7 @@ maestro test maestro/app-store-screenshots.yaml \
 pnpm prepare:app-store-screenshots -- \
   /private/tmp/zenguy-app-store-raw \
   /private/tmp/zenguy-app-store-final \
-  --version 0.2.2 \
+  --version 0.2.3 \
   --build <native-build-number> \
   --commit <40-character-candidate-commit> \
   --eas-build <eas-build-uuid> \

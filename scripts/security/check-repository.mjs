@@ -2354,9 +2354,9 @@ if (
 if (
   !expoConfig.includes('codeSigningCertificate: "./certs/updates-certificate.pem"') ||
   !expoConfig.includes('alg: "rsa-v1_5-sha256"') ||
-  !expoConfig.includes('runtimeVersion: { policy: "fingerprint" }')
+  !expoConfig.includes('runtimeVersion: { policy: "appVersion" }')
 ) {
-  failures.push("apps/app/app.config.ts: signed fingerprint-scoped OTA updates are required");
+  failures.push("apps/app/app.config.ts: signed app-version-scoped OTA updates are required");
 }
 if (
   !expoConfig.includes('associatedDomains: ["applinks:app.zenguy.com"]') ||

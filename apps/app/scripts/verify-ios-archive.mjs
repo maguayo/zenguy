@@ -181,7 +181,9 @@ if (Object.hasOwn(info.NSAppTransportSecurity ?? {}, "NSAllowsLocalNetworking"))
 if (!same(info.UIBackgroundModes, [])) fail("archive contains unexpected background modes");
 
 const expo = plist(join(appPath, "Expo.plist"));
-if (expo.EXUpdatesRuntimeVersion !== "file:fingerprint") fail("runtime is not fingerprint-scoped");
+if (expo.EXUpdatesRuntimeVersion !== packageJson.version) {
+  fail("runtime version must match the public app version");
+}
 if (expo.EXUpdatesURL !== `https://u.expo.dev/${expectedProjectId}`) fail("EAS Update project changed");
 if (
   expo.EXUpdatesCodeSigningMetadata?.alg !== "rsa-v1_5-sha256" ||
@@ -190,9 +192,6 @@ if (
 ) {
   fail("signed EAS Update configuration is missing or changed");
 }
-const fingerprint = readFileSync(join(appPath, "EXUpdates.bundle", "fingerprint"), "utf8");
-if (!/^[0-9a-f]{40}$/u.test(fingerprint)) fail("embedded runtime fingerprint is invalid");
-
 const appPrivacyPath = join(appPath, "PrivacyInfo.xcprivacy");
 const appPrivacy = plist(appPrivacyPath);
 if (appPrivacy.NSPrivacyTracking !== false || !same(appPrivacy.NSPrivacyTrackingDomains, [])) {
@@ -268,6 +267,6 @@ if (failures.length > 0) {
 } else {
   const mode = signed ? `signed for team ${archiveProperties.Team}` : "unsigned local preflight";
   console.log(
-    `iOS archive verified: ${expectedBundleId} ${packageJson.version} (${buildNumber}), fingerprint ${fingerprint}, ${privacyManifests.length} privacy manifests, ${mode}.`,
+    `iOS archive verified: ${expectedBundleId} ${packageJson.version} (${buildNumber}), runtime ${expo.EXUpdatesRuntimeVersion}, ${privacyManifests.length} privacy manifests, ${mode}.`,
   );
 }

@@ -2,7 +2,7 @@
 
 Duplicate this file for the exact candidate as
 `release-smoke-test-<version>-<build>.md`; do not mark a row from a simulator,
-another build or an OTA with a different fingerprint. Record the canonical EAS
+another build or an OTA with a different runtime version. Record the canonical EAS
 build and submission URLs (which embed their full UUIDs), and fill TestFlight status exactly as
 `VALID / IN_BETA_TESTING`; a processing or expired build is not a candidate.
 
@@ -15,7 +15,8 @@ build and submission URLs (which embed their full UUIDs), and fill TestFlight st
 | Git commit | `<FULL_COMMIT_SHA>` |
 | EAS build ID / URL | `<EAS_BUILD_URL>` |
 | EAS submission ID / URL | `<EAS_SUBMISSION_URL>` |
-| Runtime fingerprint | `<FINGERPRINT>` |
+| Runtime version | `<RUNTIME_VERSION>` |
+| EAS build fingerprint | `<EAS_BUILD_FINGERPRINT>` |
 | API origin | `https://api.zenguy.com` |
 | TestFlight status | `<VALID_AND_IN_BETA_TESTING>` |
 | Tester | `<NAME>` |

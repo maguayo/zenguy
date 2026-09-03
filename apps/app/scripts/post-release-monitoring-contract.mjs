@@ -80,7 +80,7 @@ function validateReleasedRecord(releaseRecord, failures) {
   const review = releaseRecord?.appReview;
   const credentials = releaseRecord?.credentials;
   if (
-    releaseRecord?.schemaVersion !== 4 ||
+    releaseRecord?.schemaVersion !== 5 ||
     releaseRecord?.app?.bundleIdentifier !== "com.zenguy.app" ||
     releaseRecord?.app?.ascAppId !== "6804201911" ||
     review?.stage !== "RELEASED" ||

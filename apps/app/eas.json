@@ -16,6 +16,7 @@
         "simulator": true
       },
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com"
       }
     },
@@ -28,6 +29,7 @@
         "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "env": {
+        "APP_VARIANT": "preview",
         "EXPO_PUBLIC_API_ORIGIN": "https://api-staging.zenguy.com"
       }
     },
@@ -40,6 +42,7 @@
         "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_ORIGIN": "https://api.zenguy.com"
       }
     }

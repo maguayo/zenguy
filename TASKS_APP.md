@@ -1,21 +1,24 @@
 # Tareas pendientes para superar App Review en iOS
 
-Auditoría realizada el **1 de septiembre de 2026** sobre `apps/app`, el estado
+Auditoría actualizada el **3 de septiembre de 2026** sobre `apps/app`, el estado
 remoto de EAS/TestFlight y las reglas vigentes de Apple. El objetivo de esta
 lista es preparar la primera publicación pública; no basta con que una build
 esté disponible en TestFlight.
 
 Estado actual relevante:
 
-- La implementación de fuente está en `0.2.2` y ha superado la validación local.
-  Ese commit de preparación no es por sí mismo una candidata publicable: el
-  proceso exige primero un despliegue de producción verde y después una build
-  EAS nueva, firmada y vinculada al mismo commit.
-- La última build EAS iOS, verificada de nuevo el 1 de septiembre de 2026, es
-  `0.2.1 (4)` (`24b874a6-b9ef-4590-a0dd-3067c157451c`). Finalizó correctamente,
-  y su submission `5b7eade9-da52-4085-aace-f6a44b2d598b` permanece `VALID` e
-  `IN_BETA_TESTING` según EAS; App Store Connect la muestra como **Ready to
-  Submit** en TestFlight. No representa este código y **no debe enviarse** a App
+- La implementación de fuente está en `0.2.3`. La build `0.2.2 (5)` se inició desde
+  el commit desplegado `e664297e185be523e5fa547a05015977f88973fc`, pero EAS la
+  detuvo antes de compilar por una divergencia conocida de
+  `runtimeVersion.policy=fingerprint` en proyectos CNG de Expo SDK 57. No se
+  generó artefacto ni submission y la etiqueta inmutable `ios-v0.2.2` queda como
+  trazabilidad del intento fallido. La corrección usa el runtime recomendado
+  `appVersion` y una variante explícita disponible en la evaluación local y en
+  el builder remoto; requiere desplegar y etiquetar `ios-v0.2.3`.
+- La última build satisfactoria sigue siendo `0.2.1 (4)`
+  (`24b874a6-b9ef-4590-a0dd-3067c157451c`). Su submission
+  `5b7eade9-da52-4085-aace-f6a44b2d598b` permanece `VALID` e
+  `IN_BETA_TESTING`, pero no representa este código y **no debe enviarse** a App
   Review.
 - App Store Connect se auditó con una sesión autenticada. La versión pública
   sigue siendo `0.2.0`, build `3`, con estado **Rejected**. La submission
@@ -61,25 +64,20 @@ Estado actual relevante:
   (`22004384`): permite crearlas, pero no moverlas ni borrarlas y no tiene
   bypass. Los entornos `ios-production-release` e `ios-production-ota` ya
   existen y cada uno admite exclusivamente su patrón de tag (`ios-v*` o
-  `ios-ota-v*`); ambos están aún sin secretos. El repositorio solo tiene un
-  colaborador, por lo que falta añadir un segundo usuario o equipo con acceso
+  `ios-ota-v*`). `ios-production-release` ya contiene únicamente el token Expo
+  dedicado; el entorno OTA sigue sin sus dos secretos. El repositorio solo
+  tiene un colaborador, por lo que falta añadir un segundo usuario o equipo con acceso
   de lectura antes de poder exigir una aprobación realmente independiente y
   bloquear la autoaprobación.
-- `https://api.zenguy.com/api/health`, `/api/app/version` y el AASA público
-  responden `200`, pero el health remoto aún sirve el envelope anterior y no
-  identifica `environment=production` ni `runnerDispatch=queue`. El AASA
-  publicado aún incluye las rutas retiradas `/verify-email` y `/grants/*`; la
-  fuente local ya contiene únicamente reset, invitaciones y rutas autenticadas
-  de workspace. `https://zenguy.com/support/`
-  y `/privacy-choices/` todavía responden `404`; `/privacy/` responde `200`,
-  pero sigue sirviendo el texto anterior sin el consentimiento actual de
-  OpenAI, la eliminación completa ni Privacy Choices. Todo ello requiere
-  desplegar el frontend/website corregido antes de presentar la candidata.
-- App Store Connect ya tiene una sesión autenticada y se ha usado solo para una
-  auditoría de lectura. Cloudflare no tiene una sesión/token disponible en este
-  entorno. Por eso todavía no se han desplegado las migraciones, las páginas
-  públicas ni una candidata; los cambios representativos en Apple siguen sin
-  guardarse y requieren autorización en el momento de hacerlos.
+- El despliegue de producción `33681814557` terminó correctamente para
+  `e664297e185be523e5fa547a05015977f88973fc`: migraciones, API, admin, Worker de
+  claves y prerrequisitos públicos quedaron verificados. `verify:app-store-remotes`
+  confirma en producción health/version, runner por Containers, AASA reducido,
+  soporte, privacidad y Privacy Choices. El nuevo commit `0.2.3` deberá superar
+  otra ejecución verde para su SHA exacto antes de cruzar credenciales.
+- App Store Connect y Expo tienen sesiones autenticadas. La metadata pública de
+  Apple sigue sin modificarse deliberadamente: se guardará solo cuando el
+  binario exacto haya terminado de procesarse y pueda asociarse a la ficha.
 
 ## P0 — bloqueos confirmados
 
@@ -336,21 +334,24 @@ Estado actual relevante:
 - [ ] **Crear una candidata nueva desde un commit limpio posterior a todos los
   P0.**
 
-  La versión pública ya se incrementó de `0.2.1` a `0.2.2` y la etiqueta
-  inmutable `ios-v0.2.2` sigue libre. Mantener el build number remoto por encima
-  de `4`, construir con el perfil `production`, Xcode 26 y credenciales
-  congeladas, y enviar a TestFlight. Confirmar que el runtime real usa el
-  fingerprint actual. No publicar una OTA desde un worktree sucio: el canal
+  La versión pública se incrementó a `0.2.3` porque la etiqueta inmutable
+  `ios-v0.2.2` conserva el intento fallido `0.2.2 (5)`. Tras validar y desplegar
+  el nuevo commit exacto, crear `ios-v0.2.3`, mantener el build number remoto
+  por encima de `5`, construir con el perfil `production`, Xcode 26 y
+  credenciales congeladas, y enviar a TestFlight. Confirmar que el runtime real
+  es `0.2.3` y registrar también el fingerprint de la build EAS. No publicar una
+  OTA desde un worktree sucio: el canal
   `production` todavía conserva como última OTA una actualización antigua del
   runtime `0.2.0` marcada como dirty.
 
   Criterio de cierre: EAS Build y EAS Submission están en estado terminal
   satisfactorio; Apple muestra el binario como `VALID` y `IN_BETA_TESTING`; la
-  versión, build, commit, fingerprint y API `https://api.zenguy.com` coinciden.
+  versión, build, commit, runtime, fingerprint EAS y API
+  `https://api.zenguy.com` coinciden.
   El workflow exige antes un `production.yml` satisfactorio para ese SHA exacto,
   y la fila de versión en Account debe mostrar ese mismo número de build nativo.
   La plantilla y el verificador del registro final ya exigen esos valores y que
-  `ios-v0.2.2` apunte al commit exacto; falta poder rellenarlos con la candidata
+  `ios-v0.2.3` apunte al commit exacto; falta poder rellenarlos con la candidata
   real.
 
 - [ ] **Preparar una cuenta estable y completa para App Review.**
@@ -425,7 +426,7 @@ Estado actual relevante:
   build antigua. **Content Rights** afirma que la app no accede a contenido de
   terceros, aunque puede mostrar contenido web autorizado por el cliente; debe
   declararse el acceso autorizado descrito en `content-rights.md`. No reutilizar
-  esos textos ni capturas para `0.2.2`.
+  esos textos ni capturas para `0.2.3`.
 
   Verificar o completar nombre, subtítulo, descripción, keywords, categoría,
   copyright, URL canónica de privacidad, URL de soporte, precio `Free`, regiones
@@ -560,7 +561,7 @@ Estado actual relevante:
   campo **Version** habilitado (`0.2.0`), la build `3` se puede retirar y existe
   un botón **Update Review** habilitado. Por tanto, para esta primera versión no
   se debe crear otra ficha ni pulsar Add Platform: tras procesarse la candidata,
-  cambiar ese campo a `0.2.2`, sustituir la build por la nueva `5+` y guardar la
+  cambiar ese campo a `0.2.3`, sustituir la build por la nueva `6+` y guardar la
   metadata. **Update Review** es la frontera de reenvío y no debe pulsarse hasta
   que el snapshot `REVIEW_READY`, el vídeo y los siete apartados estén cerrados.
 

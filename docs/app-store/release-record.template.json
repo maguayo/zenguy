@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "app": {
     "name": "Zenguy",
     "bundleIdentifier": "com.zenguy.app",
@@ -18,7 +18,8 @@
     "version": "<VERSION>",
     "build": "<BUILD>",
     "commit": "<FULL_COMMIT_SHA>",
-    "runtimeFingerprint": "<FINGERPRINT>",
+    "runtimeVersion": "<RUNTIME_VERSION>",
+    "easBuildFingerprint": "<EAS_BUILD_FINGERPRINT>",
     "apiOrigin": "https://api.zenguy.com",
     "channel": "production",
     "easBuildId": "<EAS_BUILD_UUID>",

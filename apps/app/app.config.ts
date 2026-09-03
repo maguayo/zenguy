@@ -14,27 +14,32 @@ const privacyCollectedDataTypes: PrivacyManifestConfig["NSPrivacyCollectedDataTy
     NSPrivacyCollectedDataTypePurposes: entry.privacyManifest.purposes,
   }));
 
-const isDevelopmentProfile = process.env.EAS_BUILD_PROFILE === "development";
-const isProductionProfile = process.env.EAS_BUILD_PROFILE === "production";
+// Unlike EAS_BUILD_PROFILE, APP_VARIANT is supplied through each eas.json
+// profile and is therefore available during both local config resolution and
+// the remote build. Keep the default development-safe for ordinary Expo use.
+const appVariant = process.env.APP_VARIANT ?? "development";
+const isDevelopmentProfile = appVariant === "development";
+const isProductionProfile = appVariant === "production";
 const internalRouterScheme = "zenguy-internal";
 
-// The app ships no secrets: the only build-time setting is the API origin,
-// provided through EXPO_PUBLIC_API_ORIGIN (see eas.json and README.md).
+// The app ships no secrets: the build-time settings are the public API origin
+// and the non-secret app variant (see eas.json and README.md).
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "Zenguy",
   slug: "zenguy",
   // EAS project "zenguy" in the maguayo Expo account (eas.json, EAS Update).
   owner: "maguayo",
-  version: "0.2.2",
+  version: "0.2.3",
   // Expo Router requires a logical scheme to resolve its root URL in a
   // standalone release. The final config plugin removes the corresponding
   // CFBundleURLTypes entry, so other iOS apps cannot invoke this scheme;
   // verified HTTPS Universal Links remain the only inbound link mechanism.
   scheme: internalRouterScheme,
-  // Native inputs produce a distinct runtime automatically. This prevents an
-  // OTA from crossing an entitlement, module or config-plugin boundary.
-  runtimeVersion: { policy: "fingerprint" },
+  // Expo currently recommends one OTA runtime per public binary version. Bump
+  // the app version whenever native inputs change so updates cannot cross a
+  // binary compatibility boundary.
+  runtimeVersion: { policy: "appVersion" },
   updates: {
     url: "https://u.expo.dev/dbac86d4-6e5f-4cb1-b465-4182ccb5cac7",
     codeSigningCertificate: "./certs/updates-certificate.pem",
@@ -153,7 +158,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-notifications",
       {
         // aps-environment: production for store builds, development otherwise.
-        mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
+        mode: isProductionProfile ? "production" : "development",
       },
     ],
     // Must remain last: keep the logical Router scheme out of Info.plist so it

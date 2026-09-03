@@ -2,7 +2,7 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const fullCommitPattern = /^[0-9a-f]{40}$/u;
-const fingerprintPattern = /^[0-9a-f]{40}$/u;
+const easFingerprintPattern = /^[0-9a-f]{40}$/u;
 const timestampPattern =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/u;
 
@@ -67,7 +67,8 @@ function validateSmokeRecord(source, candidate, recordedAt, failures) {
     ["Public version", candidate.version],
     ["Apple build number", candidate.build],
     ["Git commit", candidate.commit],
-    ["Runtime fingerprint", candidate.runtimeFingerprint],
+    ["Runtime version", candidate.runtimeVersion],
+    ["EAS build fingerprint", candidate.easBuildFingerprint],
     ["API origin", candidate.apiOrigin],
     ["TestFlight status", "VALID / IN_BETA_TESTING"],
   ]);
@@ -156,7 +157,8 @@ function validateGuideline21Response(
     ["Git commit", candidate.commit],
     ["EAS build ID / URL", candidate.easBuildUrl],
     ["EAS submission ID / URL", candidate.easSubmissionUrl],
-    ["Runtime fingerprint", candidate.runtimeFingerprint],
+    ["Runtime version", candidate.runtimeVersion],
+    ["EAS build fingerprint", candidate.easBuildFingerprint],
     ["API origin", candidate.apiOrigin],
     ["Attachment filename", screenRecordingFilename],
     ["Attachment SHA-256", screenRecordingSha256],
@@ -386,7 +388,7 @@ export function validateReleaseRecord(
       "schemaVersion",
       "signoffs",
     ]) ||
-    record?.schemaVersion !== 4
+    record?.schemaVersion !== 5
   ) {
     failures.push("release record root/schema keys are not exact");
   }
@@ -459,16 +461,18 @@ export function validateReleaseRecord(
       "easSubmissionId",
       "easSubmissionStatus",
       "easSubmissionUrl",
-      "runtimeFingerprint",
+      "easBuildFingerprint",
+      "runtimeVersion",
       "testFlightState",
       "version",
     ]) ||
     candidate.version !== packageVersion ||
     !/^[1-9]\d*$/u.test(candidate.build ?? "") ||
     !Number.isSafeInteger(Number(candidate.build)) ||
-    Number(candidate.build) < 5 ||
+    Number(candidate.build) < 6 ||
     !fullCommitPattern.test(candidate.commit ?? "") ||
-    !fingerprintPattern.test(candidate.runtimeFingerprint ?? "") ||
+    candidate.runtimeVersion !== candidate.version ||
+    !easFingerprintPattern.test(candidate.easBuildFingerprint ?? "") ||
     !uuidPattern.test(candidate.easBuildId ?? "") ||
     !uuidPattern.test(candidate.easSubmissionId ?? "") ||
     candidate.easBuildUrl !==

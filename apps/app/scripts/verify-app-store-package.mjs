@@ -274,7 +274,8 @@ const expectedGuideline21Placeholders = [
   "FULL_COMMIT_SHA",
   "EAS_BUILD_URL",
   "EAS_SUBMISSION_URL",
-  "FINGERPRINT",
+  "RUNTIME_VERSION",
+  "EAS_BUILD_FINGERPRINT",
   "SCREEN_RECORDING_FILENAME",
   "SCREEN_RECORDING_SHA256",
   "MODEL",
@@ -365,7 +366,8 @@ const expectedSmokePlaceholders = [
   "FULL_COMMIT_SHA",
   "EAS_BUILD_URL",
   "EAS_SUBMISSION_URL",
-  "FINGERPRINT",
+  "RUNTIME_VERSION",
+  "EAS_BUILD_FINGERPRINT",
   "VALID_AND_IN_BETA_TESTING",
   "NAME",
   "MODEL",
@@ -398,7 +400,8 @@ const expectedReleaseRecordPlaceholders = [
   "VERSION",
   "BUILD",
   "FULL_COMMIT_SHA",
-  "FINGERPRINT",
+  "RUNTIME_VERSION",
+  "EAS_BUILD_FINGERPRINT",
   "EAS_BUILD_UUID",
   "EAS_BUILD_URL",
   "EAS_SUBMISSION_UUID",
@@ -439,7 +442,7 @@ if (
   fail("release-record template: placeholders changed or were filled in the source template");
 }
 if (
-  releaseRecordTemplate.schemaVersion !== 4 ||
+  releaseRecordTemplate.schemaVersion !== 5 ||
   !hasExactKeys(releaseRecordTemplate, [
     "ageRating",
     "app",
@@ -480,14 +483,16 @@ if (
     "easSubmissionId",
     "easSubmissionStatus",
     "easSubmissionUrl",
-    "runtimeFingerprint",
+    "easBuildFingerprint",
+    "runtimeVersion",
     "testFlightState",
     "version",
   ]) ||
   releaseRecordTemplate.candidate?.version !== "<VERSION>" ||
   releaseRecordTemplate.candidate?.build !== "<BUILD>" ||
   releaseRecordTemplate.candidate?.commit !== "<FULL_COMMIT_SHA>" ||
-  releaseRecordTemplate.candidate?.runtimeFingerprint !== "<FINGERPRINT>" ||
+  releaseRecordTemplate.candidate?.runtimeVersion !== "<RUNTIME_VERSION>" ||
+  releaseRecordTemplate.candidate?.easBuildFingerprint !== "<EAS_BUILD_FINGERPRINT>" ||
   releaseRecordTemplate.candidate?.easBuildId !== "<EAS_BUILD_UUID>" ||
   releaseRecordTemplate.candidate?.easBuildUrl !== "<EAS_BUILD_URL>" ||
   releaseRecordTemplate.candidate?.easSubmissionId !== "<EAS_SUBMISSION_UUID>" ||

@@ -22,11 +22,11 @@ const verifierPath = fileURLToPath(
 
 function releasedRecord() {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     app: { bundleIdentifier: "com.zenguy.app", ascAppId: "6804201911" },
     candidate: {
-      version: "0.2.2",
-      build: "5",
+      version: "0.2.3",
+      build: "6",
       commit,
       easBuildId: buildId,
       easBuildUrl: buildUrl,
@@ -74,8 +74,8 @@ function validMonitoringRecord() {
     schemaVersion: 1,
     releaseRecordSha256: releaseHash,
     candidate: {
-      version: "0.2.2",
-      build: "5",
+      version: "0.2.3",
+      build: "6",
       commit,
       easBuildId: buildId,
       easBuildUrl: buildUrl,

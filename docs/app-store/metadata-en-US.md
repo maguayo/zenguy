@@ -27,7 +27,7 @@ device evidence. The exact portal-only age answers are versioned in
 | Privacy Policy URL | `https://zenguy.com/privacy/` |
 | User Privacy Choices URL | `https://zenguy.com/privacy-choices/` |
 
-## Version 0.2.2
+## Version 0.2.3
 
 ### Promotional text (150/170)
 

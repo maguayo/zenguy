@@ -14,11 +14,11 @@ const smokeHash = "d".repeat(64);
 const privacyHash = "e".repeat(64);
 const appReviewResponseHash = "f".repeat(64);
 const screenRecordingHash = "9".repeat(64);
-const screenRecordingFilename = "zenguy-0.2.2-5-review.mp4";
+const screenRecordingFilename = "zenguy-0.2.3-6-review.mp4";
 
 function validRecord() {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     app: {
       name: "Zenguy",
       bundleIdentifier: "com.zenguy.app",
@@ -34,10 +34,11 @@ function validRecord() {
       displayGlobalRating: "18+",
     },
     candidate: {
-      version: "0.2.2",
-      build: "5",
+      version: "0.2.3",
+      build: "6",
       commit,
-      runtimeFingerprint: fingerprint,
+      runtimeVersion: "0.2.3",
+      easBuildFingerprint: fingerprint,
       apiOrigin: "https://api.zenguy.com",
       channel: "production",
       easBuildId: buildId,
@@ -104,7 +105,7 @@ function validRecord() {
 function screenshotManifest() {
   return {
     app: "Zenguy",
-    build: "5",
+    build: "6",
     commit,
     easBuildId: buildId,
     easSubmissionId: submissionId,
@@ -136,7 +137,7 @@ function screenshotManifest() {
     generatedAt: "2026-09-02T07:30:00.000Z",
     locale: "en-US",
     schemaVersion: 1,
-    version: "0.2.2",
+    version: "0.2.3",
   };
 }
 
@@ -149,12 +150,13 @@ function smokeRecord() {
 
 | Field | Result |
 | --- | --- |
-| Public version | \`0.2.2\` |
-| Apple build number | \`5\` |
+| Public version | \`0.2.3\` |
+| Apple build number | \`6\` |
 | Git commit | \`${commit}\` |
 | EAS build ID / URL | \`${buildUrl}\` |
 | EAS submission ID / URL | \`${submissionUrl}\` |
-| Runtime fingerprint | \`${fingerprint}\` |
+| Runtime version | \`0.2.3\` |
+| EAS build fingerprint | \`${fingerprint}\` |
 | API origin | \`https://api.zenguy.com\` |
 | TestFlight status | \`VALID / IN_BETA_TESTING\` |
 | Tester | \`Release owner\` |
@@ -181,12 +183,13 @@ function guideline21Response() {
 
 | Field | Result |
 | --- | --- |
-| Public version | \`0.2.2\` |
-| Apple build number | \`5\` |
+| Public version | \`0.2.3\` |
+| Apple build number | \`6\` |
 | Git commit | \`${commit}\` |
 | EAS build ID / URL | \`${buildUrl}\` |
 | EAS submission ID / URL | \`${submissionUrl}\` |
-| Runtime fingerprint | \`${fingerprint}\` |
+| Runtime version | \`0.2.3\` |
+| EAS build fingerprint | \`${fingerprint}\` |
 | API origin | \`https://api.zenguy.com\` |
 
 ## 1 — Physical-device screen recording
@@ -229,7 +232,7 @@ function evidence() {
     },
     appReviewResponseSha256: appReviewResponseHash,
     appReviewResponseSource: guideline21Response(),
-    packageVersion: "0.2.2",
+    packageVersion: "0.2.3",
     privacyReportSha256: privacyHash,
     screenshotsManifest: screenshotManifest(),
     screenshotsManifestSha256: screenshotsHash,

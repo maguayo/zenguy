@@ -15,7 +15,8 @@ or private attachment URLs.
 | Git commit | `<FULL_COMMIT_SHA>` |
 | EAS build ID / URL | `<EAS_BUILD_URL>` |
 | EAS submission ID / URL | `<EAS_SUBMISSION_URL>` |
-| Runtime fingerprint | `<FINGERPRINT>` |
+| Runtime version | `<RUNTIME_VERSION>` |
+| EAS build fingerprint | `<EAS_BUILD_FINGERPRINT>` |
 | API origin | `https://api.zenguy.com` |
 
 ## 1 — Physical-device screen recording

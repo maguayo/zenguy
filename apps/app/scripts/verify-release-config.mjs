@@ -76,7 +76,7 @@ function resolvedConfig(profile) {
     encoding: "utf8",
     env: {
       ...process.env,
-      EAS_BUILD_PROFILE: profile,
+      APP_VARIANT: profile,
       EXPO_PUBLIC_API_ORIGIN:
         profile === "production"
           ? "https://api.zenguy.com"
@@ -122,8 +122,8 @@ function verifyNativeProfile(profile, expectedApns, localNetworking) {
   } else if (info.NSAppTransportSecurity?.NSAllowsLocalNetworking !== undefined) {
     fail(`${profile}: release-like profiles must not allow local networking`);
   }
-  if (expoPlist.EXUpdatesRuntimeVersion !== "file:fingerprint") {
-    fail(`${profile}: EAS Update runtime must resolve from a native fingerprint`);
+  if (expoPlist.EXUpdatesRuntimeVersion !== config.version) {
+    fail(`${profile}: EAS Update runtime must match the public app version`);
   }
   if (
     expoPlist.EXUpdatesCodeSigningMetadata?.alg !== "rsa-v1_5-sha256" ||
@@ -191,13 +191,20 @@ for (const profile of ["development", "preview", "production"]) {
 if (
   eas.build?.production?.channel !== "production" ||
   eas.build?.production?.environment !== "production" ||
+  eas.build?.production?.env?.APP_VARIANT !== "production" ||
   eas.build?.production?.env?.EXPO_PUBLIC_API_ORIGIN !== "https://api.zenguy.com"
 ) {
-  fail("production build must use only the production channel, environment and API origin");
+  fail("production build must use only the production channel, environment, variant and API origin");
 }
 for (const [profile, build] of Object.entries(eas.build ?? {})) {
+  if (build.env?.APP_VARIANT !== profile) {
+    fail(`${profile}: APP_VARIANT must exactly match the build profile`);
+  }
   for (const [name, value] of Object.entries(build.env ?? {})) {
-    if (!name.startsWith("EXPO_PUBLIC_") || typeof value !== "string") {
+    if (
+      (name !== "APP_VARIANT" && !name.startsWith("EXPO_PUBLIC_")) ||
+      typeof value !== "string"
+    ) {
       fail(`${profile}: build profile contains a non-public inline environment value`);
     }
   }

@@ -12,7 +12,7 @@ function completeEnvironment() {
     APP_REVIEW_CONTACT_LAST_NAME: "Contact",
     APP_REVIEW_CONTACT_EMAIL: "review-contact@zenguy.com",
     APP_REVIEW_CONTACT_PHONE: "+34 600 000 000",
-    APP_REVIEW_SCREEN_RECORDING_FILENAME: "zenguy-0.2.2-5-review.mp4",
+    APP_REVIEW_SCREEN_RECORDING_FILENAME: "zenguy-0.2.3-6-review.mp4",
     APP_REVIEW_TESTED_DEVICES: "iPhone 17 Pro — iOS 26.5",
     MAESTRO_REVIEW_EMAIL: "apple-review@zenguy.com",
     MAESTRO_REVIEW_PASSWORD: "Review-only-password-2026!",
@@ -30,7 +30,7 @@ test("builds review metadata in memory and clears every injected value", () => {
   const config = buildStoreReviewConfig(environment);
 
   assertEnvironmentCleared(environment);
-  assert.equal(config.apple.version, "0.2.2");
+  assert.equal(config.apple.version, "0.2.3");
   assert.deepEqual(config.apple.review, {
     demoPassword: "Review-only-password-2026!",
     demoRequired: true,
@@ -42,7 +42,7 @@ test("builds review metadata in memory and clears every injected value", () => {
     phone: "+34 600 000 000",
   });
   assert.match(config.apple.review.notes, /Guideline\s+3\.1\.3\(f\)/u);
-  assert.match(config.apple.review.notes, /zenguy-0\.2\.2-5-review\.mp4/u);
+  assert.match(config.apple.review.notes, /zenguy-0\.2\.3-6-review\.mp4/u);
   assert.match(config.apple.review.notes, /iPhone 17 Pro — iOS 26\.5/u);
   assert.match(config.apple.review.notes, /Guideline 2\.1 information/u);
   assert.doesNotMatch(config.apple.review.notes, /<[A-Z][A-Z0-9_]+>/u);

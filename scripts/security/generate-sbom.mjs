@@ -31,6 +31,7 @@ function packagesFromLock(path) {
 
 const output = process.argv[2];
 if (!output) throw new Error("Usage: generate-sbom.mjs <output.json>");
+const { version: appVersion } = JSON.parse(readFileSync("apps/app/package.json", "utf8"));
 const unique = new Map();
 for (const path of ["pnpm-lock.yaml", "apps/app/pnpm-lock.yaml"]) {
   for (const component of packagesFromLock(path)) unique.set(component["bom-ref"], component);
@@ -40,7 +41,7 @@ const bom = {
   components: [...unique.values()].sort((left, right) =>
     left["bom-ref"].localeCompare(right["bom-ref"]),
   ),
-  metadata: { component: { name: "zenguy", type: "application", version: "0.2.2" } },
+  metadata: { component: { name: "zenguy", type: "application", version: appVersion } },
   specVersion: "1.5",
   version: 1,
 };

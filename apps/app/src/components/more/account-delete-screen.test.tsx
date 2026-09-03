@@ -9,13 +9,13 @@ const mockSuccess = jest.fn();
 const mockConfirm = jest.fn<(options: unknown) => Promise<boolean>>();
 
 jest.mock("expo-application", () => ({
-  nativeApplicationVersion: "0.2.2",
-  nativeBuildVersion: "5",
+  nativeApplicationVersion: "0.2.3",
+  nativeBuildVersion: "6",
 }));
 
 jest.mock("expo-constants", () => ({
   __esModule: true,
-  default: { expoConfig: { ios: { buildNumber: "5" }, version: "0.2.2" } },
+  default: { expoConfig: { ios: { buildNumber: "6" }, version: "0.2.3" } },
 }));
 
 jest.mock("expo-updates", () => ({ channel: "production", updateId: null }));
