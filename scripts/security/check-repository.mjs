@@ -2512,10 +2512,16 @@ if (
   productionWorkflow.includes("secrets.CLOUDFLARE_API_TOKEN") ||
   productionWorkflow.includes("secrets.CLOUDFLARE_STAGING_API_TOKEN") ||
   (productionWorkflow.match(/secrets\.CLOUDFLARE_PRODUCTION_API_TOKEN/gu) ?? [])
-    .length !== 6
+    .length !== 7 ||
+  !productionWorkflow.includes(
+    "EXPO_PUSH_ACCESS_TOKEN: ${{ secrets.EXPO_PUSH_ACCESS_TOKEN }}",
+  ) ||
+  !productionWorkflow.includes(
+    "wrangler secret put EXPO_PUSH_ACCESS_TOKEN --env production",
+  )
 ) {
   failures.push(
-    "production.yml: production must use only its protected Environment and dedicated Cloudflare token",
+    "production.yml: production must use only its protected Environment, dedicated Cloudflare token and encrypted Expo push secret",
   );
 }
 const productionPreflight = productionWorkflow.indexOf(

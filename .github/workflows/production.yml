@@ -89,6 +89,15 @@ jobs:
         run: |
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
           test "$GITHUB_SHA" = "$current_sha"
+      - name: Sync Expo push access token
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PRODUCTION_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPO_PUSH_ACCESS_TOKEN: ${{ secrets.EXPO_PUSH_ACCESS_TOKEN }}
+        run: |
+          test -n "$EXPO_PUSH_ACCESS_TOKEN"
+          printf '%s' "$EXPO_PUSH_ACCESS_TOKEN" | pnpm exec wrangler secret put EXPO_PUSH_ACCESS_TOKEN --env production
       - name: Deploy production Worker
         working-directory: apps/api
         env:
