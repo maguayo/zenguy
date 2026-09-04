@@ -521,6 +521,22 @@ class BrowserUseIntegrationTests(unittest.TestCase):
         self.assertNotIn("actual-secret", task)
         self.assertEqual(start_url, "https://example.com/login")
 
+    def test_system_extension_preserves_explicit_money_tolerances(self):
+        prompt = worker.BROWSER_USE_SYSTEM_EXTENSION
+
+        self.assertIn("One cent is 0.01 currency units", prompt)
+        self.assertIn(
+            "an absolute difference less than or equal to the stated tolerance passes",
+            prompt,
+        )
+        self.assertIn(
+            "A zero-price promotional item is not a monetary mismatch", prompt
+        )
+        self.assertIn(
+            "observe at least one subsequent stable page state before finishing",
+            prompt,
+        )
+
     def test_extracts_and_validates_browser_use_json_after_model_prose(self):
         raw = (
             "I verified both conditions.\n"

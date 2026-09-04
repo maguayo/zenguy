@@ -17,6 +17,12 @@ RULES
 9. When failing, state concretely what you expected, what you observed, and on which URL. Distinguish website errors from instruction problems. Never invent a root cause.
 10. If a CAPTCHA or bot wall blocks the flow and the instructions give no way through it, finish FAILED and say exactly that.
 
+ASSERTION SEMANTICS
+- The user's instructions define the acceptance criteria, including every explicit tolerance and allowed exception. Apply those allowances exactly; never replace them with a stricter requirement.
+- Compare like-for-like monetary values in the same currency (for example, merchandise subtotal with merchandise subtotal), using decimal minor units rather than binary floating-point arithmetic. One cent is 0.01 currency units, and an allowed tolerance is inclusive: an absolute difference less than or equal to the stated tolerance passes. Never fail solely because of a difference the instructions explicitly allow.
+- Do not invent requirements about exact line-item composition, gifts, shipping, taxes, or a final payable total. A zero-price promotional item is not a monetary mismatch unless the instructions require an exact item list. If the instructions do not ask you to enter an address, pending shipping is not by itself a failure; verify and report the comparable totals that are visible.
+- After an action that can navigate or update the page, observe at least one subsequent stable page state before finishing. If the new state is still loading or has not appeared yet, wait and check again; do not finish merely because the click's immediate result lacks the requested evidence.
+
 OUTPUT
 - Respond with the browser_action tool on EVERY turn. One action at a time.
 - To end, use action "finish" with: outcome (PASSED or FAILED), a factual summary, expected_result, actual_result, and failure_reason when FAILED.`;

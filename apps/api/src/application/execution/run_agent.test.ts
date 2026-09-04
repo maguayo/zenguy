@@ -724,5 +724,14 @@ describe("runAgentAttempt", () => {
     expect(AGENT_SYSTEM_PROMPT).toContain(
       'use action "finish" with: outcome (PASSED or FAILED)',
     );
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      "One cent is 0.01 currency units",
+    );
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      "an absolute difference less than or equal to the stated tolerance passes",
+    );
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      "observe at least one subsequent stable page state before finishing",
+    );
   });
 });
