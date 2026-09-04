@@ -14,9 +14,9 @@ export function heroState(data: Overview): HeroState {
 
 export function heroHeadline(state: HeroState, openIncidents: number): string {
   if (state === "incident") {
-    return `${openIncidents} ${openIncidents === 1 ? "incidencia abierta" : "incidencias abiertas"}`;
+    return `${openIncidents} open ${openIncidents === 1 ? "incident" : "incidents"}`;
   }
-  return state === "calm" ? "Todo en calma" : "Aún no hay nada bajo vigilancia";
+  return state === "calm" ? "All clear" : "Nothing under watch yet";
 }
 
 export function compactDuration(ms: number | null): string {
@@ -33,10 +33,10 @@ export function compactRelative(iso: string): string {
   const timestamp = Date.parse(iso);
   if (!Number.isFinite(timestamp)) return "—";
   const elapsed = Math.max(0, Date.now() - timestamp);
-  if (elapsed < 60_000) return "ahora";
-  if (elapsed < 3_600_000) return `hace ${Math.max(1, Math.round(elapsed / 60_000))} m`;
-  if (elapsed < 86_400_000) return `hace ${Math.max(1, Math.round(elapsed / 3_600_000))} h`;
-  return `hace ${Math.max(1, Math.round(elapsed / 86_400_000))} d`;
+  if (elapsed < 60_000) return "now";
+  if (elapsed < 3_600_000) return `${Math.max(1, Math.round(elapsed / 60_000))}m ago`;
+  if (elapsed < 86_400_000) return `${Math.max(1, Math.round(elapsed / 3_600_000))}h ago`;
+  return `${Math.max(1, Math.round(elapsed / 86_400_000))}d ago`;
 }
 
 const HERO_TONE: Record<HeroState, { halo: string; dot: string }> = {
@@ -47,7 +47,7 @@ const HERO_TONE: Record<HeroState, { halo: string; dot: string }> = {
 
 function metricValue(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined) return "—";
-  return new Intl.NumberFormat("es-ES", { maximumFractionDigits: digits }).format(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value);
 }
 
 function HeroMetric({
@@ -115,24 +115,23 @@ export function OverviewHero({
   if (state === "incident") {
     story = openIncident ? (
       <>
-        <strong className="font-medium text-zinc-800">{openIncident.resourceName}</strong> tiene una
-        incidencia desde {compactRelative(openIncident.openedAt)}.
+        An incident affecting <strong className="font-medium text-zinc-800">{openIncident.resourceName}</strong> opened {compactRelative(openIncident.openedAt)}.
       </>
     ) : (
-      "Hay servicios que necesitan atención."
+      "Some services need attention."
     );
   } else if (state === "empty") {
-    story = "Crea un test o un monitor para empezar a vigilar tus servicios.";
+    story = "Create a test or monitor to start watching your services.";
   } else if (lastIncident === null) {
-    story = "Sin incidentes hasta ahora.";
+    story = "No incidents so far.";
   } else if (lastIncident === undefined) {
-    story = "Comprobando el historial de incidentes…";
+    story = "Checking incident history…";
   } else {
     story = (
       <>
-        Último incidente {compactRelative(lastIncident.openedAt)}
+        Last incident {compactRelative(lastIncident.openedAt)}
         {lastIncident.status === "RESOLVED"
-          ? ` — resuelto en ${compactDuration(lastIncident.durationMs)}`
+          ? ` — resolved in ${compactDuration(lastIncident.durationMs)}`
           : ""}
       </>
     );
@@ -147,7 +146,7 @@ export function OverviewHero({
           ? `/w/${workspaceId}/tests`
           : `/w/${workspaceId}/incidents`;
   const historyLabel =
-    state === "incident" ? "Ver incidencias" : state === "empty" ? "Empezar" : "Historial";
+    state === "incident" ? "View incidents" : state === "empty" ? "Get started" : "History";
 
   return (
     <section
@@ -186,7 +185,7 @@ export function OverviewHero({
           value={metricValue(overview.uptime.uptime30d, 2)}
         />
         <HeroMetric
-          label="Resp. 24 h"
+          label="Response 24 h"
           unit={overview.uptime.avgResponseTimeMs24h == null ? undefined : "ms"}
           value={metricValue(
             overview.uptime.avgResponseTimeMs24h == null
@@ -195,12 +194,12 @@ export function OverviewHero({
           )}
         />
         <HeroMetric
-          label="Fallos 24 h"
+          label="Failures 24 h"
           tone={overview.browserTests.failed24h > 0 ? "danger" : "neutral"}
           value={overview.browserTests.failed24h}
         />
         <HeroMetric
-          label="Incidentes"
+          label="Incidents"
           tone={openIncidents > 0 ? "danger" : "neutral"}
           value={openIncidents}
         />

@@ -56,12 +56,12 @@ describe("overview activity", () => {
         Object.entries(activityPresentation).map(([type, value]) => [type, value.label]),
       ),
     ).toEqual({
-      CHANNEL_DELIVERY_FAILED: "Entrega fallida",
-      MONITOR_DOWN: "Incidente abierto",
-      MONITOR_RECOVERED: "Recuperado",
+      CHANNEL_DELIVERY_FAILED: "Delivery failed",
+      MONITOR_DOWN: "Incident opened",
+      MONITOR_RECOVERED: "Recovered",
       TEST_FAILED: "Failed",
       TEST_PASSED: "Passed",
-      TEST_RECOVERED: "Recuperado",
+      TEST_RECOVERED: "Recovered",
       TEST_SYSTEM_ERROR: "System error",
       TEST_TIMEOUT: "Timeout",
     });
@@ -90,9 +90,9 @@ describe("overview activity", () => {
 
   it("uses compact overview-relative labels", () => {
     const now = Date.now();
-    expect(compactTime(new Date(now).toISOString())).toBe("ahora");
-    expect(compactTime(new Date(now - 3 * 60 * 60_000).toISOString())).toBe("3h");
-    expect(compactTime(new Date(now + 4 * 60_000).toISOString())).toBe("en 4m");
+    expect(compactTime(new Date(now).toISOString())).toBe("now");
+    expect(compactTime(new Date(now - 3 * 60 * 60_000).toISOString())).toBe("3h ago");
+    expect(compactTime(new Date(now + 4 * 60_000).toISOString())).toBe("in 4m");
   });
 
   it("uses readable resource labels", () => {

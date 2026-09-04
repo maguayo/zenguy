@@ -134,13 +134,13 @@ describe("heroState", () => {
 
 describe("heroHeadline", () => {
   it("counts open incidents", () => {
-    expect(heroHeadline("incident", 1)).toBe("1 incidencia abierta");
-    expect(heroHeadline("incident", 3)).toBe("3 incidencias abiertas");
+    expect(heroHeadline("incident", 1)).toBe("1 open incident");
+    expect(heroHeadline("incident", 3)).toBe("3 open incidents");
   });
 
   it("keeps the calm and empty voices", () => {
-    expect(heroHeadline("calm", 0)).toBe("Todo en calma");
-    expect(heroHeadline("empty", 0)).toBe("Aún no hay nada bajo vigilancia");
+    expect(heroHeadline("calm", 0)).toBe("All clear");
+    expect(heroHeadline("empty", 0)).toBe("Nothing under watch yet");
   });
 });
 
@@ -161,15 +161,15 @@ describe("compactDuration", () => {
 });
 
 describe("compactRelative", () => {
-  it("formats recent timestamps in Spanish compact units", () => {
-    expect(compactRelative(iso(30_000))).toBe("ahora");
-    expect(compactRelative(iso(12 * MINUTE_MS))).toBe("hace 12 m");
-    expect(compactRelative(iso(4 * HOUR_MS + 20 * MINUTE_MS))).toBe("hace 4 h");
-    expect(compactRelative(iso(6 * DAY_MS))).toBe("hace 6 d");
+  it("formats recent timestamps in English compact units", () => {
+    expect(compactRelative(iso(30_000))).toBe("now");
+    expect(compactRelative(iso(12 * MINUTE_MS))).toBe("12m ago");
+    expect(compactRelative(iso(4 * HOUR_MS + 20 * MINUTE_MS))).toBe("4h ago");
+    expect(compactRelative(iso(6 * DAY_MS))).toBe("6d ago");
   });
 
   it("handles future and invalid timestamps safely", () => {
-    expect(compactRelative(iso(-5 * MINUTE_MS))).toBe("ahora");
+    expect(compactRelative(iso(-5 * MINUTE_MS))).toBe("now");
     expect(compactRelative("not-a-date")).toBe("—");
   });
 });
@@ -191,21 +191,21 @@ describe("OverviewHero render", () => {
     });
     const text = visibleText(html);
 
-    expect(text).toContain("Todo en calma");
-    expect(text).toContain("Último incidente hace 6 d — resuelto en 4 h 35 m");
+    expect(text).toContain("All clear");
+    expect(text).toContain("Last incident 6d ago — resolved in 4 h 35 m");
     expect(text).toContain(
-      "Uptime 30 d 99,99 % Resp. 24 h 215 ms Fallos 24 h 2 Incidentes 0",
+      "Uptime 30 d 99.99 % Response 24 h 215 ms Failures 24 h 2 Incidents 0",
     );
     expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Uptime 30 d<\/p>/u);
-    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Resp\. 24 h<\/p>/u);
-    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Fallos 24 h<\/p>/u);
-    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Incidentes<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Response 24 h<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Failures 24 h<\/p>/u);
+    expect(html).toMatch(/<p class="[^"]*\bwhitespace-nowrap\b[^"]*">Incidents<\/p>/u);
     expect(html).toMatch(
       /<p class="[^"]*\bwhitespace-nowrap\b[^"]*">215 <span class="[^"]*">ms<\/span><\/p>/u,
     );
     expect(html).not.toMatch(/class="[^"]*\bblock\b[^"]*">ms<\/span>/u);
     expect(html).toContain('href="/w/ws_1/incidents"');
-    expect(text).toContain("Historial");
+    expect(text).toContain("History");
   });
 
   it("renders an open incident with danger metrics and the filtered incidents link", () => {
@@ -221,13 +221,13 @@ describe("OverviewHero render", () => {
     });
     const text = visibleText(html);
 
-    expect(text).toContain("1 incidencia abierta");
-    expect(text).toContain("Checkout API tiene una incidencia desde hace 12 m.");
+    expect(text).toContain("1 open incident");
+    expect(text).toContain("An incident affecting Checkout API opened 12m ago.");
     expect(text).toContain(
-      "Uptime 30 d 98,75 % Resp. 24 h — Fallos 24 h 3 Incidentes 1",
+      "Uptime 30 d 98.75 % Response 24 h — Failures 24 h 3 Incidents 1",
     );
     expect(html).toContain('href="/w/ws_1/incidents?status=open"');
-    expect(text).toContain("Ver incidencias");
+    expect(text).toContain("View incidents");
   });
 
   it("renders the empty state and routes managers to create their first test", () => {
@@ -241,13 +241,13 @@ describe("OverviewHero render", () => {
     });
     const text = visibleText(html);
 
-    expect(text).toContain("Aún no hay nada bajo vigilancia");
-    expect(text).toContain("Crea un test o un monitor para empezar a vigilar tus servicios.");
+    expect(text).toContain("Nothing under watch yet");
+    expect(text).toContain("Create a test or monitor to start watching your services.");
     expect(text).toContain(
-      "Uptime 30 d — Resp. 24 h — Fallos 24 h 0 Incidentes 0",
+      "Uptime 30 d — Response 24 h — Failures 24 h 0 Incidents 0",
     );
     expect(html).toContain('href="/w/ws_1/tests/new"');
-    expect(text).toContain("Empezar");
+    expect(text).toContain("Get started");
   });
 
   it("routes members without manage rights to the tests list", () => {
@@ -257,6 +257,6 @@ describe("OverviewHero render", () => {
     });
 
     expect(html).toContain('href="/w/ws_1/tests"');
-    expect(visibleText(html)).toContain("Empezar");
+    expect(visibleText(html)).toContain("Get started");
   });
 });
