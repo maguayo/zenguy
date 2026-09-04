@@ -117,7 +117,11 @@ export class ExpoPushClient {
       const batch = messages.slice(start, start + EXPO_PUSH_BATCH_SIZE);
       let response: Response;
       try {
-        response = await this.fetchFn(EXPO_PUSH_ENDPOINT, {
+        // Invoke the injected function without the client as its receiver.
+        // Workerd rejects `this.fetchFn(...)` when fetchFn is the Worker global
+        // `fetch`, before any request reaches Expo.
+        const fetchFn = this.fetchFn;
+        response = await fetchFn(EXPO_PUSH_ENDPOINT, {
           method: "POST",
           headers: {
             Accept: "application/json",

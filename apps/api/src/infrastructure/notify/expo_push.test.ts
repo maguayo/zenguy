@@ -116,6 +116,23 @@ describe("ExpoPushClient", () => {
     expect(JSON.parse(String(recorder.requests[1]?.init?.body))).toHaveLength(1);
   });
 
+  it("does not bind the Worker global fetch to the client instance", async () => {
+    let receiver: unknown = Symbol("not-called");
+    const strictFetch: ExpoFetch = function (this: unknown) {
+      receiver = this;
+      return Promise.resolve(tickets({ status: "ok", id: "ticket" }));
+    };
+    const messages = buildPushMessages([token(1)], FAILURE, {
+      workspaceId: "ws_1",
+      appUrl: "https://app.zenguy.test",
+    });
+
+    await expect(new ExpoPushClient(strictFetch).send(messages)).resolves.toEqual([
+      { status: "ok", id: "ticket" },
+    ]);
+    expect(receiver).toBeUndefined();
+  });
+
   it("retries HTTP errors and network faults, parks only an unreadable acceptance", async () => {
     const messages = buildPushMessages([token(1)], FAILURE, {
       workspaceId: "ws_1",
