@@ -1,3 +1,5 @@
+import type { InstructionImprover } from "./application/browser_tests/improve_instructions";
+import { OpenAiInstructionImprover } from "./infrastructure/llm/instruction_improver";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { EmailSender } from "./domain/email/sender";
@@ -207,6 +209,7 @@ import { D1RateLimiter, type RateLimiter } from "./shared/ratelimit";
 import { PublishQueueOutbox } from "./application/durability/publish_outbox";
 
 export interface AppOverrides {
+  instructionImprover?: InstructionImprover;
   clock?: Clock;
   ids?: IdGenerator;
   users?: UserRepo;
@@ -1020,6 +1023,8 @@ export function buildApp(
   app.route(
     "/api/workspaces",
     browserTestRoutes({
+      instructionImprover: overrides.instructionImprover ?? new OpenAiInstructionImprover(env.OPENAI_API_KEY_CF),
+      remoteAiConsents,
       users,
       workspaces,
       members,

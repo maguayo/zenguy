@@ -1,3 +1,6 @@
+import { improveInstructionsSchema, type InstructionImprover } from "../../application/browser_tests/improve_instructions";
+import { REMOTE_AI_PROVIDER, REMOTE_AI_CONSENT_VERSION, REMOTE_AI_CONSENT_REQUIRED_REASON, type RemoteAiConsentRepo } from "../../domain/users/remote_ai_consent";
+import { forbidden } from "../../shared/errors";
 import { Hono } from "hono";
 import type { TrackEvent } from "../../application/activity/track_event";
 import type { WriteAudit } from "../../application/audit/write_audit";
@@ -67,6 +70,8 @@ import { zjson, zquery } from "../validate";
 import { validation } from "../../shared/errors";
 
 export interface BrowserTestRoutesDependencies {
+  instructionImprover: InstructionImprover;
+  remoteAiConsents: Pick<RemoteAiConsentRepo, "hasActive">;
   users: UserRepo;
   workspaces: WorkspaceRepo;
   members: MemberRepo;
@@ -330,6 +335,27 @@ export function browserTestRoutes(
         ip: requestIp(context),
       });
       return context.json({ data: presentBrowserTest(result) }, 201);
+    },
+  );
+
+  app.post(
+    "/:workspaceId/browser-tests/improve-instructions",
+    auth,
+    requireVerifiedEmail,
+    workspace,
+    requireAction("tests.manage"),
+    active,
+    zjson(improveInstructionsSchema),
+    rateLimit(dependencies.rateLimiter,
+      (context) => `improve_instructions:workspace:${context.get("workspace").id}`, 10, 3600),
+    rateLimit(dependencies.rateLimiter,
+      (context) => `improve_instructions:user:${context.get("user").id}`, 10, 3600),
+    async (context) => {
+      if (!(await dependencies.remoteAiConsents.hasActive(
+        context.get("workspace").id, REMOTE_AI_PROVIDER, REMOTE_AI_CONSENT_VERSION,
+      ))) throw forbidden(REMOTE_AI_CONSENT_REQUIRED_REASON);
+      const result = await dependencies.instructionImprover.improve(context.req.valid("json"));
+      return context.json({ data: result });
     },
   );
 

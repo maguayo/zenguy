@@ -1,3 +1,5 @@
+import { D1RemoteAiConsentRepo } from "../../infrastructure/db/remote_ai_consent_repo";
+import { REMOTE_AI_PROVIDER, REMOTE_AI_CONSENT_VERSION } from "../../domain/users/remote_ai_consent";
 import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import type { IncidentCloserOnDelete } from "../../application/browser_tests/incident_closer";
@@ -136,6 +138,7 @@ function channel(
 }
 
 describe("browser test routes", () => {
+  const improve = vi.fn(async () => ({ instructions: "Improved draft" }));
   let app: Hono<AppEnv>;
   let clock: FixedClock;
   let tokens: Record<Actor, string>;
@@ -147,6 +150,7 @@ describe("browser test routes", () => {
 
   beforeEach(async () => {
     await freshDb();
+    improve.mockClear();
     const bindings = testEnv();
     const config = loadConfig(bindings);
     const users = new D1UserRepo(bindings.DB);
@@ -206,6 +210,7 @@ describe("browser test routes", () => {
       clock,
       ids: new FakeIds(),
       incidentCloserOnTestDelete: incidents,
+      instructionImprover: { improve },
     });
   });
 
@@ -234,6 +239,50 @@ describe("browser test routes", () => {
     expect(response.status).toBe(201);
     return { id: String(body.data.id), body };
   }
+
+  async function grantAiConsent() {
+    await new D1RemoteAiConsentRepo(testEnv().DB).grant({
+      workspaceId: WORKSPACE.id, provider: REMOTE_AI_PROVIDER,
+      policyVersion: REMOTE_AI_CONSENT_VERSION, actorUserId: USERS.owner.id, at: NOW,
+    });
+  }
+
+  function improveRequest(actor: Actor = "owner", workspaceId = WORKSPACE.id, draft: unknown = {
+    instructions: CONFIG.instructions, startUrl: CONFIG.startUrl, device: CONFIG.device,
+  }) {
+    return app.request(`/api/workspaces/${workspaceId}/browser-tests/improve-instructions`, {
+      method: "POST", headers: headers(actor), body: JSON.stringify(draft),
+    });
+  }
+
+  it("requires workspace consent before sending a draft to the provider", async () => {
+    expect((await improveRequest()).status).toBe(403);
+    expect(improve).not.toHaveBeenCalled();
+    await grantAiConsent();
+    const result = await improveRequest();
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({ data: { instructions: "Improved draft" } });
+    expect(improve).toHaveBeenCalledTimes(1);
+    const rows = await testEnv().DB.prepare("SELECT COUNT(*) AS count FROM test_runs").first<{ count: number }>();
+    expect(rows?.count).toBe(0);
+  });
+
+  it("denies members and other workspaces, invalid drafts and inactive subscriptions", async () => {
+    await grantAiConsent();
+    expect((await improveRequest("member")).status).toBe(403);
+    expect((await improveRequest("owner", OTHER_WORKSPACE.id)).status).not.toBe(200);
+    expect((await improveRequest("owner", WORKSPACE.id, { instructions: "" })).status).toBe(400);
+    await subscriptions.upsertByWorkspace({ ...SUBSCRIPTION, status: "CANCELED" });
+    expect((await improveRequest()).status).toBe(402);
+    expect(improve).not.toHaveBeenCalled();
+  });
+
+  it("rate limits instruction improvement independently of runs", async () => {
+    await grantAiConsent();
+    for (let index = 0; index < 10; index++) expect((await improveRequest()).status).toBe(200);
+    expect((await improveRequest()).status).toBe(429);
+    expect(improve).toHaveBeenCalledTimes(10);
+  });
 
   it("validates channel ownership and creates a scheduled test", async () => {
     for (const channelIds of [["ch_missing"], ["ch_other_workspace"]]) {

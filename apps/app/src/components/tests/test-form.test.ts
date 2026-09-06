@@ -89,7 +89,7 @@ describe("browser test form", () => {
     expect(isTestFormField("tests.0.startUrl")).toBe(false);
     expect(isTestFormField("toString")).toBe(false);
     expect(testFormDefaults.intervalHours).toBe(24);
-    expect(testFormDefaults.maxRetries).toBe(1);
+    expect(testFormDefaults.maxRetries).toBe(2);
   });
 
   it("preselects enabled default channels for a new test", () => {

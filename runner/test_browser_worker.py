@@ -2630,10 +2630,10 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
         self.assertEqual(config.model_name, "gpt-5.6-luna")
         self.assertEqual(config.model_api_key, "sk-test-key")
-        self.assertEqual(config.model_reasoning_effort, "low")
+        self.assertEqual(config.model_reasoning_effort, "high")
         self.assertEqual(
             config.model_reasoning_effort_schedule,
-            ("low", "medium", "high"),
+            ("high", "xhigh", "max"),
         )
         self.assertTrue(config.allow_remote_model)
         self.assertTrue(config.model_native_structured)
@@ -2662,14 +2662,14 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertFalse(config.headless)
         self.assertEqual(config.poll_seconds, 3.0)
 
-    def test_default_reasoning_escalates_and_caps_at_high(self):
+    def test_default_reasoning_escalates_and_caps_at_max(self):
         config = worker.RunnerConfig.for_fallback(
             "staging",
             environ=self.ENVIRON,
             secrets_path=Path("/nonexistent/runner-secrets.json"),
         )
 
-        expected = ("low", "medium", "high", "high")
+        expected = ("high", "xhigh", "max", "max")
         actual = tuple(
             worker.reasoning_effort_for_attempt(config, attempt_index)
             for attempt_index in range(4)
@@ -2807,7 +2807,7 @@ class FallbackModelTests(unittest.TestCase):
         self.assertEqual(model.kwargs["model"], "gpt-5.6-luna")
         self.assertEqual(model.kwargs["base_url"], "https://api.openai.com/v1")
         self.assertEqual(model.kwargs["api_key"], "sk-test-key")
-        self.assertEqual(model.kwargs["reasoning_effort"], "low")
+        self.assertEqual(model.kwargs["reasoning_effort"], "high")
         http_client = model.kwargs["http_client"]
         self.addCleanup(lambda: asyncio.run(http_client.aclose()))
         self.assertFalse(http_client.follow_redirects)
@@ -3301,9 +3301,9 @@ class CloudflareRuntimeTests(unittest.TestCase):
         self.assertEqual(config.zenguy_runner_token, "r" * 64)
         self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
         self.assertEqual(config.model_name, "gpt-5.6-luna")
-        self.assertEqual(config.model_reasoning_effort, "low")
+        self.assertEqual(config.model_reasoning_effort, "high")
         self.assertEqual(
-            config.model_reasoning_effort_schedule, ("low", "medium", "high")
+            config.model_reasoning_effort_schedule, ("high", "xhigh", "max")
         )
         self.assertTrue(config.allow_remote_model)
         self.assertTrue(config.model_native_structured)

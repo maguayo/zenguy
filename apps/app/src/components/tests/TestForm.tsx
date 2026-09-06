@@ -1,3 +1,4 @@
+import { ImproveInstructions } from "./ImproveInstructions";
 import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -269,6 +270,12 @@ export function TestForm({ testId }: { testId?: string }) {
               </Field>
             )}
           />
+        <ImproveInstructions
+          key={`${current.id}:${testId ?? "new"}`}
+          workspaceId={current.id}
+          input={{ startUrl: form.watch("startUrl"), instructions: form.watch("instructions"), device: form.watch("device") }}
+          onApply={(instructions) => form.setValue("instructions", instructions, { shouldDirty: true, shouldValidate: true })}
+        />
           <View style={styles.warning}>
             <Feather color={colors.warn} name="alert-triangle" size={16} style={styles.warningIcon} />
             <Small color={colors.textBody} style={styles.warningText}>

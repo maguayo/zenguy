@@ -160,3 +160,16 @@ export function downloadReport(
 ): Promise<TextDownload> {
   return apiGetText(`${workspacePath(workspaceId)}/runs/${encodeURIComponent(runId)}/report`);
 }
+
+export interface ImproveInstructionsInput {
+  startUrl: string;
+  instructions: string;
+  device: "DESKTOP" | "MOBILE";
+}
+
+export function improveInstructions(
+  workspaceId: string,
+  input: ImproveInstructionsInput,
+): Promise<{ instructions: string }> {
+  return apiPost(`${workspacePath(workspaceId)}/browser-tests/improve-instructions`, input);
+}

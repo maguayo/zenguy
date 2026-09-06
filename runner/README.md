@@ -224,8 +224,8 @@ offline, or without power:
   is healthy the fallback therefore stays idle.
 - Inference uses the OpenAI API (default model `gpt-5.6-luna`) through the stock
   browser-use `ChatOpenAI` adapter with native structured output. Reasoning
-  escalates by functional attempt: `low` on attempt 1, `medium` on attempt 2,
-  and `high` on attempts 3 and 4. The Bionic text adapter is not involved.
+  escalates by functional attempt: `high` on attempt 1, `xhigh` on attempt 2,
+  and `max` on attempts 3 and 4. Cloudflare Containers uses the same schedule. The Bionic text adapter is not involved.
 - Chrome runs headless by default. Steps, screenshots, secret scoping,
   redaction and SSRF rules are identical to the local mode.
 - The same stale-claim poll also surfaces attempts whose worker died mid-run,

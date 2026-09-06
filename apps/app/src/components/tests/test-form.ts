@@ -200,7 +200,7 @@ export const testFormDefaults: TestFormValues = {
   device: "DESKTOP",
   instructions: "",
   intervalHours: 24,
-  maxRetries: 1,
+  maxRetries: 2,
   name: "",
   notifyOnRecovery: true,
   startUrl: "",

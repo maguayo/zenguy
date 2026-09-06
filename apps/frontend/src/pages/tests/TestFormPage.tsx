@@ -1,3 +1,4 @@
+import { ImproveInstructions } from "../../components/ImproveInstructions";
 import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -214,7 +215,7 @@ const defaults: TestFormValues = {
   device: "DESKTOP",
   instructions: "",
   intervalHours: 24,
-  maxRetries: 1,
+  maxRetries: 2,
   name: "",
   notifyOnRecovery: true,
   startUrl: "",
@@ -428,6 +429,12 @@ export default function TestFormPage() {
             {...form.register("instructions")}
           />
         </Field>
+        <ImproveInstructions
+          key={`${current.id}:${testId ?? "new"}`}
+          workspaceId={current.id}
+          input={{ startUrl: form.watch("startUrl"), instructions: form.watch("instructions"), device: form.watch("device") }}
+          onApply={(instructions) => form.setValue("instructions", instructions, { shouldDirty: true, shouldValidate: true })}
+        />
         <div className="mt-4 flex gap-2 rounded-md border border-warn-600/20 bg-warn-50 p-3 text-sm text-zinc-700">
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warn-600" />
           <p>{stagingCredentialsCopy}</p>
