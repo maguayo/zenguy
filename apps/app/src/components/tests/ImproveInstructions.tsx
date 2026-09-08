@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { improveInstructions, type ImproveInstructionsInput } from "@/api/tests";
 import { apiErrorMessage } from "@/lib/errors";
@@ -14,7 +14,9 @@ export function ImproveInstructions({ workspaceId, input, onApply }: {
   const [suggestion, setSuggestion] = useState<{ source: string; instructions: string } | null>(null);
   const source = JSON.stringify({ workspaceId, ...input });
   const currentSource = useRef(source);
-  currentSource.current = source;
+  useEffect(() => {
+    currentSource.current = source;
+  }, [source]);
   const visible = suggestion?.source === source ? suggestion : null;
 
   async function improve() {

@@ -92,8 +92,21 @@ DEFAULT_MODEL_NAME = "qwen/qwen3.8-27b"
 DEFAULT_MODEL_REASONING_EFFORT = "xhigh"
 DEFAULT_FALLBACK_MODEL_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_FALLBACK_MODEL_NAME = "gpt-5.6-luna"
-DEFAULT_FALLBACK_REASONING_EFFORT = "high"
-DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE = ("high", "xhigh", "max")
+DEFAULT_FALLBACK_REASONING_EFFORT = "low"
+# Escalation by functional attempt. Every level must exist in the pinned OpenAI
+# SDK (test_reasoning_schedule_uses_supported_efforts): the API rejects unknown
+# levels with HTTP 400, which would turn every retry at that level into a
+# failure. Higher levels are also slower per step while the attempt budget
+# (5 min / 40 steps) stays the same for retries, so the ladder starts low.
+DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE = ("low", "medium", "high")
+# max_completion_tokens also covers the hidden reasoning tokens. 8 k was enough
+# at "low"; at "medium"/"high" the reasoning alone can exceed it, the answer
+# arrives truncated (finish_reason=length) and browser-use counts the step as
+# a failure. 32 k leaves room for the reasoning plus the structured output.
+OPENAI_MAX_COMPLETION_TOKENS = 32_768
+# Consecutive failed steps after which browser-use terminates the agent and
+# forces one final `done` call (final_response_after_failure=True).
+BROWSER_USE_MAX_FAILURES = 3
 DEFAULT_POLL_SECONDS = 5.0
 HEARTBEAT_SECONDS = 5.0
 # Shorter than the interval on purpose: a stalled POST must never make the
@@ -3069,7 +3082,7 @@ def create_browser_use_model(
             reasoning_models=[config.model_name],
             temperature=None,
             frequency_penalty=None,
-            max_completion_tokens=8_192,
+            max_completion_tokens=OPENAI_MAX_COMPLETION_TOKENS,
             max_retries=2,
             timeout=120,
             http_client=http_client,
@@ -3795,16 +3808,34 @@ _LLM_PROVIDER_ERROR_SIGNATURES = (
     "insufficient_quota",
     "credit_balance_exhausted",
     "rate_limit",
+    # AgentError.RATE_LIMIT_ERROR ("Rate limit reached. Waiting before retry.")
+    "rate limit",
     "invalid_api_key",
     "incorrect api key",
     "apiconnectionerror",
     "apitimeouterror",
-    "error code: 429",
+    # str() of the OpenAI SDK's APIConnectionError / APITimeoutError as
+    # wrapped by browser-use's ModelProviderError.
+    "connection error",
+    "request timed out",
+    # browser-use's own llm_timeout guard around each model call.
+    "llm call timed out",
+    # ModelOutputTruncatedError: finish_reason=length, the hidden reasoning
+    # consumed max_completion_tokens and no structured output came back.
+    "model output was truncated",
+    "invalid openai chat completion response",
+    "failed to parse structured output from model response",
+    # 400 = the request itself was rejected (for example an unsupported
+    # reasoning_effort level), never something the website did.
+    "error code: 400",
     "error code: 401",
+    "error code: 402",
     "error code: 403",
+    "error code: 429",
     "error code: 500",
     "error code: 502",
     "error code: 503",
+    "error code: 504",
 )
 
 
@@ -3821,6 +3852,37 @@ def _llm_provider_failure(errors: list[str]) -> str | None:
         if any(signature in lowered for signature in _LLM_PROVIDER_ERROR_SIGNATURES):
             return message
     return None
+
+
+def _forced_done_errors(
+    history: Any, max_failures: int = BROWSER_USE_MAX_FAILURES
+) -> list[str]:
+    """Errors of the consecutive failed steps right before the final step.
+
+    After ``max_failures`` consecutive step failures browser-use terminates the
+    agent and forces one last ``done`` call; the structured verdict written
+    there describes those failures, not the website. Returns [] unless the
+    history ends with exactly that shape (every one of the ``max_failures``
+    steps before the last one failed), so a provider hiccup the agent
+    recovered from never overrides a verdict reached afterwards.
+    """
+    entries = getattr(history, "history", None)
+    if not isinstance(entries, list) or len(entries) < max_failures + 1:
+        return []
+    errors: list[str] = []
+    for item in entries[-(max_failures + 1) : -1]:
+        item_errors = [
+            str(error)
+            for error in (
+                getattr(result, "error", None)
+                for result in (getattr(item, "result", None) or [])
+            )
+            if error
+        ]
+        if not item_errors:
+            return []
+        errors.extend(item_errors)
+    return errors
 
 
 def browser_use_outcome(
@@ -3868,20 +3930,37 @@ def browser_use_outcome(
             }
     else:
         failed = structured.status == "FAILED"
-        outcome = {
-            "status": structured.status,
-            "summary": structured.summary,
-            "expectedResult": structured.expected_result,
-            "actualResult": structured.actual_result,
-            **(
-                {
-                    "failureReason": structured.failure_reason
-                    or "The browser-use agent could not verify the test"
-                }
-                if failed
-                else {}
-            ),
-        }
+        provider_error = (
+            _llm_provider_failure(_forced_done_errors(history)) if failed else None
+        )
+        if provider_error is not None:
+            # The verdict came from the forced final `done` after consecutive
+            # model-provider failures: a Zenguy/LLM problem, not evidence
+            # about the website. SYSTEM_ERROR gets an infrastructure retry
+            # instead of an incident and an alert to the customer.
+            outcome = {
+                "status": "SYSTEM_ERROR",
+                "systemErrorCode": "LLM_UNAVAILABLE",
+                "summary": "The language model provider failed repeatedly during this attempt",
+                "expectedResult": structured.expected_result,
+                "actualResult": structured.actual_result,
+                "failureReason": provider_error[:2_000],
+            }
+        else:
+            outcome = {
+                "status": structured.status,
+                "summary": structured.summary,
+                "expectedResult": structured.expected_result,
+                "actualResult": structured.actual_result,
+                **(
+                    {
+                        "failureReason": structured.failure_reason
+                        or "The browser-use agent could not verify the test"
+                    }
+                    if failed
+                    else {}
+                ),
+            }
     outcome.update(
         {
             **_history_token_breakdown(history),
@@ -4043,7 +4122,7 @@ class JobExecutor:
                 output_model_schema=BrowserTestResult,
                 use_vision=self.config.model_vision and not secrets,
                 max_actions_per_step=1,
-                max_failures=3,
+                max_failures=BROWSER_USE_MAX_FAILURES,
                 max_history_items=20,
                 use_thinking=False,
                 use_judge=False,

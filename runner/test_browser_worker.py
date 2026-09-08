@@ -730,6 +730,98 @@ class BrowserUseIntegrationTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "FAILED")
         self.assertNotIn("systemErrorCode", outcome)
 
+    def test_llm_timeouts_truncation_and_rejected_requests_are_provider_failures(
+        self,
+    ):
+        for message in (
+            "LLM call timed out after 240 seconds. Keep your thinking and output short.",
+            "Model output was truncated at max_completion_tokens=8192; the "
+            "structured output is incomplete.",
+            "Error code: 400 - {'error': {'message': \"Invalid value: 'max'. "
+            "Supported values are: 'low', 'medium', 'high' and 'xhigh'.\"}}",
+            "Request timed out.",
+            "Connection error.",
+            "Rate limit reached. Waiting before retry.",
+        ):
+            self.assertIsNotNone(worker._llm_provider_failure([message]), message)
+        for message in (
+            "Element with index 7 was not clickable",
+            "Action blocked: target is not a reviewed click control",
+            "Navigation blocked: host could not be resolved",
+        ):
+            self.assertIsNone(worker._llm_provider_failure([message]), message)
+
+    @staticmethod
+    def _forced_done_history(step_errors, verdict_reason="The agent failed 3 times"):
+        def step(error):
+            return SimpleNamespace(result=[SimpleNamespace(error=error)])
+
+        return SimpleNamespace(
+            structured_output=worker.BrowserTestResult(
+                status="FAILED",
+                summary="Terminated after repeated failures",
+                expected_result="Cart subtotal matches checkout subtotal",
+                actual_result="Could not continue; the agent was terminated",
+                failure_reason=verdict_reason,
+            ),
+            history=[
+                step(None),
+                *(step(error) for error in step_errors),
+                SimpleNamespace(result=[SimpleNamespace(error=None, is_done=True)]),
+            ],
+            usage=SimpleNamespace(total_tokens=5_000),
+            urls=lambda: ["https://example.com/checkout"],
+        )
+
+    def test_forced_done_after_provider_failures_maps_to_system_error(self):
+        truncated = (
+            "Model output was truncated at max_completion_tokens=8192; the "
+            "structured output is incomplete."
+        )
+        history = self._forced_done_history([truncated, truncated, truncated])
+
+        outcome = worker.browser_use_outcome(
+            history,
+            {"instructions": "Compare subtotals"},
+            worker.Redactor({}),
+            "gpt-5.6-luna",
+            "zenguy-cf-runner/test",
+            "cf",
+        )
+
+        self.assertEqual(outcome["status"], "SYSTEM_ERROR")
+        self.assertEqual(outcome["systemErrorCode"], "LLM_UNAVAILABLE")
+        self.assertIn("truncated", outcome["failureReason"])
+        self.assertEqual(
+            outcome["actualResult"], "Could not continue; the agent was terminated"
+        )
+        self.assertEqual(outcome["runnerKind"], "cf")
+
+    def test_forced_done_after_site_failures_stays_failed(self):
+        blocked = "Action blocked: target is not a reviewed click control"
+        history = self._forced_done_history([blocked, blocked, blocked])
+
+        outcome = worker.browser_use_outcome(
+            history, {"instructions": "x"}, worker.Redactor({}), "gpt-5.6-luna"
+        )
+
+        self.assertEqual(outcome["status"], "FAILED")
+        self.assertNotIn("systemErrorCode", outcome)
+        self.assertEqual(outcome["failureReason"], "The agent failed 3 times")
+
+    def test_recovered_provider_error_does_not_override_a_later_verdict(self):
+        truncated = "Model output was truncated at max_completion_tokens=8192"
+        # One provider error, then the agent recovered and reached its own
+        # verdict on the site: not the forced-done shape.
+        history = self._forced_done_history([truncated, None, None])
+
+        outcome = worker.browser_use_outcome(
+            history, {"instructions": "x"}, worker.Redactor({}), "gpt-5.6-luna"
+        )
+
+        self.assertEqual(outcome["status"], "FAILED")
+        self.assertNotIn("systemErrorCode", outcome)
+
     def test_browser_use_telemetry_and_cloud_sync_are_disabled(self):
         self.assertEqual(worker.os.environ["ANONYMIZED_TELEMETRY"], "false")
         self.assertEqual(worker.os.environ["BROWSER_USE_CLOUD_SYNC"], "false")
@@ -2630,10 +2722,10 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
         self.assertEqual(config.model_name, "gpt-5.6-luna")
         self.assertEqual(config.model_api_key, "sk-test-key")
-        self.assertEqual(config.model_reasoning_effort, "high")
+        self.assertEqual(config.model_reasoning_effort, "low")
         self.assertEqual(
             config.model_reasoning_effort_schedule,
-            ("high", "xhigh", "max"),
+            ("low", "medium", "high"),
         )
         self.assertTrue(config.allow_remote_model)
         self.assertTrue(config.model_native_structured)
@@ -2662,14 +2754,34 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertFalse(config.headless)
         self.assertEqual(config.poll_seconds, 3.0)
 
-    def test_default_reasoning_escalates_and_caps_at_max(self):
+    def test_reasoning_schedule_uses_supported_efforts(self):
+        # The API answers HTTP 400 to an unknown reasoning_effort, which would
+        # turn every retry at that level into a failure. The pinned OpenAI SDK
+        # is the source of truth for the supported levels.
+        import typing
+
+        from openai.types.shared_params.reasoning_effort import ReasoningEffort
+
+        supported = {
+            value
+            for argument in typing.get_args(ReasoningEffort)
+            for value in typing.get_args(argument)
+        }
+
+        for effort in (
+            worker.DEFAULT_FALLBACK_REASONING_EFFORT,
+            *worker.DEFAULT_FALLBACK_REASONING_EFFORT_SCHEDULE,
+        ):
+            self.assertIn(effort, supported)
+
+    def test_default_reasoning_escalates_and_caps_at_high(self):
         config = worker.RunnerConfig.for_fallback(
             "staging",
             environ=self.ENVIRON,
             secrets_path=Path("/nonexistent/runner-secrets.json"),
         )
 
-        expected = ("high", "xhigh", "max", "max")
+        expected = ("low", "medium", "high", "high")
         actual = tuple(
             worker.reasoning_effort_for_attempt(config, attempt_index)
             for attempt_index in range(4)
@@ -2807,7 +2919,12 @@ class FallbackModelTests(unittest.TestCase):
         self.assertEqual(model.kwargs["model"], "gpt-5.6-luna")
         self.assertEqual(model.kwargs["base_url"], "https://api.openai.com/v1")
         self.assertEqual(model.kwargs["api_key"], "sk-test-key")
-        self.assertEqual(model.kwargs["reasoning_effort"], "high")
+        self.assertEqual(model.kwargs["reasoning_effort"], "low")
+        self.assertEqual(
+            model.kwargs["max_completion_tokens"],
+            worker.OPENAI_MAX_COMPLETION_TOKENS,
+        )
+        self.assertGreaterEqual(worker.OPENAI_MAX_COMPLETION_TOKENS, 16_384)
         http_client = model.kwargs["http_client"]
         self.addCleanup(lambda: asyncio.run(http_client.aclose()))
         self.assertFalse(http_client.follow_redirects)
@@ -3301,9 +3418,9 @@ class CloudflareRuntimeTests(unittest.TestCase):
         self.assertEqual(config.zenguy_runner_token, "r" * 64)
         self.assertEqual(config.model_base_url, "https://api.openai.com/v1")
         self.assertEqual(config.model_name, "gpt-5.6-luna")
-        self.assertEqual(config.model_reasoning_effort, "high")
+        self.assertEqual(config.model_reasoning_effort, "low")
         self.assertEqual(
-            config.model_reasoning_effort_schedule, ("high", "xhigh", "max")
+            config.model_reasoning_effort_schedule, ("low", "medium", "high")
         )
         self.assertTrue(config.allow_remote_model)
         self.assertTrue(config.model_native_structured)
