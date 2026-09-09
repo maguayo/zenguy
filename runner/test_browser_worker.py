@@ -2300,6 +2300,85 @@ class BrowserPolicyToolTests(unittest.IsolatedAsyncioTestCase):
             browser_session=toggle_session,
         )
 
+    async def test_can_focus_editable_fields_to_commit_checkout_address(self):
+        for unrestricted in (False, True):
+            for tag, attributes in (
+                ("INPUT", {"type": "text", "name": "city"}),
+                ("INPUT", {"name": "postalCode"}),
+                ("INPUT", {"type": "email"}),
+                ("INPUT", {"type": "tel"}),
+                ("TEXTAREA", {}),
+                ("SELECT", {"name": "countryCode"}),
+            ):
+                with self.subTest(unrestricted=unrestricted, tag=tag, attributes=attributes):
+                    runtime, original_click, *_ = self.runtime()
+                    tools = worker.create_browser_use_tools(
+                        runtime, {}, worker.Redactor({}),
+                        worker.BrowserNetworkPolicy(
+                            ("example.com",), (), ("example.com",),
+                            unrestricted=unrestricted,
+                        ),
+                    )
+                    session = SimpleNamespace(
+                        get_element_by_index=mock.AsyncMock(return_value=SimpleNamespace(
+                            node_name=tag, attributes=attributes,
+                        )),
+                        get_current_page_url=mock.AsyncMock(
+                            return_value="https://example.com/checkout"
+                        ),
+                    )
+
+                    result = await tools.registry.registry.actions["click"].function(
+                        SimpleNamespace(index=52914), session
+                    )
+
+                    self.assertTrue(result.ok)
+                    original_click.assert_awaited_once()
+
+    async def test_field_focus_still_requires_an_allowed_writable_host(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime, {}, worker.Redactor({}),
+            worker.BrowserNetworkPolicy(
+                ("example.com", "readonly.example.com"), (), ("example.com",)
+            ),
+        )
+        session = SimpleNamespace(
+            get_element_by_index=mock.AsyncMock(return_value=SimpleNamespace(
+                node_name="INPUT", attributes={"type": "text", "name": "city"},
+            )),
+            get_current_page_url=mock.AsyncMock(),
+        )
+        for url in ("https://readonly.example.com", "https://unlisted.example", "file:///tmp/form.html"):
+            with self.subTest(url=url):
+                session.get_current_page_url.return_value = url
+                result = await tools.registry.registry.actions["click"].function(
+                    SimpleNamespace(index=1), session
+                )
+                self.assertIn("blocked", result.error)
+        original_click.assert_not_awaited()
+
+    async def test_focus_support_does_not_enable_unreviewed_inputs(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime, {}, worker.Redactor({}),
+            worker.BrowserNetworkPolicy(("example.com",), unrestricted=True),
+        )
+        session = SimpleNamespace(
+            get_element_by_index=mock.AsyncMock(),
+            get_current_page_url=mock.AsyncMock(return_value="https://example.com"),
+        )
+        for input_type in ("file", "hidden", "image", "reset", "unknown"):
+            with self.subTest(input_type=input_type):
+                session.get_element_by_index.return_value = SimpleNamespace(
+                    node_name="INPUT", attributes={"type": input_type},
+                )
+                result = await tools.registry.registry.actions["click"].function(
+                    SimpleNamespace(index=1), session
+                )
+                self.assertIn("not a reviewed click control", result.error)
+        original_click.assert_not_awaited()
+
     async def test_submit_button_stays_blocked_on_an_exact_writable_host(self):
         runtime, original_click, *_ = self.runtime()
         tools = worker.create_browser_use_tools(

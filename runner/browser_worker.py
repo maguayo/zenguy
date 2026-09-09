@@ -73,11 +73,11 @@ EXPECTED_PIP_CHECK_CONFLICTS = frozenset(
         "browser-use 0.13.8 has requirement pypdf==6.14.2, but you have pypdf 6.16.1.",
     }
 )
-RUNNER_VERSION = f"zenguy-local-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
+RUNNER_VERSION = f"zenguy-local-runner/2.2.2+browser-use-{BROWSER_USE_VERSION}"
 FALLBACK_RUNNER_VERSION = (
-    f"zenguy-fallback-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
+    f"zenguy-fallback-runner/2.2.2+browser-use-{BROWSER_USE_VERSION}"
 )
-CF_RUNNER_VERSION = f"zenguy-cf-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
+CF_RUNNER_VERSION = f"zenguy-cf-runner/2.2.2+browser-use-{BROWSER_USE_VERSION}"
 CONTAINER_CHROMIUM = Path("/usr/bin/chromium")
 LOCAL_SECRETS_PATH = Path(__file__).resolve().with_name(
     ".browser_worker.local.json"
@@ -3407,7 +3407,8 @@ def create_browser_use_tools(
 
     @tools.action(
         (
-            "Follow a direct HTTP(S) link or toggle a checkbox/radio. "
+            "Follow a direct HTTP(S) link, toggle a checkbox/radio, or focus "
+            "a text input, textarea or native select (including to blur another field). "
             "In unrestricted mode, also click buttons and listbox options "
             "(including address autocomplete suggestions). Otherwise buttons "
             "require an exact approved action scope. All actions remain subject "
@@ -3431,7 +3432,14 @@ def create_browser_use_tools(
                 if isinstance(attributes, Mapping)
                 else ""
             )
-            if node_name != "input" or input_type not in {"checkbox", "radio"}:
+            # The input/select tools already permit editing these native
+            # fields. Focusing them must use the same interaction policy so
+            # ordinary blur/change validation can complete before assertions.
+            is_form_field = node_name in {"textarea", "select"} or (
+                node_name == "input" and input_type in SAFE_TEXT_INPUT_TYPES
+            )
+            is_toggle = node_name == "input" and input_type in {"checkbox", "radio"}
+            if not (is_form_field or is_toggle):
                 if not (
                     node_name == "button"
                     or (node_name == "input" and input_type in {"button", "submit"})
@@ -3494,7 +3502,9 @@ def create_browser_use_tools(
                     )
             try:
                 current_url = await browser_session.get_current_page_url()
-                policy.assert_interaction(current_url, "Toggle")
+                policy.assert_interaction(
+                    current_url, "Field focus" if is_form_field else "Toggle"
+                )
             except Exception as error:
                 return runtime.ActionResult(
                     error=redactor.redact(str(error) or "Interaction blocked")
