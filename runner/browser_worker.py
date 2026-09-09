@@ -73,11 +73,11 @@ EXPECTED_PIP_CHECK_CONFLICTS = frozenset(
         "browser-use 0.13.8 has requirement pypdf==6.14.2, but you have pypdf 6.16.1.",
     }
 )
-RUNNER_VERSION = f"zenguy-local-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
+RUNNER_VERSION = f"zenguy-local-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
 FALLBACK_RUNNER_VERSION = (
-    f"zenguy-fallback-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
+    f"zenguy-fallback-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
 )
-CF_RUNNER_VERSION = f"zenguy-cf-runner/2.2.0+browser-use-{BROWSER_USE_VERSION}"
+CF_RUNNER_VERSION = f"zenguy-cf-runner/2.2.1+browser-use-{BROWSER_USE_VERSION}"
 CONTAINER_CHROMIUM = Path("/usr/bin/chromium")
 LOCAL_SECRETS_PATH = Path(__file__).resolve().with_name(
     ".browser_worker.local.json"
@@ -3357,6 +3357,25 @@ def verify_browser_security(*, launch: bool) -> None:
             )
 
 
+def _is_listbox_option(node: Any) -> bool:
+    """Recognize custom options such as Shopify's address autocomplete rows."""
+
+    attributes = getattr(node, "attributes", {})
+    if not isinstance(attributes, Mapping) or attributes.get("role") != "option":
+        return False
+    # Options may be wrapped in a group inside the listbox. Bound traversal
+    # because this tree is supplied by the browser, not by the runner.
+    parent = getattr(node, "parent_node", None)
+    for _ in range(8):
+        if parent is None:
+            break
+        attributes = getattr(parent, "attributes", {})
+        if isinstance(attributes, Mapping) and attributes.get("role") == "listbox":
+            return True
+        parent = getattr(parent, "parent_node", None)
+    return False
+
+
 def create_browser_use_tools(
     runtime: BrowserUseRuntime,
     secrets: Mapping[str, SecretValue],
@@ -3387,7 +3406,13 @@ def create_browser_use_tools(
             actions.pop(action_name, None)
 
     @tools.action(
-        "Follow a direct allowlisted HTTP(S) link, or toggle a checkbox/radio on an exact writable host. Buttons and submits are blocked.",
+        (
+            "Follow a direct HTTP(S) link or toggle a checkbox/radio. "
+            "In unrestricted mode, also click buttons and listbox options "
+            "(including address autocomplete suggestions). Otherwise buttons "
+            "require an exact approved action scope. All actions remain subject "
+            "to the runtime's network policy."
+        ),
         param_model=click_action.param_model,
     )
     async def click(params: Any, browser_session) -> Any:
@@ -3410,20 +3435,20 @@ def create_browser_use_tools(
                 if not (
                     node_name == "button"
                     or (node_name == "input" and input_type in {"button", "submit"})
+                    or (policy.unrestricted and _is_listbox_option(node))
                 ):
                     return runtime.ActionResult(
                         error="Action blocked: target is not a reviewed click control"
                     )
                 if policy.unrestricted:
-                    # Modo "el test manda": pulsar el botón/submit directamente
-                    # (checkout, login, comprar). Solo se comprueba que el host
-                    # actual sea http/https; sin ledger ni scope exacto.
+                    # Unrestricted runs allow native buttons and reviewed ARIA
+                    # listbox options. Restricted runs never enter this branch.
                     try:
                         current_url = await browser_session.get_current_page_url()
-                        policy.assert_interaction(current_url, "Button click")
+                        policy.assert_interaction(current_url, "Control click")
                     except Exception as error:
                         return runtime.ActionResult(
-                            error=redactor.redact(str(error) or "Button click blocked")
+                            error=redactor.redact(str(error) or "Control click blocked")
                         )
                     return await click_action.function(
                         params=params,

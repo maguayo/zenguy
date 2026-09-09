@@ -68,6 +68,11 @@ jobs:
           "$RUNNER_TEMP/audit-env/bin/pip-audit" \
             --path "$RUNNER_TEMP/runner-env/lib/python3.12/site-packages"
 
+      - name: Runner regression tests
+        run: >-
+          PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/runner-env/bin/python"
+          -m unittest discover -s runner -p 'test_browser_worker.py'
+
       # actions/setup-node v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:

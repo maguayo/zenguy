@@ -2126,6 +2126,115 @@ class BrowserPolicyToolTests(unittest.IsolatedAsyncioTestCase):
         original_click.assert_awaited_once()
         self.assertFalse(getattr(result, "error", None))
 
+    async def test_unrestricted_checkout_can_select_address_autocomplete(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime,
+            {},
+            worker.Redactor({}),
+            worker.BrowserNetworkPolicy(("cocunat.com",), unrestricted=True),
+        )
+        click = tools.registry.registry.actions["click"].function
+        # Actual Shopify DOM: LI[role=option] inside UL[role=listbox].
+        # Previously this returned "not a reviewed click control" and made
+        # address-dependent price assertions fail before they could run.
+        listbox = SimpleNamespace(
+            node_name="UL",
+            attributes={"role": "listbox", "id": "shipping-address1-options"},
+            parent_node=None,
+        )
+        option = SimpleNamespace(
+            node_name="LI",
+            attributes={"role": "option", "id": "shipping-address1-option-0"},
+            text="Carrer del Doctor Pi i Molist, 72, Barcelona, España",
+            parent_node=listbox,
+        )
+        browser_session = SimpleNamespace(
+            get_element_by_index=mock.AsyncMock(return_value=option),
+            get_current_page_url=mock.AsyncMock(
+                return_value="https://secure.cocunat.com/checkouts/example/es"
+            ),
+        )
+        params = SimpleNamespace(index=7)
+
+        result = await click(params, browser_session)
+
+        self.assertFalse(getattr(result, "error", None))
+        original_click.assert_awaited_once_with(
+            params=params, browser_session=browser_session
+        )
+
+        # Grouped custom listboxes use the same interaction semantics.
+        option.node_name = "DIV"
+        option.parent_node = SimpleNamespace(
+            attributes={"role": "group"}, parent_node=listbox
+        )
+        self.assertTrue((await click(params, browser_session)).ok)
+
+    async def test_listbox_option_does_not_bypass_restricted_policy(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime,
+            {},
+            worker.Redactor({}),
+            worker.BrowserNetworkPolicy(
+                ("example.com",), (), ("example.com",)
+            ),
+        )
+        browser_session = SimpleNamespace(
+            get_element_by_index=mock.AsyncMock(return_value=SimpleNamespace(
+                node_name="LI",
+                attributes={"role": "option"},
+                parent_node=SimpleNamespace(attributes={"role": "listbox"}),
+            )),
+            get_current_page_url=mock.AsyncMock(
+                return_value="https://example.com/checkout"
+            ),
+        )
+
+        result = await tools.registry.registry.actions["click"].function(
+            SimpleNamespace(index=7), browser_session
+        )
+
+        self.assertIn("not a reviewed click control", result.error)
+        original_click.assert_not_awaited()
+
+    async def test_unrestricted_option_support_keeps_other_click_guards(self):
+        runtime, original_click, *_ = self.runtime()
+        tools = worker.create_browser_use_tools(
+            runtime,
+            {},
+            worker.Redactor({}),
+            worker.BrowserNetworkPolicy(("example.com",), unrestricted=True),
+        )
+        click = tools.registry.registry.actions["click"].function
+        browser_session = SimpleNamespace(
+            get_element_by_index=mock.AsyncMock(),
+            get_current_page_url=mock.AsyncMock(
+                return_value="https://example.com/checkout"
+            ),
+        )
+        listbox = SimpleNamespace(attributes={"role": "listbox"})
+        for node in (
+            SimpleNamespace(node_name="DIV", attributes={}),
+            SimpleNamespace(node_name="LI", attributes={}, parent_node=listbox),
+            SimpleNamespace(node_name="LI", attributes={"role": "option"}),
+        ):
+            with self.subTest(node=node):
+                browser_session.get_element_by_index.return_value = node
+                result = await click(SimpleNamespace(index=7), browser_session)
+                self.assertIn("not a reviewed click control", result.error)
+
+        browser_session.get_element_by_index.return_value = SimpleNamespace(
+            node_name="LI", attributes={"role": "option"}, parent_node=listbox
+        )
+        result = await click(SimpleNamespace(index=None), browser_session)
+        self.assertIn("Coordinate-only clicks are disabled", result.error)
+        browser_session.get_current_page_url.return_value = "file:///tmp/checkout.html"
+        result = await click(SimpleNamespace(index=7), browser_session)
+        self.assertIn("current host is not allowed", result.error)
+        original_click.assert_not_awaited()
+
     async def test_links_bypass_page_handlers_but_only_exact_scoped_toggles_can_click(self):
         runtime, original_click, *_ = self.runtime()
         tools = worker.create_browser_use_tools(
