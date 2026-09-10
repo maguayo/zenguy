@@ -13,6 +13,23 @@ pnpm --filter @zenguy/website build    # outputs dist/
 pnpm --filter @zenguy/website preview  # serve the built site on :4400
 ```
 
+## Favicons
+
+`public/favicon.svg` contains the official logo mark, with the same paths and
+sRGB colors as `apps/app/assets/icon-logo.svg`. After editing it, regenerate
+the committed assets with:
+
+```bash
+pnpm --filter @zenguy/website generate:favicons
+```
+
+The shared `Base.astro` layout includes the scalable SVG, 16/32/48 px PNG and
+multi-resolution ICO fallbacks, a 180 px Apple touch icon (also scaled by iPad),
+the Safari pinned-tab mask, and `site.webmanifest`. The manifest supplies
+192/512 px icons and a separate opaque 512 px maskable icon for Android and
+desktop shortcuts. The Apple and maskable icons use a full-bleed background;
+the OS supplies the corner shape. Shortcuts keep opening in the browser.
+
 ## Localized pricing
 
 The static HTML keeps EUR as its no-JavaScript and local-development fallback.
@@ -68,9 +85,8 @@ node apps/app/scripts/verify-app-store-static-output.mjs
 - Every color, size, and line of copy comes 1:1 from the design file; tokens live in
   `src/styles/global.css` (`@theme`). Do not restyle — extend.
 - Fonts: Geist, Geist Mono, Caveat (Google Fonts; the original embedded them as data URIs).
-- The design's logo image was exported as a dead `blob:` URL — the mark is recreated in
-  `src/components/Logo.astro` (violet rounded square + wordmark). Swap in the real asset when
-  you have it.
+- `src/components/Logo.astro` uses the official mark (dark rounded square, cream Z
+  and violet dot) with the lowercase wordmark. Favicons use the same mark.
 - The original was a fixed 1180px desktop mock; responsive stacking (`max-lg`/`max-md`) was
   added without touching the desktop rendering.
 - Primary CTAs ("Get started", "Sign in") point to `https://app.zenguy.com`; in the mock they
