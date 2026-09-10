@@ -1,0 +1,30 @@
+{
+  "id": "/",
+  "name": "Zenguy",
+  "short_name": "Zenguy",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#F9F9F8",
+  "theme_color": "#F9F9F8",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

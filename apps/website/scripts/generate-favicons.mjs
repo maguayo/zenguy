@@ -2,9 +2,19 @@ import { readFile, writeFile } from "node:fs/promises";
 import sharp from "sharp";
 
 const publicDir = new URL("../public/", import.meta.url);
+const publicDirs = [publicDir, new URL("../../frontend/public/", import.meta.url)];
 const svg = await readFile(new URL("favicon.svg", publicDir), "utf8");
 const background = svg.match(/<rect\b[^>]*fill="([^"]+)"[^>]*\/>/u);
 if (!background) throw new Error("Expected the logo's background rectangle in favicon.svg");
+
+async function writeAsset(filename, data) {
+  for (const directory of publicDirs) {
+    await writeFile(new URL(filename, directory), data);
+  }
+}
+
+// Both deployed origins must serve their own copy of every icon.
+await writeAsset("favicon.svg", svg);
 
 // Let iOS and Android apply their own corner masks to a full-bleed background.
 // The Z and dot already fit inside the central 80%-diameter maskable safe zone.
@@ -25,7 +35,7 @@ const faviconPngs = [];
 for (const size of faviconSizes) {
   const data = await png(svg, size);
   faviconPngs.push(data);
-  await writeFile(new URL(`favicon-${size}x${size}.png`, publicDir), data);
+  await writeAsset(`favicon-${size}x${size}.png`, data);
 }
 
 // An ICO directory followed by its three lossless PNG frames.
@@ -43,7 +53,7 @@ for (const [index, size] of faviconSizes.entries()) {
   directory.writeUInt32LE(offset, entry + 12);
   offset += faviconPngs[index].length;
 }
-await writeFile(new URL("favicon.ico", publicDir), Buffer.concat([directory, ...faviconPngs]));
+await writeAsset("favicon.ico", Buffer.concat([directory, ...faviconPngs]));
 
 for (const [filename, size, source] of [
   ["apple-touch-icon.png", 180, opaqueSvg],
@@ -51,7 +61,7 @@ for (const [filename, size, source] of [
   ["icon-512x512.png", 512, svg],
   ["icon-maskable-512x512.png", 512, opaqueSvg],
 ]) {
-  await writeFile(new URL(filename, publicDir), await png(source, size));
+  await writeAsset(filename, await png(source, size));
 }
 
 // Safari pinned tabs use only the mark, in black on a transparent background.
@@ -62,6 +72,6 @@ const pinnedSvg = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
   </g>
 </svg>
 `;
-await writeFile(new URL("safari-pinned-tab.svg", publicDir), pinnedSvg);
+await writeAsset("safari-pinned-tab.svg", pinnedSvg);
 
-console.log("Generated favicons, home-screen icons and the Safari pinned-tab mask.");
+console.log("Generated favicons, home-screen icons and the Safari mask for the website and webapp.");

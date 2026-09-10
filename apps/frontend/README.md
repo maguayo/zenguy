@@ -25,6 +25,22 @@ flows. If that port is unavailable, set the development-only
 `ZENGUY_API_ORIGIN` value in an ignored `apps/frontend/.env.local` file to the
 Worker origin you are using.
 
+## Favicons
+
+`index.html` declares the browser favicons, Apple touch icon, Safari pinned-tab
+mask and `site.webmanifest` for every application route. The files are served
+from this app's own `public` directory on `app.zenguy.com`.
+
+Regenerate the shared logo assets for both the public website and this webapp
+from the repository root with:
+
+```sh
+pnpm --filter @zenguy/website generate:favicons
+```
+
+The canonical SVG lives in `apps/website/public/favicon.svg`. The app manifest
+keeps its own background color and opens shortcuts in the browser.
+
 ## Cloudflare Pages deployments
 
 The Git-connected Pages projects use these settings:

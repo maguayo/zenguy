@@ -23,6 +23,10 @@ the committed assets with:
 pnpm --filter @zenguy/website generate:favicons
 ```
 
+The generator writes the same icon files to both `apps/website/public` and
+`apps/frontend/public`, so `zenguy.com` and `app.zenguy.com` each serve them from
+their own origin. Each app keeps its own manifest and HTML icon links.
+
 The shared `Base.astro` layout includes the scalable SVG, 16/32/48 px PNG and
 multi-resolution ICO fallbacks, a 180 px Apple touch icon (also scaled by iPad),
 the Safari pinned-tab mask, and `site.webmanifest`. The manifest supplies
